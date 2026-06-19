@@ -19,7 +19,7 @@ class Project(SQLModel, table=True):
     slug: str = Field(max_length=60)
     summary: Optional[str] = None
     project_type: Optional[str] = None
-    status: str = Field(default="idea")
+    status: str = Field(default="idea", index=True)
     priority: Optional[str] = None
     folder_path: Optional[str] = None
     created_at: str

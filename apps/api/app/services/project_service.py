@@ -48,6 +48,10 @@ def create_project(session: Session, data: ProjectCreate) -> Project:
         session.flush()
     except IntegrityError as exc:
         session.rollback()
+        # Broad IntegrityError→409 is Phase 2-safe because the route prevalidates
+        # workspace FK existence and Pydantic validates status; the only realistic
+        # violation here is the duplicate-slug UniqueConstraint. Narrow this to a
+        # dialect-aware constraint-name check before opening external write surfaces.
         raise ConflictError(
             f"project slug '{data.slug}' already exists in this workspace"
         ) from exc

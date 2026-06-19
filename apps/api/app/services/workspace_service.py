@@ -30,6 +30,9 @@ def create_workspace(session: Session, data: WorkspaceCreate) -> Workspace:
         session.flush()
     except IntegrityError as exc:
         session.rollback()
+        # Broad IntegrityError→409 is Phase 2-safe because Pydantic validates the
+        # slug format and the only realistic violation is the unique-slug constraint.
+        # Narrow to a dialect-aware constraint-name check before external write surfaces.
         raise ConflictError(f"workspace slug '{data.slug}' already exists") from exc
     create_audit_event(
         session,
