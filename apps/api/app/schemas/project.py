@@ -1,3 +1,4 @@
+import os
 import re
 from typing import Optional
 
@@ -8,6 +9,22 @@ from app.core.constants import PROJECT_STATUSES
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$")
 
 _PROJECT_STATUSES = frozenset(PROJECT_STATUSES)
+
+
+def _validate_folder_path(v: Optional[str]) -> Optional[str]:
+    """A project root, if given, must be a well-formed absolute path.
+
+    Deeper containment safety (symlink/junction/traversal of files *within* the
+    root) is enforced by app.fsmemory at write time; this only rejects obviously
+    bad roots up front so the common mistake surfaces as a clean 422.
+    """
+    if v is None or v == "":
+        return v
+    if "\x00" in v:
+        raise ValueError("folder_path must not contain a null byte")
+    if not os.path.isabs(v):
+        raise ValueError("folder_path must be an absolute path")
+    return v
 
 
 class ProjectCreate(BaseModel):
@@ -35,6 +52,11 @@ class ProjectCreate(BaseModel):
             raise ValueError(f"status must be one of: {', '.join(sorted(_PROJECT_STATUSES))}")
         return v
 
+    @field_validator("folder_path")
+    @classmethod
+    def validate_folder_path(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_folder_path(v)
+
 
 class ProjectUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=1, max_length=200)
@@ -48,6 +70,11 @@ class ProjectUpdate(BaseModel):
         if v is not None and v not in _PROJECT_STATUSES:
             raise ValueError(f"status must be one of: {', '.join(sorted(_PROJECT_STATUSES))}")
         return v
+
+    @field_validator("folder_path")
+    @classmethod
+    def validate_folder_path(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_folder_path(v)
 
 
 class ProjectRead(BaseModel):

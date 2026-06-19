@@ -18,3 +18,9 @@ class ConflictError(Exception):
 
 async def conflict_handler(_request: Request, exc: ConflictError) -> JSONResponse:
     return JSONResponse(status_code=409, content={"detail": exc.detail})
+
+
+async def unprocessable_handler(_request: Request, exc: Exception) -> JSONResponse:
+    """Map a domain validation error (e.g. an unsafe path) to HTTP 422."""
+    detail = getattr(exc, "detail", None) or str(exc)
+    return JSONResponse(status_code=422, content={"detail": detail})

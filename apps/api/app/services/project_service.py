@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Optional
 
 from sqlalchemy.exc import IntegrityError
@@ -6,9 +7,42 @@ from sqlmodel import Session, select
 
 from app.core.errors import ConflictError
 from app.core.utils import new_id, now_utc
+from app.fsmemory.path_safety import PathSafetyError
 from app.models.project import Project
 from app.schemas.project import ProjectCreate, ProjectUpdate
+from app.services import context_service
 from app.services.audit_service import create_audit_event
+
+logger = logging.getLogger(__name__)
+
+
+def _provision_on_save(session: Session, project: Project) -> None:
+    """Auto-provision the project folder + context pack after a save.
+
+    DB is authoritative and already committed before this runs. Both
+    PathSafetyError and OSError are caught here and made non-fatal: the
+    in-progress regeneration session is rolled back, the failure is recorded as
+    a context_regen AuditEvent, a warning is logged, and the already-committed
+    project is still returned to the caller. No exception propagates.
+    """
+    if not project.folder_path:
+        return
+    try:
+        context_service.provision_and_regenerate(session, project, actor_type="human")
+    except (PathSafetyError, OSError) as exc:
+        session.rollback()
+        create_audit_event(
+            session,
+            event_type="context_regen",
+            actor_type="system",
+            entity_type="project",
+            entity_id=project.id,
+            workspace_id=project.workspace_id,
+            project_id=project.id,
+            payload_json=json.dumps({"status": "error", "error": str(exc)}),
+        )
+        session.commit()
+        logger.warning("context provisioning failed for %s: %s", project.id, exc)
 
 
 def get_project(session: Session, project_id: str) -> Optional[Project]:
@@ -65,6 +99,7 @@ def create_project(session: Session, data: ProjectCreate) -> Project:
         project_id=project.id,
     )
     session.commit()
+    _provision_on_save(session, project)
     session.refresh(project)
     return project
 
@@ -94,5 +129,6 @@ def update_project(
         payload_json=json.dumps(update_data),
     )
     session.commit()
+    _provision_on_save(session, project)
     session.refresh(project)
     return project

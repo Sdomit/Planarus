@@ -2,7 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import router as api_v1_router
-from app.core.errors import ConflictError, conflict_handler
+from app.core.errors import ConflictError, conflict_handler, unprocessable_handler
+from app.fsmemory.path_safety import PathSafetyError
 
 
 def create_app() -> FastAPI:
@@ -20,6 +21,7 @@ def create_app() -> FastAPI:
     )
 
     app.add_exception_handler(ConflictError, conflict_handler)
+    app.add_exception_handler(PathSafetyError, unprocessable_handler)
 
     @app.get("/health", tags=["health"])
     def health() -> dict:

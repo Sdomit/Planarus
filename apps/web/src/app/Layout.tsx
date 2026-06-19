@@ -1,5 +1,6 @@
 import '../styles/layout.css'
 import Dashboard from './Dashboard'
+import ContextFilesPanel from './ContextFilesPanel'
 
 export default function Layout() {
   return (
@@ -27,7 +28,7 @@ export default function Layout() {
           <h2>AI Context</h2>
         </div>
         <div className="context-panel-content">
-          <p className="placeholder">AI/context panel — Phase 6</p>
+          <ContextFilesPanel />
         </div>
       </aside>
     </div>
