@@ -1,0 +1,136 @@
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dashboard-state {
+  color: #666;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.dashboard-error {
+  color: #c0392b;
+}
+
+.dashboard-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.workspace-label {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+}
+
+.btn-create {
+  background: #4c566a;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn-create:hover {
+  background: #5e81ac;
+}
+
+.create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.create-form input,
+.create-form select {
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.create-form button {
+  align-self: flex-end;
+  background: #5e81ac;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 16px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.create-form button:disabled {
+  opacity: 0.6;
+}
+
+.empty-state {
+  color: #999;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.project-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.project-card {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 12px 16px;
+}
+
+.project-title {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.project-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.status {
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #e8ecf0;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.status-active { background: #d4edda; color: #155724; }
+.status-blocked { background: #f8d7da; color: #721c24; }
+.status-done { background: #cce5ff; color: #004085; }
+.status-archived { background: #e2e3e5; color: #383d41; }
+
+.project-slug {
+  color: #999;
+  font-family: monospace;
+}
+
+.project-summary {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #555;
+}

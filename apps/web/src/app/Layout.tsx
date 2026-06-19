@@ -1,4 +1,5 @@
 import '../styles/layout.css'
+import Dashboard from './Dashboard'
 
 export default function Layout() {
   return (
@@ -8,7 +9,7 @@ export default function Layout() {
           <h1>AgentBoard</h1>
         </div>
         <nav className="sidebar-nav">
-          <p className="placeholder">Projects sidebar — Phase 2</p>
+          <p className="placeholder">Projects sidebar — Phase 4</p>
         </nav>
       </aside>
 
@@ -17,7 +18,7 @@ export default function Layout() {
           <h2>Dashboard</h2>
         </div>
         <div className="main-content">
-          <p className="placeholder">Main dashboard — Phase 2</p>
+          <Dashboard />
         </div>
       </main>
 

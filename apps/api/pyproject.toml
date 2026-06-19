@@ -1,12 +1,13 @@
 [project]
 name = "agentboard-api"
-version = "0.1.0"
+version = "0.2.0"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
     "sqlmodel>=0.0.21",
     "pydantic-settings>=2.0.0",
+    "alembic>=1.13.0",
 ]
 
 [project.optional-dependencies]
@@ -18,6 +19,7 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+filterwarnings = ["ignore::DeprecationWarning"]
 
 [build-system]
 requires = ["setuptools>=68"]
