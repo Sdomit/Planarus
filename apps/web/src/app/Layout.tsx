@@ -1,0 +1,34 @@
+import '../styles/layout.css'
+
+export default function Layout() {
+  return (
+    <div className="layout">
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          <h1>AgentBoard</h1>
+        </div>
+        <nav className="sidebar-nav">
+          <p className="placeholder">Projects sidebar — Phase 2</p>
+        </nav>
+      </aside>
+
+      <main className="main">
+        <div className="main-header">
+          <h2>Dashboard</h2>
+        </div>
+        <div className="main-content">
+          <p className="placeholder">Main dashboard — Phase 2</p>
+        </div>
+      </main>
+
+      <aside className="context-panel">
+        <div className="context-panel-header">
+          <h2>AI Context</h2>
+        </div>
+        <div className="context-panel-content">
+          <p className="placeholder">AI/context panel — Phase 6</p>
+        </div>
+      </aside>
+    </div>
+  )
+}

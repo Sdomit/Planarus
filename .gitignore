@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+dist/
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.Python
+
+# SQLite databases (never commit runtime data)
+*.db
+*.db-shm
+*.db-wal
+
+# Node / pnpm
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Secrets — belt-and-suspenders (also in FILES_FORBIDDEN.md)
+.env
+.env.*
+*.pem
+*.key
+secrets/
