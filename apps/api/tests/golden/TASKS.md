@@ -9,12 +9,11 @@ pinned: false
 
 # Tasks
 
-> _Placeholder._ This file is populated in Phase 4, when the Task
-> entity exists. It is generated now with a stable shape so agents can
-> rely on it being present.
-
-## Active
-_None yet._
+## Active (0)
+_No active tasks._
 
 ## Done
 0 completed.
+
+## Open blockers
+_No open blockers._

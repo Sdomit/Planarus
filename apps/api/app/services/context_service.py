@@ -15,8 +15,8 @@ from sqlmodel import Session, select
 
 from app.core.utils import now_utc
 from app.fsmemory import atomic_io, regenerate
-from app.fsmemory.regenerator import RegenReport
-from app.fsmemory.renderers import RenderContext, render
+from app.fsmemory.regenerator import RegenReport, build_render_context
+from app.fsmemory.renderers import render
 from app.fsmemory.spec import CONTEXT_FILES, ContextFileSpec
 from app.models.context_file import ContextFile
 from app.models.project import Project
@@ -29,10 +29,6 @@ def _spec_for(relative_path: str) -> Optional[ContextFileSpec]:
         if spec.relative_path == relative_path:
             return spec
     return None
-
-
-def _content_updated_at(project: Project, workspace: Workspace) -> str:
-    return max(project.updated_at, workspace.updated_at)
 
 
 def list_context_files(session: Session, project_id: str) -> list[ContextFile]:
@@ -94,7 +90,7 @@ def compute_diff(session: Session, context_file: ContextFile) -> str:
     spec = _spec_for(context_file.relative_path)
     if workspace is None or spec is None:
         return ""
-    ctx = RenderContext(project, workspace, _content_updated_at(project, workspace))
+    ctx = build_render_context(session, project, workspace)
     rendered = render(spec, ctx)
     on_disk = atomic_io.read_text(project.folder_path, context_file.relative_path) or ""
     rel = context_file.relative_path

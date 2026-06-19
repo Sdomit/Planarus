@@ -55,6 +55,78 @@ export interface RegenReport {
   outcomes: RegenOutcome[]
 }
 
+export interface Phase {
+  id: string
+  project_id: string
+  title: string
+  description: string | null
+  status: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface Stage {
+  id: string
+  phase_id: string
+  project_id: string
+  title: string
+  description: string | null
+  status: string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface Task {
+  id: string
+  project_id: string
+  phase_id: string | null
+  stage_id: string | null
+  title: string
+  description: string | null
+  status: string
+  priority: string | null
+  due_at: string | null
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface Decision {
+  id: string
+  project_id: string
+  title: string
+  decision: string
+  context: string | null
+  status: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Risk {
+  id: string
+  project_id: string
+  title: string
+  description: string | null
+  severity: string
+  status: string
+  mitigation: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Blocker {
+  id: string
+  project_id: string
+  task_id: string | null
+  title: string
+  description: string | null
+  status: string
+  created_at: string
+  updated_at: string
+}
+
 export interface WorkspaceCreate {
   name: string
   slug: string
@@ -95,6 +167,54 @@ export const api = {
     get: (id: string) => request<Project>(`/projects/${id}`),
     update: (id: string, data: Partial<Pick<Project, 'title' | 'summary' | 'status'>>) =>
       request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+  phases: {
+    list: (projectId: string) => request<Phase[]>(`/projects/${projectId}/phases`),
+    create: (projectId: string, data: { title: string; status?: string }) =>
+      request<Phase>(`/projects/${projectId}/phases`, { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Partial<Pick<Phase, 'title' | 'status'>>) =>
+      request<Phase>(`/phases/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+  stages: {
+    list: (projectId: string) => request<Stage[]>(`/projects/${projectId}/stages`),
+    create: (projectId: string, data: { title: string; phase_id: string; status?: string }) =>
+      request<Stage>(`/projects/${projectId}/stages`, { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Partial<Pick<Stage, 'title' | 'status'>>) =>
+      request<Stage>(`/stages/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+  tasks: {
+    list: (projectId: string) => request<Task[]>(`/projects/${projectId}/tasks`),
+    create: (projectId: string, data: { title: string; status?: string; priority?: string }) =>
+      request<Task>(`/projects/${projectId}/tasks`, { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Partial<Pick<Task, 'title' | 'status' | 'priority'>>) =>
+      request<Task>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+  decisions: {
+    list: (projectId: string) => request<Decision[]>(`/projects/${projectId}/decisions`),
+    create: (projectId: string, data: { title: string; decision: string; status?: string }) =>
+      request<Decision>(`/projects/${projectId}/decisions`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: Partial<Pick<Decision, 'title' | 'decision' | 'status'>>) =>
+      request<Decision>(`/decisions/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+  risks: {
+    list: (projectId: string) => request<Risk[]>(`/projects/${projectId}/risks`),
+    create: (projectId: string, data: { title: string; severity: string; status?: string }) =>
+      request<Risk>(`/projects/${projectId}/risks`, { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Partial<Pick<Risk, 'title' | 'severity' | 'status'>>) =>
+      request<Risk>(`/risks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+  blockers: {
+    list: (projectId: string) => request<Blocker[]>(`/projects/${projectId}/blockers`),
+    create: (projectId: string, data: { title: string; status?: string }) =>
+      request<Blocker>(`/projects/${projectId}/blockers`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: Partial<Pick<Blocker, 'title' | 'status'>>) =>
+      request<Blocker>(`/blockers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   },
   contextFiles: {
     list: (projectId: string) =>

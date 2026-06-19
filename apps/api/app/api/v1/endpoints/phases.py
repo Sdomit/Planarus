@@ -1,0 +1,44 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlmodel import Session
+
+from app.db.session import get_session
+from app.schemas.phase import PhaseCreate, PhaseRead, PhaseUpdate
+from app.services import phase_service
+
+router = APIRouter()
+
+
+@router.get("/projects/{project_id}/phases", response_model=list[PhaseRead])
+def list_phases(
+    project_id: str,
+    session: Session = Depends(get_session),
+) -> list[PhaseRead]:
+    return phase_service.list_phases(session, project_id)
+
+
+@router.post(
+    "/projects/{project_id}/phases",
+    response_model=PhaseRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_phase(
+    project_id: str,
+    data: PhaseCreate,
+    session: Session = Depends(get_session),
+) -> PhaseRead:
+    try:
+        return phase_service.create_phase(session, project_id, data)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+
+@router.patch("/phases/{phase_id}", response_model=PhaseRead)
+def update_phase(
+    phase_id: str,
+    data: PhaseUpdate,
+    session: Session = Depends(get_session),
+) -> PhaseRead:
+    phase = phase_service.update_phase(session, phase_id, data)
+    if phase is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Phase not found")
+    return phase

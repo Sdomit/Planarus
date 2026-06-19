@@ -9,12 +9,11 @@ pinned: false
 
 # Roadmap
 
-> _Placeholder._ This file is populated in Phase 4, when the Phase/Stage/Milestone
-> entity exists. It is generated now with a stable shape so agents can
-> rely on it being present.
-
 ## Phases
-_None yet._
+_No phases yet._
+
+## Stages
+_No stages yet._
 
 ## Milestones
 _None yet._

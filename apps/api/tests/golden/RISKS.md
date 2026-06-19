@@ -9,12 +9,11 @@ pinned: false
 
 # Risks
 
-> _Placeholder._ This file is populated in Phase 4, when the Risk
-> entity exists. It is generated now with a stable shape so agents can
-> rely on it being present.
-
 ## Open risks
 _None yet._
 
 ## Closed risks
-_None yet._
+0 closed.
+
+## Open blockers
+_No open blockers._

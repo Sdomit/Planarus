@@ -28,8 +28,14 @@ from app.fsmemory.locks import project_lock
 from app.fsmemory.provisioner import provision_tree
 from app.fsmemory.renderers import RenderContext, render
 from app.fsmemory.spec import AUDIT_LOG_RELPATH, CONTEXT_FILES
+from app.models.blocker import Blocker
 from app.models.context_file import ContextFile
+from app.models.decision import Decision
+from app.models.phase import Phase
 from app.models.project import Project
+from app.models.risk import Risk
+from app.models.stage import Stage
+from app.models.task import Task
 from app.models.workspace import Workspace
 from app.services.audit_service import create_audit_event
 
@@ -81,9 +87,78 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _content_updated_at(project: Project, workspace: Workspace) -> str:
-    # Both timestamps are UTC ISO-8601 (+00:00), so a lexicographic max is valid.
-    return max(project.updated_at, workspace.updated_at)
+def build_render_context(
+    session: Session, project: Project, workspace: Workspace
+) -> RenderContext:
+    """Fetch all planning entities for `project` and build a RenderContext.
+
+    The `updated_at` is derived from the max timestamp across all data sources
+    (project, workspace, phases, stages, tasks, decisions, risks, blockers) so
+    any entity change causes a different front-matter timestamp, triggering
+    regeneration of the relevant files. Two calls with unchanged data produce
+    identical bytes (idempotency guarantee).
+    """
+    phases = list(
+        session.exec(
+            select(Phase)
+            .where(Phase.project_id == project.id)
+            .order_by(Phase.sort_order, Phase.id)
+        ).all()
+    )
+    stages = list(
+        session.exec(
+            select(Stage)
+            .where(Stage.project_id == project.id)
+            .order_by(Stage.sort_order, Stage.id)
+        ).all()
+    )
+    tasks = list(
+        session.exec(
+            select(Task)
+            .where(Task.project_id == project.id)
+            .order_by(Task.sort_order, Task.id)
+        ).all()
+    )
+    decisions = list(
+        session.exec(
+            select(Decision)
+            .where(Decision.project_id == project.id)
+            .order_by(Decision.created_at.desc(), Decision.id)
+        ).all()
+    )
+    risks = list(
+        session.exec(select(Risk).where(Risk.project_id == project.id)).all()
+    )
+    blockers = list(
+        session.exec(
+            select(Blocker)
+            .where(Blocker.project_id == project.id)
+            .order_by(Blocker.created_at, Blocker.id)
+        ).all()
+    )
+
+    all_timestamps = (
+        [project.updated_at, workspace.updated_at]
+        + [e.updated_at for e in phases]
+        + [e.updated_at for e in stages]
+        + [e.updated_at for e in tasks]
+        + [e.updated_at for e in decisions]
+        + [e.updated_at for e in risks]
+        + [e.updated_at for e in blockers]
+    )
+    updated_at = max(all_timestamps)
+
+    return RenderContext(
+        project=project,
+        workspace=workspace,
+        updated_at=updated_at,
+        phases=tuple(phases),
+        stages=tuple(stages),
+        tasks=tuple(tasks),
+        decisions=tuple(decisions),
+        risks=tuple(risks),
+        blockers=tuple(blockers),
+    )
 
 
 def regenerate(
@@ -100,11 +175,7 @@ def regenerate(
         raise ValueError("project has no folder_path")
 
     now = now or now_utc()
-    ctx = RenderContext(
-        project=project,
-        workspace=workspace,
-        updated_at=_content_updated_at(project, workspace),
-    )
+    ctx = build_render_context(session, project, workspace)
     report = RegenReport(project_id=project.id, generated_at=now)
 
     with project_lock(root):

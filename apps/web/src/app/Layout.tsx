@@ -1,6 +1,7 @@
 import '../styles/layout.css'
 import Dashboard from './Dashboard'
 import ContextFilesPanel from './ContextFilesPanel'
+import PlanningPanel from './PlanningPanel'
 
 export default function Layout() {
   return (
@@ -9,9 +10,9 @@ export default function Layout() {
         <div className="sidebar-header">
           <h1>AgentBoard</h1>
         </div>
-        <nav className="sidebar-nav">
-          <p className="placeholder">Projects sidebar — Phase 4</p>
-        </nav>
+        <div className="sidebar-planning">
+          <PlanningPanel />
+        </div>
       </aside>
 
       <main className="main">

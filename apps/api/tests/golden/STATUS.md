@@ -11,6 +11,6 @@ pinned: false
 
 - Health: unknown
 - Status: planning
-- Active phase: phase tracking arrives in Phase 4
-- Open blockers: none tracked yet
+- Active phase: none
+- Open blockers: 0
 - Last data change: 2026-06-19T00:00:00+00:00

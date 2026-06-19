@@ -1,21 +1,27 @@
 """Deterministic Markdown renderers for the `context/*` pack.
 
 Each renderer is a pure function of a `RenderContext` (project + workspace +
-a single content-derived `updated_at`). Output is byte-stable: fixed key order
-in front matter, stable headings, sorted collections, no wall-clock timestamps
-in the body. This is what makes regeneration idempotent and golden-testable.
+a single content-derived `updated_at` + optional planning entity collections).
+Output is byte-stable: fixed key order in front matter, stable headings, sorted
+collections, no wall-clock timestamps in the body. This is what makes
+regeneration idempotent and golden-testable.
 
-The four data-dependent files (ROADMAP, TASKS, DECISIONS, RISKS) render as
-clearly-labelled placeholders until the Phase-4 planning entities exist.
+Phase 4: ROADMAP, TASKS, DECISIONS, and RISKS are data-driven. All other files
+remain project/workspace-derived. Empty collections produce stable "none yet"
+output so golden tests still pass without seeded data.
 """
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from app.fsmemory.spec import ContextFileSpec
 from app.models.project import Project
 from app.models.workspace import Workspace
+
+_CLOSED_RISK_STATUSES = frozenset({"mitigated", "accepted", "closed"})
+_DONE_TASK_STATUSES = frozenset({"done", "canceled"})
+_SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 
 
 @dataclass(frozen=True)
@@ -25,6 +31,14 @@ class RenderContext:
     # Content-derived timestamp (max of source-entity updated_at). NOT wall-clock,
     # so two regenerations with unchanged data produce identical bytes.
     updated_at: str
+    # Planning entity collections — empty by default so existing call sites
+    # (context_service, golden tests) work without modification.
+    phases: tuple = field(default_factory=tuple)
+    stages: tuple = field(default_factory=tuple)
+    tasks: tuple = field(default_factory=tuple)
+    decisions: tuple = field(default_factory=tuple)
+    risks: tuple = field(default_factory=tuple)
+    blockers: tuple = field(default_factory=tuple)
 
 
 def _wrap(kind: str, ctx: RenderContext, body: list[str]) -> str:
@@ -44,6 +58,10 @@ def _wrap(kind: str, ctx: RenderContext, body: list[str]) -> str:
 def _or(value: object, fallback: str) -> str:
     text = "" if value is None else str(value).strip()
     return text if text else fallback
+
+
+def _trunc(text: str, limit: int = 80) -> str:
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 # --- summary layer --------------------------------------------------------
@@ -99,13 +117,16 @@ def _context_body(ctx: RenderContext) -> list[str]:
 
 def _status_body(ctx: RenderContext) -> list[str]:
     p = ctx.project
+    active_phase = next((ph for ph in ctx.phases if ph.status == "active"), None)
+    active_phase_text = active_phase.title if active_phase is not None else "none"
+    open_blockers = [b for b in ctx.blockers if b.status == "open"]
     return [
         "# Current status",
         "",
         "- Health: unknown",
         f"- Status: {p.status}",
-        "- Active phase: phase tracking arrives in Phase 4",
-        "- Open blockers: none tracked yet",
+        f"- Active phase: {active_phase_text}",
+        f"- Open blockers: {len(open_blockers)}",
         f"- Last data change: {p.updated_at}",
     ]
 
@@ -129,52 +150,144 @@ def _next_step_body(_ctx: RenderContext) -> list[str]:
     ]
 
 
-# --- data-dependent placeholders (populated in Phase 4) -------------------
+# --- data-driven renderers (Phase 4) --------------------------------------
 
 
-def _placeholder(title: str, entity: str, sections: list[tuple[str, str]]) -> list[str]:
-    lines = [
-        f"# {title}",
-        "",
-        f"> _Placeholder._ This file is populated in Phase 4, when the {entity}",
-        "> entity exists. It is generated now with a stable shape so agents can",
-        "> rely on it being present.",
-    ]
-    for heading, body in sections:
-        lines += ["", f"## {heading}", body]
+def _roadmap_body(ctx: RenderContext) -> list[str]:
+    phases = sorted(ctx.phases, key=lambda p: (p.sort_order, p.id))
+    stages = sorted(ctx.stages, key=lambda s: (s.sort_order, s.id))
+
+    lines: list[str] = ["# Roadmap", ""]
+
+    # Phases table
+    lines.append("## Phases")
+    if not phases:
+        lines.append("_No phases yet._")
+    else:
+        lines += [
+            "| # | Title | Status |",
+            "|---|---|---|",
+        ]
+        for i, ph in enumerate(phases, 1):
+            lines.append(f"| {i} | {ph.title} | {ph.status} |")
+
+    lines.append("")
+
+    # Stages table
+    lines.append("## Stages")
+    if not stages:
+        lines.append("_No stages yet._")
+    else:
+        phase_title: dict[str, str] = {ph.id: ph.title for ph in phases}
+        lines += [
+            "| Phase | Title | Status |",
+            "|---|---|---|",
+        ]
+        for stg in stages:
+            ph_name = phase_title.get(stg.phase_id, stg.phase_id)
+            lines.append(f"| {ph_name} | {stg.title} | {stg.status} |")
+
+    lines += ["", "## Milestones", "_None yet._"]
     return lines
 
 
-def _roadmap_body(_ctx: RenderContext) -> list[str]:
-    return _placeholder(
-        "Roadmap",
-        "Phase/Stage/Milestone",
-        [("Phases", "_None yet._"), ("Milestones", "_None yet._")],
+def _tasks_body(ctx: RenderContext) -> list[str]:
+    active = sorted(
+        [t for t in ctx.tasks if t.status not in _DONE_TASK_STATUSES],
+        key=lambda t: (t.sort_order, t.id),
     )
+    done_count = sum(1 for t in ctx.tasks if t.status in _DONE_TASK_STATUSES)
+    open_blockers = [b for b in ctx.blockers if b.status == "open"]
+
+    lines: list[str] = ["# Tasks", ""]
+
+    lines.append(f"## Active ({len(active)})")
+    if not active:
+        lines.append("_No active tasks._")
+    else:
+        lines += [
+            "| Title | Status | Priority |",
+            "|---|---|---|",
+        ]
+        for t in active:
+            priority = t.priority or "—"
+            lines.append(f"| {_trunc(t.title)} | {t.status} | {priority} |")
+
+    lines += ["", f"## Done", f"{done_count} completed.", ""]
+
+    lines.append("## Open blockers")
+    if not open_blockers:
+        lines.append("_No open blockers._")
+    else:
+        lines += [
+            "| Title | Status |",
+            "|---|",
+        ]
+        for b in open_blockers:
+            lines.append(f"| {_trunc(b.title)} | {b.status} |")
+
+    return lines
 
 
-def _tasks_body(_ctx: RenderContext) -> list[str]:
-    return _placeholder(
-        "Tasks",
-        "Task",
-        [("Active", "_None yet._"), ("Done", "0 completed.")],
-    )
+def _decisions_body(ctx: RenderContext) -> list[str]:
+    # Sorted newest-first by created_at then id for stability.
+    decisions = sorted(ctx.decisions, key=lambda d: (d.created_at, d.id), reverse=True)
+
+    lines: list[str] = ["# Decisions", ""]
+    lines.append("## Decision log")
+    if not decisions:
+        lines.append("_No decisions recorded yet._")
+    else:
+        lines += [
+            "| Status | Title | Decision |",
+            "|---|---|---|",
+        ]
+        for d in decisions:
+            lines.append(
+                f"| {d.status} | {_trunc(d.title, 50)} | {_trunc(d.decision, 80)} |"
+            )
+
+    return lines
 
 
-def _decisions_body(_ctx: RenderContext) -> list[str]:
-    return _placeholder(
-        "Decisions",
-        "Decision",
-        [("Decision log", "_No decisions recorded yet._")],
-    )
+def _risks_body(ctx: RenderContext) -> list[str]:
+    open_risks = [
+        r for r in ctx.risks if r.status not in _CLOSED_RISK_STATUSES
+    ]
+    closed_risks = [r for r in ctx.risks if r.status in _CLOSED_RISK_STATUSES]
+    open_risks.sort(key=lambda r: (_SEVERITY_ORDER.get(r.severity, 99), r.id))
+    open_blockers = [b for b in ctx.blockers if b.status == "open"]
 
+    lines: list[str] = ["# Risks", ""]
 
-def _risks_body(_ctx: RenderContext) -> list[str]:
-    return _placeholder(
-        "Risks",
-        "Risk",
-        [("Open risks", "_None yet._"), ("Closed risks", "_None yet._")],
-    )
+    lines.append("## Open risks")
+    if not open_risks:
+        lines.append("_None yet._")
+    else:
+        lines += [
+            "| Severity | Title | Status | Mitigation |",
+            "|---|---|---|---|",
+        ]
+        for r in open_risks:
+            mitigation = _trunc(r.mitigation, 60) if r.mitigation else "—"
+            lines.append(
+                f"| {r.severity} | {_trunc(r.title, 50)} | {r.status} | {mitigation} |"
+            )
+
+    lines += ["", f"## Closed risks", f"{len(closed_risks)} closed.", ""]
+
+    lines.append("## Open blockers")
+    if not open_blockers:
+        lines.append("_No open blockers._")
+    else:
+        lines += [
+            "| Title | Status |",
+            "|---|---|",
+        ]
+        for b in open_blockers:
+            lines.append(f"| {_trunc(b.title)} | {b.status} |")
+
+    return lines
 
 
 # --- operational layer ----------------------------------------------------

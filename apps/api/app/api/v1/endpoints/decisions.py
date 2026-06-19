@@ -1,0 +1,46 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlmodel import Session
+
+from app.db.session import get_session
+from app.schemas.decision import DecisionCreate, DecisionRead, DecisionUpdate
+from app.services import decision_service
+
+router = APIRouter()
+
+
+@router.get("/projects/{project_id}/decisions", response_model=list[DecisionRead])
+def list_decisions(
+    project_id: str,
+    session: Session = Depends(get_session),
+) -> list[DecisionRead]:
+    return decision_service.list_decisions(session, project_id)
+
+
+@router.post(
+    "/projects/{project_id}/decisions",
+    response_model=DecisionRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_decision(
+    project_id: str,
+    data: DecisionCreate,
+    session: Session = Depends(get_session),
+) -> DecisionRead:
+    try:
+        return decision_service.create_decision(session, project_id, data)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+
+@router.patch("/decisions/{decision_id}", response_model=DecisionRead)
+def update_decision(
+    decision_id: str,
+    data: DecisionUpdate,
+    session: Session = Depends(get_session),
+) -> DecisionRead:
+    decision = decision_service.update_decision(session, decision_id, data)
+    if decision is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Decision not found"
+        )
+    return decision
