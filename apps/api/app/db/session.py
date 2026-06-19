@@ -1,9 +1,27 @@
 from collections.abc import Generator
 
 from sqlalchemy import event as sa_event
+from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.core.config import settings
+
+
+def configure_sqlite_pragmas(engine: Engine) -> None:
+    """Register a connect listener that enables WAL and foreign-key enforcement.
+
+    SQLite defaults to ``foreign_keys=OFF`` and the rollback journal; both must be
+    set per-connection. Applied to the app engine here and to the test engine in
+    `tests/conftest.py` so behaviour matches. WAL is a no-op on in-memory DBs.
+    """
+
+    @sa_event.listens_for(engine, "connect")
+    def _set_sqlite_pragmas(dbapi_conn, _record) -> None:
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
 
 connect_args: dict = {}
 if settings.database_url.startswith("sqlite"):
@@ -12,11 +30,7 @@ if settings.database_url.startswith("sqlite"):
 engine = create_engine(settings.database_url, echo=False, connect_args=connect_args)
 
 if settings.database_url.startswith("sqlite"):
-    @sa_event.listens_for(engine, "connect")
-    def _set_sqlite_wal(dbapi_conn, _record) -> None:
-        cursor = dbapi_conn.cursor()
-        cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.close()
+    configure_sqlite_pragmas(engine)
 
 
 def get_session() -> Generator[Session, None, None]:
@@ -25,5 +39,12 @@ def get_session() -> Generator[Session, None, None]:
 
 
 def create_db_and_tables() -> None:
+    """Create all tables directly from SQLModel metadata.
+
+    NOT called on app startup — Alembic is the canonical schema path
+    (``cd apps/api && alembic upgrade head``). Retained for ad-hoc local/dev
+    scripting and is not part of the request lifecycle.
+    """
     import app.models  # noqa: F401 — registers all SQLModel tables
+
     SQLModel.metadata.create_all(engine)

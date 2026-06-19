@@ -3,12 +3,11 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.constants import PROJECT_STATUSES
+
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$")
 
-_PROJECT_STATUSES = frozenset({
-    "idea", "researching", "planning", "ready", "active",
-    "blocked", "paused", "later", "review", "done", "archived",
-})
+_PROJECT_STATUSES = frozenset(PROJECT_STATUSES)
 
 
 class ProjectCreate(BaseModel):

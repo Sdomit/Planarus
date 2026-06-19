@@ -4,7 +4,7 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
 import app.models  # noqa: F401 — registers all tables in SQLModel.metadata
-from app.db.session import get_session
+from app.db.session import configure_sqlite_pragmas, get_session
 from app.main import app
 
 
@@ -15,6 +15,8 @@ def engine_fixture():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    # Match production: enforce foreign keys (WAL is a no-op on in-memory DBs).
+    configure_sqlite_pragmas(test_engine)
     SQLModel.metadata.create_all(test_engine)
     yield test_engine
     SQLModel.metadata.drop_all(test_engine)

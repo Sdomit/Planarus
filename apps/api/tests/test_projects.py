@@ -116,6 +116,36 @@ def test_create_project_missing_workspace(client: TestClient) -> None:
     assert response.status_code == 404
 
 
+def test_create_project_duplicate_slug_conflict(client: TestClient) -> None:
+    ws_id = _create_workspace(client)
+    first = client.post(
+        "/api/v1/projects",
+        json={"workspace_id": ws_id, "title": "First", "slug": "dup-proj"},
+    )
+    assert first.status_code == 201
+    second = client.post(
+        "/api/v1/projects",
+        json={"workspace_id": ws_id, "title": "Second", "slug": "dup-proj"},
+    )
+    assert second.status_code == 409
+    assert "detail" in second.json()
+
+
+def test_same_slug_allowed_in_different_workspaces(client: TestClient) -> None:
+    ws1 = _create_workspace(client, "workspace-a")
+    ws2 = _create_workspace(client, "workspace-b")
+    r1 = client.post(
+        "/api/v1/projects",
+        json={"workspace_id": ws1, "title": "A", "slug": "shared-slug"},
+    )
+    r2 = client.post(
+        "/api/v1/projects",
+        json={"workspace_id": ws2, "title": "B", "slug": "shared-slug"},
+    )
+    assert r1.status_code == 201
+    assert r2.status_code == 201
+
+
 def test_audit_event_created_on_project_create(client: TestClient, session) -> None:
     from app.models.audit_event import AuditEvent
     from sqlmodel import select
@@ -132,3 +162,28 @@ def test_audit_event_created_on_project_create(client: TestClient, session) -> N
     project_events = [e for e in events if e.entity_type == "project"]
     assert len(project_events) == 1
     assert project_events[0].actor_type == "human"
+
+
+def test_audit_event_created_on_project_update(client: TestClient, session) -> None:
+    from app.models.audit_event import AuditEvent
+    from sqlmodel import select
+
+    ws_id = _create_workspace(client)
+    created = client.post(
+        "/api/v1/projects",
+        json={"workspace_id": ws_id, "title": "Before", "slug": "to-update"},
+    ).json()
+    client.patch(
+        f"/api/v1/projects/{created['id']}",
+        json={"status": "active"},
+    )
+    events = session.exec(
+        select(AuditEvent).where(
+            AuditEvent.event_type == "update",
+            AuditEvent.entity_type == "project",
+        )
+    ).all()
+    assert len(events) == 1
+    assert events[0].entity_id == created["id"]
+    assert events[0].payload_json is not None
+    assert "active" in events[0].payload_json

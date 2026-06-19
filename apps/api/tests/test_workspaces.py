@@ -41,3 +41,15 @@ def test_create_workspace_slug_too_short(client: TestClient) -> None:
         "/api/v1/workspaces", json={"name": "Short", "slug": "a"}
     )
     assert response.status_code == 422
+
+
+def test_create_workspace_duplicate_slug_conflict(client: TestClient) -> None:
+    first = client.post(
+        "/api/v1/workspaces", json={"name": "First", "slug": "dup-ws"}
+    )
+    assert first.status_code == 201
+    second = client.post(
+        "/api/v1/workspaces", json={"name": "Second", "slug": "dup-ws"}
+    )
+    assert second.status_code == 409
+    assert "detail" in second.json()

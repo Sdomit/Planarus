@@ -45,6 +45,13 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.String(), nullable=False),
         sa.Column("archived_at", sa.String(), nullable=True),
         sa.UniqueConstraint("workspace_id", "slug", name="uq_project_workspace_slug"),
+        # Frozen snapshot of app.core.constants.PROJECT_STATUSES at authoring time.
+        # A new status ships as a new migration revision, not an edit here.
+        sa.CheckConstraint(
+            "status IN ('idea', 'researching', 'planning', 'ready', 'active', "
+            "'blocked', 'paused', 'later', 'review', 'done', 'archived')",
+            name="ck_project_status",
+        ),
     )
     op.create_index("ix_project_workspace_id", "project", ["workspace_id"])
     op.create_index("ix_project_status", "project", ["status"])

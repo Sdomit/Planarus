@@ -1,13 +1,16 @@
 from typing import Optional
 
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import CheckConstraint, UniqueConstraint
 from sqlmodel import Field, SQLModel
+
+from app.core.constants import project_status_check_sql
 
 
 class Project(SQLModel, table=True):
     __tablename__ = "project"
     __table_args__ = (
         UniqueConstraint("workspace_id", "slug", name="uq_project_workspace_slug"),
+        CheckConstraint(project_status_check_sql(), name="ck_project_status"),
     )
 
     id: str = Field(primary_key=True)

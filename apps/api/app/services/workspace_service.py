@@ -1,5 +1,7 @@
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
+from app.core.errors import ConflictError
 from app.core.utils import new_id, now_utc
 from app.models.workspace import Workspace
 from app.schemas.workspace import WorkspaceCreate
@@ -22,6 +24,13 @@ def create_workspace(session: Session, data: WorkspaceCreate) -> Workspace:
         updated_at=now,
     )
     session.add(workspace)
+    try:
+        # Flush the parent first so the audit row's FK target exists (FKs are
+        # enforced) and a duplicate-slug violation surfaces here, not mid-audit.
+        session.flush()
+    except IntegrityError as exc:
+        session.rollback()
+        raise ConflictError(f"workspace slug '{data.slug}' already exists") from exc
     create_audit_event(
         session,
         event_type="create",
