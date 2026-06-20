@@ -114,3 +114,30 @@ BLOCKER_STATUSES: tuple[str, ...] = ("open", "resolved", "canceled")
 
 def blocker_status_check_sql(column: str = "status") -> str:
     return _check_sql(column, BLOCKER_STATUSES)
+
+
+# Doc
+DOC_TYPES: tuple[str, ...] = (
+    "note",
+    "spec",
+    "research",
+    "plan",
+    "reference",
+    "other",
+)
+
+DOC_STATUSES: tuple[str, ...] = ("draft", "published")
+
+DOC_FORMATS: tuple[str, ...] = ("tiptap_json",)
+
+
+def doc_type_check_sql(column: str = "doc_type") -> str:
+    return _check_sql(column, DOC_TYPES)
+
+
+def doc_status_check_sql(column: str = "status") -> str:
+    return _check_sql(column, DOC_STATUSES)
+
+
+def doc_format_check_sql(column: str = "editor_format") -> str:
+    return _check_sql(column, DOC_FORMATS)

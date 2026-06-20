@@ -127,6 +127,58 @@ export interface Blocker {
   updated_at: string
 }
 
+export interface DocSummary {
+  id: string
+  project_id: string
+  parent_doc_id: string | null
+  title: string
+  slug: string
+  doc_type: string
+  status: string
+  sort_order: number
+  version: number
+  updated_at: string
+  archived_at: string | null
+}
+
+export interface Doc extends DocSummary {
+  editor_format: string
+  content_json: string
+  markdown_cache: string
+  export_relative_path: string | null
+  export_checksum: string | null
+  exported_at: string | null
+  created_at: string
+}
+
+export interface DocCreate {
+  title: string
+  doc_type: string
+  status?: string
+  sort_order?: number
+  parent_doc_id?: string | null
+  slug?: string | null
+}
+
+export interface DocUpdate {
+  version: number
+  title?: string | null
+  doc_type?: string | null
+  status?: string | null
+  sort_order?: number | null
+  parent_doc_id?: string | null
+  content_json?: string | null
+  markdown_cache?: string | null
+  archived_at?: string | null
+}
+
+export interface DocExportResponse {
+  export_path: string
+  was_changed: boolean
+  drift_detected: boolean
+  checksum: string
+}
+
 export interface WorkspaceCreate {
   name: string
   slug: string
@@ -215,6 +267,23 @@ export const api = {
       }),
     update: (id: string, data: Partial<Pick<Blocker, 'title' | 'status'>>) =>
       request<Blocker>(`/blockers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+  docs: {
+    list: (projectId: string, params?: { doc_type?: string; status?: string; include_archived?: boolean }) => {
+      const q = new URLSearchParams()
+      if (params?.doc_type) q.set('doc_type', params.doc_type)
+      if (params?.status) q.set('status', params.status)
+      if (params?.include_archived) q.set('include_archived', 'true')
+      const qs = q.toString()
+      return request<DocSummary[]>(`/projects/${projectId}/docs${qs ? `?${qs}` : ''}`)
+    },
+    get: (id: string) => request<Doc>(`/docs/${id}`),
+    create: (projectId: string, data: DocCreate) =>
+      request<Doc>(`/projects/${projectId}/docs`, { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: DocUpdate) =>
+      request<Doc>(`/docs/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    exportMarkdown: (id: string) =>
+      request<DocExportResponse>(`/docs/${id}/export-markdown`, { method: 'POST' }),
   },
   contextFiles: {
     list: (projectId: string) =>

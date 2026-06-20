@@ -8,6 +8,7 @@ from app.models.task import Task  # noqa: F401
 from app.models.decision import Decision  # noqa: F401
 from app.models.risk import Risk  # noqa: F401
 from app.models.blocker import Blocker  # noqa: F401
+from app.models.doc import Doc  # noqa: F401
 
 __all__ = [
     "Workspace",
@@ -20,4 +21,5 @@ __all__ = [
     "Decision",
     "Risk",
     "Blocker",
+    "Doc",
 ]

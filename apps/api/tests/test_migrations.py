@@ -33,9 +33,11 @@ def test_upgrade_then_downgrade(tmp_path):
     tables = _tables(db_path)
     assert {"workspace", "project", "auditevent", "contextfile"} <= tables
     assert {"phase", "stage", "task", "decision", "risk", "blocker"} <= tables
+    assert "doc" in tables
 
     command.downgrade(cfg, "base")
     tables = _tables(db_path)
+    assert "doc" not in tables
     assert "contextfile" not in tables
     assert "project" not in tables
     assert "workspace" not in tables

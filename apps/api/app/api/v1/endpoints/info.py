@@ -10,5 +10,5 @@ def get_info() -> dict:
     return {
         "name": settings.app_name,
         "version": settings.app_version,
-        "phase": "4-planning-entities",
+        "phase": "5-project-detail",
     }

@@ -4,6 +4,7 @@ from app.api.v1.endpoints import (
     blockers,
     context,
     decisions,
+    docs,
     info,
     phases,
     projects,
@@ -24,3 +25,4 @@ router.include_router(tasks.router, tags=["tasks"])
 router.include_router(decisions.router, tags=["decisions"])
 router.include_router(risks.router, tags=["risks"])
 router.include_router(blockers.router, tags=["blockers"])
+router.include_router(docs.router, tags=["docs"])

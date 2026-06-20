@@ -15,7 +15,11 @@ function slugify(title: string): string {
     .slice(0, 60) || 'my-project'
 }
 
-export default function Dashboard() {
+interface DashboardProps {
+  onOpenDocs?: (projectId: string) => void
+}
+
+export default function Dashboard({ onOpenDocs }: DashboardProps) {
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -157,6 +161,15 @@ export default function Dashboard() {
                 <span className="project-slug">{p.slug}</span>
               </div>
               {p.summary && <p className="project-summary">{p.summary}</p>}
+              {onOpenDocs && (
+                <button
+                  className="btn-docs"
+                  onClick={() => onOpenDocs(p.id)}
+                  style={{ marginTop: '0.5rem', fontSize: '0.75rem', cursor: 'pointer', background: 'none', border: '1px solid #ddd', borderRadius: '4px', padding: '0.2rem 0.5rem' }}
+                >
+                  Docs
+                </button>
+              )}
             </li>
           ))}
         </ul>
