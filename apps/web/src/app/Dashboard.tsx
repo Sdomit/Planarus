@@ -17,9 +17,10 @@ function slugify(title: string): string {
 
 interface DashboardProps {
   onOpenDocs?: (projectId: string) => void
+  onOpenContextPack?: (projectId: string) => void
 }
 
-export default function Dashboard({ onOpenDocs }: DashboardProps) {
+export default function Dashboard({ onOpenDocs, onOpenContextPack }: DashboardProps) {
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -161,15 +162,26 @@ export default function Dashboard({ onOpenDocs }: DashboardProps) {
                 <span className="project-slug">{p.slug}</span>
               </div>
               {p.summary && <p className="project-summary">{p.summary}</p>}
-              {onOpenDocs && (
-                <button
-                  className="btn-docs"
-                  onClick={() => onOpenDocs(p.id)}
-                  style={{ marginTop: '0.5rem', fontSize: '0.75rem', cursor: 'pointer', background: 'none', border: '1px solid #ddd', borderRadius: '4px', padding: '0.2rem 0.5rem' }}
-                >
-                  Docs
-                </button>
-              )}
+              <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.4rem' }}>
+                {onOpenDocs && (
+                  <button
+                    className="btn-docs"
+                    onClick={() => onOpenDocs(p.id)}
+                    style={{ fontSize: '0.75rem', cursor: 'pointer', background: 'none', border: '1px solid #ddd', borderRadius: '4px', padding: '0.2rem 0.5rem' }}
+                  >
+                    Docs
+                  </button>
+                )}
+                {onOpenContextPack && (
+                  <button
+                    className="btn-context-pack"
+                    onClick={() => onOpenContextPack(p.id)}
+                    style={{ fontSize: '0.75rem', cursor: 'pointer', background: 'none', border: '1px solid #ddd', borderRadius: '4px', padding: '0.2rem 0.5rem' }}
+                  >
+                    Context Pack
+                  </button>
+                )}
+              </div>
             </li>
           ))}
         </ul>

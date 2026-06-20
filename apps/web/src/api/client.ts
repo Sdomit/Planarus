@@ -193,6 +193,119 @@ export interface ProjectCreate {
   status?: string
 }
 
+// --- Context Pack Builder (Phase 6A) ---------------------------------------
+
+export interface ContextPackProfile {
+  key: string
+  version: number
+  label: string
+  description: string
+  default_target: string
+  include_git_checklist: boolean
+}
+
+export interface ContextPackProfilesResponse {
+  target_tools: string[]
+  budget_presets: Record<string, number>
+  default_budget_preset: string
+  profiles: ContextPackProfile[]
+}
+
+export interface StructuredSourceItem {
+  source_id: string
+  label: string
+  kind: string
+  default_included: boolean
+  optional: boolean
+  token_estimate: number
+}
+
+export interface DocumentSourceItem {
+  source_id: string
+  doc_id: string
+  title: string
+  doc_type: string
+  status: string
+  token_estimate: number
+}
+
+export interface GovernanceSourceItem {
+  source_id: string
+  relative_path: string
+  available: boolean
+  status: string
+  token_estimate: number
+}
+
+export interface ContextPackSources {
+  project_id: string
+  has_folder: boolean
+  structured: StructuredSourceItem[]
+  documents: DocumentSourceItem[]
+  governance: GovernanceSourceItem[]
+  warnings: string[]
+}
+
+export interface ContextPackSelection {
+  document_ids?: string[]
+  document_order?: string[]
+  pinned_source_ids?: string[]
+  excluded_source_ids?: string[]
+  include_done_tasks?: boolean
+  include_closed_risks?: boolean
+  include_resolved_blockers?: boolean
+  include_all_decisions?: boolean
+  include_audit_slice?: boolean
+}
+
+export interface ContextPackPreviewRequest {
+  profile: string
+  target_tool: string
+  budget_preset: string
+  objective: string
+  selection: ContextPackSelection
+}
+
+export interface ManifestEntry {
+  source_id: string
+  label: string
+  kind: string
+  included: boolean
+  truncated: boolean
+  pinned: boolean
+  flagged: boolean
+  token_estimate: number
+  version: string
+  note: string | null
+}
+
+export interface TruncationEntry {
+  source_id: string
+  reason: string
+}
+
+export interface SecretFinding {
+  pattern_label: string
+  masked_preview: string
+  source_ref: string
+  count: number
+}
+
+export interface ContextPackPreview {
+  markdown: string
+  pack_checksum: string
+  token_estimate: number
+  budget_preset: string
+  budget_limit: number
+  over_budget: boolean
+  profile: { key: string; version: number; label: string; include_git_checklist: boolean }
+  target_tool: string
+  manifest: ManifestEntry[]
+  warnings: string[]
+  truncations: TruncationEntry[]
+  secret_findings: SecretFinding[]
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json', ...init?.headers },
@@ -301,5 +414,15 @@ export const api = {
       ),
     diff: (id: string) =>
       request<{ relative_path: string; diff: string }>(`/context-files/${id}/diff`),
+  },
+  contextPack: {
+    profiles: () => request<ContextPackProfilesResponse>('/context-pack/profiles'),
+    sources: (projectId: string) =>
+      request<ContextPackSources>(`/projects/${projectId}/context-pack/sources`),
+    preview: (projectId: string, body: ContextPackPreviewRequest) =>
+      request<ContextPackPreview>(`/projects/${projectId}/context-pack/preview`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
   },
 }

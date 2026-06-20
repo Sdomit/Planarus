@@ -4,21 +4,50 @@ import Dashboard from './Dashboard'
 import ContextFilesPanel from './ContextFilesPanel'
 import PlanningPanel from './PlanningPanel'
 import DocsPanel from './DocsPanel'
+import ContextPackBuilder from './ContextPackBuilder'
 
-type MainView = 'dashboard' | 'docs'
+type MainView = 'dashboard' | 'docs' | 'context-pack'
 
-// Minimal project context: Dashboard surfaces the selected project id via
-// a custom event so Layout can pass it to DocsPanel.
+// Minimal project context: Dashboard surfaces the selected project id so Layout
+// can pass it to the Docs and Context Pack views.
 const DEFAULT_PROJECT_ID = ''
+
+const VIEW_TITLES: Record<MainView, string> = {
+  dashboard: 'Dashboard',
+  docs: 'Docs',
+  'context-pack': 'Context Pack',
+}
 
 export default function Layout() {
   const [mainView, setMainView] = useState<MainView>('dashboard')
-  const [docsProjectId, setDocsProjectId] = useState<string>(DEFAULT_PROJECT_ID)
+  const [projectId, setProjectId] = useState<string>(DEFAULT_PROJECT_ID)
 
-  const handleOpenDocs = (projectId: string) => {
-    setDocsProjectId(projectId)
+  const handleOpenDocs = (id: string) => {
+    setProjectId(id)
     setMainView('docs')
   }
+
+  const handleOpenContextPack = (id: string) => {
+    setProjectId(id)
+    setMainView('context-pack')
+  }
+
+  const navButton = (view: MainView, label: string) => (
+    <button
+      type="button"
+      onClick={() => setMainView(view)}
+      style={{
+        fontWeight: mainView === view ? 600 : 400,
+        textDecoration: mainView === view ? 'underline' : 'none',
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        fontSize: '0.85rem',
+      }}
+    >
+      {label}
+    </button>
+  )
 
   return (
     <div className="layout">
@@ -33,57 +62,42 @@ export default function Layout() {
 
       <main className="main">
         <div className="main-header">
-          {mainView === 'dashboard' ? (
-            <h2>Dashboard</h2>
-          ) : (
-            <h2>Docs</h2>
-          )}
-          <nav className="main-nav" style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
-            <button
-              type="button"
-              onClick={() => setMainView('dashboard')}
-              style={{
-                fontWeight: mainView === 'dashboard' ? 600 : 400,
-                textDecoration: mainView === 'dashboard' ? 'underline' : 'none',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '0.85rem',
-              }}
-            >
-              Dashboard
-            </button>
-            <button
-              type="button"
-              onClick={() => setMainView('docs')}
-              style={{
-                fontWeight: mainView === 'docs' ? 600 : 400,
-                textDecoration: mainView === 'docs' ? 'underline' : 'none',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '0.85rem',
-              }}
-            >
-              Docs
-            </button>
+          <h2>{VIEW_TITLES[mainView]}</h2>
+          <nav
+            className="main-nav"
+            style={{ marginTop: '0.5rem', display: 'flex', gap: '0.75rem' }}
+          >
+            {navButton('dashboard', 'Dashboard')}
+            {navButton('docs', 'Docs')}
+            {navButton('context-pack', 'Context Pack')}
           </nav>
         </div>
         <div className="main-content">
           {mainView === 'dashboard' && (
-            <Dashboard onOpenDocs={handleOpenDocs} />
-          )}
-          {mainView === 'docs' && docsProjectId && (
-            <DocsPanel
-              projectId={docsProjectId}
-              onClose={() => setMainView('dashboard')}
+            <Dashboard
+              onOpenDocs={handleOpenDocs}
+              onOpenContextPack={handleOpenContextPack}
             />
           )}
-          {mainView === 'docs' && !docsProjectId && (
-            <p style={{ color: '#888', fontSize: '0.85rem' }}>
-              Select a project from the Dashboard first.
-            </p>
-          )}
+          {mainView === 'docs' &&
+            (projectId ? (
+              <DocsPanel projectId={projectId} onClose={() => setMainView('dashboard')} />
+            ) : (
+              <p style={{ color: '#888', fontSize: '0.85rem' }}>
+                Select a project from the Dashboard first.
+              </p>
+            ))}
+          {mainView === 'context-pack' &&
+            (projectId ? (
+              <ContextPackBuilder
+                projectId={projectId}
+                onClose={() => setMainView('dashboard')}
+              />
+            ) : (
+              <p style={{ color: '#888', fontSize: '0.85rem' }}>
+                Select a project from the Dashboard first.
+              </p>
+            ))}
         </div>
       </main>
 
