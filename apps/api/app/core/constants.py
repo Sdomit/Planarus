@@ -141,3 +141,56 @@ def doc_status_check_sql(column: str = "status") -> str:
 
 def doc_format_check_sql(column: str = "editor_format") -> str:
     return _check_sql(column, DOC_FORMATS)
+
+
+# --- Phase 7A: Approval engine ------------------------------------------------
+# ApprovalRequest lifecycle + binding enums. See docs/dev/phase-7a-approvals.md.
+APPROVAL_STATUSES: tuple[str, ...] = (
+    "pending",
+    "approved",
+    "applying",
+    "applied",
+    "rejected",
+    "expired",
+    "invalidated",
+    "failed",
+)
+
+# Phase 7A is local-only; the column exists for forward compatibility (7B/7C).
+APPROVAL_ORIGINS: tuple[str, ...] = ("local",)
+
+APPROVAL_RISK_LEVELS: tuple[str, ...] = ("low", "medium", "high")
+
+# The narrow, versioned action allowlist surfaced to the DB CHECK. The field-level
+# policy lives in app/policy/allowlist.py and MUST stay in sync with this tuple
+# (app/policy/allowlist.py asserts equality at import time).
+APPROVAL_ACTION_TYPES: tuple[str, ...] = (
+    "task.create",
+    "task.update",
+    "decision.create",
+)
+
+# Entity kinds an approval may target.
+APPROVAL_TARGET_ENTITY_TYPES: tuple[str, ...] = ("task", "decision")
+
+
+def approval_status_check_sql(column: str = "status") -> str:
+    return _check_sql(column, APPROVAL_STATUSES)
+
+
+def approval_origin_check_sql(column: str = "origin") -> str:
+    return _check_sql(column, APPROVAL_ORIGINS)
+
+
+def approval_risk_level_check_sql(column: str = "risk_level") -> str:
+    return _check_sql(column, APPROVAL_RISK_LEVELS)
+
+
+def approval_action_type_check_sql(column: str = "action_type") -> str:
+    return _check_sql(column, APPROVAL_ACTION_TYPES)
+
+
+def approval_target_entity_type_check_sql(
+    column: str = "target_entity_type",
+) -> str:
+    return _nullable_check_sql(column, APPROVAL_TARGET_ENTITY_TYPES)

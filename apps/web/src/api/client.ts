@@ -306,6 +306,50 @@ export interface ContextPackPreview {
   secret_findings: SecretFinding[]
 }
 
+// --- Approval Queue (Phase 7A) ---------------------------------------------
+
+export interface ApprovalSummary {
+  id: string
+  workspace_id: string
+  project_id: string
+  origin: string
+  actor_ref: string | null
+  action_type: string
+  target_entity_type: string | null
+  target_entity_id: string | null
+  risk_level: string
+  status: string
+  policy_version: number
+  created_at: string
+  expires_at: string
+  decided_at: string | null
+  decided_by: string | null
+  applied_at: string | null
+  reason: string | null
+  failure_reason: string | null
+}
+
+export interface DiffEntry {
+  field: string
+  before: unknown
+  after: unknown
+}
+
+export interface ApprovalDetail extends ApprovalSummary {
+  patch_checksum: string
+  diff: DiffEntry[]
+  is_expired: boolean
+  stale_reason: string | null
+  secret_warning: boolean
+}
+
+export interface ApprovalAuditEntry {
+  id: string
+  event_type: string
+  actor_type: string
+  created_at: string
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json', ...init?.headers },
@@ -316,6 +360,31 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(`${res.status}: ${text}`)
   }
   return res.json() as Promise<T>
+}
+
+// Local control token (Phase 7A): fetched once from the loopback API and attached
+// to every state-changing approval call. Held in memory only — never persisted.
+let _localToken: string | null = null
+
+export function _resetLocalTokenForTests(): void {
+  _localToken = null
+}
+
+async function getLocalToken(): Promise<string> {
+  if (_localToken) return _localToken
+  const res = await fetch(`${BASE}/local-session`)
+  if (!res.ok) throw new Error(`local session unavailable (${res.status})`)
+  const data = (await res.json()) as { token: string }
+  _localToken = data.token
+  return _localToken
+}
+
+async function controlRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = await getLocalToken()
+  return request<T>(path, {
+    ...init,
+    headers: { ...init?.headers, 'X-AgentBoard-Local-Token': token },
+  })
 }
 
 export const api = {
@@ -424,5 +493,28 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(body),
       }),
+  },
+  approvals: {
+    localSession: () => request<{ token: string }>('/local-session'),
+    list: (projectId?: string, status?: string) => {
+      const q = new URLSearchParams()
+      if (projectId) q.set('project_id', projectId)
+      if (status) q.set('status', status)
+      const qs = q.toString()
+      return request<ApprovalSummary[]>(`/approvals${qs ? `?${qs}` : ''}`)
+    },
+    get: (id: string) => request<ApprovalDetail>(`/approvals/${id}`),
+    audit: (id: string) => request<ApprovalAuditEntry[]>(`/approvals/${id}/audit`),
+    approve: (id: string) =>
+      controlRequest<ApprovalSummary>(`/approvals/${id}/approve`, { method: 'POST' }),
+    reject: (id: string, reason?: string) =>
+      controlRequest<ApprovalSummary>(`/approvals/${id}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: reason ?? null }),
+      }),
+    apply: (id: string) =>
+      controlRequest<ApprovalSummary>(`/approvals/${id}/apply`, { method: 'POST' }),
+    invalidate: (id: string) =>
+      controlRequest<ApprovalSummary>(`/approvals/${id}/invalidate`, { method: 'POST' }),
   },
 }

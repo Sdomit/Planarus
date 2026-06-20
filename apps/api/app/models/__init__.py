@@ -9,6 +9,7 @@ from app.models.decision import Decision  # noqa: F401
 from app.models.risk import Risk  # noqa: F401
 from app.models.blocker import Blocker  # noqa: F401
 from app.models.doc import Doc  # noqa: F401
+from app.models.approval_request import ApprovalRequest  # noqa: F401
 
 __all__ = [
     "Workspace",
@@ -22,4 +23,5 @@ __all__ = [
     "Risk",
     "Blocker",
     "Doc",
+    "ApprovalRequest",
 ]

@@ -18,9 +18,14 @@ function slugify(title: string): string {
 interface DashboardProps {
   onOpenDocs?: (projectId: string) => void
   onOpenContextPack?: (projectId: string) => void
+  onOpenApprovals?: (projectId: string) => void
 }
 
-export default function Dashboard({ onOpenDocs, onOpenContextPack }: DashboardProps) {
+export default function Dashboard({
+  onOpenDocs,
+  onOpenContextPack,
+  onOpenApprovals,
+}: DashboardProps) {
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -179,6 +184,15 @@ export default function Dashboard({ onOpenDocs, onOpenContextPack }: DashboardPr
                     style={{ fontSize: '0.75rem', cursor: 'pointer', background: 'none', border: '1px solid #ddd', borderRadius: '4px', padding: '0.2rem 0.5rem' }}
                   >
                     Context Pack
+                  </button>
+                )}
+                {onOpenApprovals && (
+                  <button
+                    className="btn-approvals"
+                    onClick={() => onOpenApprovals(p.id)}
+                    style={{ fontSize: '0.75rem', cursor: 'pointer', background: 'none', border: '1px solid #ddd', borderRadius: '4px', padding: '0.2rem 0.5rem' }}
+                  >
+                    Approvals
                   </button>
                 )}
               </div>

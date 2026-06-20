@@ -5,8 +5,9 @@ import ContextFilesPanel from './ContextFilesPanel'
 import PlanningPanel from './PlanningPanel'
 import DocsPanel from './DocsPanel'
 import ContextPackBuilder from './ContextPackBuilder'
+import ApprovalQueuePanel from './ApprovalQueuePanel'
 
-type MainView = 'dashboard' | 'docs' | 'context-pack'
+type MainView = 'dashboard' | 'docs' | 'context-pack' | 'approvals'
 
 // Minimal project context: Dashboard surfaces the selected project id so Layout
 // can pass it to the Docs and Context Pack views.
@@ -16,6 +17,7 @@ const VIEW_TITLES: Record<MainView, string> = {
   dashboard: 'Dashboard',
   docs: 'Docs',
   'context-pack': 'Context Pack',
+  approvals: 'Approval Queue',
 }
 
 export default function Layout() {
@@ -30,6 +32,11 @@ export default function Layout() {
   const handleOpenContextPack = (id: string) => {
     setProjectId(id)
     setMainView('context-pack')
+  }
+
+  const handleOpenApprovals = (id: string) => {
+    setProjectId(id)
+    setMainView('approvals')
   }
 
   const navButton = (view: MainView, label: string) => (
@@ -70,6 +77,7 @@ export default function Layout() {
             {navButton('dashboard', 'Dashboard')}
             {navButton('docs', 'Docs')}
             {navButton('context-pack', 'Context Pack')}
+            {navButton('approvals', 'Approvals')}
           </nav>
         </div>
         <div className="main-content">
@@ -77,6 +85,7 @@ export default function Layout() {
             <Dashboard
               onOpenDocs={handleOpenDocs}
               onOpenContextPack={handleOpenContextPack}
+              onOpenApprovals={handleOpenApprovals}
             />
           )}
           {mainView === 'docs' &&
@@ -90,6 +99,17 @@ export default function Layout() {
           {mainView === 'context-pack' &&
             (projectId ? (
               <ContextPackBuilder
+                projectId={projectId}
+                onClose={() => setMainView('dashboard')}
+              />
+            ) : (
+              <p style={{ color: '#888', fontSize: '0.85rem' }}>
+                Select a project from the Dashboard first.
+              </p>
+            ))}
+          {mainView === 'approvals' &&
+            (projectId ? (
+              <ApprovalQueuePanel
                 projectId={projectId}
                 onClose={() => setMainView('dashboard')}
               />

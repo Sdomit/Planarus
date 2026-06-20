@@ -34,10 +34,28 @@ def test_upgrade_then_downgrade(tmp_path):
     assert {"workspace", "project", "auditevent", "contextfile"} <= tables
     assert {"phase", "stage", "task", "decision", "risk", "blocker"} <= tables
     assert "doc" in tables
+    assert "approvalrequest" in tables
 
     command.downgrade(cfg, "base")
     tables = _tables(db_path)
+    assert "approvalrequest" not in tables
     assert "doc" not in tables
     assert "contextfile" not in tables
     assert "project" not in tables
     assert "workspace" not in tables
+
+
+def test_downgrade_one_revision_drops_only_approval(tmp_path):
+    """0005 -> 0004 removes approvalrequest but keeps every earlier table."""
+    db_path = tmp_path / "migrations_step.db"
+    cfg = _config(db_path)
+
+    command.upgrade(cfg, "head")
+    command.downgrade(cfg, "0004")
+    tables = _tables(db_path)
+    assert "approvalrequest" not in tables
+    assert "doc" in tables
+    assert {"task", "decision"} <= tables
+
+    command.upgrade(cfg, "head")
+    assert "approvalrequest" in _tables(db_path)

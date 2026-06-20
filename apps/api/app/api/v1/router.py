@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    approvals,
     blockers,
     context,
     context_pack,
@@ -28,3 +29,4 @@ router.include_router(risks.router, tags=["risks"])
 router.include_router(blockers.router, tags=["blockers"])
 router.include_router(docs.router, tags=["docs"])
 router.include_router(context_pack.router, tags=["context-pack"])
+router.include_router(approvals.router, tags=["approvals"])

@@ -1,10 +1,19 @@
 import hashlib
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 
 def now_utc() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def now_utc_plus_hours(hours: float) -> str:
+    """ISO-8601 UTC timestamp `hours` from now.
+
+    Used for approval expiry. Same format as `now_utc()`, so the two compare
+    correctly with a plain string `>=` (zero-padded, identical `+00:00` offset).
+    """
+    return (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat()
 
 
 def new_id(prefix: str) -> str:
