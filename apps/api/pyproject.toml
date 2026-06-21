@@ -8,6 +8,8 @@ dependencies = [
     "sqlmodel>=0.0.21",
     "pydantic-settings>=2.0.0",
     "alembic>=1.13.0",
+    # Phase 7B STDIO MCP server. Pinned to one exact resolved version (no range).
+    "mcp==1.28.0",
 ]
 
 [project.optional-dependencies]

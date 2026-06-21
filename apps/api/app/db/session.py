@@ -20,6 +20,11 @@ def configure_sqlite_pragmas(engine: Engine) -> None:
         cursor = dbapi_conn.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA foreign_keys=ON")
+        # WAL allows many readers + one writer; busy_timeout makes a writer wait
+        # briefly (rather than failing immediately) when the API and the Phase 7B
+        # MCP process contend for the write lock. Bounded so a stuck lock still
+        # surfaces as a normal, handleable error rather than hanging forever.
+        cursor.execute("PRAGMA busy_timeout=5000")
         cursor.close()
 
 

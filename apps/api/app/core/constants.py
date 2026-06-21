@@ -156,8 +156,9 @@ APPROVAL_STATUSES: tuple[str, ...] = (
     "failed",
 )
 
-# Phase 7A is local-only; the column exists for forward compatibility (7B/7C).
-APPROVAL_ORIGINS: tuple[str, ...] = ("local",)
+# Phase 7A was local-only; Phase 7B adds the MCP origin. The column still exists
+# for forward compatibility (7C external HTTP).
+APPROVAL_ORIGINS: tuple[str, ...] = ("local", "mcp")
 
 APPROVAL_RISK_LEVELS: tuple[str, ...] = ("low", "medium", "high")
 

@@ -16,6 +16,7 @@ import json
 from typing import Optional
 
 from sqlalchemy import update as sa_update
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.core.errors import (
@@ -24,7 +25,7 @@ from app.core.errors import (
     PolicyError,
     SecretDetectedError,
 )
-from app.core.utils import new_id, now_utc, now_utc_plus_hours
+from app.core.utils import new_id, now_utc, now_utc_plus_hours, sha256_hex
 from app.models.approval_request import ApprovalRequest
 from app.models.audit_event import AuditEvent
 from app.models.decision import Decision
@@ -42,6 +43,26 @@ APPROVAL_TTL_HOURS: float = 24.0
 
 _TARGET_MODELS = {"task": Task, "decision": Decision}
 _TERMINAL = ("applied", "rejected", "expired", "invalidated", "failed")
+# A proposal is "active" (still blocks an identical idempotent duplicate) while it
+# can still be applied. "failed" is included because apply() treats it as
+# retryable — so an identical re-proposal dedupes to the existing failed one
+# rather than creating a second row that could double-apply. Only the truly
+# terminal states (applied/rejected/expired/invalidated) free the idempotency key.
+# MUST mirror the partial unique index in the model AND migration 0006.
+_ACTIVE_STATUSES = ("pending", "approved", "applying", "failed")
+
+
+def _find_active_by_idempotency(
+    session: Session, origin: str, actor_ref: str, key: str
+) -> Optional[ApprovalRequest]:
+    """Return an existing active proposal matching the idempotency triple, if any."""
+    stmt = select(ApprovalRequest).where(
+        ApprovalRequest.origin == origin,
+        ApprovalRequest.actor_ref == actor_ref,
+        ApprovalRequest.idempotency_key == key,
+        ApprovalRequest.status.in_(_ACTIVE_STATUSES),
+    )
+    return session.exec(stmt).first()
 
 
 # --- internal helpers --------------------------------------------------------
@@ -188,12 +209,19 @@ def create_proposal(
     target_entity_id: Optional[str] = None,
     actor_ref: str = "local",
     origin: str = "local",
+    derive_idempotency: bool = False,
 ) -> ApprovalRequest:
-    """Create a pending proposal. Internal seam — not exposed over HTTP in 7A.
+    """Create a pending proposal. Internal seam — not exposed over HTTP.
 
     Raises ``LookupError`` (missing project/target), ``PolicyError`` (bad
     action/field/precondition/oversize), or ``SecretDetectedError`` (secret in a
     value). No ApprovalRequest row is created on any rejection.
+
+    When ``derive_idempotency`` is True (the Phase 7B MCP path), a server-side
+    idempotency key is derived from ``origin + actor_ref + workspace + project +
+    action + target + patch_checksum``; if an identical *active* proposal already
+    exists it is returned instead of creating a duplicate. Phase 7A local callers
+    omit this flag and are unaffected (key stays NULL → no dedupe).
     """
     project = session.get(Project, project_id)
     if project is None:
@@ -236,6 +264,28 @@ def create_proposal(
         session, action_type, project_id, normalized, target_entity_id, base_versions
     )
 
+    checksum = binding.patch_checksum(normalized)
+
+    # Server-derived idempotency (Phase 7B). The key is NEVER client-supplied.
+    idempotency_key: Optional[str] = None
+    if derive_idempotency:
+        idempotency_key = sha256_hex(
+            "|".join(
+                [
+                    origin,
+                    actor_ref,
+                    project.workspace_id,
+                    project_id,
+                    action_type,
+                    target_entity_id or "",
+                    checksum,
+                ]
+            )
+        )
+        existing = _find_active_by_idempotency(session, origin, actor_ref, idempotency_key)
+        if existing is not None:
+            return existing
+
     now = now_utc()
     ar = ApprovalRequest(
         id=new_id("apr"),
@@ -247,17 +297,29 @@ def create_proposal(
         target_entity_type=target_entity_type,
         target_entity_id=target_entity_id,
         proposed_patch_json=serialized,
-        patch_checksum=binding.patch_checksum(normalized),
+        patch_checksum=checksum,
         base_target_fingerprint=base_fingerprint,
         base_versions_json=binding.canonical_json(base_versions) if base_versions else None,
         policy_version=allowlist.POLICY_VERSION,
         risk_level="low" if policy.is_create else "medium",
         status="pending",
+        idempotency_key=idempotency_key,
         created_at=now,
         expires_at=now_utc_plus_hours(APPROVAL_TTL_HOURS),
     )
     session.add(ar)
-    session.flush()
+    try:
+        session.flush()
+    except IntegrityError:
+        # A concurrent identical proposal won the active-idempotency unique index.
+        session.rollback()
+        if idempotency_key is not None:
+            existing = _find_active_by_idempotency(
+                session, origin, actor_ref, idempotency_key
+            )
+            if existing is not None:
+                return existing
+        raise
     _audit(session, ar, "proposal_created", actor_type="system")
     session.commit()
     session.refresh(ar)

@@ -1,6 +1,6 @@
 from typing import Optional
 
-from sqlalchemy import CheckConstraint, Index
+from sqlalchemy import CheckConstraint, Index, text
 from sqlmodel import Field, SQLModel
 
 from app.core.constants import (
@@ -39,7 +39,22 @@ class ApprovalRequest(SQLModel, table=True):
         Index("ix_approval_status", "status"),
         Index("ix_approval_expires_at", "expires_at"),
         Index("ix_approval_origin", "origin"),
-        Index("uq_approval_idempotency_key", "idempotency_key", unique=True),
+        # Phase 7B: idempotency is unique only among *active* proposals, so an
+        # identical request is allowed again once the earlier one is truly terminal
+        # (rejected/expired/invalidated/applied). "failed" is treated as active
+        # because apply() can retry it — an identical re-proposal must dedupe to it
+        # rather than create a second row that could double-apply. Keyed by
+        # (origin, actor_ref, idempotency_key). Local proposals leave
+        # idempotency_key NULL (NULLs are distinct), so they never collide. This
+        # MUST match migration 0006 — tests build the schema from this model.
+        Index(
+            "uq_approval_active_idem",
+            "origin",
+            "actor_ref",
+            "idempotency_key",
+            unique=True,
+            sqlite_where=text("status IN ('pending', 'approved', 'applying', 'failed')"),
+        ),
     )
 
     id: str = Field(primary_key=True)
