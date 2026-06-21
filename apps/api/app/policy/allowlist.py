@@ -49,6 +49,11 @@ class ActionPolicy:
     is_create: bool
     allowed_fields: frozenset[str]
     required_fields: frozenset[str]
+    # Fields whose value is an internal canonical entity reference (not free text).
+    # A reference field is exempt from secret scanning ONLY after it is validated as
+    # an existing, project-owned reference for this exact proposal (never by prefix
+    # or entropy). Must be a subset of allowed_fields (asserted at import).
+    reference_fields: frozenset[str] = frozenset()
 
 
 ACTION_POLICIES: dict[str, ActionPolicy] = {
@@ -60,6 +65,7 @@ ACTION_POLICIES: dict[str, ActionPolicy] = {
             {"title", "description", "status", "priority", "phase_id", "stage_id", "due_at"}
         ),
         required_fields=frozenset({"title"}),
+        reference_fields=frozenset({"phase_id", "stage_id"}),
     ),
     "task.update": ActionPolicy(
         action_type="task.update",
@@ -69,6 +75,7 @@ ACTION_POLICIES: dict[str, ActionPolicy] = {
             {"title", "description", "status", "priority", "phase_id", "stage_id", "due_at"}
         ),
         required_fields=frozenset(),
+        reference_fields=frozenset({"phase_id", "stage_id"}),
     ),
     "decision.create": ActionPolicy(
         action_type="decision.create",
@@ -76,6 +83,7 @@ ACTION_POLICIES: dict[str, ActionPolicy] = {
         is_create=True,
         allowed_fields=frozenset({"title", "context", "decision", "status"}),
         required_fields=frozenset({"title", "decision"}),
+        reference_fields=frozenset(),
     ),
 }
 
@@ -83,6 +91,13 @@ ACTION_POLICIES: dict[str, ActionPolicy] = {
 assert set(ACTION_POLICIES) == set(
     APPROVAL_ACTION_TYPES
 ), "ACTION_POLICIES must match APPROVAL_ACTION_TYPES"
+
+# A reference field must be part of its action's schema. This keeps the scan-exempt
+# set (validated reference fields) bounded by the declared, allowlisted fields.
+for _action, _policy in ACTION_POLICIES.items():
+    assert (
+        _policy.reference_fields <= _policy.allowed_fields
+    ), f"reference_fields must be a subset of allowed_fields for {_action}"
 
 _TASK_STATUSES = frozenset(TASK_STATUSES)
 _TASK_PRIORITIES = frozenset(TASK_PRIORITIES)

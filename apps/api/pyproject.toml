@@ -10,6 +10,8 @@ dependencies = [
     "alembic>=1.13.0",
     # Phase 7B STDIO MCP server. Pinned to one exact resolved version (no range).
     "mcp==1.28.0",
+    # Phase 7C1 external API key hashing (Argon2id). Pinned to one exact version.
+    "argon2-cffi==25.1.0",
 ]
 
 [project.optional-dependencies]

@@ -76,7 +76,9 @@ def _patch_from(args: StrictArgs, fields: tuple[str, ...]) -> dict:
 
 
 def _require_propose(cap: Capability) -> None:
-    if not cap.valid or cap.tier != "propose":
+    # Capability-based check (shared by MCP propose tier and external API clients).
+    # For an MCP propose-tier capability can_propose is True; for read it is False.
+    if not cap.valid or not cap.can_propose:
         raise MCPToolError(CODE_FORBIDDEN, "propose capability required")
 
 
@@ -112,7 +114,7 @@ def _create(
             patch=patch,
             target_entity_id=target_entity_id,
             actor_ref=cap.actor_ref,
-            origin="mcp",
+            origin=cap.origin,
             derive_idempotency=True,
         )
     except SecretDetectedError:

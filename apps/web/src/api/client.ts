@@ -350,6 +350,39 @@ export interface ApprovalAuditEntry {
   created_at: string
 }
 
+// --- External API clients (Phase 7C1) --------------------------------------
+
+export interface ApiClientSummary {
+  id: string
+  workspace_id: string
+  key_id: string
+  label: string
+  can_read: boolean
+  can_propose: boolean
+  project_ids: string[]
+  enabled: boolean
+  created_at: string
+  expires_at: string
+  last_used_at: string | null
+  revoked_at: string | null
+}
+
+export interface ApiClientCreatePayload {
+  label: string
+  workspace_id: string
+  project_ids: string[]
+  can_read: boolean
+  can_propose: boolean
+  expires_in_days?: number
+}
+
+export interface ApiClientCreatedResponse {
+  client: ApiClientSummary
+  // The raw key — returned exactly once, never stored.
+  api_key: string
+  warning: string
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json', ...init?.headers },
@@ -516,5 +549,21 @@ export const api = {
       controlRequest<ApprovalSummary>(`/approvals/${id}/apply`, { method: 'POST' }),
     invalidate: (id: string) =>
       controlRequest<ApprovalSummary>(`/approvals/${id}/invalidate`, { method: 'POST' }),
+  },
+  // External API client (machine key) management — local-human only. Every call
+  // is local-control-gated, so all three go through controlRequest. The raw key is
+  // returned only by create() and is never persisted by the client.
+  apiClients: {
+    list: (workspaceId?: string) =>
+      controlRequest<ApiClientSummary[]>(
+        `/api-clients${workspaceId ? `?workspace_id=${workspaceId}` : ''}`,
+      ),
+    create: (data: ApiClientCreatePayload) =>
+      controlRequest<ApiClientCreatedResponse>('/api-clients', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    revoke: (id: string) =>
+      controlRequest<ApiClientSummary>(`/api-clients/${id}/revoke`, { method: 'POST' }),
   },
 }

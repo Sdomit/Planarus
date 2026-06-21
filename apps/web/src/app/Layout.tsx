@@ -6,8 +6,9 @@ import PlanningPanel from './PlanningPanel'
 import DocsPanel from './DocsPanel'
 import ContextPackBuilder from './ContextPackBuilder'
 import ApprovalQueuePanel from './ApprovalQueuePanel'
+import ExternalClientsPanel from './ExternalClientsPanel'
 
-type MainView = 'dashboard' | 'docs' | 'context-pack' | 'approvals'
+type MainView = 'dashboard' | 'docs' | 'context-pack' | 'approvals' | 'clients'
 
 // Minimal project context: Dashboard surfaces the selected project id so Layout
 // can pass it to the Docs and Context Pack views.
@@ -18,6 +19,7 @@ const VIEW_TITLES: Record<MainView, string> = {
   docs: 'Docs',
   'context-pack': 'Context Pack',
   approvals: 'Approval Queue',
+  clients: 'External API Clients',
 }
 
 export default function Layout() {
@@ -78,6 +80,7 @@ export default function Layout() {
             {navButton('docs', 'Docs')}
             {navButton('context-pack', 'Context Pack')}
             {navButton('approvals', 'Approvals')}
+            {navButton('clients', 'External API')}
           </nav>
         </div>
         <div className="main-content">
@@ -118,6 +121,11 @@ export default function Layout() {
                 Select a project from the Dashboard first.
               </p>
             ))}
+          {/* External API client management is workspace-level (its own selectors),
+              so it does not require a Dashboard project selection. */}
+          {mainView === 'clients' && (
+            <ExternalClientsPanel onClose={() => setMainView('dashboard')} />
+          )}
         </div>
       </main>
 

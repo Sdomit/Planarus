@@ -118,11 +118,26 @@ def _validate_dependencies(
     patch: dict,
     target_entity_id: Optional[str],
     base_versions: dict,
-) -> None:
-    """Validate task phase/stage references against the project. Raises PolicyError."""
-    if not action_type.startswith("task."):
-        return
+    policy: "allowlist.ActionPolicy",
+) -> frozenset[str]:
+    """Validate every declared reference field against canonical project ownership.
 
+    Returns the set of *patch* keys (a subset of ``policy.reference_fields``) that
+    were present, non-null, and validated as an existing, project-owned reference —
+    exactly the keys safe to exempt from secret scanning (a reference is exempt
+    *because* it was validated, never by prefix or entropy). Raises a GENERIC
+    ``PolicyError`` (no value echo) on any missing / cross-project / inconsistent
+    reference; the caller writes no row or audit on that failure.
+
+    Read-only: validates existence/ownership and records base versions for stale
+    detection; never mutates. Also runs at approve/apply time via ``_revalidate``
+    (where the returned set is ignored).
+    """
+    reference_fields = policy.reference_fields
+    if not reference_fields:
+        return frozenset()
+
+    validated: set[str] = set()
     effective_phase = patch.get("phase_id")
     effective_stage = patch.get("stage_id")
     existing = None
@@ -133,18 +148,24 @@ def _validate_dependencies(
     if "stage_id" not in patch and existing is not None:
         effective_stage = existing.stage_id
 
-    if effective_phase is not None:
+    if "phase_id" in reference_fields and effective_phase is not None:
         phase = session.get(Phase, effective_phase)
         if phase is None or phase.project_id != project_id:
-            raise PolicyError(f"phase '{effective_phase}' not found in project")
+            raise PolicyError("referenced phase is not a valid phase in this project")
         base_versions[effective_phase] = phase.updated_at
-    if effective_stage is not None:
+        if patch.get("phase_id") is not None:
+            validated.add("phase_id")
+    if "stage_id" in reference_fields and effective_stage is not None:
         stage = session.get(Stage, effective_stage)
         if stage is None or stage.project_id != project_id:
-            raise PolicyError(f"stage '{effective_stage}' not found in project")
+            raise PolicyError("referenced stage is not a valid stage in this project")
         if effective_phase is not None and stage.phase_id != effective_phase:
-            raise PolicyError("stage does not belong to the given phase")
+            raise PolicyError("referenced stage does not belong to the referenced phase")
         base_versions[effective_stage] = stage.updated_at
+        if patch.get("stage_id") is not None:
+            validated.add("stage_id")
+
+    return frozenset(validated)
 
 
 def _revalidate(session: Session, ar: ApprovalRequest) -> Optional[str]:
@@ -190,7 +211,7 @@ def _revalidate(session: Session, ar: ApprovalRequest) -> Optional[str]:
 
     try:
         _validate_dependencies(
-            session, ar.action_type, ar.project_id, normalized, ar.target_entity_id, {}
+            session, ar.action_type, ar.project_id, normalized, ar.target_entity_id, {}, policy
         )
     except PolicyError as exc:
         return exc.detail
@@ -234,13 +255,6 @@ def create_proposal(
     if len(serialized.encode("utf-8")) > allowlist.MAX_PATCH_BYTES:
         raise PolicyError("proposed patch exceeds size limit")
 
-    # Secret scan: reject; never store/return/audit the raw value.
-    for key, value in normalized.items():
-        if value is None:
-            continue
-        if secret_scan.scan(str(value), f"patch:{key}"):
-            raise SecretDetectedError()
-
     target_entity_type = policy.target_entity_type
     base_fingerprint: Optional[str] = None
     base_versions: dict = {}
@@ -260,9 +274,23 @@ def create_proposal(
         base_fingerprint = binding.target_fingerprint(policy.allowed_fields, target)
         base_versions[target_entity_id] = getattr(target, "updated_at", None)
 
-    _validate_dependencies(
-        session, action_type, project_id, normalized, target_entity_id, base_versions
+    # Canonical reference validation BEFORE the secret scan. Returns the patch keys
+    # validated as existing, project-owned references — the ONLY values exempt from
+    # secret scanning. A reference is exempt because it was validated, never by
+    # prefix/entropy; an invalid / cross-project / missing reference raises a generic
+    # PolicyError here and no row or audit is written.
+    validated_refs = _validate_dependencies(
+        session, action_type, project_id, normalized, target_entity_id, base_versions, policy
     )
+
+    # Secret-scan every non-null patch value EXCEPT the validated reference fields.
+    # Free text (title/description/decision/context/status/priority/due_at) is always
+    # scanned; reject before any row or audit is written, never echoing the value.
+    for key, value in normalized.items():
+        if value is None or key in validated_refs:
+            continue
+        if secret_scan.scan(str(value), f"patch:{key}"):
+            raise SecretDetectedError()
 
     checksum = binding.patch_checksum(normalized)
 

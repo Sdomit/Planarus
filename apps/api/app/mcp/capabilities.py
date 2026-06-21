@@ -27,24 +27,89 @@ _TIERS = ("read", "propose")
 
 @dataclass(frozen=True)
 class Capability:
+    """An immutable scope grant for a read/propose principal (MCP or external API).
+
+    ``tier`` is retained for the Phase 7B MCP path (the static registry and the
+    server log key on it, and the env config still uses ``tier=read|propose``).
+    Phase 7C1 adds the independent booleans ``can_read``/``can_propose`` (so an
+    external API key can grant exactly one of them), plus ``origin``
+    (``"mcp"``/``"api"``) and an explicit ``actor_ref`` override. When the booleans
+    are left ``None`` they are derived from ``tier`` so every existing MCP
+    construction site keeps the identical behaviour:
+
+        tier=read    -> can_read=True,  can_propose=False
+        tier=propose -> can_read=True,  can_propose=True
+    """
+
     tier: str
     workspace_id: str
     project_ids: frozenset[str]
     label: str
     valid: bool = True
+    origin: str = "mcp"
+    can_read: Optional[bool] = None
+    can_propose: Optional[bool] = None
+    # Explicit actor_ref (e.g. "api:<key_id>"); falls back to "mcp:<label>".
+    actor_ref_value: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        # Derive the booleans from tier when not explicitly provided, so legacy
+        # MCP construction (tier only) keeps identical read/propose visibility.
+        if self.can_read is None:
+            object.__setattr__(self, "can_read", self.tier in ("read", "propose"))
+        if self.can_propose is None:
+            object.__setattr__(self, "can_propose", self.tier == "propose")
 
     @property
     def actor_ref(self) -> str:
+        if self.actor_ref_value is not None:
+            return self.actor_ref_value
         return f"mcp:{self.label}"
 
     def allows_project(self, project_id: str) -> bool:
         return self.valid and project_id in self.project_ids
 
 
-# The default-deny capability: valid=False, no projects, read tier (lowest power).
+# The default-deny capability: valid=False, no projects, no powers.
 DENY = Capability(
-    tier="read", workspace_id="", project_ids=frozenset(), label="denied", valid=False
+    tier="read",
+    workspace_id="",
+    project_ids=frozenset(),
+    label="denied",
+    valid=False,
+    can_read=False,
+    can_propose=False,
 )
+
+
+def capability_from_api_client(
+    *,
+    workspace_id: str,
+    key_id: str,
+    project_ids: frozenset[str],
+    label: str,
+    can_read: bool,
+    can_propose: bool,
+) -> Capability:
+    """Build a validated Capability for an authenticated external ApiClient row.
+
+    Scope comes from the credential, never from a request body. ``actor_ref`` is
+    ``api:<key_id>`` and ``origin`` is ``"api"`` so external proposals are
+    distinguishable from MCP/local ones yet share policy/secret-scan/idempotency.
+    The booleans are authoritative for API clients; ``tier`` is set only for
+    cosmetic/log parity (the external routes gate on ``can_read``/``can_propose``).
+    """
+    return Capability(
+        tier="propose" if can_propose else "read",
+        workspace_id=workspace_id,
+        project_ids=project_ids,
+        label=label,
+        valid=True,
+        origin="api",
+        can_read=can_read,
+        can_propose=can_propose,
+        actor_ref_value=f"api:{key_id}",
+    )
 
 
 def _safe_label(raw: object) -> str:

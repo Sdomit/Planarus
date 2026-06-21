@@ -156,9 +156,10 @@ APPROVAL_STATUSES: tuple[str, ...] = (
     "failed",
 )
 
-# Phase 7A was local-only; Phase 7B adds the MCP origin. The column still exists
-# for forward compatibility (7C external HTTP).
-APPROVAL_ORIGINS: tuple[str, ...] = ("local", "mcp")
+# Phase 7A was local-only; Phase 7B adds the MCP origin; Phase 7C1 adds the
+# external HTTP API origin. Widening this tuple requires a paired migration that
+# rewrites the frozen ``ck_approval_origin`` CHECK (migration 0007 for 'api').
+APPROVAL_ORIGINS: tuple[str, ...] = ("local", "mcp", "api")
 
 APPROVAL_RISK_LEVELS: tuple[str, ...] = ("low", "medium", "high")
 

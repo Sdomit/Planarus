@@ -36,3 +36,17 @@ def client_fixture(session):
     app.dependency_overrides[get_session] = _override
     yield TestClient(app)
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(name="external_api")
+def external_api_fixture(monkeypatch):
+    """Enable the Phase 7C1 external API for the duration of a test + reset the
+    in-process rate limiter (state is process-global). Disabled-by-default is
+    restored automatically by monkeypatch."""
+    from app.core.config import settings
+    from app.core.rate_limit import limiter
+
+    monkeypatch.setattr(settings, "external_api_enabled", True)
+    limiter.reset()
+    yield
+    limiter.reset()

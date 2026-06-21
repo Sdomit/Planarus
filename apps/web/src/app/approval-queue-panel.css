@@ -120,6 +120,13 @@
   border: 1px solid var(--border, #ddd);
 }
 
+/* Phase 7C1: external-API-originated proposals (no behaviour change — label only). */
+.aqp-origin-api {
+  color: #5b21b6;
+  border-color: #ddd6fe;
+  background: #f5f3ff;
+}
+
 .aqp-risk-high {
   color: #991b1b;
   border-color: #fecaca;
