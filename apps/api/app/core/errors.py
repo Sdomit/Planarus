@@ -1,19 +1,33 @@
-"""Domain-level exceptions and their HTTP translations.
+"""FastAPI exception handlers — the HTTP boundary for domain exceptions.
 
-Services raise these framework-agnostic errors; a FastAPI exception handler
-(registered in `app.main`) maps them to structured JSON responses so route
-handlers stay thin and free of try/except.
+The framework-neutral exception CLASSES live in ``app/core/exceptions.py``; this
+module only maps them to HTTP responses and is imported only by ``app/main.py``.
+The classes are re-exported here for backward compatibility at the HTTP boundary.
+Service / policy / MCP code must import the classes from ``app.core.exceptions``,
+never from here, so those layers do not transitively load FastAPI.
 """
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from app.core.exceptions import (  # re-exported for the HTTP boundary only
+    ApprovalApplyError,
+    ApprovalConflictError,
+    ConflictError,
+    PolicyError,
+    SecretDetectedError,
+)
 
-class ConflictError(Exception):
-    """A write violated a uniqueness constraint (e.g. a duplicate slug)."""
-
-    def __init__(self, detail: str) -> None:
-        self.detail = detail
-        super().__init__(detail)
+__all__ = [
+    "ConflictError",
+    "ApprovalConflictError",
+    "PolicyError",
+    "SecretDetectedError",
+    "ApprovalApplyError",
+    "conflict_handler",
+    "unprocessable_handler",
+    "approval_conflict_handler",
+    "server_error_handler",
+]
 
 
 async def conflict_handler(_request: Request, exc: ConflictError) -> JSONResponse:
@@ -21,57 +35,9 @@ async def conflict_handler(_request: Request, exc: ConflictError) -> JSONRespons
 
 
 async def unprocessable_handler(_request: Request, exc: Exception) -> JSONResponse:
-    """Map a domain validation error (e.g. an unsafe path) to HTTP 422."""
+    """Map a domain validation error (unsafe path, policy/secret rejection) to HTTP 422."""
     detail = getattr(exc, "detail", None) or str(exc)
     return JSONResponse(status_code=422, content={"detail": detail})
-
-
-# --- Phase 7A: approval engine errors ----------------------------------------
-
-
-class ApprovalConflictError(Exception):
-    """An approval action is invalid for the request's current state (HTTP 409).
-
-    Covers replay, wrong-state, expired, stale, and invalidated transitions.
-    """
-
-    def __init__(self, detail: str) -> None:
-        self.detail = detail
-        super().__init__(detail)
-
-
-class PolicyError(Exception):
-    """A proposal violated the action/field allowlist or a precondition (HTTP 422)."""
-
-    def __init__(self, detail: str) -> None:
-        self.detail = detail
-        super().__init__(detail)
-
-
-class SecretDetectedError(Exception):
-    """A proposal payload contained a possible secret and was rejected (HTTP 422).
-
-    The detail is intentionally generic — a raw secret value is NEVER placed in
-    the message, response body, logs, or audit record.
-    """
-
-    def __init__(
-        self, detail: str = "proposal contains a possible secret and was rejected"
-    ) -> None:
-        self.detail = detail
-        super().__init__(detail)
-
-
-class ApprovalApplyError(Exception):
-    """Applying an approved proposal failed unexpectedly (HTTP 500).
-
-    The failure is recorded on the ApprovalRequest (status=failed) before this is
-    raised. The detail never contains secret or full-patch content.
-    """
-
-    def __init__(self, detail: str) -> None:
-        self.detail = detail
-        super().__init__(detail)
 
 
 async def approval_conflict_handler(

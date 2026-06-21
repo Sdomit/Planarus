@@ -15,7 +15,7 @@ from app.core.constants import (
     TASK_PRIORITIES,
     TASK_STATUSES,
 )
-from app.core.errors import PolicyError
+from app.core.exceptions import PolicyError
 
 POLICY_VERSION: int = 1
 

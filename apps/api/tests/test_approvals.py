@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from app.core.errors import PolicyError, SecretDetectedError
+from app.core.exceptions import PolicyError, SecretDetectedError
 from app.core.utils import new_id, now_utc, now_utc_plus_hours
 from app.models.approval_request import ApprovalRequest
 from app.models.audit_event import AuditEvent

@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from app.core.errors import ConflictError
+from app.core.exceptions import ConflictError
 from app.core.utils import new_id, now_utc
 from app.fsmemory.path_safety import PathSafetyError
 from app.models.project import Project

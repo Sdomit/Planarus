@@ -13,7 +13,7 @@ from typing import Optional
 
 from sqlmodel import Session
 
-from app.core.errors import PolicyError, SecretDetectedError
+from app.core.exceptions import PolicyError, SecretDetectedError
 from app.mcp.capabilities import Capability
 from app.mcp.errors import (
     CODE_FORBIDDEN,

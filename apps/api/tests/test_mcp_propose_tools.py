@@ -141,7 +141,7 @@ def test_failed_proposal_dedupes_no_double_create(
 ) -> None:
     """A failed proposal stays in the active idempotency set, so an identical
     re-proposal dedupes to it instead of creating a second applicable row."""
-    from app.core.errors import ApprovalApplyError
+    from app.core.exceptions import ApprovalApplyError
 
     ws, pid = seed(client, "pp13")
     cap = propose_cap(ws, pid)

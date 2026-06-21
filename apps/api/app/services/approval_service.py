@@ -19,7 +19,7 @@ from sqlalchemy import update as sa_update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from app.core.errors import (
+from app.core.exceptions import (
     ApprovalApplyError,
     ApprovalConflictError,
     PolicyError,
