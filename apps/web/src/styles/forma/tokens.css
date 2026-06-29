@@ -1,0 +1,251 @@
+/* ============================================================
+   FORMA — Claude Design System
+   Tokens: Primitive & Semantic CSS Custom Properties
+   ============================================================ */
+
+@import url("fonts.css");
+
+:root {
+
+  /* ── PRIMITIVE COLORS ──────────────────────────────────── */
+
+  /* Neutral */
+  --cn-0:   #FFFFFF;
+  --cn-50:  #FAFAF8;
+  --cn-100: #F3F3F0;
+  --cn-200: #E8E8E4;
+  --cn-300: #D1D1CC;
+  --cn-400: #A8A8A2;
+  --cn-500: #78786E;
+  --cn-600: #52524A;
+  --cn-700: #3A3A33;
+  --cn-800: #272720;
+  --cn-900: #1A1A14;
+  --cn-950: #0F0F0A;
+
+  /* Amber (Primary Accent) */
+  --ca-50:  #FFFBEB;
+  --ca-100: #FEF3C7;
+  --ca-200: #FDE68A;
+  --ca-300: #FCD34D;
+  --ca-400: #FBBF24;
+  --ca-500: #F59E0B;
+  --ca-600: #D97706;
+  --ca-700: #B45309;
+  --ca-800: #92400E;
+  --ca-900: #78350F;
+
+  /* Emerald (Success) */
+  --cs-50:  #ECFDF5;
+  --cs-100: #D1FAE5;
+  --cs-500: #10B981;
+  --cs-600: #059669;
+  --cs-700: #047857;
+  --cs-900: #064E3B;
+
+  /* Rose (Danger) */
+  --cd-50:  #FFF1F2;
+  --cd-100: #FFE4E6;
+  --cd-500: #F43F5E;
+  --cd-600: #E11D48;
+  --cd-700: #BE123C;
+  --cd-900: #881337;
+
+  /* Sky (Info) */
+  --ci-50:  #F0F9FF;
+  --ci-100: #E0F2FE;
+  --ci-500: #0EA5E9;
+  --ci-600: #0284C7;
+  --ci-700: #0369A1;
+  --ci-900: #0C4A6E;
+
+  /* ── SEMANTIC TOKENS ───────────────────────────────────── */
+
+  /* Backgrounds */
+  --bg-canvas:   var(--cn-50);
+  --bg-surface:  var(--cn-0);
+  --bg-subtle:   var(--cn-100);
+  --bg-muted:    var(--cn-200);
+  --bg-inverse:  var(--cn-900);
+
+  /* Text */
+  --text-primary:   var(--cn-900);
+  --text-secondary: var(--cn-600);
+  --text-tertiary:  var(--cn-400);
+  --text-disabled:  var(--cn-300);
+  --text-inverse:   var(--cn-0);
+  --text-accent:    var(--ca-700);
+  --text-success:   var(--cs-700);
+  --text-danger:    var(--cd-700);
+  --text-info:      var(--ci-700);
+
+  /* Borders */
+  --border-subtle:  var(--cn-200);
+  --border-default: var(--cn-300);
+  --border-strong:  var(--cn-500);
+  --border-accent:  var(--ca-600);
+
+  /* Accent */
+  --accent:         var(--ca-600);
+  --accent-hover:   var(--ca-700);
+  --accent-active:  var(--ca-800);
+  --accent-subtle:  var(--ca-50);
+  --accent-muted:   var(--ca-100);
+
+  /* Status */
+  --status-success-fg: var(--cs-700);
+  --status-success-bg: var(--cs-50);
+  --status-success-border: var(--cs-100);
+  --status-danger-fg:  var(--cd-700);
+  --status-danger-bg:  var(--cd-50);
+  --status-danger-border: var(--cd-100);
+  --status-warning-fg: var(--ca-700);
+  --status-warning-bg: var(--ca-50);
+  --status-warning-border: var(--ca-100);
+  --status-info-fg:    var(--ci-700);
+  --status-info-bg:    var(--ci-50);
+  --status-info-border: var(--ci-100);
+
+  /* ── TYPOGRAPHY ────────────────────────────────────────── */
+
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+  /* Size scale */
+  --text-xs:   0.6875rem; /* 11px */
+  --text-sm:   0.8125rem; /* 13px */
+  --text-base: 0.9375rem; /* 15px */
+  --text-md:   1rem;      /* 16px */
+  --text-lg:   1.125rem;  /* 18px */
+  --text-xl:   1.375rem;  /* 22px */
+  --text-2xl:  1.75rem;   /* 28px */
+  --text-3xl:  2.25rem;   /* 36px */
+  --text-4xl:  3rem;      /* 48px */
+  --text-5xl:  3.75rem;   /* 60px */
+
+  /* Line heights */
+  --leading-none:     1;
+  --leading-tight:    1.2;
+  --leading-snug:     1.35;
+  --leading-normal:   1.5;
+  --leading-relaxed:  1.65;
+  --leading-loose:    1.8;
+
+  /* Font weights */
+  --weight-normal:   400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  /* Letter spacing */
+  --tracking-tight:   -0.025em;
+  --tracking-snug:    -0.01em;
+  --tracking-normal:   0em;
+  --tracking-wide:     0.025em;
+  --tracking-wider:    0.06em;
+  --tracking-widest:   0.12em;
+
+  /* ── SPACING ───────────────────────────────────────────── */
+  --space-0:    0;
+  --space-px:   1px;
+  --space-0-5:  0.125rem;  /*  2px */
+  --space-1:    0.25rem;   /*  4px */
+  --space-1-5:  0.375rem;  /*  6px */
+  --space-2:    0.5rem;    /*  8px */
+  --space-2-5:  0.625rem;  /* 10px */
+  --space-3:    0.75rem;   /* 12px */
+  --space-3-5:  0.875rem;  /* 14px */
+  --space-4:    1rem;      /* 16px */
+  --space-5:    1.25rem;   /* 20px */
+  --space-6:    1.5rem;    /* 24px */
+  --space-7:    1.75rem;   /* 28px */
+  --space-8:    2rem;      /* 32px */
+  --space-10:   2.5rem;    /* 40px */
+  --space-12:   3rem;      /* 48px */
+  --space-14:   3.5rem;    /* 56px */
+  --space-16:   4rem;      /* 64px */
+  --space-20:   5rem;      /* 80px */
+  --space-24:   6rem;      /* 96px */
+  --space-32:   8rem;      /* 128px */
+
+  /* ── BORDER RADIUS ─────────────────────────────────────── */
+  --radius-none: 0;
+  --radius-xs:   2px;
+  --radius-sm:   4px;
+  --radius-md:   6px;
+  --radius-lg:   8px;
+  --radius-xl:   12px;
+  --radius-2xl:  16px;
+  --radius-3xl:  24px;
+  --radius-full: 9999px;
+
+  /* ── SHADOWS ───────────────────────────────────────────── */
+  --shadow-none: none;
+  --shadow-xs:   0 1px 2px rgba(15, 15, 10, 0.04);
+  --shadow-sm:   0 1px 3px rgba(15, 15, 10, 0.06), 0 1px 2px rgba(15, 15, 10, 0.04);
+  --shadow-md:   0 4px 8px rgba(15, 15, 10, 0.08), 0 2px 4px rgba(15, 15, 10, 0.04);
+  --shadow-lg:   0 12px 24px rgba(15, 15, 10, 0.09), 0 4px 8px rgba(15, 15, 10, 0.04);
+  --shadow-xl:   0 24px 48px rgba(15, 15, 10, 0.12), 0 8px 16px rgba(15, 15, 10, 0.05);
+  --shadow-inner: inset 0 1px 3px rgba(15, 15, 10, 0.08);
+
+  /* ── MOTION ────────────────────────────────────────────── */
+  --duration-instant: 50ms;  /* @kind other */
+  --duration-fast:    100ms; /* @kind other */
+  --duration-normal:  200ms; /* @kind other */
+  --duration-slow:    300ms; /* @kind other */
+  --duration-slower:  500ms; /* @kind other */
+  --duration-lazy:    800ms; /* @kind other */
+
+  --ease-linear:      linear;                          /* @kind other */
+  --ease-standard:    cubic-bezier(0.4, 0, 0.2, 1);    /* @kind other */
+  --ease-decelerate:  cubic-bezier(0.0, 0, 0.2, 1);    /* @kind other */
+  --ease-accelerate:  cubic-bezier(0.4, 0, 1, 1);      /* @kind other */
+  --ease-spring:      cubic-bezier(0.34, 1.56, 0.64, 1); /* @kind other */
+  --ease-snap:        cubic-bezier(0.22, 1, 0.36, 1);  /* @kind other */
+
+  /* ── Z-INDEX ───────────────────────────────────────────── */
+  --z-base:      0;   /* @kind other */
+  --z-raised:    10;  /* @kind other */
+  --z-dropdown:  100; /* @kind other */
+  --z-sticky:    200; /* @kind other */
+  --z-overlay:   300; /* @kind other */
+  --z-modal:     400; /* @kind other */
+  --z-toast:     500; /* @kind other */
+}
+
+/* ── DARK MODE ─────────────────────────────────────────────── */
+[data-theme="dark"] {
+  --bg-canvas:   #111110;
+  --bg-surface:  var(--cn-900);
+  --bg-subtle:   var(--cn-800);
+  --bg-muted:    var(--cn-700);
+  --bg-inverse:  var(--cn-100);
+
+  --text-primary:   var(--cn-50);
+  --text-secondary: var(--cn-300);
+  --text-tertiary:  var(--cn-500);
+  --text-disabled:  var(--cn-700);
+  --text-inverse:   var(--cn-900);
+
+  --border-subtle:  rgba(255,255,255,0.06);
+  --border-default: rgba(255,255,255,0.10);
+  --border-strong:  rgba(255,255,255,0.18);
+
+  --accent-subtle:  rgba(217, 119, 6, 0.12);
+  --accent-muted:   rgba(217, 119, 6, 0.20);
+
+  --status-success-bg: rgba(5, 150, 105, 0.12);
+  --status-success-border: rgba(5, 150, 105, 0.2);
+  --status-danger-bg: rgba(225, 29, 72, 0.12);
+  --status-danger-border: rgba(225, 29, 72, 0.2);
+  --status-warning-bg: rgba(217, 119, 6, 0.12);
+  --status-warning-border: rgba(217, 119, 6, 0.2);
+  --status-info-bg: rgba(2, 132, 199, 0.12);
+  --status-info-border: rgba(2, 132, 199, 0.2);
+
+  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md:  0 4px 8px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.2);
+  --shadow-lg:  0 12px 24px rgba(0, 0, 0, 0.4), 0 4px 8px rgba(0, 0, 0, 0.25);
+  --shadow-xl:  0 24px 48px rgba(0, 0, 0, 0.5), 0 8px 16px rgba(0, 0, 0, 0.3);
+}

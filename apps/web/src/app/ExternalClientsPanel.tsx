@@ -13,11 +13,9 @@ const DEFAULT_EXPIRY = 90
 const EXPOSURE_WARNING =
   'The external API is disabled by default and should remain loopback-bound (127.0.0.1) unless you deliberately expose it. Keys grant read and/or pending-proposal access only — never approve or apply.'
 
-interface ExternalClientsPanelProps {
-  onClose: () => void
-}
+interface ExternalClientsPanelProps { onClose: () => void }
 
-// --- one-time raw-key modal --------------------------------------------------
+// --- one-time raw-key modal — uses Forma modal classes ------------------
 
 function RawKeyModal({ apiKey, onClose }: { apiKey: string; onClose: () => void }) {
   const [copied, setCopied] = useState(false)
@@ -30,28 +28,35 @@ function RawKeyModal({ apiKey, onClose }: { apiKey: string; onClose: () => void 
   }
 
   return (
-    <div className="ecp-modal" role="dialog" aria-label="New API key">
-      <div className="ecp-modal-box">
-        <h3>API key created</h3>
-        <p className="ecp-warn">
-          Copy and store this key now — it is shown <strong>only once</strong> and
-          cannot be retrieved again.
-        </p>
-        <code className="ecp-key">{apiKey}</code>
-        <div className="ecp-modal-actions">
-          <button type="button" onClick={copy}>
-            {copied ? 'Copied' : 'Copy'}
+    <div className="modal-overlay" role="dialog" aria-label="New API key">
+      <div className="modal modal-sm">
+        <div className="modal-header">
+          <span className="modal-title">API key created</span>
+        </div>
+        <div className="modal-body">
+          <p style={{ color: 'var(--status-warning-fg)', fontSize: 'var(--text-sm)', marginTop: 0 }}>
+            Copy and store this key now — it is shown <strong>only once</strong> and cannot be retrieved again.
+          </p>
+          <code style={{
+            display: 'block', wordBreak: 'break-all',
+            background: 'var(--bg-subtle)', border: '1px solid var(--border-default)',
+            borderRadius: 'var(--radius-md)', padding: 'var(--space-3)',
+            fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)',
+            margin: 'var(--space-3) 0',
+          }}>{apiKey}</code>
+        </div>
+        <div className="modal-footer">
+          <button type="button" className="btn btn-outline btn-sm" onClick={copy}>
+            {copied ? 'Copied ✓' : 'Copy'}
           </button>
-          <button type="button" onClick={onClose}>
-            Done
-          </button>
+          <button type="button" className="btn btn-solid btn-sm" onClick={onClose}>Done</button>
         </div>
       </div>
     </div>
   )
 }
 
-// --- create form -------------------------------------------------------------
+// --- create form -------------------------------------------------------
 
 interface CreateFormProps {
   workspaceId: string
@@ -70,109 +75,78 @@ function CreateClientForm({ workspaceId, projects, onCreated, onCancel }: Create
   const [error, setError] = useState<string | null>(null)
 
   const toggleProject = (id: string) =>
-    setProjectIds((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]))
+    setProjectIds(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id])
 
   const valid = label.trim() !== '' && projectIds.length > 0 && (canRead || canPropose)
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!valid) return
-    setSaving(true)
-    setError(null)
+    setSaving(true); setError(null)
     api.apiClients
-      .create({
-        label: label.trim(),
-        workspace_id: workspaceId,
-        project_ids: projectIds,
-        can_read: canRead,
-        can_propose: canPropose,
-        expires_in_days: expiry,
-      })
-      .then((res) => onCreated(res.api_key))
+      .create({ label: label.trim(), workspace_id: workspaceId, project_ids: projectIds, can_read: canRead, can_propose: canPropose, expires_in_days: expiry })
+      .then(res => onCreated(res.api_key))
       .catch((err: Error) => setError(err.message))
       .finally(() => setSaving(false))
   }
 
   return (
     <form className="ecp-form" onSubmit={submit}>
-      <label className="ecp-field">
-        <span>Label</span>
-        <input
-          type="text"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder="e.g. ci-readonly"
-          autoFocus
-        />
-      </label>
+      <div className="form-field">
+        <label className="form-label">Label</label>
+        <input className="input" type="text" value={label}
+          onChange={e => setLabel(e.target.value)} placeholder="e.g. ci-readonly" autoFocus />
+      </div>
 
       <fieldset className="ecp-fieldset">
         <legend>Projects (at least one)</legend>
-        {projects.length === 0 ? (
-          <p className="ecp-muted">No projects in this workspace.</p>
-        ) : (
-          projects.map((p) => (
+        {projects.length === 0
+          ? <p style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)', margin: 0 }}>No projects in this workspace.</p>
+          : projects.map(p => (
             <label key={p.id} className="ecp-check-row">
-              <input
-                type="checkbox"
-                checked={projectIds.includes(p.id)}
-                onChange={() => toggleProject(p.id)}
-              />
+              <input type="checkbox" checked={projectIds.includes(p.id)} onChange={() => toggleProject(p.id)} />
               <span>{p.title}</span>
             </label>
-          ))
-        )}
+          ))}
       </fieldset>
 
       <fieldset className="ecp-fieldset">
         <legend>Permissions (at least one)</legend>
         <label className="ecp-check-row">
-          <input type="checkbox" checked={canRead} onChange={(e) => setCanRead(e.target.checked)} />
+          <input type="checkbox" checked={canRead} onChange={e => setCanRead(e.target.checked)} />
           <span>can_read — bounded project reads</span>
         </label>
         <label className="ecp-check-row">
-          <input
-            type="checkbox"
-            checked={canPropose}
-            onChange={(e) => setCanPropose(e.target.checked)}
-          />
+          <input type="checkbox" checked={canPropose} onChange={e => setCanPropose(e.target.checked)} />
           <span>can_propose — create pending proposals</span>
         </label>
       </fieldset>
 
-      <label className="ecp-field">
-        <span>Expires in</span>
-        <select value={expiry} onChange={(e) => setExpiry(Number(e.target.value))}>
-          {EXPIRY_OPTIONS.map((d) => (
-            <option key={d} value={d}>
-              {d} days{d === DEFAULT_EXPIRY ? ' (default)' : ''}
-            </option>
+      <div className="form-field">
+        <label className="form-label">Expires in</label>
+        <select className="input select" value={expiry} onChange={e => setExpiry(Number(e.target.value))}>
+          {EXPIRY_OPTIONS.map(d => (
+            <option key={d} value={d}>{d} days{d === DEFAULT_EXPIRY ? ' (default)' : ''}</option>
           ))}
         </select>
-      </label>
+      </div>
 
       {error && <p className="ecp-error">{error}</p>}
-      {!valid && (
-        <p className="ecp-hint">
-          Provide a label, select at least one project, and grant at least one permission.
-        </p>
-      )}
+      {!valid && <p className="ecp-hint">Provide a label, select at least one project, and grant at least one permission.</p>}
 
       <div className="ecp-form-actions">
-        <button type="submit" disabled={!valid || saving}>
+        <button type="submit" disabled={!valid || saving} className="btn btn-solid btn-sm">
           {saving ? 'Creating…' : 'Create key'}
         </button>
-        <button type="button" onClick={onCancel}>
-          Cancel
-        </button>
+        <button type="button" className="btn btn-outline btn-sm" onClick={onCancel}>Cancel</button>
       </div>
     </form>
   )
 }
 
-// --- root panel --------------------------------------------------------------
+// --- root panel --------------------------------------------------------
 
-export default function ExternalClientsPanel({ onClose }: ExternalClientsPanelProps) {
+export default function ExternalClientsPanel({ onClose: _onClose }: ExternalClientsPanelProps) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [workspaceId, setWorkspaceId] = useState('')
   const [projects, setProjects] = useState<Project[]>([])
@@ -180,38 +154,24 @@ export default function ExternalClientsPanel({ onClose }: ExternalClientsPanelPr
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
-  // The raw key lives in memory only and is cleared when the modal closes or the
-  // component unmounts. It is never written to storage, URLs, or logs.
+  // ponytail: raw key lives in memory only, cleared on modal close or unmount
   const [rawKey, setRawKey] = useState<string | null>(null)
 
   useEffect(() => {
-    api.workspaces
-      .list()
-      .then((ws) => {
-        setWorkspaces(ws)
-        if (ws[0]) setWorkspaceId(ws[0].id)
-        else setLoading(false)
-      })
-      .catch((e: Error) => {
-        setError(e.message)
-        setLoading(false)
-      })
+    api.workspaces.list()
+      .then(ws => { setWorkspaces(ws); if (ws[0]) setWorkspaceId(ws[0].id); else setLoading(false) })
+      .catch((e: Error) => { setError(e.message); setLoading(false) })
   }, [])
 
   useEffect(() => {
     if (!workspaceId) return
-    setLoading(true)
-    setError(null)
+    setLoading(true); setError(null)
     Promise.all([api.projects.list(workspaceId), api.apiClients.list(workspaceId)])
-      .then(([projs, cls]) => {
-        setProjects(projs)
-        setClients(cls)
-      })
+      .then(([projs, cls]) => { setProjects(projs); setClients(cls) })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false))
   }, [workspaceId])
 
-  // Defence-in-depth: clear the one-time key from memory on unmount.
   useEffect(() => () => setRawKey(null), [])
 
   const reloadClients = () => {
@@ -221,94 +181,60 @@ export default function ExternalClientsPanel({ onClose }: ExternalClientsPanelPr
 
   const handleRevoke = (id: string) => {
     if (!window.confirm('Revoke this API key? This is permanent and cannot be undone.')) return
-    api.apiClients
-      .revoke(id)
-      .then(reloadClients)
-      .catch((e: Error) => setError(e.message))
+    api.apiClients.revoke(id).then(reloadClients).catch((e: Error) => setError(e.message))
   }
 
-  const handleCreated = (key: string) => {
-    setShowCreate(false)
-    setRawKey(key)
-    reloadClients()
-  }
+  const handleCreated = (key: string) => { setShowCreate(false); setRawKey(key); reloadClients() }
 
   return (
     <div className="ecp-panel">
-      <div className="ecp-panel-header">
-        <span className="ecp-panel-title">External API Clients</span>
-        <button className="ecp-close" onClick={onClose} title="Close">
-          ✕
-        </button>
-      </div>
-
-      <p className="ecp-exposure" role="note">
-        {EXPOSURE_WARNING}
-      </p>
+      <p className="ecp-exposure" role="note">{EXPOSURE_WARNING}</p>
 
       <div className="ecp-toolbar">
-        <label className="ecp-ws-select">
-          Workspace:
-          <select
-            value={workspaceId}
-            onChange={(e) => setWorkspaceId(e.target.value)}
-            disabled={workspaces.length === 0}
-          >
-            {workspaces.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name}
-              </option>
-            ))}
+        <label className="ecp-ws-label">
+          Workspace
+          <select className="input select input-sm" value={workspaceId}
+            onChange={e => setWorkspaceId(e.target.value)} disabled={workspaces.length === 0}>
+            {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
           </select>
         </label>
-        <button
-          type="button"
-          className="ecp-new"
-          onClick={() => setShowCreate((v) => !v)}
-          disabled={!workspaceId}
-        >
+        <button type="button" className="btn btn-outline btn-sm"
+          onClick={() => setShowCreate(v => !v)} disabled={!workspaceId}>
           {showCreate ? 'Cancel' : '+ New key'}
         </button>
       </div>
 
       {showCreate && workspaceId && (
-        <CreateClientForm
-          workspaceId={workspaceId}
-          projects={projects}
-          onCreated={handleCreated}
-          onCancel={() => setShowCreate(false)}
-        />
+        <CreateClientForm workspaceId={workspaceId} projects={projects}
+          onCreated={handleCreated} onCancel={() => setShowCreate(false)} />
       )}
 
       {error && <p className="ecp-error">{error}</p>}
-      {loading ? (
-        <p className="ecp-muted">Loading…</p>
-      ) : clients.length === 0 ? (
-        <p className="ecp-muted">No external API keys in this workspace.</p>
-      ) : (
-        <ul className="ecp-list">
-          {clients.map((c) => (
-            <li key={c.id} className={`ecp-item${c.revoked_at ? ' ecp-item-revoked' : ''}`}>
-              <div className="ecp-item-main">
-                <span className="ecp-item-label">{c.label}</span>
-                <span className="ecp-item-keyid">{c.key_id.slice(0, 10)}…</span>
-              </div>
-              <div className="ecp-item-meta">
-                {c.can_read && <span className="ecp-perm">read</span>}
-                {c.can_propose && <span className="ecp-perm">propose</span>}
-                <span className="ecp-projects">{c.project_ids.length} project(s)</span>
-                {c.revoked_at ? (
-                  <span className="ecp-revoked">revoked</span>
-                ) : (
-                  <button type="button" className="ecp-revoke" onClick={() => handleRevoke(c.id)}>
-                    Revoke
-                  </button>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+
+      {loading
+        ? <p className="ecp-muted">Loading…</p>
+        : clients.length === 0
+          ? <p className="ecp-muted">No external API keys in this workspace.</p>
+          : (
+            <div className="ab-tablecard">
+              <ul className="ecp-list">
+                {clients.map(c => (
+                  <li key={c.id} className={`ecp-item${c.revoked_at ? ' ecp-item-revoked' : ''}`}>
+                    <span className="ecp-item-label">{c.label}</span>
+                    <span className="ecp-item-keyid">{c.key_id.slice(0, 10)}…</span>
+                    <div className="ecp-item-meta">
+                      {c.can_read && <span className="ecp-perm">read</span>}
+                      {c.can_propose && <span className="ecp-perm">propose</span>}
+                      <span className="ecp-projects">{c.project_ids.length}p</span>
+                      {c.revoked_at
+                        ? <span className="ecp-revoked-label">revoked</span>
+                        : <button type="button" className="btn btn-destructive btn-xs" onClick={() => handleRevoke(c.id)}>Revoke</button>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
       {rawKey && <RawKeyModal apiKey={rawKey} onClose={() => setRawKey(null)} />}
     </div>

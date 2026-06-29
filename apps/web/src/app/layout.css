@@ -1,0 +1,62 @@
+/* Mobile navigation drawer — overrides applied only at <=639px */
+
+.ab-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+.ab-menu-btn:hover { background: var(--bg-subtle); }
+.ab-menu-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.ab-menu-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 999;
+}
+
+@media (max-width: 639px) {
+  .ab-menu-btn { display: flex; }
+
+  .ab-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 256px;
+    z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+  }
+
+  .ab-sidebar.ab-sidebar--open {
+    transform: translateX(0);
+  }
+
+  /* The sidebar is now position:fixed, but the app grid still reserves its
+     240px track — collapse to one column so main fills the viewport instead
+     of being squeezed into 240px with dead space beside it. */
+  .ab-app { grid-template-columns: 1fr; }
+
+  /* Topbar: drop the decorative search (no handler) and tighten padding so the
+     page title fits on a phone instead of being overlapped. */
+  .ab-topbar { padding: 0 var(--space-4); gap: var(--space-3); }
+  .ab-search { display: none; }
+  .ab-tb-title, .ab-tb-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+  /* Multi-column content grids stack on a phone. */
+  .ab-content-inner { padding: var(--space-4); }
+  .ab-kpis { grid-template-columns: 1fr 1fr; }
+  .ab-docs,
+  .ab-pack,
+  .ab-formgrid { grid-template-columns: 1fr; }
+}

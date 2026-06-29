@@ -8,7 +8,6 @@ import {
 } from '../api/client'
 import './context-pack-builder.css'
 
-// Maps an optional structured source id to its selection flag.
 const OPTIONAL_FLAG: Record<string, keyof OptionalFlags> = {
   tasks_done: 'include_done_tasks',
   risks_closed: 'include_closed_risks',
@@ -33,12 +32,9 @@ const EMPTY_FLAGS: OptionalFlags = {
   include_audit_slice: false,
 }
 
-interface ContextPackBuilderProps {
-  projectId: string
-  onClose: () => void
-}
+interface ContextPackBuilderProps { projectId: string; onClose: () => void }
 
-export default function ContextPackBuilder({ projectId, onClose }: ContextPackBuilderProps) {
+export default function ContextPackBuilder({ projectId }: ContextPackBuilderProps) {
   const [profilesData, setProfilesData] = useState<ContextPackProfilesResponse | null>(null)
   const [sources, setSources] = useState<ContextPackSources | null>(null)
   const [loading, setLoading] = useState(true)
@@ -63,30 +59,21 @@ export default function ContextPackBuilder({ projectId, onClose }: ContextPackBu
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    setLoadError(null)
+    setLoading(true); setLoadError(null)
     Promise.all([api.contextPack.profiles(), api.contextPack.sources(projectId)])
-      .then(([p, s]) => {
-        if (cancelled) return
-        setProfilesData(p)
-        setSources(s)
-      })
+      .then(([p, s]) => { if (!cancelled) { setProfilesData(p); setSources(s) } })
       .catch((e: Error) => !cancelled && setLoadError(e.message))
       .finally(() => !cancelled && setLoading(false))
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [projectId])
 
-  const buildSelection = useCallback((): ContextPackSelection => {
-    return {
-      document_ids: selectedDocs,
-      document_order: selectedDocs,
-      pinned_source_ids: [...pinned],
-      excluded_source_ids: [...excluded],
-      ...optionals,
-    }
-  }, [selectedDocs, pinned, excluded, optionals])
+  const buildSelection = useCallback((): ContextPackSelection => ({
+    document_ids: selectedDocs,
+    document_order: selectedDocs,
+    pinned_source_ids: [...pinned],
+    excluded_source_ids: [...excluded],
+    ...optionals,
+  }), [selectedDocs, pinned, excluded, optionals])
 
   const liveEstimate = useMemo(() => {
     if (!sources) return 0
@@ -102,249 +89,178 @@ export default function ContextPackBuilder({ projectId, onClose }: ContextPackBu
   }, [sources, excluded, optionals, selectedDocs])
 
   const generate = useCallback(() => {
-    setGenerating(true)
-    setGenError(null)
-    setCopied(false)
-    setShowCopyConfirm(false)
+    setGenerating(true); setGenError(null); setCopied(false); setShowCopyConfirm(false)
     api.contextPack
-      .preview(projectId, {
-        profile,
-        target_tool: targetTool,
-        budget_preset: budget,
-        objective,
-        selection: buildSelection(),
-      })
+      .preview(projectId, { profile, target_tool: targetTool, budget_preset: budget, objective, selection: buildSelection() })
       .then(setPreview)
       .catch((e: Error) => setGenError(e.message))
       .finally(() => setGenerating(false))
   }, [projectId, profile, targetTool, budget, objective, buildSelection])
 
   const confirmCopy = useCallback(() => {
-    if (preview && navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(preview.markdown)
-    }
-    setCopied(true)
-    setShowCopyConfirm(false)
+    if (preview && navigator.clipboard?.writeText) navigator.clipboard.writeText(preview.markdown)
+    setCopied(true); setShowCopyConfirm(false)
   }, [preview])
 
   const toggleStructured = (sourceId: string, isOptional: boolean) => {
     if (isOptional) {
       const flag = OPTIONAL_FLAG[sourceId]
-      setOptionals((o) => ({ ...o, [flag]: !o[flag] }))
+      setOptionals(o => ({ ...o, [flag]: !o[flag] }))
     } else {
-      setExcluded((prev) => {
+      setExcluded(prev => {
         const next = new Set(prev)
-        if (next.has(sourceId)) next.delete(sourceId)
-        else next.add(sourceId)
+        if (next.has(sourceId)) next.delete(sourceId); else next.add(sourceId)
         return next
       })
     }
   }
 
-  const toggleDoc = (docId: string) => {
-    setSelectedDocs((prev) =>
-      prev.includes(docId) ? prev.filter((d) => d !== docId) : [...prev, docId],
-    )
-  }
+  const toggleDoc = (docId: string) =>
+    setSelectedDocs(prev => prev.includes(docId) ? prev.filter(d => d !== docId) : [...prev, docId])
 
-  const togglePin = (sourceId: string) => {
-    setPinned((prev) => {
+  const togglePin = (sourceId: string) =>
+    setPinned(prev => {
       const next = new Set(prev)
-      if (next.has(sourceId)) next.delete(sourceId)
-      else next.add(sourceId)
+      if (next.has(sourceId)) next.delete(sourceId); else next.add(sourceId)
       return next
     })
-  }
 
-  const moveDoc = (docId: string, dir: -1 | 1) => {
-    setSelectedDocs((prev) => {
-      const i = prev.indexOf(docId)
-      const j = i + dir
+  const moveDoc = (docId: string, dir: -1 | 1) =>
+    setSelectedDocs(prev => {
+      const i = prev.indexOf(docId), j = i + dir
       if (i < 0 || j < 0 || j >= prev.length) return prev
-      const next = [...prev]
-      ;[next[i], next[j]] = [next[j], next[i]]
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]]
       return next
     })
-  }
 
   if (loading) return <p className="cpb-state">Loading sources…</p>
-  if (loadError) {
-    return (
-      <div className="cpb-state cpb-error">
-        <p>{loadError}</p>
-      </div>
-    )
-  }
-  if (!profilesData || !sources) {
-    return <p className="cpb-state">No data available.</p>
-  }
+  if (loadError) return <p className="cpb-state" style={{ color: 'var(--status-danger-fg)' }}>{loadError}</p>
+  if (!profilesData || !sources) return <p className="cpb-state">No data available.</p>
 
   return (
     <div className="cpb-panel">
-      <div className="cpb-header">
-        <span className="cpb-title">Context Pack Builder</span>
-        <button className="cpb-close" onClick={onClose} title="Close">
-          ✕
-        </button>
-      </div>
-
-      <p className="cpb-privacy-notice" role="note">
-        🔒 Packs are local. Nothing is sent anywhere until you copy it.
+      <p className="cpb-notice" role="note">
+        🔒 Packs are local — nothing is sent anywhere until you copy it.
       </p>
 
-      <div className="cpb-body">
+      <div className="cpb-layout">
+        {/* Left: controls */}
         <div className="cpb-controls">
-          <label className="cpb-field">
-            <span>Profile</span>
-            <select value={profile} onChange={(e) => setProfile(e.target.value)}>
-              {profilesData.profiles.map((p) => (
-                <option key={p.key} value={p.key}>
-                  {p.label}
-                </option>
-              ))}
+          <div className="cpb-field">
+            <label className="cpb-field-label">Profile</label>
+            <select className="input select" value={profile} onChange={e => setProfile(e.target.value)}>
+              {profilesData.profiles.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
             </select>
-          </label>
+          </div>
 
-          <label className="cpb-field">
-            <span>Target tool</span>
-            <select value={targetTool} onChange={(e) => setTargetTool(e.target.value)}>
-              {profilesData.target_tools.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
+          <div className="cpb-field">
+            <label className="cpb-field-label">Target tool</label>
+            <select className="input select" value={targetTool} onChange={e => setTargetTool(e.target.value)}>
+              {profilesData.target_tools.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
-          </label>
+          </div>
 
-          <label className="cpb-field">
-            <span>Budget</span>
-            <select value={budget} onChange={(e) => setBudget(e.target.value)}>
+          <div className="cpb-field">
+            <label className="cpb-field-label">Budget</label>
+            <select className="input select" value={budget} onChange={e => setBudget(e.target.value)}>
               {Object.entries(profilesData.budget_presets).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {k} (~{v.toLocaleString()} tok)
-                </option>
+                <option key={k} value={k}>{k} (~{v.toLocaleString()} tok)</option>
               ))}
             </select>
-          </label>
+          </div>
 
-          <label className="cpb-field cpb-objective">
-            <span>Your task (authoritative — kept separate from project data)</span>
-            <textarea
-              placeholder="Describe the single task you want the agent to do…"
-              value={objective}
-              onChange={(e) => setObjective(e.target.value)}
-              rows={3}
-            />
-          </label>
+          <div className="cpb-field">
+            <label className="cpb-field-label">
+              Your task <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>(authoritative — kept separate from project data)</span>
+            </label>
+            <textarea className="input" placeholder="Describe the single task you want the agent to do…"
+              value={objective} onChange={e => setObjective(e.target.value)} rows={3} />
+          </div>
 
-          <fieldset className="cpb-sources">
-            <legend>Project sources</legend>
-            {sources.structured.map((s) => {
-              const checked = s.optional
-                ? optionals[OPTIONAL_FLAG[s.source_id]]
-                : !excluded.has(s.source_id)
+          <div className="cpb-srcgroup">
+            <div className="cpb-srcgroup-head">
+              <span className="cpb-srcgroup-title">Project sources</span>
+            </div>
+            {sources.structured.map(s => {
+              const checked = s.optional ? optionals[OPTIONAL_FLAG[s.source_id]] : !excluded.has(s.source_id)
               return (
-                <label key={s.source_id} className="cpb-source-row">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => toggleStructured(s.source_id, s.optional)}
-                  />
-                  <span className="cpb-source-label">{s.label}</span>
-                  <span className="cpb-source-kind">{s.kind}</span>
-                  <span className="cpb-source-tokens">~{s.token_estimate}</span>
+                <label key={s.source_id} className={`ab-src${checked ? ' on' : ''}`}>
+                  <input type="checkbox" checked={checked} onChange={() => toggleStructured(s.source_id, s.optional)}
+                    style={{ flexShrink: 0 }} />
+                  <span className="ab-src-name">{s.label}</span>
+                  <span className="ab-src-tok">{s.kind}</span>
+                  <span className="ab-src-tok">~{s.token_estimate}</span>
                 </label>
               )
             })}
-          </fieldset>
-
-          <fieldset className="cpb-sources">
-            <legend>Documents</legend>
-            {sources.documents.length === 0 ? (
-              <p className="cpb-empty">No documents in this project.</p>
-            ) : (
-              sources.documents.map((d) => {
-                const sel = selectedDocs.includes(d.doc_id)
-                const isPinned = pinned.has(d.source_id)
-                return (
-                  <div key={d.doc_id} className="cpb-doc-row">
-                    <label className="cpb-source-row">
-                      <input type="checkbox" checked={sel} onChange={() => toggleDoc(d.doc_id)} />
-                      <span className="cpb-source-label">{d.title}</span>
-                      <span className="cpb-source-tokens">~{d.token_estimate}</span>
-                    </label>
-                    {sel && (
-                      <span className="cpb-doc-actions">
-                        <button
-                          type="button"
-                          className={isPinned ? 'cpb-pin cpb-pin-on' : 'cpb-pin'}
-                          onClick={() => togglePin(d.source_id)}
-                          title={isPinned ? 'Unpin' : 'Pin (trimmed last)'}
-                        >
-                          📌
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveDoc(d.doc_id, -1)}
-                          title="Move up"
-                        >
-                          ↑
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveDoc(d.doc_id, 1)}
-                          title="Move down"
-                        >
-                          ↓
-                        </button>
-                      </span>
-                    )}
-                  </div>
-                )
-              })
-            )}
-          </fieldset>
-
-          <div className="cpb-estimate">
-            Estimated selection: <strong>~{liveEstimate.toLocaleString()}</strong> tokens
-            (approximate)
           </div>
 
-          <button className="cpb-generate" onClick={generate} disabled={generating}>
+          <div className="cpb-srcgroup">
+            <div className="cpb-srcgroup-head">
+              <span className="cpb-srcgroup-title">Documents</span>
+            </div>
+            {sources.documents.length === 0 ? (
+              <p style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)', margin: 0 }}>No documents in this project.</p>
+            ) : sources.documents.map(d => {
+              const sel = selectedDocs.includes(d.doc_id)
+              const isPinned = pinned.has(d.source_id)
+              return (
+                <div key={d.doc_id} className="cpb-doc-row">
+                  <label className={`ab-src${sel ? ' on' : ''}`}>
+                    <input type="checkbox" checked={sel} onChange={() => toggleDoc(d.doc_id)} style={{ flexShrink: 0 }} />
+                    <span className="ab-src-name">{d.title}</span>
+                    <span className="ab-src-tok">~{d.token_estimate}</span>
+                  </label>
+                  {sel && (
+                    <div className="cpb-doc-actions">
+                      <button type="button" className="btn btn-ghost btn-xs"
+                        onClick={() => togglePin(d.source_id)} title={isPinned ? 'Unpin' : 'Pin (trimmed last)'}>
+                        {isPinned ? '📌' : '📌'}{isPinned ? ' Pinned' : ' Pin'}
+                      </button>
+                      <button type="button" className="btn btn-ghost btn-xs" onClick={() => moveDoc(d.doc_id, -1)} title="Move up">↑</button>
+                      <button type="button" className="btn btn-ghost btn-xs" onClick={() => moveDoc(d.doc_id, 1)} title="Move down">↓</button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="cpb-estimate">
+            Estimated: <strong>~{liveEstimate.toLocaleString()}</strong> tokens (approximate)
+          </div>
+
+          <button className="btn btn-solid" onClick={generate} disabled={generating}>
             {generating ? 'Generating…' : 'Generate preview'}
           </button>
           {genError && <p className="cpb-error-msg">{genError}</p>}
         </div>
 
+        {/* Right: preview */}
         <div className="cpb-preview">
           {!preview ? (
-            <p className="cpb-empty">
-              Choose your sources and click “Generate preview”.
-            </p>
+            <div className="cpb-empty">Choose your sources and click "Generate preview".</div>
           ) : (
             <>
               <div className="cpb-preview-meta">
-                <span className={preview.over_budget ? 'cpb-tokens cpb-over' : 'cpb-tokens'}>
+                <span className={`cpb-tokens${preview.over_budget ? ' over' : ''}`}>
                   ~{preview.token_estimate.toLocaleString()} / {preview.budget_limit.toLocaleString()} tokens
-                  {preview.over_budget ? ' (over budget)' : ''}
+                  {preview.over_budget ? ' ⚠ over budget' : ''}
                 </span>
-                <span className="cpb-checksum" title="Pack checksum">
-                  {preview.pack_checksum.slice(0, 12)}
-                </span>
+                <span className="cpb-checksum" title="Pack checksum">{preview.pack_checksum.slice(0, 12)}</span>
               </div>
 
               {preview.warnings.length > 0 && (
                 <ul className="cpb-warnings">
-                  {preview.warnings.map((w, i) => (
-                    <li key={i}>⚠ {w}</li>
-                  ))}
+                  {preview.warnings.map((w, i) => <li key={i}>⚠ {w}</li>)}
                 </ul>
               )}
 
               {preview.truncations.length > 0 && (
                 <p className="cpb-trunc">
-                  Trimmed {preview.truncations.length} source(s) to fit the budget:{' '}
-                  {preview.truncations.map((t) => `${t.source_id} (${t.reason})`).join(', ')}
+                  Trimmed {preview.truncations.length} source(s) to fit budget:{' '}
+                  {preview.truncations.map(t => `${t.source_id} (${t.reason})`).join(', ')}
                 </p>
               )}
 
@@ -353,37 +269,32 @@ export default function ContextPackBuilder({ projectId, onClose }: ContextPackBu
                   <strong>Possible secrets (masked, best-effort):</strong>
                   <ul>
                     {preview.secret_findings.map((f, i) => (
-                      <li key={i}>
-                        {f.pattern_label}: <code>{f.masked_preview}</code> in {f.source_ref}{' '}
-                        ×{f.count}
-                      </li>
+                      <li key={i}>{f.pattern_label}: <code>{f.masked_preview}</code> in {f.source_ref} ×{f.count}</li>
                     ))}
                   </ul>
                 </div>
               )}
 
-              <pre className="cpb-markdown">{preview.markdown}</pre>
+              <pre className="ab-preview-body cpb-markdown">{preview.markdown}</pre>
 
               <div className="cpb-actions">
-                <button className="cpb-copy" onClick={() => setShowCopyConfirm(true)}>
+                <button className="btn btn-outline btn-sm" onClick={() => setShowCopyConfirm(true)}>
                   Copy to clipboard
                 </button>
                 {copied && <span className="cpb-copied">Copied ✓</span>}
               </div>
 
               {showCopyConfirm && (
-                <div className="cpb-copy-confirm" role="dialog" aria-label="Copy confirmation">
+                <div className="cpb-confirm-dialog" role="dialog" aria-label="Copy confirmation">
                   <p>
                     This pack will leave AgentBoard when you paste it into an external tool.
                     {preview.secret_findings.length > 0
-                      ? ` ${preview.secret_findings.length} possible secret(s) were flagged (detection is best-effort, not a guarantee).`
+                      ? ` ${preview.secret_findings.length} possible secret(s) were flagged (detection is best-effort).`
                       : ' Secret detection is best-effort and not a guarantee.'}
                   </p>
                   <div className="cpb-confirm-actions">
-                    <button className="cpb-confirm-yes" onClick={confirmCopy}>
-                      Copy anyway
-                    </button>
-                    <button onClick={() => setShowCopyConfirm(false)}>Cancel</button>
+                    <button className="btn btn-solid btn-sm" onClick={confirmCopy}>Copy anyway</button>
+                    <button className="btn btn-outline btn-sm" onClick={() => setShowCopyConfirm(false)}>Cancel</button>
                   </div>
                 </div>
               )}

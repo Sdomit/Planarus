@@ -40,3 +40,6 @@ Thumbs.db
 *.pem
 *.key
 secrets/
+
+# Local QA artifacts (Playwright MCP screenshots/logs — not source)
+.playwright-mcp/

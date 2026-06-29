@@ -10,21 +10,14 @@ export default function ContextFilesPanel() {
   const [regenerating, setRegenerating] = useState(false)
   const [pinning, setPinning] = useState<string | null>(null)
 
-  useEffect(() => {
-    load()
-  }, [])
+  useEffect(() => { load() }, [])
 
   async function load() {
-    setLoading(true)
-    setError(null)
+    setLoading(true); setError(null)
     try {
       const workspaces = await api.workspaces.list()
       const ws = workspaces[0] ?? null
-      if (!ws) {
-        setProject(null)
-        setFiles([])
-        return
-      }
+      if (!ws) { setProject(null); setFiles([]); return }
       const projects = await api.projects.list(ws.id)
       const proj = projects[0] ?? null
       setProject(proj)
@@ -38,8 +31,7 @@ export default function ContextFilesPanel() {
 
   async function regenerate() {
     if (!project) return
-    setRegenerating(true)
-    setError(null)
+    setRegenerating(true); setError(null)
     try {
       await api.contextFiles.regenerate(project.id)
       setFiles(await api.contextFiles.list(project.id))
@@ -54,7 +46,7 @@ export default function ContextFilesPanel() {
     setPinning(file.id)
     try {
       const updated = await api.contextFiles.setPinned(file.id, !file.pinned)
-      setFiles((prev) => prev.map((f) => (f.id === updated.id ? updated : f)))
+      setFiles(prev => prev.map(f => f.id === updated.id ? updated : f))
     } catch (e) {
       setError(String(e))
     } finally {
@@ -62,62 +54,79 @@ export default function ContextFilesPanel() {
     }
   }
 
-  if (loading) {
-    return <p className="cf-state">Loading context files…</p>
-  }
+  if (loading) return <p className="cf-state">Loading context files…</p>
 
   if (error) {
     return (
       <div className="cf-state cf-error">
         <p>{error}</p>
-        <button onClick={load}>Retry</button>
+        <button className="btn btn-outline btn-sm" onClick={load}>Retry</button>
       </div>
     )
   }
 
   if (!project) {
-    return <p className="cf-state">No project yet. Create one to generate its context pack.</p>
+    return (
+      <div className="ab-empty">
+        <div className="ab-empty-art">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+            <rect x="8" y="6" width="32" height="36" rx="4" fill="var(--bg-subtle)" stroke="var(--border-default)" strokeWidth="2"/>
+            <path d="M16 16h16M16 22h16M16 28h10" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+        </div>
+        <h3>No project yet</h3>
+        <p>Create a project first, then set its folder path to generate context files.</p>
+      </div>
+    )
   }
 
   return (
     <div className="cf-panel">
       <div className="cf-toolbar">
-        <span className="cf-project">{project.title}</span>
-        <button
-          className="cf-regen"
-          onClick={regenerate}
-          disabled={regenerating || !project.folder_path}
-        >
+        <span className="cf-project-name">{project.title}</span>
+        <button className="btn btn-outline btn-sm" onClick={regenerate}
+          disabled={regenerating || !project.folder_path}>
           {regenerating ? 'Regenerating…' : 'Regenerate'}
         </button>
       </div>
 
       {!project.folder_path && (
-        <p className="cf-note">No folder path set — this project has no context pack yet.</p>
+        <p className="cf-note">No folder path set — set one in project settings to generate context files.</p>
       )}
 
       {files.length === 0 ? (
-        <p className="cf-note">No context files generated yet.</p>
+        <div className="ab-empty">
+          <div className="ab-empty-art">
+            <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+              <rect x="8" y="6" width="32" height="36" rx="4" fill="var(--bg-subtle)" stroke="var(--border-default)" strokeWidth="2"/>
+              <path d="M16 16h16M16 22h16M16 28h10" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round"/>
+              <circle cx="36" cy="36" r="8" fill="var(--bg-canvas)" stroke="var(--border-default)" strokeWidth="2"/>
+              <path d="M36 32v8M32 36h8" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          </div>
+          <h3>No context files yet</h3>
+          <p>Context files give AI agents a snapshot of your project — code structure, decisions, docs, and tasks — so they can answer questions without reading the whole repo.</p>
+          {project.folder_path && (
+            <button className="btn btn-solid btn-sm" onClick={regenerate} disabled={regenerating}>
+              {regenerating ? 'Generating…' : 'Generate now'}
+            </button>
+          )}
+        </div>
       ) : (
         <ul className="cf-list">
-          {files.map((f) => (
+          {files.map(f => (
             <li key={f.id} className="cf-item">
               <div className="cf-item-head">
                 <span className="cf-path">{f.relative_path.replace('context/', '')}</span>
-                <button
-                  className={f.pinned ? 'cf-pin pinned' : 'cf-pin'}
-                  onClick={() => togglePin(f)}
-                  disabled={pinning === f.id}
-                >
+                <button className="btn btn-ghost btn-xs" onClick={() => togglePin(f)}
+                  disabled={pinning === f.id} aria-pressed={f.pinned}>
                   {f.pinned ? '📌 Pinned' : 'Pin'}
                 </button>
               </div>
               <div className="cf-meta">
                 <span className="cf-kind">{f.kind}</span>
                 {f.last_manual_edit_at && <span className="cf-drift">drifted</span>}
-                <span className="cf-time">
-                  {f.generated_at.slice(0, 16).replace('T', ' ')}
-                </span>
+                <span className="cf-time">{f.generated_at.slice(0, 16).replace('T', ' ')}</span>
               </div>
             </li>
           ))}

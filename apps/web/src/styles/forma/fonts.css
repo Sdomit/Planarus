@@ -1,0 +1,26 @@
+/* ============================================================
+   FORMA — Font faces
+   Registers the two Forma families so the design-system compiler
+   can resolve --font-sans / --font-mono. These reference the
+   upstream variable font files (all weights via the wght axis).
+   If the user uploads self-hosted .woff2 files, swap the src
+   URLs below to the local paths — the family names stay identical.
+   ============================================================ */
+
+/* Plus Jakarta Sans — body / UI (weights 400–800) */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/plusjakartasans/v12/LDIbaomQNQcsA88c7O9yZ4KMCoOg4IA6-91aHEjcWuA_qU7NSg.ttf) format('truetype');
+}
+
+/* JetBrains Mono — code / tokens / micro-labels (weights 400–600) */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/jetbrainsmono/v18/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKxjPVmUsaaDhw.ttf) format('truetype');
+}

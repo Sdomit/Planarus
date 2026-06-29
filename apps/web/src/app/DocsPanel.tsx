@@ -5,6 +5,7 @@ import CodeBlock from '@tiptap/extension-code-block'
 import Link from '@tiptap/extension-link'
 import { MarkdownSerializer } from 'prosemirror-markdown'
 import { api, type Doc, type DocSummary } from '../api/client'
+import { StatusBadge } from './StatusBadge'
 import './docs-panel.css'
 
 // ---------------------------------------------------------------------------
@@ -13,52 +14,32 @@ import './docs-panel.css'
 
 const _docSerializer = new MarkdownSerializer(
   {
-    doc(state, node) {
-      state.renderContent(node)
-    },
-    paragraph(state, node) {
-      state.renderInline(node)
-      state.closeBlock(node)
-    },
-    text(state, node) {
-      state.text(node.text ?? '')
-    },
+    doc(state, node) { state.renderContent(node) },
+    paragraph(state, node) { state.renderInline(node); state.closeBlock(node) },
+    text(state, node) { state.text(node.text ?? '') },
     heading(state, node) {
       state.write(state.repeat('#', node.attrs.level as number) + ' ')
-      state.renderInline(node)
-      state.closeBlock(node)
+      state.renderInline(node); state.closeBlock(node)
     },
-    blockquote(state, node) {
-      state.wrapBlock('> ', null, node, () => state.renderContent(node))
-    },
-    bulletList(state, node) {
-      state.renderList(node, '  ', () => '* ')
-    },
+    blockquote(state, node) { state.wrapBlock('> ', null, node, () => state.renderContent(node)) },
+    bulletList(state, node) { state.renderList(node, '  ', () => '* ') },
     orderedList(state, node) {
       const start = (node.attrs.start as number) || 1
       state.renderList(node, '  ', (i: number) => `${start + i}. `)
     },
-    listItem(state, node) {
-      state.renderContent(node)
-    },
+    listItem(state, node) { state.renderContent(node) },
     codeBlock(state, node) {
       state.write('```' + ((node.attrs.language as string) || '') + '\n')
-      state.text(node.textContent, false)
-      state.ensureNewLine()
-      state.write('```')
-      state.closeBlock(node)
+      state.text(node.textContent, false); state.ensureNewLine()
+      state.write('```'); state.closeBlock(node)
     },
     hardBreak(state, node, parent, index) {
       for (let i = index + 1; i < parent.childCount; i++) {
-        if (parent.child(i).type !== node.type) {
-          state.write('\\\n')
-          return
-        }
+        if (parent.child(i).type !== node.type) { state.write('\\\n'); return }
       }
     },
     horizontalRule(state, node) {
-      state.write((node.attrs.markup as string) || '---')
-      state.closeBlock(node)
+      state.write((node.attrs.markup as string) || '---'); state.closeBlock(node)
     },
   },
   {
@@ -75,10 +56,7 @@ const _docSerializer = new MarkdownSerializer(
   },
 )
 
-// Converts a live ProseMirror document node to Markdown.
-// Preserves headings, bold, italic, lists, blockquotes, code blocks, and links.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function serializeToMarkdown(doc: any): string {
+export function serializeToMarkdown(doc: any): string { // eslint-disable-line @typescript-eslint/no-explicit-any
   return _docSerializer.serialize(doc)
 }
 
@@ -92,16 +70,16 @@ interface DocListProps {
   projectId: string
   onSelect: (doc: DocSummary) => void
   onNew: () => void
+  onClose?: () => void
 }
 
-function DocList({ projectId, onSelect, onNew }: DocListProps) {
+function DocList({ projectId, onSelect, onNew, onClose }: DocListProps) {
   const [docs, setDocs] = useState<DocSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    setLoading(true)
-    setError(null)
+    setLoading(true); setError(null)
     api.docs.list(projectId)
       .then(setDocs)
       .catch((e: Error) => setError(e.message))
@@ -112,22 +90,39 @@ function DocList({ projectId, onSelect, onNew }: DocListProps) {
   if (error) return <p className="dp-state dp-error">{error}</p>
 
   return (
-    <div className="dp-list-view">
-      <div className="dp-toolbar">
-        <button className="dp-btn-new" onClick={onNew}>+ New Doc</button>
+    <div>
+      <div className="dp-list-header">
+        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>
+          {docs.length} {docs.length === 1 ? 'document' : 'documents'}
+        </div>
+        <button className="btn btn-solid btn-sm" onClick={onNew}>+ New Doc</button>
+        {onClose && <button type="button" className="btn btn-ghost btn-sm" title="Close docs" onClick={onClose}>✕</button>}
       </div>
       {docs.length === 0 ? (
-        <p className="dp-empty">No docs yet. Create one to get started.</p>
+        <div className="ab-empty">
+          <div className="ab-empty-art">
+            <svg className="ic-32" aria-hidden="true"><use href="#icon-file" /></svg>
+          </div>
+          <h3>No docs yet</h3>
+          <p>Create your first doc to capture specs, plans, or research.</p>
+          <button className="btn btn-solid btn-sm" onClick={onNew}>Create a doc</button>
+        </div>
       ) : (
-        <ul className="dp-list">
+        <div className="ab-doclist">
           {docs.map(d => (
-            <li key={d.id} className="dp-item" onClick={() => onSelect(d)}>
-              <span className="dp-item-title">{d.title}</span>
-              <span className={`dp-badge dp-badge-${d.doc_type}`}>{d.doc_type}</span>
-              <span className={`dp-badge dp-badge-status-${d.status}`}>{d.status}</span>
-            </li>
+            <div key={d.id} className="ab-docitem" role="button" tabIndex={0}
+              onClick={() => onSelect(d)}
+              onKeyDown={e => e.key === 'Enter' && onSelect(d)}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="ab-doc-name">{d.title}</div>
+                <div className="ab-doc-meta">
+                  <span className="badge badge-neutral badge-sm">{d.doc_type}</span>
+                </div>
+              </div>
+              <StatusBadge kind="docstatus" value={d.status} />
+            </div>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   )
@@ -152,8 +147,7 @@ function CreateDocForm({ projectId, onCreated, onCancel }: CreateDocFormProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim()) return
-    setSaving(true)
-    setError(null)
+    setSaving(true); setError(null)
     api.docs.create(projectId, { title: title.trim(), doc_type: docType })
       .then(onCreated)
       .catch((err: Error) => setError(err.message))
@@ -161,28 +155,32 @@ function CreateDocForm({ projectId, onCreated, onCancel }: CreateDocFormProps) {
   }
 
   return (
-    <form className="dp-form" onSubmit={handleSubmit}>
-      <input
-        type="text"
-        placeholder="Doc title"
-        value={title}
-        onChange={e => setTitle(e.target.value)}
-        required
-        autoFocus
-      />
-      <select value={docType} onChange={e => setDocType(e.target.value)}>
-        {DOC_TYPES.map(t => (
-          <option key={t} value={t}>{t}</option>
-        ))}
-      </select>
-      {error && <p className="dp-form-error">{error}</p>}
-      <div className="dp-form-actions">
-        <button type="submit" disabled={saving || !title.trim()}>
-          {saving ? 'Creating…' : 'Create'}
-        </button>
-        <button type="button" onClick={onCancel}>Cancel</button>
+    <div>
+      <div className="dp-list-header">
+        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>New document</span>
+        <button className="btn btn-ghost btn-sm" onClick={onCancel}>Cancel</button>
       </div>
-    </form>
+      <form className="dp-form" onSubmit={handleSubmit}>
+        <div className="form-field">
+          <label className="form-label">Title</label>
+          <input className="input" type="text" placeholder="Doc title" value={title}
+            onChange={e => setTitle(e.target.value)} required autoFocus />
+        </div>
+        <div className="form-field">
+          <label className="form-label">Type</label>
+          <select className="input select" value={docType} onChange={e => setDocType(e.target.value)}>
+            {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        {error && <p className="form-error">{error}</p>}
+        <div className="dp-form-actions">
+          <button type="submit" disabled={saving || !title.trim()} className="btn btn-solid btn-sm">
+            {saving ? 'Creating…' : 'Create'}
+          </button>
+          <button type="button" className="btn btn-outline btn-sm" onClick={onCancel}>Cancel</button>
+        </div>
+      </form>
+    </div>
   )
 }
 
@@ -193,43 +191,27 @@ function CreateDocForm({ projectId, onCreated, onCancel }: CreateDocFormProps) {
 function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
   if (!editor) return null
   return (
-    <div className="dp-toolbar-editor" role="toolbar" aria-label="Editor toolbar">
-      <button
-        type="button"
-        onClick={() => editor.chain().focus().toggleBold().run()}
-        className={editor.isActive('bold') ? 'dp-tool dp-tool-active' : 'dp-tool'}
-        title="Bold"
-      >B</button>
-      <button
-        type="button"
-        onClick={() => editor.chain().focus().toggleItalic().run()}
-        className={editor.isActive('italic') ? 'dp-tool dp-tool-active' : 'dp-tool'}
-        title="Italic"
-      ><em>I</em></button>
-      <button
-        type="button"
-        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-        className={editor.isActive('heading', { level: 1 }) ? 'dp-tool dp-tool-active' : 'dp-tool'}
-        title="Heading 1"
-      >H1</button>
-      <button
-        type="button"
-        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-        className={editor.isActive('heading', { level: 2 }) ? 'dp-tool dp-tool-active' : 'dp-tool'}
-        title="Heading 2"
-      >H2</button>
-      <button
-        type="button"
-        onClick={() => editor.chain().focus().toggleBulletList().run()}
-        className={editor.isActive('bulletList') ? 'dp-tool dp-tool-active' : 'dp-tool'}
-        title="Bullet list"
-      >•</button>
-      <button
-        type="button"
-        onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-        className={editor.isActive('codeBlock') ? 'dp-tool dp-tool-active' : 'dp-tool'}
-        title="Code block"
-      >{'{}'}</button>
+    <div className="ab-toolbar" role="toolbar" aria-label="Editor toolbar">
+      <button type="button" title="Bold"
+        className={`ab-tbtn${editor.isActive('bold') ? ' active' : ''}`}
+        onClick={() => editor.chain().focus().toggleBold().run()}>B</button>
+      <button type="button" title="Italic"
+        className={`ab-tbtn${editor.isActive('italic') ? ' active' : ''}`}
+        onClick={() => editor.chain().focus().toggleItalic().run()}><span className="ab-tbtn-it" aria-hidden="true">I</span></button>
+      <span className="ab-tdiv" />
+      <button type="button" title="Heading 1"
+        className={`ab-tbtn${editor.isActive('heading', { level: 1 }) ? ' active' : ''}`}
+        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>H1</button>
+      <button type="button" title="Heading 2"
+        className={`ab-tbtn${editor.isActive('heading', { level: 2 }) ? ' active' : ''}`}
+        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>H2</button>
+      <span className="ab-tdiv" />
+      <button type="button" title="Bullet list"
+        className={`ab-tbtn${editor.isActive('bulletList') ? ' active' : ''}`}
+        onClick={() => editor.chain().focus().toggleBulletList().run()}>•</button>
+      <button type="button" title="Code block"
+        className={`ab-tbtn${editor.isActive('codeBlock') ? ' active' : ''}`}
+        onClick={() => editor.chain().focus().toggleCodeBlock().run()}>{'{}'}</button>
     </div>
   )
 }
@@ -239,21 +221,15 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
 // ---------------------------------------------------------------------------
 
 function MarkdownPreview({ markdown }: { markdown: string }) {
-  if (!markdown) return <p className="dp-empty">No markdown content yet.</p>
-  return (
-    <pre className="dp-markdown-preview">{markdown}</pre>
-  )
+  if (!markdown) return <p style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)', padding: 'var(--space-6) var(--space-8)', margin: 0 }}>No markdown content yet.</p>
+  return <pre className="dp-md-preview">{markdown}</pre>
 }
 
 // ---------------------------------------------------------------------------
 // Doc editor
 // ---------------------------------------------------------------------------
 
-interface DocEditorProps {
-  docId: string
-  onBack: () => void
-}
-
+interface DocEditorProps { docId: string; onBack: () => void }
 type SaveState = 'saved' | 'unsaved' | 'saving' | 'conflict' | 'error'
 
 function DocEditor({ docId, onBack }: DocEditorProps) {
@@ -268,31 +244,20 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
   const docRef = useRef<Doc | null>(null)
 
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-      CodeBlock,
-      Link.configure({ openOnClick: false }),
-    ],
+    extensions: [StarterKit, CodeBlock, Link.configure({ openOnClick: false })],
     content: '',
-    onUpdate: () => {
-      setSaveState('unsaved')
-    },
+    onUpdate: () => setSaveState('unsaved'),
   })
 
   useEffect(() => {
-    setLoading(true)
-    setLoadError(null)
+    setLoading(true); setLoadError(null)
     api.docs.get(docId)
       .then(d => {
-        setDoc(d)
-        docRef.current = d
-        versionRef.current = d.version
+        setDoc(d); docRef.current = d; versionRef.current = d.version
         if (editor) {
           let parsed: object | null = null
           try { parsed = JSON.parse(d.content_json) } catch { /* ignore */ }
-          if (parsed) {
-            editor.commands.setContent(parsed as never)
-          }
+          if (parsed) editor.commands.setContent(parsed as never)
         }
         setSaveState('saved')
       })
@@ -304,26 +269,14 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
     if (!editor || !docRef.current) return
     const contentJson = JSON.stringify(editor.getJSON())
     const markdownCache = serializeToMarkdown(editor.state.doc)
-    setSaveState('saving')
-    setSaveError(null)
+    setSaveState('saving'); setSaveError(null)
     try {
-      const updated = await api.docs.update(docRef.current.id, {
-        version: versionRef.current,
-        content_json: contentJson,
-        markdown_cache: markdownCache,
-      })
-      setDoc(updated)
-      docRef.current = updated
-      versionRef.current = updated.version
-      setSaveState('saved')
+      const updated = await api.docs.update(docRef.current.id, { version: versionRef.current, content_json: contentJson, markdown_cache: markdownCache })
+      setDoc(updated); docRef.current = updated; versionRef.current = updated.version; setSaveState('saved')
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
-      if (msg.startsWith('409')) {
-        setSaveState('conflict')
-      } else {
-        setSaveState('error')
-        setSaveError(msg)
-      }
+      if (msg.startsWith('409')) setSaveState('conflict')
+      else { setSaveState('error'); setSaveError(msg) }
     }
   }, [editor])
 
@@ -335,11 +288,8 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
       setExportMsg(res.was_changed ? `Exported to ${res.export_path}` : 'No changes (file up-to-date)')
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
-      if (msg.startsWith('409')) {
-        setExportMsg('The exported Markdown file was changed outside AgentBoard. Review it before exporting again.')
-      } else {
-        setExportMsg(`Export failed: ${msg}`)
-      }
+      if (msg.startsWith('409')) setExportMsg('The exported file was changed outside AgentBoard. Review it before exporting again.')
+      else setExportMsg(`Export failed: ${msg}`)
     }
   }, [doc])
 
@@ -347,52 +297,39 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
   if (loadError) return <p className="dp-state dp-error">{loadError}</p>
   if (!doc) return <p className="dp-state dp-error">Doc not found.</p>
 
+  const saveLabel =
+    saveState === 'saving'  ? 'Saving…' :
+    saveState === 'saved'   ? 'Saved' :
+    saveState === 'unsaved' ? 'Unsaved changes' :
+    saveState === 'conflict' ? '⚠ Updated elsewhere — refresh to reload' :
+    `Error: ${saveError ?? 'unknown'}`
+
   return (
-    <div className="dp-editor">
-      <div className="dp-editor-header">
-        <button className="dp-back" onClick={onBack} title="Back to list">← Back</button>
-        <span className="dp-editor-title">{doc.title}</span>
-        <span className={`dp-badge dp-badge-${doc.doc_type}`}>{doc.doc_type}</span>
+    <div className="ab-editor">
+      <div className="dp-editor-nav" style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--border-subtle)' }}>
+        <button className="btn btn-ghost btn-sm" onClick={onBack} title="Back to list">← Back</button>
+        <span className="dp-editor-name">{doc.title}</span>
+        <StatusBadge kind="docstatus" value={doc.status} />
       </div>
 
       <EditorToolbar editor={editor} />
 
-      <div className="dp-editor-body">
-        {showPreview ? (
-          <MarkdownPreview markdown={doc.markdown_cache} />
-        ) : (
-          <EditorContent editor={editor} className="dp-tiptap" />
-        )}
+      <div className="dp-tiptap-wrap">
+        {showPreview
+          ? <MarkdownPreview markdown={doc.markdown_cache} />
+          : <div className="ab-prose"><EditorContent editor={editor} className="dp-tiptap" /></div>
+        }
       </div>
 
-      <div className="dp-status-bar">
-        <span className={`dp-save-state dp-save-${saveState}`}>
-          {saveState === 'saving' && 'Saving…'}
-          {saveState === 'saved' && 'Saved'}
-          {saveState === 'unsaved' && 'Unsaved'}
-          {saveState === 'conflict' && '⚠ Updated elsewhere — refresh to reload'}
-          {saveState === 'error' && `Error: ${saveError ?? 'unknown'}`}
-        </span>
-        <button
-          type="button"
-          className="dp-btn-save"
-          onClick={save}
-          disabled={saveState === 'saving' || saveState === 'saved'}
-        >
-          Save
-        </button>
-        <button
-          type="button"
-          className="dp-btn-preview"
-          onClick={() => setShowPreview(p => !p)}
-        >
+      <div className="dp-statusbar">
+        <span className={`dp-save-label ${saveState}`}>{saveLabel}</span>
+        <button type="button" className="btn btn-outline btn-xs"
+          onClick={save} disabled={saveState === 'saving' || saveState === 'saved'}>Save</button>
+        <button type="button" className="btn btn-ghost btn-xs"
+          onClick={() => setShowPreview(p => !p)}>
           {showPreview ? 'Editor' : 'Preview'}
         </button>
-        <button
-          type="button"
-          className="dp-btn-export"
-          onClick={() => exportMarkdown()}
-        >
+        <button type="button" className="btn btn-ghost btn-xs" onClick={() => exportMarkdown()}>
           Export Markdown
         </button>
       </div>
@@ -405,54 +342,20 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
 // Root panel
 // ---------------------------------------------------------------------------
 
-interface DocsPanelProps {
-  projectId: string
-  onClose: () => void
-}
+interface DocsPanelProps { projectId: string; onClose: () => void }
 
 export default function DocsPanel({ projectId, onClose }: DocsPanelProps) {
   const [view, setView] = useState<'list' | 'new' | 'editor'>('list')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  const handleSelect = (doc: DocSummary) => {
-    setSelectedId(doc.id)
-    setView('editor')
-  }
-
-  const handleCreated = (doc: Doc) => {
-    setSelectedId(doc.id)
-    setView('editor')
-  }
+  const handleSelect = (doc: DocSummary) => { setSelectedId(doc.id); setView('editor') }
+  const handleCreated = (doc: Doc) => { setSelectedId(doc.id); setView('editor') }
 
   return (
     <div className="dp-panel">
-      <div className="dp-panel-header">
-        <span className="dp-panel-title">Docs</span>
-        {view !== 'list' && (
-          <button className="dp-back-list" onClick={() => setView('list')}>← List</button>
-        )}
-        <button className="dp-close" onClick={onClose} title="Close docs">✕</button>
-      </div>
-
-      {view === 'list' && (
-        <DocList
-          projectId={projectId}
-          onSelect={handleSelect}
-          onNew={() => setView('new')}
-        />
-      )}
-
-      {view === 'new' && (
-        <CreateDocForm
-          projectId={projectId}
-          onCreated={handleCreated}
-          onCancel={() => setView('list')}
-        />
-      )}
-
-      {view === 'editor' && selectedId && (
-        <DocEditor docId={selectedId} onBack={() => setView('list')} />
-      )}
+      {view === 'list' && <DocList projectId={projectId} onSelect={handleSelect} onNew={() => setView('new')} onClose={onClose} />}
+      {view === 'new' && <CreateDocForm projectId={projectId} onCreated={handleCreated} onCancel={() => setView('list')} />}
+      {view === 'editor' && selectedId && <DocEditor docId={selectedId} onBack={() => setView('list')} />}
     </div>
   )
 }

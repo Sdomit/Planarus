@@ -1,0 +1,198 @@
+/* ============================================================
+   FORMA — Animations
+   Keyframes, utility classes, and loading patterns
+   ============================================================ */
+
+/* ── KEYFRAMES ───────────────────────────────────────────── */
+
+/* Entrances */
+@keyframes fa-fade-in       { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fa-fade-in-up    { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fa-fade-in-down  { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fa-fade-in-left  { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes fa-fade-in-right { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes fa-scale-in      { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+@keyframes fa-pop-in        { 0% { opacity: 0; transform: scale(0.6); } 60% { transform: scale(1.08); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes fa-slide-up      { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes fa-slide-down    { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+
+/* Exits */
+@keyframes fa-fade-out      { from { opacity: 1; } to { opacity: 0; } }
+@keyframes fa-scale-out     { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.9); } }
+
+/* Attention */
+@keyframes fa-pulse  { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+@keyframes fa-ping   { 75%, 100% { transform: scale(2); opacity: 0; } }
+@keyframes fa-bounce { 0%, 100% { transform: translateY(0); animation-timing-function: cubic-bezier(0.8, 0, 1, 1); } 50% { transform: translateY(-14px); animation-timing-function: cubic-bezier(0, 0, 0.2, 1); } }
+@keyframes fa-shake  { 10%, 90% { transform: translateX(-2px); } 20%, 80% { transform: translateX(4px); } 30%, 50%, 70% { transform: translateX(-6px); } 40%, 60% { transform: translateX(6px); } }
+@keyframes fa-wiggle { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
+@keyframes fa-heartbeat { 0%, 50%, 100% { transform: scale(1); } 25% { transform: scale(1.12); } 75% { transform: scale(1.06); } }
+
+/* Loading */
+@keyframes fa-spin       { to { transform: rotate(360deg); } }
+@keyframes fa-shimmer    { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+@keyframes fa-progress   { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } }
+@keyframes fa-typing-dot { 0%, 60%, 100% { transform: translateY(0); opacity: 0.35; } 30% { transform: translateY(-7px); opacity: 1; } }
+@keyframes fa-ring-pulse { 0% { box-shadow: 0 0 0 0 var(--accent); opacity: 0.6; } 100% { box-shadow: 0 0 0 14px transparent; opacity: 0; } }
+
+/* Drawn check */
+@keyframes fa-draw-check { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
+
+/* ── UTILITY CLASSES ─────────────────────────────────────── */
+
+.anim-fade-in       { animation: fa-fade-in       var(--duration-normal) var(--ease-decelerate) both; }
+.anim-fade-in-up    { animation: fa-fade-in-up    var(--duration-slow)   var(--ease-decelerate) both; }
+.anim-fade-in-down  { animation: fa-fade-in-down  var(--duration-slow)   var(--ease-decelerate) both; }
+.anim-fade-in-left  { animation: fa-fade-in-left  var(--duration-slow)   var(--ease-decelerate) both; }
+.anim-fade-in-right { animation: fa-fade-in-right var(--duration-slow)   var(--ease-decelerate) both; }
+.anim-scale-in      { animation: fa-scale-in      var(--duration-slow)   var(--ease-spring)     both; }
+.anim-pop-in        { animation: fa-pop-in        var(--duration-slow)   var(--ease-spring)     both; }
+.anim-slide-up      { animation: fa-slide-up      var(--duration-slow)   var(--ease-snap)       both; }
+.anim-slide-down    { animation: fa-slide-down    var(--duration-slow)   var(--ease-snap)       both; }
+.anim-fade-out      { animation: fa-fade-out      var(--duration-normal) var(--ease-accelerate) both; }
+.anim-scale-out     { animation: fa-scale-out     var(--duration-normal) var(--ease-accelerate) both; }
+
+.anim-pulse     { animation: fa-pulse 1.6s var(--ease-standard) infinite; }
+.anim-bounce    { animation: fa-bounce 1s infinite; }
+.anim-shake     { animation: fa-shake 0.6s var(--ease-standard); }
+.anim-wiggle    { animation: fa-wiggle 0.4s var(--ease-standard); }
+.anim-heartbeat { animation: fa-heartbeat 1.4s var(--ease-standard) infinite; }
+
+.anim-spin { animation: fa-spin 0.8s linear infinite; }
+
+/* Stagger delays (use on children) */
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 60ms; }
+.stagger > *:nth-child(3) { animation-delay: 120ms; }
+.stagger > *:nth-child(4) { animation-delay: 180ms; }
+.stagger > *:nth-child(5) { animation-delay: 240ms; }
+.stagger > *:nth-child(6) { animation-delay: 300ms; }
+.stagger > *:nth-child(7) { animation-delay: 360ms; }
+.stagger > *:nth-child(8) { animation-delay: 420ms; }
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .anim-fade-in, .anim-fade-in-up, .anim-fade-in-down, .anim-fade-in-left, .anim-fade-in-right,
+  .anim-scale-in, .anim-pop-in, .anim-slide-up, .anim-slide-down,
+  .anim-pulse, .anim-bounce, .anim-shake, .anim-wiggle, .anim-heartbeat {
+    animation: none !important;
+  }
+}
+
+/* ── LOADING COMPONENTS ──────────────────────────────────── */
+
+/* Spinner — circular indeterminate */
+.spinner {
+  width: 28px; height: 28px;
+  border: 3px solid var(--bg-muted);
+  border-top-color: var(--accent);
+  border-radius: var(--radius-full);
+  animation: fa-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+.spinner-sm { width: 16px; height: 16px; border-width: 2px; }
+.spinner-lg { width: 40px; height: 40px; border-width: 4px; }
+
+/* Spinner — dual ring */
+.spinner-dual {
+  width: 28px; height: 28px;
+  border: 3px solid var(--accent-muted);
+  border-top-color: var(--accent);
+  border-right-color: var(--accent);
+  border-radius: var(--radius-full);
+  animation: fa-spin 0.9s var(--ease-standard) infinite;
+}
+
+/* Skeleton */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-subtle) 0%,
+    var(--bg-muted) 50%,
+    var(--bg-subtle) 100%
+  );
+  background-size: 200% 100%;
+  border-radius: var(--radius-sm);
+  animation: fa-shimmer 1.6s linear infinite;
+}
+.skeleton-text  { height: 12px; }
+.skeleton-title { height: 18px; }
+.skeleton-block { height: 100px; border-radius: var(--radius-md); }
+.skeleton-circle { border-radius: var(--radius-full); }
+
+/* Progress — indeterminate */
+.progress-track {
+  width: 100%;
+  height: 4px;
+  background: var(--bg-muted);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  position: relative;
+}
+.progress-bar-indet {
+  position: absolute;
+  top: 0; left: 0;
+  width: 30%;
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-full);
+  animation: fa-progress 1.4s var(--ease-standard) infinite;
+}
+
+/* Progress — determinate */
+.progress-bar-det {
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-full);
+  transition: width var(--duration-slow) var(--ease-standard);
+}
+
+/* Typing dots */
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: var(--space-2) 0;
+}
+.typing-dots > span {
+  width: 7px; height: 7px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  display: inline-block;
+  animation: fa-typing-dot 1.2s var(--ease-standard) infinite;
+}
+.typing-dots > span:nth-child(2) { animation-delay: 150ms; }
+.typing-dots > span:nth-child(3) { animation-delay: 300ms; }
+
+/* Live status dot — pulsing ring */
+.live-dot {
+  position: relative;
+  width: 8px; height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  display: inline-block;
+  flex-shrink: 0;
+}
+.live-dot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--accent);
+  animation: fa-ring-pulse 1.8s var(--ease-standard) infinite;
+}
+
+/* Drawn check */
+.check-anim {
+  width: 24px; height: 24px;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+.check-anim path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: fa-draw-check 500ms var(--ease-decelerate) forwards;
+}
