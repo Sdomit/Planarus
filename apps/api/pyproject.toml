@@ -28,3 +28,8 @@ filterwarnings = ["ignore::DeprecationWarning"]
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
+
+# Package only `app`; `alembic/` is migration scripts, not a distributed package.
+# Without this, setuptools auto-discovery errors on the flat multi-package layout.
+[tool.setuptools]
+packages = ["app"]
