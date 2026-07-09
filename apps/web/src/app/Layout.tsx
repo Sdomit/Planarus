@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Dashboard from './Dashboard'
+import CockpitPanel from './CockpitPanel'
 import PlanningPanel from './PlanningPanel'
 import DocsPanel from './DocsPanel'
 import ContextPackBuilder from './ContextPackBuilder'
@@ -10,7 +11,7 @@ import { Icon } from './Icon'
 import './layout.css'
 
 type MainView =
-  | 'dashboard' | 'planning' | 'docs'
+  | 'dashboard' | 'cockpit' | 'planning' | 'docs'
   | 'context-pack' | 'context-files' | 'approvals' | 'clients'
 
 interface SelectedProject {
@@ -22,6 +23,7 @@ interface SelectedProject {
 const NAV: { group: string; items: { view: MainView; label: string; icon: string }[] }[] = [
   { group: 'Workspace', items: [
     { view: 'dashboard', label: 'Dashboard', icon: 'grid' },
+    { view: 'cockpit', label: 'Cockpit', icon: 'zap' },
     { view: 'planning', label: 'Planning', icon: 'layers' },
   ] },
   { group: 'Context', items: [
@@ -37,6 +39,7 @@ const NAV: { group: string; items: { view: MainView; label: string; icon: string
 
 const TITLES: Record<MainView, { title: string; sub: string }> = {
   dashboard: { title: 'Dashboard', sub: 'Workspace overview' },
+  cockpit: { title: 'Cockpit', sub: 'Project command center' },
   planning: { title: 'Planning', sub: 'Phases, tasks, decisions & risks' },
   docs: { title: 'Docs', sub: 'Project documents' },
   'context-pack': { title: 'Context Pack', sub: 'Build an AI context pack' },
@@ -89,7 +92,7 @@ export default function Layout() {
 
   const selectProject = (p: SelectedProject) => {
     setProject(p)
-    setMainView('planning')
+    setMainView('cockpit')
     closeMenu()
   }
 
@@ -202,6 +205,7 @@ export default function Layout() {
           <div className="ab-content-inner">
             <div style={{ minWidth: 0 }}>
               {mainView === 'dashboard' && <Dashboard onSelectProject={selectProject} />}
+              {mainView === 'cockpit' && (project ? <CockpitPanel projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
               {mainView === 'planning' && <PlanningPanel />}
               {mainView === 'docs' && (project ? <DocsPanel projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
               {mainView === 'context-pack' && (project ? <ContextPackBuilder projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}

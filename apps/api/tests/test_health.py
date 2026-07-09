@@ -13,7 +13,7 @@ def test_info_returns_metadata(client: TestClient) -> None:
     data = response.json()
     assert data["name"] == "AgentBoard"
     assert "version" in data
-    assert data["phase"] == "7a-approval-engine"
+    assert data["phase"] == "8-git-metadata"
 
 
 def test_openapi_schema_renders(client: TestClient) -> None:

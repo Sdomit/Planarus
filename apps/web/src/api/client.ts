@@ -179,6 +179,23 @@ export interface DocExportResponse {
   checksum: string
 }
 
+// --- Read-only Git metadata (Phase 8) --------------------------------------
+
+export interface GitRepoLink {
+  project_id: string
+  repo_path: string | null
+  is_repo: boolean
+  current_branch: string | null
+  detached: boolean
+  last_commit_sha: string | null
+  last_commit_subject: string | null
+  is_dirty: boolean
+  dirty_count: number
+  remote_url: string | null
+  message: string | null
+  checked_at: string
+}
+
 export interface WorkspaceCreate {
   name: string
   slug: string
@@ -516,6 +533,9 @@ export const api = {
       ),
     diff: (id: string) =>
       request<{ relative_path: string; diff: string }>(`/context-files/${id}/diff`),
+  },
+  git: {
+    get: (projectId: string) => request<GitRepoLink>(`/projects/${projectId}/git`),
   },
   contextPack: {
     profiles: () => request<ContextPackProfilesResponse>('/context-pack/profiles'),
