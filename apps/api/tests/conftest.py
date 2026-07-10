@@ -34,7 +34,9 @@ def client_fixture(session):
         yield session
 
     app.dependency_overrides[get_session] = _override
-    yield TestClient(app)
+    # base_url picks a Host the app-wide allowlist accepts (the default
+    # "testserver" is deliberately treated as a foreign host in guard tests).
+    yield TestClient(app, base_url="http://localhost")
     app.dependency_overrides.clear()
 
 
