@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, ContextFile, Project } from '../api/client'
 import './context-files-panel.css'
 
-export default function ContextFilesPanel() {
+export default function ContextFilesPanel({ projectId }: { projectId: string }) {
   const [project, setProject] = useState<Project | null>(null)
   const [files, setFiles] = useState<ContextFile[]>([])
   const [loading, setLoading] = useState(true)
@@ -10,18 +10,15 @@ export default function ContextFilesPanel() {
   const [regenerating, setRegenerating] = useState(false)
   const [pinning, setPinning] = useState<string | null>(null)
 
-  useEffect(() => { load() }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load() }, [projectId])
 
   async function load() {
     setLoading(true); setError(null)
     try {
-      const workspaces = await api.workspaces.list()
-      const ws = workspaces[0] ?? null
-      if (!ws) { setProject(null); setFiles([]); return }
-      const projects = await api.projects.list(ws.id)
-      const proj = projects[0] ?? null
+      const proj = await api.projects.get(projectId)
       setProject(proj)
-      setFiles(proj ? await api.contextFiles.list(proj.id) : [])
+      setFiles(await api.contextFiles.list(proj.id))
     } catch {
       setError('Could not load context files. Make sure the backend is running on port 8000.')
     } finally {
@@ -65,20 +62,7 @@ export default function ContextFilesPanel() {
     )
   }
 
-  if (!project) {
-    return (
-      <div className="ab-empty">
-        <div className="ab-empty-art">
-          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-            <rect x="8" y="6" width="32" height="36" rx="4" fill="var(--bg-subtle)" stroke="var(--border-default)" strokeWidth="2"/>
-            <path d="M16 16h16M16 22h16M16 28h10" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round"/>
-          </svg>
-        </div>
-        <h3>No project yet</h3>
-        <p>Create a project first, then set its folder path to generate context files.</p>
-      </div>
-    )
-  }
+  if (!project) return null
 
   return (
     <div className="cf-panel">

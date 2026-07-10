@@ -18,9 +18,8 @@ const file = {
 
 vi.mock('../api/client', () => ({
   api: {
-    workspaces: { list: vi.fn(async () => [{ id: 'ws_1', name: 'WS', slug: 'ws' }]) },
     projects: {
-      list: vi.fn(async () => [{ id: 'proj_1', title: 'Demo', slug: 'demo', folder_path: '/srv/demo' }]),
+      get: vi.fn(async () => ({ id: 'proj_1', title: 'Demo', slug: 'demo', folder_path: '/srv/demo' })),
     },
     contextFiles: {
       list: vi.fn(async () => [file]),
@@ -32,14 +31,14 @@ vi.mock('../api/client', () => ({
 
 describe('ContextFilesPanel', () => {
   it('lists generated context files with a Regenerate action', async () => {
-    render(<ContextFilesPanel />)
+    render(<ContextFilesPanel projectId="proj_1" />)
     expect(await screen.findByText('NEXT_STEP.md')).toBeTruthy()
     expect(screen.getByText('Regenerate')).toBeTruthy()
     expect(screen.getByText('Demo')).toBeTruthy()
   })
 
   it('toggles the pin state', async () => {
-    render(<ContextFilesPanel />)
+    render(<ContextFilesPanel projectId="proj_1" />)
     const pinBtn = await screen.findByText('Pin')
     fireEvent.click(pinBtn)
     await waitFor(() => expect(screen.getByText('📌 Pinned')).toBeTruthy())
