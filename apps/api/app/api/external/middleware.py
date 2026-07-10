@@ -1,11 +1,13 @@
 """ASGI middleware for the Phase 7C1 external API boundary.
 
-Two middlewares, both scoped to ``/api/external/``:
+Two middlewares:
 
-* ``ExternalApiGuard`` — runs before routing on external paths only:
+* ``ExternalApiGuard`` — the Host-header allowlist (DNS-rebinding defense;
+  ``X-Forwarded-*`` is NEVER trusted) applies to EVERY http request: the local
+  ``/api/v1`` surface is unauthenticated and ``/local-session`` hands out the
+  control token, so a DNS-rebound page must fail the same check as the external
+  surface. On ``/api/external/`` paths it additionally enforces, before routing:
     - disabled-by-default → generic 404 problem+json;
-    - Host-header allowlist (DNS-rebinding defense; ``X-Forwarded-*`` is NEVER
-      trusted) → 403;
     - Cookie header rejection → 403 (external is Bearer-only);
     - 64 KiB body cap enforced by BOTH Content-Length and an actual streamed-byte
       count (handles missing/misleading length) → 413, without reading an
@@ -146,7 +148,19 @@ class ExternalApiGuard:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or not scope.get("path", "").startswith(EXTERNAL_PREFIX):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = dict(scope.get("headers") or [])
+
+        if not scope.get("path", "").startswith(EXTERNAL_PREFIX):
+            # Local surface (/api/v1, /health, /docs): same strict Host check,
+            # nothing else — CORS, auth, and error shapes stay as they are.
+            if not _host_ok(headers.get(b"host")):
+                await _send_problem(send, 403, "forbidden_host", "Forbidden",
+                                    "host not allowed", _gen_request_id())
+                return
             await self.app(scope, receive, send)
             return
 
@@ -158,8 +172,6 @@ class ExternalApiGuard:
             await _send_problem(send, 404, "not_found", "Not Found",
                                 "the requested resource was not found", request_id)
             return
-
-        headers = dict(scope.get("headers") or [])
 
         if not _host_ok(headers.get(b"host")):
             await _send_problem(send, 403, "forbidden_host", "Forbidden",

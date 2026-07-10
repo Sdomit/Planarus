@@ -100,7 +100,7 @@ def test_internal_routes_still_get_cors():
     from app.main import app
     from fastapi.testclient import TestClient
 
-    c = TestClient(app)
+    c = TestClient(app, base_url="http://localhost")
     res = c.get("/api/v1/local-session", headers={"Origin": "http://localhost:5173"})
     assert res.headers.get("access-control-allow-origin") == "http://localhost:5173"
 
