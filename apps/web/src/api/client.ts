@@ -400,6 +400,140 @@ export interface ApiClientCreatedResponse {
   warning: string
 }
 
+// --- Phase 9: roadmap / timeline / agent runs / notifications ----------------
+
+export interface RoadmapTaskRollup {
+  total: number
+  done: number
+  in_progress: number
+  blocked: number
+}
+
+export interface RoadmapStage {
+  id: string
+  title: string
+  status: string
+  sort_order: number
+  tasks: RoadmapTaskRollup
+  pct_done: number
+}
+
+export interface RoadmapPhase {
+  id: string
+  title: string
+  status: string
+  sort_order: number
+  stages: RoadmapStage[]
+  tasks: RoadmapTaskRollup
+  pct_done: number
+}
+
+export interface ProjectRoadmap {
+  project_id: string
+  generated_at: string
+  phases: RoadmapPhase[]
+  unphased: RoadmapTaskRollup
+  totals: RoadmapTaskRollup
+  pct_done: number
+}
+
+export interface TimelineEvent {
+  id: string
+  at: string
+  event_type: string
+  entity_type: string
+  entity_id: string | null
+  actor_type: string
+  label: string
+}
+
+export interface ProjectTimeline {
+  project_id: string
+  generated_at: string
+  events: TimelineEvent[]
+}
+
+export interface AgentRun {
+  id: string
+  project_id: string
+  agent_family: string
+  agent_name: string | null
+  mode: string | null
+  status: string
+  summary: string | null
+  started_at: string
+  ended_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AgentRunAnalytics {
+  project_id: string
+  generated_at: string
+  total: number
+  by_family: Record<string, number>
+  by_status: Record<string, number>
+  by_mode: Record<string, number>
+  success_rate: number | null
+  avg_duration_minutes: number | null
+  last_run_at: string | null
+}
+
+export interface NotificationItem {
+  id: string
+  kind: string
+  severity: string
+  title: string
+  detail: string | null
+  project_id: string
+  project_title: string
+  at: string
+}
+
+export interface NotificationFeed {
+  generated_at: string
+  items: NotificationItem[]
+}
+
+export interface NotificationRule {
+  id: string
+  project_id: string
+  channel: string
+  trigger_type: string
+  enabled: boolean
+  to_email: string
+  threshold_hours: number
+  created_at: string
+  updated_at: string
+}
+
+export interface EmailLogEntry {
+  id: string
+  project_id: string
+  rule_id: string | null
+  to_email: string
+  subject: string
+  status: string
+  error: string | null
+  sent_at: string
+  created_at: string
+}
+
+export interface ReminderOutcome {
+  rule_id: string
+  status: string
+  reason: string | null
+  email_log_id: string | null
+}
+
+export interface ReminderSendResult {
+  project_id: string
+  sent: number
+  skipped: number
+  failed: number
+  outcomes: ReminderOutcome[]
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json', ...init?.headers },
@@ -585,5 +719,66 @@ export const api = {
       }),
     revoke: (id: string) =>
       controlRequest<ApiClientSummary>(`/api-clients/${id}/revoke`, { method: 'POST' }),
+  },
+  // --- Phase 9 ----------------------------------------------------------------
+  roadmap: {
+    get: (projectId: string) => request<ProjectRoadmap>(`/projects/${projectId}/roadmap`),
+  },
+  timeline: {
+    get: (projectId: string, limit = 100) =>
+      request<ProjectTimeline>(`/projects/${projectId}/timeline?limit=${limit}`),
+  },
+  agentRuns: {
+    list: (projectId: string) => request<AgentRun[]>(`/projects/${projectId}/agent-runs`),
+    create: (
+      projectId: string,
+      data: Partial<Pick<AgentRun, 'agent_family' | 'agent_name' | 'mode' | 'status' | 'summary'>>,
+    ) =>
+      request<AgentRun>(`/projects/${projectId}/agent-runs`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    update: (
+      id: string,
+      data: Partial<Pick<AgentRun, 'agent_family' | 'agent_name' | 'mode' | 'status' | 'summary' | 'ended_at'>>,
+    ) => request<AgentRun>(`/agent-runs/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    analytics: (projectId: string) =>
+      request<AgentRunAnalytics>(`/projects/${projectId}/agent-runs/analytics`),
+  },
+  notifications: {
+    feed: (projectId?: string | null) =>
+      request<NotificationFeed>(
+        `/notifications${projectId ? `?project_id=${projectId}` : ''}`,
+      ),
+  },
+  notificationRules: {
+    list: (projectId: string) =>
+      request<NotificationRule[]>(`/projects/${projectId}/notification-rules`),
+    // Rule writes configure where outbound email goes → local-control-gated.
+    create: (
+      projectId: string,
+      data: { to_email: string; trigger_type?: string; threshold_hours?: number; enabled?: boolean },
+    ) =>
+      controlRequest<NotificationRule>(`/projects/${projectId}/notification-rules`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    update: (
+      id: string,
+      data: Partial<Pick<NotificationRule, 'trigger_type' | 'enabled' | 'to_email' | 'threshold_hours'>>,
+    ) =>
+      controlRequest<NotificationRule>(`/notification-rules/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+  },
+  reminders: {
+    // Sending has a side effect outside the app (SMTP) → local-control-gated.
+    send: (projectId: string) =>
+      controlRequest<ReminderSendResult>(`/projects/${projectId}/reminders/send`, {
+        method: 'POST',
+      }),
+    emailLog: (projectId: string, limit = 50) =>
+      request<EmailLogEntry[]>(`/projects/${projectId}/email-log?limit=${limit}`),
   },
 }

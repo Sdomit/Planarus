@@ -19,5 +19,16 @@ class Settings(BaseSettings):
         default="", validation_alias="AGENTBOARD_EXTERNAL_API_ALLOWED_HOSTS"
     )
 
+    # Phase 9 email reminders. DISABLED by default; when enabled, sends go only to
+    # a loopback SMTP host (Mailpit) — the service refuses any non-loopback host.
+    email_enabled: bool = Field(
+        default=False, validation_alias="AGENTBOARD_EMAIL_ENABLED"
+    )
+    smtp_host: str = Field(default="127.0.0.1", validation_alias="AGENTBOARD_SMTP_HOST")
+    smtp_port: int = Field(default=1025, validation_alias="AGENTBOARD_SMTP_PORT")
+    email_from: str = Field(
+        default="agentboard@localhost", validation_alias="AGENTBOARD_EMAIL_FROM"
+    )
+
 
 settings = Settings()

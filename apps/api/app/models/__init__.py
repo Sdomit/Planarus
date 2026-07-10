@@ -11,6 +11,9 @@ from app.models.blocker import Blocker  # noqa: F401
 from app.models.doc import Doc  # noqa: F401
 from app.models.approval_request import ApprovalRequest  # noqa: F401
 from app.models.api_client import ApiClient  # noqa: F401
+from app.models.agent_run import AgentRun  # noqa: F401
+from app.models.notification_rule import NotificationRule  # noqa: F401
+from app.models.email_log import EmailLog  # noqa: F401
 
 __all__ = [
     "Workspace",
@@ -26,4 +29,7 @@ __all__ = [
     "Doc",
     "ApprovalRequest",
     "ApiClient",
+    "AgentRun",
+    "NotificationRule",
+    "EmailLog",
 ]
