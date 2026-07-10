@@ -206,10 +206,10 @@ export default function Layout() {
             <div style={{ minWidth: 0 }}>
               {mainView === 'dashboard' && <Dashboard onSelectProject={selectProject} />}
               {mainView === 'cockpit' && (project ? <CockpitPanel projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
-              {mainView === 'planning' && <PlanningPanel />}
+              {mainView === 'planning' && (project ? <PlanningPanel projectId={project.id} /> : placeholder)}
               {mainView === 'docs' && (project ? <DocsPanel projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
               {mainView === 'context-pack' && (project ? <ContextPackBuilder projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
-              {mainView === 'context-files' && <ContextFilesPanel />}
+              {mainView === 'context-files' && (project ? <ContextFilesPanel projectId={project.id} /> : placeholder)}
               {mainView === 'approvals' && (project ? <ApprovalQueuePanel projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
               {mainView === 'clients' && <ExternalClientsPanel onClose={() => setMainView('dashboard')} />}
             </div>

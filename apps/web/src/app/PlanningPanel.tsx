@@ -25,7 +25,7 @@ const BOARD_COLS = [
   { key: 'done',     label: 'Done',     statuses: ['done', 'canceled'],                   dot: 'var(--status-success-fg)' },
 ]
 
-export default function PlanningPanel() {
+export default function PlanningPanel({ projectId }: { projectId: string }) {
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -48,19 +48,16 @@ export default function PlanningPanel() {
 
   useEffect(() => {
     load()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
 
   async function load() {
     setLoading(true)
     setError(null)
     try {
-      const workspaces = await api.workspaces.list()
-      const ws = workspaces[0] ?? null
-      if (!ws) { setProject(null); return }
-      const projects = await api.projects.list(ws.id)
-      const proj = projects[0] ?? null
+      const proj = await api.projects.get(projectId)
       setProject(proj)
-      if (proj) await loadEntities(proj.id)
+      await loadEntities(proj.id)
     } catch {
       setError('Could not load planning data.')
     } finally {
@@ -112,11 +109,7 @@ export default function PlanningPanel() {
       <button className="btn btn-outline btn-sm" onClick={load}>Retry</button>
     </div>
   )
-  if (!project) return (
-    <div className="pp-state">
-      <p style={{ margin: 0 }}>No project yet. Create one in the Dashboard.</p>
-    </div>
-  )
+  if (!project) return null
 
   const openBlockers = blockers.filter(b => b.status === 'open')
 

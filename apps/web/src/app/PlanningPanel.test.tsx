@@ -1,12 +1,11 @@
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import PlanningPanel from './PlanningPanel'
 
 // Stub api module so tests don't hit network
 vi.mock('../api/client', () => ({
   api: {
-    workspaces: { list: vi.fn() },
-    projects: { list: vi.fn() },
+    projects: { get: vi.fn() },
     phases: { list: vi.fn(), create: vi.fn() },
     tasks: { list: vi.fn(), create: vi.fn() },
     decisions: { list: vi.fn(), create: vi.fn() },
@@ -18,8 +17,7 @@ vi.mock('../api/client', () => ({
 import { api } from '../api/client'
 
 const mockApi = api as unknown as {
-  workspaces: { list: ReturnType<typeof vi.fn> }
-  projects: { list: ReturnType<typeof vi.fn> }
+  projects: { get: ReturnType<typeof vi.fn> }
   phases: { list: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> }
   tasks: { list: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> }
   decisions: { list: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> }
@@ -27,7 +25,6 @@ const mockApi = api as unknown as {
   blockers: { list: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> }
 }
 
-const WORKSPACE = { id: 'ws_1', name: 'Test WS', slug: 'test-ws' }
 const PROJECT = {
   id: 'proj_1',
   workspace_id: 'ws_1',
@@ -39,8 +36,7 @@ const PROJECT = {
 }
 
 function setupEmpty() {
-  mockApi.workspaces.list.mockResolvedValue([WORKSPACE])
-  mockApi.projects.list.mockResolvedValue([PROJECT])
+  mockApi.projects.get.mockResolvedValue(PROJECT)
   mockApi.phases.list.mockResolvedValue([])
   mockApi.tasks.list.mockResolvedValue([])
   mockApi.decisions.list.mockResolvedValue([])
@@ -59,19 +55,19 @@ afterEach(() => {
 describe('PlanningPanel', () => {
   it('shows loading state initially', () => {
     setupEmpty()
-    render(<PlanningPanel />)
+    render(<PlanningPanel projectId="proj_1" />)
     expect(screen.getByText('Loading…')).toBeTruthy()
   })
 
   it('shows project name after load', async () => {
     setupEmpty()
-    render(<PlanningPanel />)
+    render(<PlanningPanel projectId="proj_1" />)
     expect(await screen.findByText('Test Project')).toBeTruthy()
   })
 
   it('shows all four tabs', async () => {
     setupEmpty()
-    render(<PlanningPanel />)
+    render(<PlanningPanel projectId="proj_1" />)
     await screen.findByText('Test Project')
     expect(screen.getByRole('tab', { name: 'Phases' })).toBeTruthy()
     expect(screen.getByRole('tab', { name: 'Tasks' })).toBeTruthy()
@@ -79,30 +75,51 @@ describe('PlanningPanel', () => {
     expect(screen.getByRole('tab', { name: 'Risks' })).toBeTruthy()
   })
 
-  it('shows no-project message when workspace is empty', async () => {
-    mockApi.workspaces.list.mockResolvedValue([WORKSPACE])
-    mockApi.projects.list.mockResolvedValue([])
-    render(<PlanningPanel />)
-    expect(await screen.findByText(/No project yet/)).toBeTruthy()
+  it('reads and writes against the projectId prop, not the first project', async () => {
+    // Regression: the panel used to derive workspaces[0].projects[0] on its own,
+    // so a second project's view could read/write the first project's data.
+    mockApi.projects.get.mockResolvedValue({ ...PROJECT, id: 'proj_2', title: 'Second Project' })
+    mockApi.phases.list.mockResolvedValue([])
+    mockApi.tasks.list.mockResolvedValue([])
+    mockApi.decisions.list.mockResolvedValue([])
+    mockApi.risks.list.mockResolvedValue([])
+    mockApi.blockers.list.mockResolvedValue([])
+    mockApi.phases.create.mockResolvedValue({
+      id: 'ph_9', project_id: 'proj_2', title: 'Kickoff', description: null,
+      status: 'planned', sort_order: 1,
+      created_at: '2026-06-19T00:00:00+00:00', updated_at: '2026-06-19T00:00:00+00:00',
+    })
+
+    render(<PlanningPanel projectId="proj_2" />)
+    await screen.findByText('Second Project')
+    expect(mockApi.projects.get).toHaveBeenCalledWith('proj_2')
+    expect(mockApi.phases.list).toHaveBeenCalledWith('proj_2')
+    expect(mockApi.tasks.list).toHaveBeenCalledWith('proj_2')
+
+    fireEvent.click(screen.getByText('+ Add'))
+    fireEvent.change(screen.getByPlaceholderText('Phase title'), { target: { value: 'Kickoff' } })
+    fireEvent.click(screen.getByText('Save'))
+    await waitFor(() =>
+      expect(mockApi.phases.create).toHaveBeenCalledWith('proj_2', { title: 'Kickoff', status: 'planned' }),
+    )
   })
 
   it('shows error and retry on API failure', async () => {
-    mockApi.workspaces.list.mockRejectedValue(new Error('Network error'))
-    render(<PlanningPanel />)
+    mockApi.projects.get.mockRejectedValue(new Error('Network error'))
+    render(<PlanningPanel projectId="proj_1" />)
     expect(await screen.findByText(/Could not load/)).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
   })
 
   it('shows no-phases empty state when phases list is empty', async () => {
     setupEmpty()
-    render(<PlanningPanel />)
+    render(<PlanningPanel projectId="proj_1" />)
     await screen.findByText('Test Project')
     expect(screen.getByText('No phases yet.')).toBeTruthy()
   })
 
   it('renders phases when present', async () => {
-    mockApi.workspaces.list.mockResolvedValue([WORKSPACE])
-    mockApi.projects.list.mockResolvedValue([PROJECT])
+    mockApi.projects.get.mockResolvedValue(PROJECT)
     mockApi.phases.list.mockResolvedValue([
       {
         id: 'ph_1',
@@ -119,14 +136,14 @@ describe('PlanningPanel', () => {
     mockApi.decisions.list.mockResolvedValue([])
     mockApi.risks.list.mockResolvedValue([])
     mockApi.blockers.list.mockResolvedValue([])
-    render(<PlanningPanel />)
+    render(<PlanningPanel projectId="proj_1" />)
     expect(await screen.findByText('Foundation')).toBeTruthy()
     expect(screen.getByText('active')).toBeTruthy()
   })
 
   it('phase status dropdown shows only canonical values', async () => {
     setupEmpty()
-    render(<PlanningPanel />)
+    render(<PlanningPanel projectId="proj_1" />)
     await screen.findByText('Test Project')
     fireEvent.click(screen.getByText('+ Add'))
     // valid canonical values present
@@ -138,8 +155,7 @@ describe('PlanningPanel', () => {
   })
 
   it('shows open blocker count badge', async () => {
-    mockApi.workspaces.list.mockResolvedValue([WORKSPACE])
-    mockApi.projects.list.mockResolvedValue([PROJECT])
+    mockApi.projects.get.mockResolvedValue(PROJECT)
     mockApi.phases.list.mockResolvedValue([])
     mockApi.tasks.list.mockResolvedValue([])
     mockApi.decisions.list.mockResolvedValue([])
@@ -156,7 +172,7 @@ describe('PlanningPanel', () => {
         updated_at: '2026-06-19T00:00:00+00:00',
       },
     ])
-    render(<PlanningPanel />)
+    render(<PlanningPanel projectId="proj_1" />)
     expect(await screen.findByText('1 blocked')).toBeTruthy()
   })
 })
