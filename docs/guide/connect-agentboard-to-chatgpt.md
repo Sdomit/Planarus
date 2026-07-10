@@ -74,9 +74,13 @@ ingress:
   - hostname: agentboard.example.com
     path: ^/api/external/.*
     service: http://127.0.0.1:8000
+    originRequest:
+      httpHostHeader: agentboard.example.com
   - hostname: agentboard.example.com
     path: ^/health$
     service: http://127.0.0.1:8000
+    originRequest:
+      httpHostHeader: agentboard.example.com
   - service: http_status:404
 ```
 
@@ -214,7 +218,8 @@ Never try to edit a live key; a revoked key can never be re-enabled.
   after setting `AGENTBOARD_EXTERNAL_API_ENABLED=true` in a fresh terminal.
 - **"host not allowed" / 403** → `AGENTBOARD_EXTERNAL_API_ALLOWED_HOSTS` must be the
   exact hostname (`agentboard.example.com`, no `https://`, no trailing slash), and
-  you must have restarted afterward.
+  you must have restarted afterward. Also confirm the `httpHostHeader:` line in your
+  `config.yml` is that same hostname — it sets the `Host` the app actually checks.
 - **The GPT can't reach it** → the `cloudflared` window isn't running, the server
   URL in the action isn't `https://agentboard.example.com`, or the Bearer key is
   wrong/revoked/expired.
