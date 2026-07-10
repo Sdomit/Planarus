@@ -16,8 +16,10 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from app.fsmemory.spec import ContextFileSpec
+from app.mcp.serializers import redact
 from app.models.project import Project
 from app.models.workspace import Workspace
+from app.prompt.boundary import defang
 
 _CLOSED_RISK_STATUSES = frozenset({"mitigated", "accepted", "closed"})
 _DONE_TASK_STATUSES = frozenset({"done", "canceled"})
@@ -55,12 +57,25 @@ def _wrap(kind: str, ctx: RenderContext, body: list[str]) -> str:
     return "\n".join(front + [""] + body) + "\n"
 
 
-def _or(value: object, fallback: str) -> str:
+def _sanitize(value: object) -> str:
+    """Free-text DB fields are untrusted (agents read these files unwrapped):
+    mask secret shapes first (redact-before-clip), then defang injection markers.
+    Both passes are deterministic, so output stays byte-stable/golden-testable;
+    benign text passes through unchanged."""
     text = "" if value is None else str(value).strip()
+    if not text:
+        return ""
+    masked, _ = redact(text)
+    return defang(masked)
+
+
+def _or(value: object, fallback: str) -> str:
+    text = _sanitize(value)
     return text if text else fallback
 
 
 def _trunc(text: str, limit: int = 80) -> str:
+    text = _sanitize(text)
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
@@ -70,7 +85,7 @@ def _trunc(text: str, limit: int = 80) -> str:
 def _project_body(ctx: RenderContext) -> list[str]:
     p, ws = ctx.project, ctx.workspace
     return [
-        f"# {p.title}",
+        f"# {_sanitize(p.title)}",
         "",
         _or(p.summary, "_No summary set._"),
         "",
@@ -79,7 +94,7 @@ def _project_body(ctx: RenderContext) -> list[str]:
         f"- Slug: {p.slug}",
         f"- Type: {_or(p.project_type, 'unset')}",
         f"- Status: {p.status}",
-        f"- Workspace: {ws.name} ({ws.id})",
+        f"- Workspace: {_sanitize(ws.name)} ({ws.id})",
         "",
         "## Key links",
         f"- Folder root: {_or(p.folder_path, 'unset')}",
@@ -118,7 +133,7 @@ def _context_body(ctx: RenderContext) -> list[str]:
 def _status_body(ctx: RenderContext) -> list[str]:
     p = ctx.project
     active_phase = next((ph for ph in ctx.phases if ph.status == "active"), None)
-    active_phase_text = active_phase.title if active_phase is not None else "none"
+    active_phase_text = _sanitize(active_phase.title) if active_phase is not None else "none"
     open_blockers = [b for b in ctx.blockers if b.status == "open"]
     return [
         "# Current status",
@@ -169,7 +184,7 @@ def _roadmap_body(ctx: RenderContext) -> list[str]:
             "|---|---|---|",
         ]
         for i, ph in enumerate(phases, 1):
-            lines.append(f"| {i} | {ph.title} | {ph.status} |")
+            lines.append(f"| {i} | {_sanitize(ph.title)} | {ph.status} |")
 
     lines.append("")
 
@@ -178,14 +193,14 @@ def _roadmap_body(ctx: RenderContext) -> list[str]:
     if not stages:
         lines.append("_No stages yet._")
     else:
-        phase_title: dict[str, str] = {ph.id: ph.title for ph in phases}
+        phase_title: dict[str, str] = {ph.id: _sanitize(ph.title) for ph in phases}
         lines += [
             "| Phase | Title | Status |",
             "|---|---|---|",
         ]
         for stg in stages:
             ph_name = phase_title.get(stg.phase_id, stg.phase_id)
-            lines.append(f"| {ph_name} | {stg.title} | {stg.status} |")
+            lines.append(f"| {ph_name} | {_sanitize(stg.title)} | {stg.status} |")
 
     lines += ["", "## Milestones", "_None yet._"]
     return lines
@@ -210,7 +225,7 @@ def _tasks_body(ctx: RenderContext) -> list[str]:
             "|---|---|---|",
         ]
         for t in active:
-            priority = t.priority or "—"
+            priority = _sanitize(t.priority) or "—"
             lines.append(f"| {_trunc(t.title)} | {t.status} | {priority} |")
 
     lines += ["", f"## Done", f"{done_count} completed.", ""]
