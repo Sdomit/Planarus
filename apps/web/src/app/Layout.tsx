@@ -2,17 +2,24 @@ import { useEffect, useRef, useState } from 'react'
 import Dashboard from './Dashboard'
 import CockpitPanel from './CockpitPanel'
 import PlanningPanel from './PlanningPanel'
+import RoadmapPanel from './RoadmapPanel'
+import TimelinePanel from './TimelinePanel'
 import DocsPanel from './DocsPanel'
 import ContextPackBuilder from './ContextPackBuilder'
 import ContextFilesPanel from './ContextFilesPanel'
+import MarkdownPreviewPanel from './MarkdownPreviewPanel'
 import ApprovalQueuePanel from './ApprovalQueuePanel'
 import ExternalClientsPanel from './ExternalClientsPanel'
+import AgentRunsPanel from './AgentRunsPanel'
+import RemindersPanel from './RemindersPanel'
+import NotificationsBell from './NotificationsBell'
 import { Icon } from './Icon'
 import './layout.css'
 
 type MainView =
-  | 'dashboard' | 'cockpit' | 'planning' | 'docs'
-  | 'context-pack' | 'context-files' | 'approvals' | 'clients'
+  | 'dashboard' | 'cockpit' | 'planning' | 'roadmap' | 'timeline' | 'docs'
+  | 'context-pack' | 'context-files' | 'preview' | 'approvals' | 'clients'
+  | 'agent-runs' | 'reminders'
 
 interface SelectedProject {
   id: string
@@ -25,15 +32,20 @@ const NAV: { group: string; items: { view: MainView; label: string; icon: string
     { view: 'dashboard', label: 'Dashboard', icon: 'grid' },
     { view: 'cockpit', label: 'Cockpit', icon: 'zap' },
     { view: 'planning', label: 'Planning', icon: 'layers' },
+    { view: 'roadmap', label: 'Roadmap', icon: 'columns' },
+    { view: 'timeline', label: 'Timeline', icon: 'clock' },
   ] },
   { group: 'Context', items: [
     { view: 'docs', label: 'Docs', icon: 'file' },
     { view: 'context-pack', label: 'Context Pack', icon: 'inbox' },
     { view: 'context-files', label: 'Context Files', icon: 'folder' },
+    { view: 'preview', label: 'Markdown Preview', icon: 'code' },
   ] },
   { group: 'Agents', items: [
     { view: 'approvals', label: 'Approvals', icon: 'check' },
     { view: 'clients', label: 'Clients', icon: 'external' },
+    { view: 'agent-runs', label: 'Agent Runs', icon: 'table' },
+    { view: 'reminders', label: 'Reminders', icon: 'bell' },
   ] },
 ]
 
@@ -41,11 +53,16 @@ const TITLES: Record<MainView, { title: string; sub: string }> = {
   dashboard: { title: 'Dashboard', sub: 'Workspace overview' },
   cockpit: { title: 'Cockpit', sub: 'Project command center' },
   planning: { title: 'Planning', sub: 'Phases, tasks, decisions & risks' },
+  roadmap: { title: 'Roadmap', sub: 'Progress across phases & stages' },
+  timeline: { title: 'Timeline', sub: 'Audited project activity' },
   docs: { title: 'Docs', sub: 'Project documents' },
   'context-pack': { title: 'Context Pack', sub: 'Build an AI context pack' },
   'context-files': { title: 'Context Files', sub: 'Generated Markdown context' },
+  preview: { title: 'Markdown Preview', sub: 'Rendered context files & docs' },
   approvals: { title: 'Approval Queue', sub: 'Pending agent proposals' },
   clients: { title: 'External API Clients', sub: 'Machine keys & scopes' },
+  'agent-runs': { title: 'Agent Runs', sub: 'Execution telemetry & analytics' },
+  reminders: { title: 'Reminders', sub: 'Email reminders & send history' },
 }
 
 function initials(s: string): string {
@@ -193,9 +210,7 @@ export default function Layout() {
             <input type="text" placeholder="Search…" aria-label="Search" />
             <kbd>⌘K</kbd>
           </label>
-          <button className="ab-iconbtn" type="button" aria-label="Notifications">
-            <Icon name="bell" className="ic-18" />
-          </button>
+          <NotificationsBell projectId={project?.id ?? null} />
           <button className="ab-iconbtn" type="button" onClick={toggleTheme} aria-label="Toggle theme">
             <Icon name={isDark ? 'sun' : 'moon'} className="ic-18" />
           </button>
@@ -207,11 +222,16 @@ export default function Layout() {
               {mainView === 'dashboard' && <Dashboard onSelectProject={selectProject} />}
               {mainView === 'cockpit' && (project ? <CockpitPanel projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
               {mainView === 'planning' && (project ? <PlanningPanel projectId={project.id} /> : placeholder)}
+              {mainView === 'roadmap' && (project ? <RoadmapPanel projectId={project.id} /> : placeholder)}
+              {mainView === 'timeline' && (project ? <TimelinePanel projectId={project.id} /> : placeholder)}
               {mainView === 'docs' && (project ? <DocsPanel projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
               {mainView === 'context-pack' && (project ? <ContextPackBuilder projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
               {mainView === 'context-files' && (project ? <ContextFilesPanel projectId={project.id} /> : placeholder)}
+              {mainView === 'preview' && (project ? <MarkdownPreviewPanel projectId={project.id} /> : placeholder)}
               {mainView === 'approvals' && (project ? <ApprovalQueuePanel projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
               {mainView === 'clients' && <ExternalClientsPanel onClose={() => setMainView('dashboard')} />}
+              {mainView === 'agent-runs' && (project ? <AgentRunsPanel projectId={project.id} /> : placeholder)}
+              {mainView === 'reminders' && (project ? <RemindersPanel projectId={project.id} /> : placeholder)}
             </div>
           </div>
         </main>

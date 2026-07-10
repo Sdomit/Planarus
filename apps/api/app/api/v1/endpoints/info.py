@@ -10,5 +10,5 @@ def get_info() -> dict:
     return {
         "name": settings.app_name,
         "version": settings.app_version,
-        "phase": "8-git-metadata",
+        "phase": "9-v1-expansion",
     }

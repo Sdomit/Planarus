@@ -196,3 +196,60 @@ def approval_target_entity_type_check_sql(
     column: str = "target_entity_type",
 ) -> str:
     return _nullable_check_sql(column, APPROVAL_TARGET_ENTITY_TYPES)
+
+
+# --- Phase 9: agent runs + notifications ---------------------------------------
+# AgentRun — manual, local-human-entered execution telemetry. `agent_family` and
+# `mode` reuse the canonical lists from docs/plan/03-data-model.md.
+AGENT_FAMILIES: tuple[str, ...] = (
+    "chatgpt",
+    "claude",
+    "codex",
+    "opencode",
+    "cursor",
+    "custom",
+    "unspecified",
+)
+
+AGENT_RUN_MODES: tuple[str, ...] = (
+    "plan",
+    "implement",
+    "review",
+    "debug",
+    "summarize",
+)
+
+AGENT_RUN_STATUSES: tuple[str, ...] = ("started", "succeeded", "failed", "canceled")
+
+
+def agent_family_check_sql(column: str = "agent_family") -> str:
+    return _check_sql(column, AGENT_FAMILIES)
+
+
+def agent_run_mode_check_sql(column: str = "mode") -> str:
+    return _nullable_check_sql(column, AGENT_RUN_MODES)
+
+
+def agent_run_status_check_sql(column: str = "status") -> str:
+    return _check_sql(column, AGENT_RUN_STATUSES)
+
+
+# NotificationRule / EmailLog. Only the email channel drives sends today; the
+# in-app feed and desktop notifications are always-on client concerns.
+NOTIFICATION_CHANNELS: tuple[str, ...] = ("in_app", "desktop", "email")
+
+NOTIFICATION_TRIGGERS: tuple[str, ...] = ("due_soon", "daily_digest")
+
+EMAIL_LOG_STATUSES: tuple[str, ...] = ("sent", "failed")
+
+
+def notification_channel_check_sql(column: str = "channel") -> str:
+    return _check_sql(column, NOTIFICATION_CHANNELS)
+
+
+def notification_trigger_check_sql(column: str = "trigger_type") -> str:
+    return _check_sql(column, NOTIFICATION_TRIGGERS)
+
+
+def email_log_status_check_sql(column: str = "status") -> str:
+    return _check_sql(column, EMAIL_LOG_STATUSES)

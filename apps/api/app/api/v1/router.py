@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    agent_runs,
     api_clients,
     approvals,
     blockers,
@@ -10,11 +11,14 @@ from app.api.v1.endpoints import (
     docs,
     git,
     info,
+    notifications,
     phases,
     projects,
     risks,
+    roadmap,
     stages,
     tasks,
+    timeline,
     workspaces,
 )
 
@@ -34,3 +38,7 @@ router.include_router(context_pack.router, tags=["context-pack"])
 router.include_router(git.router, tags=["git"])
 router.include_router(approvals.router, tags=["approvals"])
 router.include_router(api_clients.router, tags=["api-clients"])
+router.include_router(roadmap.router, tags=["roadmap"])
+router.include_router(timeline.router, tags=["timeline"])
+router.include_router(agent_runs.router, tags=["agent-runs"])
+router.include_router(notifications.router, tags=["notifications"])
