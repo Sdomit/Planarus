@@ -1,10 +1,18 @@
 ---
 kind: dev_guide
-updated_at: 2026-06-19
-phase: 1-foundation
+updated_at: 2026-07-10
+phase: implementation (through 7C2a)
 ---
 
-# Developer setup — Phase 1
+# Developer setup
+
+## One-command launcher (Windows)
+
+From the repo root, run [`run-agentboard.bat`](../../run-agentboard.bat): it
+checks the venv + pnpm, runs `alembic upgrade head`, starts the API
+(`uvicorn app.main:app --reload --port 8000`) and the web dev server
+(`pnpm dev:web`, port 5173), then opens the UI. Local dev only — the external
+API stays disabled.
 
 ## Prerequisites
 
@@ -28,8 +36,11 @@ source .venv/bin/activate
 # Windows PowerShell
 .venv\Scripts\Activate.ps1
 
-# Install runtime + dev dependencies
+# Install runtime + dev dependencies (editable install works since cfac8fb)
 pip install -e ".[dev]"
+
+# Apply DB migrations before the first boot (and after pulling new ones)
+alembic upgrade head
 
 # Run the API server
 uvicorn app.main:app --reload --port 8000
@@ -64,7 +75,8 @@ cd apps/api
 python -m pytest
 ```
 
-Expected output: 3 tests pass (health, info, openapi schema).
+Expected output: **512 passed, 1 skipped** (the skip is a symlink-privilege
+test on Windows).
 
 ### Frontend
 
@@ -73,7 +85,7 @@ cd apps/web
 pnpm test
 ```
 
-Expected output: 1 test suite, 1 test passes (smoke render).
+Expected output: **54 tests pass**.
 
 ### Frontend typecheck
 
@@ -99,18 +111,15 @@ pnpm typecheck:web  # frontend typecheck
 
 ---
 
-## What is intentionally NOT implemented in Phase 1
+## What is intentionally NOT implemented yet
+
+Phases 2–7C2a are implemented on `main` (CRUD, migrations, context-pack
+generation, planning UI, Tiptap docs, prompt panel, approval queue, MCP,
+external API). Still pending:
 
 | Feature | Phase |
 |---------|-------|
-| Project / task CRUD | Phase 2 |
-| SQLite schema + Alembic migrations | Phase 2 |
-| Markdown context-pack generation | Phase 3 |
-| Planning hierarchy UI (tree, kanban) | Phase 4 |
-| Rich Tiptap editor | Phase 5 |
-| AI context / prompt panel | Phase 6 |
-| Approval queue + MCP/REST external surfaces | Phase 7 |
-| Read-only Git metadata | Phase 8 |
+| Read-only Git metadata | Phase 8 (built on `feat/phase-8-git-metadata`, unmerged) |
 | Tauri desktop packaging | Phase 9 or later |
 | Auth, billing, cloud deployment | Hosted phase (Phase 10+) |
-| Email, CI/CD, migrations | Respective future phases |
+| Email, CI/CD | Respective future phases |

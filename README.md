@@ -15,21 +15,25 @@ log) — all stored locally in real folders you own.
 
 ## Status
 
-**Phase: architecture lock (pre-code).** No application code exists yet. This
-repository currently holds the research, the locked architecture plan, and
-AgentBoard's own context pack.
+**Working local-first app.** `apps/api` (FastAPI + SQLModel + Alembic) and
+`apps/web` (React + TS + Vite) ship eight surfaces: Dashboard, Cockpit, Planning,
+Docs, Context Pack, Context Files, Approvals, Clients. Test baseline on `main`:
+**548 pytest passed / 1 skipped, 56 vitest**. The external API exists but is
+**disabled by default** (loopback-bound; enabling it is an explicit user opt-in).
+One-command local run: `run-agentboard.bat`.
 
 | Artifact | Location |
 |---|---|
 | Source research | [deep-research-report.md](deep-research-report.md) |
-| Architecture & MVP plan (start here) | [docs/plan/00-OVERVIEW.md](docs/plan/00-OVERVIEW.md) |
+| Architecture & MVP plan | [docs/plan/00-OVERVIEW.md](docs/plan/00-OVERVIEW.md) |
 | Living context pack (read first as an agent) | [context/](context/) |
 | Agent routing instructions | [CLAUDE.md](CLAUDE.md) |
+| Developer setup | [docs/dev/setup.md](docs/dev/setup.md) |
 
 ## The locked stack (one line)
 
-React + Tiptap UI → packaged with **Tauri** for desktop and served as a normal
-web app → talking to a **FastAPI** backend (run as a Tauri sidecar on desktop)
+React + Tiptap UI → served as a normal web app today (**Tauri** desktop
+packaging deferred to Phase 9+) → talking to a **FastAPI** backend
 → **SQLite** locally (SQLAlchemy/SQLModel + Alembic, Postgres-ready) → every
 project mirrored to a **real folder of Markdown context files** → a narrow,
 approval-gated **MCP** server and REST API for agents.
@@ -54,10 +58,11 @@ agent access, Markdown *context packs*, and token-efficient agent orchestration
 
 ## Next implementation step
 
-Phase 0 is the documentation-only architecture acceptance gate described in
-[docs/plan/08-implementation-phases.md](docs/plan/08-implementation-phases.md).
-After a second review accepts the plan, the first code branch is
-`feat/phase-1-foundation`.
+Phase 8 (read-only Git metadata + Cockpit) and the 2026-07-10 review fixes are
+merged. Next: execute the Phase 7C2b opt-in ChatGPT exposure (human-gated — see
+[docs/dev/phase-7c2b-go-live-runbook.md](docs/dev/phase-7c2b-go-live-runbook.md))
+or Phase 9 (V1 interface expansion + notifications). Live objective:
+[context/NEXT_STEP.md](context/NEXT_STEP.md).
 
 ## License
 
