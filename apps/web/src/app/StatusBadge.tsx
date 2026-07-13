@@ -1,7 +1,7 @@
 // Maps AgentBoard status/priority/severity values to forma badge "tones".
 export type ToneKind =
   | 'project' | 'phase' | 'task' | 'priority'
-  | 'decision' | 'severity' | 'riskstatus'
+  | 'decision' | 'severity' | 'riskstatus' | 'milestone'
   | 'approval' | 'docstatus' | 'agentrun' | 'emailstatus' | 'notifseverity'
 
 type Tone = 'neutral' | 'info' | 'accent' | 'success' | 'warning' | 'danger' | 'critical'
@@ -21,6 +21,7 @@ const TONE: Record<ToneKind, Record<string, Tone>> = {
   decision: { proposed: 'info', accepted: 'success', superseded: 'neutral', reversed: 'danger' },
   severity: { low: 'neutral', medium: 'warning', high: 'danger', critical: 'critical' },
   riskstatus: { open: 'danger', monitoring: 'warning', mitigated: 'success', accepted: 'info', closed: 'neutral' },
+  milestone: { planned: 'neutral', active: 'info', achieved: 'success', missed: 'danger', canceled: 'neutral' },
   approval: {
     pending: 'warning', approved: 'info', applying: 'info', applied: 'success',
     rejected: 'danger', invalidated: 'neutral', expired: 'neutral', failed: 'danger',

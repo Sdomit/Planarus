@@ -31,6 +31,7 @@ from app.fsmemory.spec import AUDIT_LOG_RELPATH, CONTEXT_FILES
 from app.models.blocker import Blocker
 from app.models.context_file import ContextFile
 from app.models.decision import Decision
+from app.models.milestone import Milestone
 from app.models.phase import Phase
 from app.models.project import Project
 from app.models.risk import Risk
@@ -136,6 +137,13 @@ def build_render_context(
             .order_by(Blocker.created_at, Blocker.id)
         ).all()
     )
+    milestones = list(
+        session.exec(
+            select(Milestone)
+            .where(Milestone.project_id == project.id)
+            .order_by(Milestone.sort_order, Milestone.id)
+        ).all()
+    )
 
     all_timestamps = (
         [project.updated_at, workspace.updated_at]
@@ -145,6 +153,7 @@ def build_render_context(
         + [e.updated_at for e in decisions]
         + [e.updated_at for e in risks]
         + [e.updated_at for e in blockers]
+        + [e.updated_at for e in milestones]
     )
     updated_at = max(all_timestamps)
 
@@ -158,6 +167,7 @@ def build_render_context(
         decisions=tuple(decisions),
         risks=tuple(risks),
         blockers=tuple(blockers),
+        milestones=tuple(milestones),
     )
 
 

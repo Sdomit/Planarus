@@ -127,6 +127,49 @@ export interface Blocker {
   updated_at: string
 }
 
+export interface Milestone {
+  id: string
+  project_id: string
+  phase_id: string | null
+  title: string
+  description: string | null
+  status: string
+  target_date: string | null
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ChecklistItem {
+  id: string
+  task_id: string
+  label: string
+  done: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface Comment {
+  id: string
+  project_id: string
+  entity_type: string
+  entity_id: string
+  body: string
+  author_type: string
+  created_at: string
+}
+
+export interface Link {
+  id: string
+  project_id: string
+  entity_type: string
+  entity_id: string
+  url: string
+  title: string | null
+  created_at: string
+}
+
 export interface DocSummary {
   id: string
   project_id: string
@@ -633,6 +676,42 @@ export const api = {
       }),
     update: (id: string, data: Partial<Pick<Blocker, 'title' | 'status'>>) =>
       request<Blocker>(`/blockers/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+  milestones: {
+    list: (projectId: string) => request<Milestone[]>(`/projects/${projectId}/milestones`),
+    create: (projectId: string, data: { title: string; status?: string; target_date?: string; phase_id?: string }) =>
+      request<Milestone>(`/projects/${projectId}/milestones`, { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Partial<Pick<Milestone, 'title' | 'status' | 'target_date' | 'phase_id'>>) =>
+      request<Milestone>(`/milestones/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+  checklistItems: {
+    list: (taskId: string) => request<ChecklistItem[]>(`/tasks/${taskId}/checklist-items`),
+    create: (taskId: string, data: { label: string; done?: boolean }) =>
+      request<ChecklistItem>(`/tasks/${taskId}/checklist-items`, { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Partial<Pick<ChecklistItem, 'label' | 'done'>>) =>
+      request<ChecklistItem>(`/checklist-items/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+  comments: {
+    list: (projectId: string, params?: { entity_type?: string; entity_id?: string }) => {
+      const q = new URLSearchParams()
+      if (params?.entity_type) q.set('entity_type', params.entity_type)
+      if (params?.entity_id) q.set('entity_id', params.entity_id)
+      const qs = q.toString()
+      return request<Comment[]>(`/projects/${projectId}/comments${qs ? `?${qs}` : ''}`)
+    },
+    create: (projectId: string, data: { entity_type: string; entity_id: string; body: string }) =>
+      request<Comment>(`/projects/${projectId}/comments`, { method: 'POST', body: JSON.stringify(data) }),
+  },
+  links: {
+    list: (projectId: string, params?: { entity_type?: string; entity_id?: string }) => {
+      const q = new URLSearchParams()
+      if (params?.entity_type) q.set('entity_type', params.entity_type)
+      if (params?.entity_id) q.set('entity_id', params.entity_id)
+      const qs = q.toString()
+      return request<Link[]>(`/projects/${projectId}/links${qs ? `?${qs}` : ''}`)
+    },
+    create: (projectId: string, data: { entity_type: string; entity_id: string; url: string; title?: string }) =>
+      request<Link>(`/projects/${projectId}/links`, { method: 'POST', body: JSON.stringify(data) }),
   },
   docs: {
     list: (projectId: string, params?: { doc_type?: string; status?: string; include_archived?: boolean }) => {

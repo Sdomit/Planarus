@@ -113,13 +113,16 @@ pnpm typecheck:web  # frontend typecheck
 
 ## What is intentionally NOT implemented yet
 
-Phases 2–7C2a are implemented on `main` (CRUD, migrations, context-pack
+Phases 2–9 are implemented on `main` (CRUD, migrations, context-pack
 generation, planning UI, Tiptap docs, prompt panel, approval queue, MCP,
-external API). Still pending:
+external API, read-only Git metadata + Cockpit, Roadmap/Timeline/Agent-Run
+analytics, notifications + email reminders). Phase 4b then completed the
+Must-have MVP data model (Milestone/Comment/Link/ChecklistItem, migration
+`0009`). Still pending:
 
 | Feature | Phase |
 |---------|-------|
-| Read-only Git metadata | Phase 8 (built on `feat/phase-8-git-metadata`, unmerged) |
-| Tauri desktop packaging | Phase 9 or later |
+| Opt-in ChatGPT exposure (go-live) | Phase 7C2b (human-gated) |
+| Tauri desktop packaging | Post-V1 / future |
 | Auth, billing, cloud deployment | Hosted phase (Phase 10+) |
-| Email, CI/CD | Respective future phases |
+| CI/CD | Future phase |

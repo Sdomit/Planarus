@@ -8,21 +8,29 @@ vi.mock('../api/client', () => ({
     projects: { get: vi.fn() },
     phases: { list: vi.fn(), create: vi.fn() },
     tasks: { list: vi.fn(), create: vi.fn() },
+    milestones: { list: vi.fn(), create: vi.fn() },
     decisions: { list: vi.fn(), create: vi.fn() },
     risks: { list: vi.fn(), create: vi.fn() },
     blockers: { list: vi.fn(), create: vi.fn() },
+    comments: { list: vi.fn(), create: vi.fn() },
+    links: { list: vi.fn(), create: vi.fn() },
+    checklistItems: { list: vi.fn(), create: vi.fn(), update: vi.fn() },
   },
 }))
 
 import { api } from '../api/client'
 
+type Fn = ReturnType<typeof vi.fn>
 const mockApi = api as unknown as {
-  projects: { get: ReturnType<typeof vi.fn> }
-  phases: { list: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> }
-  tasks: { list: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> }
-  decisions: { list: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> }
-  risks: { list: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> }
-  blockers: { list: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> }
+  projects: { get: Fn }
+  phases: { list: Fn; create: Fn }
+  tasks: { list: Fn; create: Fn }
+  milestones: { list: Fn; create: Fn }
+  decisions: { list: Fn; create: Fn }
+  risks: { list: Fn; create: Fn }
+  blockers: { list: Fn; create: Fn }
+  comments: { list: Fn; create: Fn }
+  links: { list: Fn; create: Fn }
 }
 
 const PROJECT = {
@@ -39,9 +47,12 @@ function setupEmpty() {
   mockApi.projects.get.mockResolvedValue(PROJECT)
   mockApi.phases.list.mockResolvedValue([])
   mockApi.tasks.list.mockResolvedValue([])
+  mockApi.milestones.list.mockResolvedValue([])
   mockApi.decisions.list.mockResolvedValue([])
   mockApi.risks.list.mockResolvedValue([])
   mockApi.blockers.list.mockResolvedValue([])
+  mockApi.comments.list.mockResolvedValue([])
+  mockApi.links.list.mockResolvedValue([])
 }
 
 beforeEach(() => {
@@ -65,14 +76,29 @@ describe('PlanningPanel', () => {
     expect(await screen.findByText('Test Project')).toBeTruthy()
   })
 
-  it('shows all four tabs', async () => {
+  it('shows all tabs', async () => {
     setupEmpty()
     render(<PlanningPanel projectId="proj_1" />)
     await screen.findByText('Test Project')
-    expect(screen.getByRole('tab', { name: 'Phases' })).toBeTruthy()
-    expect(screen.getByRole('tab', { name: 'Tasks' })).toBeTruthy()
-    expect(screen.getByRole('tab', { name: 'Decisions' })).toBeTruthy()
-    expect(screen.getByRole('tab', { name: 'Risks' })).toBeTruthy()
+    for (const name of ['Phases', 'Tasks', 'Milestones', 'Decisions', 'Risks', 'Comments', 'Links']) {
+      expect(screen.getByRole('tab', { name })).toBeTruthy()
+    }
+  })
+
+  it('renders milestones with target date when present', async () => {
+    setupEmpty()
+    mockApi.milestones.list.mockResolvedValue([
+      {
+        id: 'mil_1', project_id: 'proj_1', phase_id: null, title: 'Beta launch',
+        description: null, status: 'planned', target_date: '2026-08-01', sort_order: 0,
+        created_at: '2026-07-13T00:00:00+00:00', updated_at: '2026-07-13T00:00:00+00:00',
+      },
+    ])
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    fireEvent.click(screen.getByRole('tab', { name: 'Milestones' }))
+    expect(await screen.findByText('Beta launch')).toBeTruthy()
+    expect(screen.getByText('2026-08-01')).toBeTruthy()
   })
 
   it('reads and writes against the projectId prop, not the first project', async () => {

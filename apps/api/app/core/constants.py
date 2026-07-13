@@ -253,3 +253,48 @@ def notification_trigger_check_sql(column: str = "trigger_type") -> str:
 
 def email_log_status_check_sql(column: str = "status") -> str:
     return _check_sql(column, EMAIL_LOG_STATUSES)
+
+
+# --- Phase 4b: Milestone, Comment, Link (completing the MVP data model) --------
+MILESTONE_STATUSES: tuple[str, ...] = (
+    "planned",
+    "active",
+    "achieved",
+    "missed",
+    "canceled",
+)
+
+
+def milestone_status_check_sql(column: str = "status") -> str:
+    return _check_sql(column, MILESTONE_STATUSES)
+
+
+# Comment/Link are polymorphic: they attach to any project-scoped entity via
+# (entity_type, entity_id). This is the target-kind allowlist (03-data-model.md).
+REF_ENTITY_TYPES: tuple[str, ...] = (
+    "project",
+    "phase",
+    "stage",
+    "task",
+    "decision",
+    "risk",
+    "blocker",
+    "milestone",
+    "doc",
+)
+
+# Who authored a comment. Local-app comments are "human"; the field exists so an
+# approval-gated agent comment can be attributed without a schema change later.
+COMMENT_AUTHOR_TYPES: tuple[str, ...] = ("human", "agent", "system")
+
+
+def comment_entity_type_check_sql(column: str = "entity_type") -> str:
+    return _check_sql(column, REF_ENTITY_TYPES)
+
+
+def comment_author_type_check_sql(column: str = "author_type") -> str:
+    return _check_sql(column, COMMENT_AUTHOR_TYPES)
+
+
+def link_entity_type_check_sql(column: str = "entity_type") -> str:
+    return _check_sql(column, REF_ENTITY_TYPES)

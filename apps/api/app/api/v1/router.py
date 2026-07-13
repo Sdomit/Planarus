@@ -5,12 +5,16 @@ from app.api.v1.endpoints import (
     api_clients,
     approvals,
     blockers,
+    checklist_items,
+    comments,
     context,
     context_pack,
     decisions,
     docs,
     git,
     info,
+    links,
+    milestones,
     notifications,
     phases,
     projects,
@@ -33,6 +37,10 @@ router.include_router(tasks.router, tags=["tasks"])
 router.include_router(decisions.router, tags=["decisions"])
 router.include_router(risks.router, tags=["risks"])
 router.include_router(blockers.router, tags=["blockers"])
+router.include_router(milestones.router, tags=["milestones"])
+router.include_router(checklist_items.router, tags=["checklist-items"])
+router.include_router(comments.router, tags=["comments"])
+router.include_router(links.router, tags=["links"])
 router.include_router(docs.router, tags=["docs"])
 router.include_router(context_pack.router, tags=["context-pack"])
 router.include_router(git.router, tags=["git"])
