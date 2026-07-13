@@ -41,6 +41,7 @@ class RenderContext:
     decisions: tuple = field(default_factory=tuple)
     risks: tuple = field(default_factory=tuple)
     blockers: tuple = field(default_factory=tuple)
+    milestones: tuple = field(default_factory=tuple)
 
 
 def _wrap(kind: str, ctx: RenderContext, body: list[str]) -> str:
@@ -202,7 +203,22 @@ def _roadmap_body(ctx: RenderContext) -> list[str]:
             ph_name = phase_title.get(stg.phase_id, stg.phase_id)
             lines.append(f"| {ph_name} | {_sanitize(stg.title)} | {stg.status} |")
 
-    lines += ["", "## Milestones", "_None yet._"]
+    # Milestones — soonest target_date first, undated last; then sort_order.
+    milestones = sorted(
+        ctx.milestones,
+        key=lambda m: (m.target_date or "9999-99-99", m.sort_order, m.id),
+    )
+    lines += ["", "## Milestones"]
+    if not milestones:
+        lines.append("_None yet._")
+    else:
+        lines += [
+            "| Target | Title | Status |",
+            "|---|---|---|",
+        ]
+        for m in milestones:
+            target = _sanitize(m.target_date) or "—"
+            lines.append(f"| {target} | {_trunc(m.title, 50)} | {m.status} |")
     return lines
 
 

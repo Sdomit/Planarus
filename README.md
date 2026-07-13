@@ -16,9 +16,11 @@ log) — all stored locally in real folders you own.
 ## Status
 
 **Working local-first app.** `apps/api` (FastAPI + SQLModel + Alembic) and
-`apps/web` (React + TS + Vite) ship eight surfaces: Dashboard, Cockpit, Planning,
-Docs, Context Pack, Context Files, Approvals, Clients. Test baseline on `main`:
-**548 pytest passed / 1 skipped, 56 vitest**. The external API exists but is
+`apps/web` (React + TS + Vite) ship thirteen surfaces: Dashboard, Cockpit,
+Planning (phases/tasks/milestones/decisions/risks/comments/links + task
+checklists), Roadmap, Timeline, Docs, Context Pack, Context Files, Markdown
+Preview, Agent Runs, Approvals, Clients, and Reminders. Test baseline:
+**630 pytest passed / 2 skipped, 73 vitest**. The external API exists but is
 **disabled by default** (loopback-bound; enabling it is an explicit user opt-in).
 One-command local run: `run-agentboard.bat`.
 
@@ -58,11 +60,12 @@ agent access, Markdown *context packs*, and token-efficient agent orchestration
 
 ## Next implementation step
 
-Phase 8 (read-only Git metadata + Cockpit) and the 2026-07-10 review fixes are
-merged. Next: execute the Phase 7C2b opt-in ChatGPT exposure (human-gated — see
+Phases 1–9 plus Phase 4b (Milestone/Comment/Link/ChecklistItem — the last
+Must-have MVP data entities) are built. Next: execute the Phase 7C2b opt-in
+ChatGPT exposure (human-gated — see
 [docs/dev/phase-7c2b-go-live-runbook.md](docs/dev/phase-7c2b-go-live-runbook.md))
-or Phase 9 (V1 interface expansion + notifications). Live objective:
-[context/NEXT_STEP.md](context/NEXT_STEP.md).
+or Phase 10 groundwork (gated behind a separate architecture review). Live
+objective: [context/NEXT_STEP.md](context/NEXT_STEP.md).
 
 ## License
 

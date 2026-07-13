@@ -14,6 +14,10 @@ from app.models.api_client import ApiClient  # noqa: F401
 from app.models.agent_run import AgentRun  # noqa: F401
 from app.models.notification_rule import NotificationRule  # noqa: F401
 from app.models.email_log import EmailLog  # noqa: F401
+from app.models.milestone import Milestone  # noqa: F401
+from app.models.checklist_item import ChecklistItem  # noqa: F401
+from app.models.comment import Comment  # noqa: F401
+from app.models.link import Link  # noqa: F401
 
 __all__ = [
     "Workspace",
@@ -32,4 +36,8 @@ __all__ = [
     "AgentRun",
     "NotificationRule",
     "EmailLog",
+    "Milestone",
+    "ChecklistItem",
+    "Comment",
+    "Link",
 ]
