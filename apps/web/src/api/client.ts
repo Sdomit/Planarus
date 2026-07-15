@@ -610,7 +610,7 @@ async function controlRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const token = await getLocalToken()
   return request<T>(path, {
     ...init,
-    headers: { ...init?.headers, 'X-AgentBoard-Local-Token': token },
+    headers: { ...init?.headers, 'X-Approvo-Local-Token': token },
   })
 }
 

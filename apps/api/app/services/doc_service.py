@@ -228,7 +228,7 @@ def export_doc_markdown(session: Session, doc_id: str) -> DocExportResponse:
 
         if drift_detected:
             raise LookupError(
-                "The exported Markdown file was changed outside AgentBoard. "
+                "The exported Markdown file was changed outside Approvo. "
                 "Review it before exporting again."
             )
 

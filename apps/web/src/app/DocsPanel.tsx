@@ -288,7 +288,7 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
       setExportMsg(res.was_changed ? `Exported to ${res.export_path}` : 'No changes (file up-to-date)')
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
-      if (msg.startsWith('409')) setExportMsg('The exported file was changed outside AgentBoard. Review it before exporting again.')
+      if (msg.startsWith('409')) setExportMsg('The exported file was changed outside Approvo. Review it before exporting again.')
       else setExportMsg(`Export failed: ${msg}`)
     }
   }, [doc])

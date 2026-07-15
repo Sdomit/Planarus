@@ -4,7 +4,7 @@ Boundaries, in order of enforcement:
 
 1. Disabled by default — ``AGENTBOARD_EMAIL_ENABLED=true`` is required.
 2. Loopback SMTP only — the configured host must be 127.0.0.1/::1/localhost, so
-   AgentBoard can never become an outbound relay. Hosted providers (Brevo,
+   Approvo can never become an outbound relay. Hosted providers (Brevo,
    Resend) are a later, explicitly designed phase.
 3. Per-project daily send cap (anti-abuse, counted from EmailLog).
 4. Fail-closed secret scan on subject+body before anything leaves the process.
@@ -54,7 +54,7 @@ def _due_soon_body(session: Session, project: Project, rule: NotificationRule) -
     overdue, due_soon = due_task_buckets(session, project.id, rule.threshold_hours)
     if not overdue and not due_soon:
         return None
-    lines = [f"AgentBoard reminders for project: {project.title}", ""]
+    lines = [f"Approvo reminders for project: {project.title}", ""]
     if overdue:
         lines.append(f"Overdue tasks ({len(overdue)}):")
         lines.extend(f"  - {t.title} (due {t.due_at})" for t in overdue)
@@ -63,7 +63,7 @@ def _due_soon_body(session: Session, project: Project, rule: NotificationRule) -
         lines.append(f"Due within {rule.threshold_hours}h ({len(due_soon)}):")
         lines.extend(f"  - {t.title} (due {t.due_at})" for t in due_soon)
         lines.append("")
-    lines.append("— AgentBoard (local)")
+    lines.append("— Approvo (local)")
     return "\n".join(lines)
 
 
@@ -84,7 +84,7 @@ def _digest_body(session: Session, project: Project, rule: NotificationRule) -> 
     overdue, due_soon = due_task_buckets(session, project.id, rule.threshold_hours)
 
     lines = [
-        f"AgentBoard daily digest for project: {project.title}",
+        f"Approvo daily digest for project: {project.title}",
         "",
         f"Open tasks: {len(open_tasks)} (done: {done})",
         f"Open blockers: {len(blockers)}",
@@ -95,7 +95,7 @@ def _digest_body(session: Session, project: Project, rule: NotificationRule) -> 
         lines.append("")
         lines.append("Overdue:")
         lines.extend(f"  - {t.title} (due {t.due_at})" for t in overdue)
-    lines.extend(["", "— AgentBoard (local)"])
+    lines.extend(["", "— Approvo (local)"])
     return "\n".join(lines)
 
 
@@ -169,10 +169,10 @@ def send_project_reminders(session: Session, project_id: str) -> ReminderSendRes
                     )
                 )
                 continue
-            subject = f"[AgentBoard] {project.title} — task reminders"
+            subject = f"[Approvo] {project.title} — task reminders"
         else:  # daily_digest
             body = _digest_body(session, project, rule)
-            subject = f"[AgentBoard] {project.title} — daily digest"
+            subject = f"[Approvo] {project.title} — daily digest"
 
         # Fail closed: never send content that looks like it carries a secret.
         if scan(subject + "\n" + body, source_ref=f"email:{rule.id}"):

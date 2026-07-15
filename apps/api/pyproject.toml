@@ -1,5 +1,5 @@
 [project]
-name = "agentboard-api"
+name = "approvo-api"
 version = "0.2.0"
 requires-python = ">=3.11"
 dependencies = [

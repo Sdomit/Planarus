@@ -72,7 +72,7 @@ async def _external_aware_http_handler(request: Request, exc: StarletteHTTPExcep
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="AgentBoard API",
+        title="Approvo API",
         version="0.2.0",
         description="Local-first AI project cockpit — API",
     )

@@ -1,6 +1,6 @@
 @echo off
 REM ============================================================================
-REM  AgentBoard - local dev launcher (UI/UX testing)
+REM  Approvo - local dev launcher (UI/UX testing)
 REM  Starts the FastAPI backend (:8000) + Vite frontend (:5173) and opens the UI.
 REM  Commands mirror docs/dev/setup.md. Vite proxies /api -> :8000, so every
 REM  UI feature works with no extra config.
@@ -24,7 +24,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo Starting AgentBoard  ^|  API :8000   Web :5173
+echo Starting Approvo  ^|  API :8000   Web :5173
 echo.
 
 REM --- backend window: migrate to head, then run with hot reload --------------
@@ -33,11 +33,11 @@ REM  any leftover value in your environment. setlocal keeps this out of your
 REM  shell; the started window inherits it.
 set "AGENTBOARD_EXTERNAL_API_ENABLED=false"
 cd /d "%ROOT%apps\api"
-start "AgentBoard API (:8000)" cmd /k "call .venv\Scripts\activate.bat && alembic upgrade head && uvicorn app.main:app --reload --port 8000"
+start "Approvo API (:8000)" cmd /k "call .venv\Scripts\activate.bat && alembic upgrade head && uvicorn app.main:app --reload --port 8000"
 
 REM --- frontend window: Vite dev server (root workspace script) ---------------
 cd /d "%ROOT%"
-start "AgentBoard Web (:5173)" cmd /k "pnpm dev:web"
+start "Approvo Web (:5173)" cmd /k "pnpm dev:web"
 
 REM --- give the dev server a moment, then open the UI -------------------------
 timeout /t 6 /nobreak >nul

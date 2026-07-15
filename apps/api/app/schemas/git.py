@@ -7,7 +7,7 @@ class GitRepoLink(BaseModel):
     """Read-only snapshot of a project folder's Git state.
 
     Computed live from allowlisted read-only Git commands (see
-    ``app.services.git_service``); AgentBoard never persists or mutates Git state.
+    ``app.services.git_service``); Approvo never persists or mutates Git state.
     When the folder is missing or not a repo, ``is_repo`` is ``False`` and
     ``message`` explains why — the response is still a valid 200 body.
 

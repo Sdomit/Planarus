@@ -7,7 +7,7 @@ afterEach(cleanup)
 describe('App', () => {
   it('renders the forma app shell', () => {
     render(<App />)
-    expect(screen.getByText('AgentBoard')).toBeTruthy()
+    expect(screen.getByText('Approvo')).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeTruthy()
     expect(screen.getByText('Planning')).toBeTruthy()
   })

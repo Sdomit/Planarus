@@ -1,0 +1,10 @@
+.git/
+**/.venv/
+**/node_modules/
+**/__pycache__/
+**/*.pyc
+**/dist/
+apps/web/.vite/
+agentboard-data/
+*.db
+*.db-*
