@@ -55,5 +55,19 @@ class Settings(BaseSettings):
         default=720, validation_alias="AGENTBOARD_AUTH_SESSION_TTL_HOURS"
     )
 
+    # Phase 10.3 (hosted mode) — storage backend for generated project artifacts.
+    # "local" (default) is the filesystem, byte-identical to before. "memory" is
+    # for tests/ephemeral use. A hosted "s3" adapter is a future addition.
+    storage_backend: str = Field(
+        default="local", validation_alias="AGENTBOARD_STORAGE_BACKEND"
+    )
+
+    # Phase 10.4 (hosted deploy) — extra allowed browser origins for the hosted
+    # web app, comma-separated (e.g. "https://app.example.com"). Empty (default)
+    # means only the local dev origins are trusted, so nothing changes locally.
+    # These are added to the CORS allowlist and the Origin check for the local
+    # control-token endpoints.
+    web_origins: str = Field(default="", validation_alias="AGENTBOARD_WEB_ORIGINS")
+
 
 settings = Settings()
