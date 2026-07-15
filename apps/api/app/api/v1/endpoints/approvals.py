@@ -11,12 +11,15 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlmodel import Session
 
+from app.core import tenant
 from app.core.security import (
     get_local_control_token,
     origin_allowed,
     require_local_control,
 )
+from app.core.tenant import tenant_user
 from app.db.session import get_session
+from app.models.user import User
 from app.schemas.approval import (
     ApprovalAuditEntry,
     ApprovalDetail,
@@ -27,6 +30,24 @@ from app.schemas.approval import (
 from app.services import approval_service
 
 router = APIRouter()
+
+
+def _require_approver(
+    session: Session, approval_id: str, user: Optional[User]
+) -> None:
+    """D22: in hosted mode, approve/apply/reject/invalidate need an owner
+    (approver) role in the approval's workspace — on top of the local control
+    token. No-op when auth is disabled. Preserves the 7C1 invariant: this only
+    gates the human apply path; external clients still never reach it.
+    """
+    if not tenant.settings.auth_enabled:
+        return
+    ar = approval_service.get_approval(session, approval_id)
+    if ar is None:
+        raise HTTPException(status_code=404, detail="approval not found")
+    tenant.require_workspace_access(
+        session, ar.workspace_id, user, *tenant.APPROVER_ROLES
+    )
 
 
 @router.get("/local-session", response_model=LocalSessionResponse)
@@ -85,8 +106,11 @@ def approval_audit(
     dependencies=[Depends(require_local_control)],
 )
 def approve(
-    approval_id: str, session: Session = Depends(get_session)
+    approval_id: str,
+    session: Session = Depends(get_session),
+    user: Optional[User] = Depends(tenant_user),
 ) -> ApprovalSummary:
+    _require_approver(session, approval_id, user)
     try:
         return approval_service.approve(session, approval_id)
     except LookupError:
@@ -102,7 +126,9 @@ def reject(
     approval_id: str,
     body: Optional[RejectRequest] = None,
     session: Session = Depends(get_session),
+    user: Optional[User] = Depends(tenant_user),
 ) -> ApprovalSummary:
+    _require_approver(session, approval_id, user)
     try:
         return approval_service.reject(
             session, approval_id, reason=(body.reason if body else None)
@@ -117,8 +143,11 @@ def reject(
     dependencies=[Depends(require_local_control)],
 )
 def apply(
-    approval_id: str, session: Session = Depends(get_session)
+    approval_id: str,
+    session: Session = Depends(get_session),
+    user: Optional[User] = Depends(tenant_user),
 ) -> ApprovalSummary:
+    _require_approver(session, approval_id, user)
     try:
         return approval_service.apply(session, approval_id)
     except LookupError:
@@ -131,8 +160,11 @@ def apply(
     dependencies=[Depends(require_local_control)],
 )
 def invalidate(
-    approval_id: str, session: Session = Depends(get_session)
+    approval_id: str,
+    session: Session = Depends(get_session),
+    user: Optional[User] = Depends(tenant_user),
 ) -> ApprovalSummary:
+    _require_approver(session, approval_id, user)
     try:
         return approval_service.invalidate(session, approval_id)
     except LookupError:

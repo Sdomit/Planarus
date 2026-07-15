@@ -21,10 +21,17 @@ def auth_on_fixture(monkeypatch):
     yield
 
 
-def _mk_workspace(client, slug="acme") -> str:
-    r = client.post("/api/v1/workspaces", json={"name": slug.title(), "slug": slug})
-    assert r.status_code == 201, r.text
-    return r.json()["id"]
+def _mk_workspace(session, slug="acme") -> str:
+    """Create a MEMBER-LESS workspace directly (bypassing the HTTP endpoint, which
+    since P10.2 requires login and auto-owns the creator). Represents a seeded or
+    pre-auth workspace — the case the bootstrap-claim path exists for."""
+    from app.schemas.workspace import WorkspaceCreate
+    from app.services import workspace_service
+
+    ws = workspace_service.create_workspace(
+        session, WorkspaceCreate(name=slug.title(), slug=slug)
+    )
+    return ws.id
 
 
 def _login(client, email, display_name=None) -> str:
@@ -46,16 +53,16 @@ def _auth(token):
 
 
 # --- disabled by default ------------------------------------------------------
-def test_auth_surface_404_when_disabled(client):
-    ws = _mk_workspace(client)
+def test_auth_surface_404_when_disabled(client, session):
+    ws = _mk_workspace(session)
     assert client.get("/api/v1/auth/me").status_code == 404
     assert client.post("/api/v1/auth/dev-login", json={"email": "a@b.co"}).status_code == 404
     assert client.get(f"/api/v1/workspaces/{ws}/members").status_code == 404
 
 
-def test_existing_routes_unchanged_when_disabled(client):
+def test_existing_routes_unchanged_when_disabled(client, session):
     # The core local-mode surface must behave exactly as before (no auth needed).
-    ws = _mk_workspace(client, "solo")
+    ws = _mk_workspace(session, "solo")
     assert client.get("/api/v1/workspaces").status_code == 200
     r = client.post("/api/v1/projects", json={"workspace_id": ws, "title": "P", "slug": "proj"})
     assert r.status_code == 201, r.text
@@ -109,8 +116,8 @@ def test_expired_session_rejected(client, auth_on, monkeypatch):
 
 
 # --- membership bootstrap + RBAC ----------------------------------------------
-def test_bootstrap_requires_self_as_owner(client, auth_on):
-    ws = _mk_workspace(client)
+def test_bootstrap_requires_self_as_owner(client, session, auth_on):
+    ws = _mk_workspace(session)
     owner = _login(client, "owner@acme.co")
 
     # non-owner role on empty workspace → 403
@@ -139,8 +146,8 @@ def test_bootstrap_requires_self_as_owner(client, auth_on):
     assert ok.json()["role"] == "owner"
 
 
-def test_owner_manages_members_and_editor_cannot(client, auth_on):
-    ws = _mk_workspace(client)
+def test_owner_manages_members_and_editor_cannot(client, session, auth_on):
+    ws = _mk_workspace(session)
     owner = _login(client, "owner@acme.co")
     editor = _login(client, "editor@acme.co")
     client.post(
@@ -170,8 +177,8 @@ def test_owner_manages_members_and_editor_cannot(client, auth_on):
     assert client.get(f"/api/v1/workspaces/{ws}/members", cookies=_auth(third)).status_code == 403
 
 
-def test_add_unknown_email_404(client, auth_on):
-    ws = _mk_workspace(client)
+def test_add_unknown_email_404(client, session, auth_on):
+    ws = _mk_workspace(session)
     owner = _login(client, "owner@acme.co")
     client.post(
         f"/api/v1/workspaces/{ws}/members",
@@ -186,8 +193,8 @@ def test_add_unknown_email_404(client, auth_on):
     assert r.status_code == 404
 
 
-def test_duplicate_member_conflict(client, auth_on):
-    ws = _mk_workspace(client)
+def test_duplicate_member_conflict(client, session, auth_on):
+    ws = _mk_workspace(session)
     owner = _login(client, "owner@acme.co")
     _login(client, "dup@acme.co")
     client.post(
@@ -209,8 +216,8 @@ def test_duplicate_member_conflict(client, auth_on):
     assert b.status_code == 409
 
 
-def test_last_owner_protection(client, auth_on):
-    ws = _mk_workspace(client)
+def test_last_owner_protection(client, session, auth_on):
+    ws = _mk_workspace(session)
     owner = _login(client, "owner@acme.co")
     ug = client.get("/api/v1/auth/me", cookies=_auth(owner)).json()["user"]["id"]
     client.post(
@@ -243,8 +250,8 @@ def test_last_owner_protection(client, auth_on):
     ).status_code == 200
 
 
-def test_membership_appears_in_me(client, auth_on):
-    ws = _mk_workspace(client)
+def test_membership_appears_in_me(client, session, auth_on):
+    ws = _mk_workspace(session)
     owner = _login(client, "owner@acme.co")
     client.post(
         f"/api/v1/workspaces/{ws}/members",
@@ -255,9 +262,9 @@ def test_membership_appears_in_me(client, auth_on):
     assert me["memberships"] == [{"workspace_id": ws, "role": "owner"}]
 
 
-def test_members_route_404_when_disabled_even_with_cookie(client, monkeypatch):
+def test_members_route_404_when_disabled_even_with_cookie(client, session, monkeypatch):
     # Belt-and-suspenders: with auth off the members surface must not exist.
-    ws = _mk_workspace(client)
+    ws = _mk_workspace(session)
     assert client.patch(
         f"/api/v1/workspaces/{ws}/members/x", json={"role": "editor"}
     ).status_code == 404

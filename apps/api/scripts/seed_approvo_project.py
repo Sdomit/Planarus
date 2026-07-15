@@ -65,12 +65,21 @@ PHASES: list[dict] = [
                 ],
             },
             {
-                "title": "P10.2 — Tenant enforcement",
+                "title": "P10.2 — Tenant enforcement (workspace/project + D22)",
+                "status": "done",
+                "tasks": [
+                    {"title": "Request-scoped tenant context from session", "status": "done"},
+                    {"title": "Workspace/project access filtering + role gating", "status": "done"},
+                    {"title": "Approver-role gating on approve/apply (D22)", "status": "done"},
+                ],
+            },
+            {
+                "title": "P10.2b — Per-child-route tenant guards (full isolation)",
                 "status": "active",
                 "tasks": [
-                    {"title": "Request-scoped tenant context from session", "status": "backlog"},
-                    {"title": "Mandatory workspace row-filtering in services", "status": "backlog"},
-                    {"title": "Approver-role gating on approve/apply (D22)", "status": "backlog"},
+                    {"title": "Guard nested collection routes (/projects/{id}/…)", "status": "backlog"},
+                    {"title": "Resolve-via-parent on flat item routes (/tasks/{id}…)", "status": "backlog"},
+                    {"title": "Cross-tenant denial sweep test over every domain route", "status": "backlog"},
                 ],
             },
             {"title": "P10.3 — Hosted object storage adapter", "status": "planned"},
