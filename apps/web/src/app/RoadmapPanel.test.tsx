@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import RoadmapPanel from './RoadmapPanel'
 
 const rollup = (total: number, done: number) => ({ total, done, in_progress: 0, blocked: 0 })
@@ -33,7 +33,8 @@ vi.mock('../api/client', () => ({
 
 describe('RoadmapPanel', () => {
   it('renders overall + per-phase progress with rollups', async () => {
-    render(<RoadmapPanel projectId="proj_1" />)
+    const onOpenPlanning = vi.fn()
+    render(<RoadmapPanel projectId="proj_1" onOpenPlanning={onOpenPlanning} />)
     expect(await screen.findByText('Overall 20%')).toBeTruthy()
     expect(screen.getByText('Phase One')).toBeTruthy()
     expect(screen.getByText('Stage A')).toBeTruthy()
@@ -41,5 +42,7 @@ describe('RoadmapPanel', () => {
     expect(screen.getByText('1/4 done')).toBeTruthy()
     const bars = screen.getAllByRole('progressbar')
     expect(bars.length).toBeGreaterThanOrEqual(3)
+    fireEvent.click(screen.getByRole('button', { name: 'Assign tasks' }))
+    expect(onOpenPlanning).toHaveBeenCalledOnce()
   })
 })

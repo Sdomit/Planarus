@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   api,
   type ApiClientSummary,
   type Project,
   type Workspace,
 } from '../api/client'
+import { fmtTimestamp } from './format'
 import './external-clients-panel.css'
 
 const EXPIRY_OPTIONS = [30, 60, 90, 180, 365] as const
@@ -19,6 +20,16 @@ interface ExternalClientsPanelProps { onClose: () => void }
 
 function RawKeyModal({ apiKey, onClose }: { apiKey: string; onClose: () => void }) {
   const [copied, setCopied] = useState(false)
+  const doneRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    doneRef.current?.focus()
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => document.removeEventListener('keydown', closeOnEscape)
+  }, [onClose])
 
   const copy = () => {
     void navigator.clipboard?.writeText(apiKey).then(
@@ -28,10 +39,10 @@ function RawKeyModal({ apiKey, onClose }: { apiKey: string; onClose: () => void 
   }
 
   return (
-    <div className="modal-overlay" role="dialog" aria-label="New API key">
-      <div className="modal modal-sm">
+    <div className="modal-overlay">
+      <div className="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="new-api-key-title">
         <div className="modal-header">
-          <span className="modal-title">API key created</span>
+          <span className="modal-title" id="new-api-key-title">API key created</span>
         </div>
         <div className="modal-body">
           <p style={{ color: 'var(--status-warning-fg)', fontSize: 'var(--text-sm)', marginTop: 0 }}>
@@ -49,7 +60,7 @@ function RawKeyModal({ apiKey, onClose }: { apiKey: string; onClose: () => void 
           <button type="button" className="btn btn-outline btn-sm" onClick={copy}>
             {copied ? 'Copied ✓' : 'Copy'}
           </button>
-          <button type="button" className="btn btn-solid btn-sm" onClick={onClose}>Done</button>
+          <button ref={doneRef} type="button" className="btn btn-solid btn-sm" onClick={onClose}>Done</button>
         </div>
       </div>
     </div>
@@ -93,8 +104,8 @@ function CreateClientForm({ workspaceId, projects, onCreated, onCancel }: Create
   return (
     <form className="ecp-form" onSubmit={submit}>
       <div className="form-field">
-        <label className="form-label">Label</label>
-        <input className="input" type="text" value={label}
+        <label className="form-label" htmlFor="ecp-client-label">Label</label>
+        <input id="ecp-client-label" className="input" type="text" value={label}
           onChange={e => setLabel(e.target.value)} placeholder="e.g. ci-readonly" autoFocus />
       </div>
 
@@ -123,8 +134,8 @@ function CreateClientForm({ workspaceId, projects, onCreated, onCancel }: Create
       </fieldset>
 
       <div className="form-field">
-        <label className="form-label">Expires in</label>
-        <select className="input select" value={expiry} onChange={e => setExpiry(Number(e.target.value))}>
+        <label className="form-label" htmlFor="ecp-client-expiry">Expires in</label>
+        <select id="ecp-client-expiry" className="input select" value={expiry} onChange={e => setExpiry(Number(e.target.value))}>
           {EXPIRY_OPTIONS.map(d => (
             <option key={d} value={d}>{d} days{d === DEFAULT_EXPIRY ? ' (default)' : ''}</option>
           ))}
@@ -220,12 +231,23 @@ export default function ExternalClientsPanel({ onClose: _onClose }: ExternalClie
               <ul className="ecp-list">
                 {clients.map(c => (
                   <li key={c.id} className={`ecp-item${c.revoked_at ? ' ecp-item-revoked' : ''}`}>
-                    <span className="ecp-item-label">{c.label}</span>
-                    <span className="ecp-item-keyid">{c.key_id.slice(0, 10)}…</span>
+                    <div className="ecp-item-main">
+                      <div className="ecp-item-heading">
+                        <span className="ecp-item-label">{c.label}</span>
+                        <span className="ecp-item-keyid">{c.key_id.slice(0, 10)}…</span>
+                      </div>
+                      <span className="ecp-item-details">
+                        {c.project_ids.length} {c.project_ids.length === 1 ? 'project' : 'projects'}: {c.project_ids
+                          .map(id => projects.find(project => project.id === id)?.title ?? id)
+                          .join(', ')}
+                        {' '}· Expires {fmtTimestamp(c.expires_at)}
+                        {' '}· {c.last_used_at ? `Last used ${fmtTimestamp(c.last_used_at)}` : 'Never used'}
+                      </span>
+                    </div>
                     <div className="ecp-item-meta">
                       {c.can_read && <span className="ecp-perm">read</span>}
                       {c.can_propose && <span className="ecp-perm">propose</span>}
-                      <span className="ecp-projects">{c.project_ids.length}p</span>
+                      {!c.enabled && !c.revoked_at && <span className="ecp-revoked-label">disabled</span>}
                       {c.revoked_at
                         ? <span className="ecp-revoked-label">revoked</span>
                         : <button type="button" className="btn btn-destructive btn-xs" onClick={() => handleRevoke(c.id)}>Revoke</button>}
