@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Dashboard from './Dashboard'
 import CockpitPanel from './CockpitPanel'
 import PlanningPanel from './PlanningPanel'
@@ -14,6 +14,7 @@ import AgentRunsPanel from './AgentRunsPanel'
 import RemindersPanel from './RemindersPanel'
 import NotificationsBell from './NotificationsBell'
 import { Icon } from './Icon'
+import { api, type NotificationItem } from '../api/client'
 import './layout.css'
 
 type MainView =
@@ -49,10 +50,16 @@ const NAV: { group: string; items: { view: MainView; label: string; icon: string
   ] },
 ]
 
+const NAV_ITEMS = NAV.flatMap(group => group.items.map(item => ({ ...item, group: group.group })))
+
+function isMobileViewport(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 639px)').matches
+}
+
 const TITLES: Record<MainView, { title: string; sub: string }> = {
   dashboard: { title: 'Dashboard', sub: 'Workspace overview' },
   cockpit: { title: 'Cockpit', sub: 'Project command center' },
-  planning: { title: 'Planning', sub: 'Phases, tasks, decisions & risks' },
+  planning: { title: 'Planning', sub: 'Phases, tasks, milestones & risks' },
   roadmap: { title: 'Roadmap', sub: 'Progress across phases & stages' },
   timeline: { title: 'Timeline', sub: 'Audited project activity' },
   docs: { title: 'Docs', sub: 'Project documents' },
@@ -79,7 +86,13 @@ export default function Layout() {
     () => document.documentElement.getAttribute('data-theme') || 'light-blue',
   )
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [mobileNavMode, setMobileNavMode] = useState(isMobileViewport)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [planningTab, setPlanningTab] = useState<'phases' | 'tasks'>('phases')
   const menuBtnRef = useRef<HTMLButtonElement>(null)
+  const sidebarRef = useRef<HTMLElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   const isDark = theme.startsWith('dark')
   const toggleTheme = () => {
@@ -100,17 +113,59 @@ export default function Layout() {
     return () => document.removeEventListener('keydown', handleKey)
   }, [mobileMenuOpen])
 
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+    const query = window.matchMedia('(max-width: 639px)')
+    const update = () => setMobileNavMode(query.matches)
+    update()
+    query.addEventListener?.('change', update)
+    return () => query.removeEventListener?.('change', update)
+  }, [])
+
+  useEffect(() => {
+    if (sidebarRef.current) sidebarRef.current.inert = mobileNavMode && !mobileMenuOpen
+    if (mobileNavMode && mobileMenuOpen) {
+      sidebarRef.current?.querySelector<HTMLButtonElement>('button')?.focus()
+    }
+  }, [mobileMenuOpen, mobileNavMode])
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        searchInputRef.current?.focus()
+        setSearchOpen(true)
+      }
+    }
+    document.addEventListener('keydown', handleShortcut)
+    return () => document.removeEventListener('keydown', handleShortcut)
+  }, [])
+
   const closeMenu = () => setMobileMenuOpen(false)
 
-  const navigate = (view: MainView) => {
+  const navigate = (view: MainView, options?: { planningTab?: 'phases' | 'tasks' }) => {
+    if (view === 'planning') setPlanningTab(options?.planningTab ?? 'phases')
     setMainView(view)
+    setSearchQuery('')
+    setSearchOpen(false)
+    if (mobileNavMode) menuBtnRef.current?.focus()
     closeMenu()
   }
 
   const selectProject = (p: SelectedProject) => {
     setProject(p)
     setMainView('cockpit')
+    if (mobileNavMode) menuBtnRef.current?.focus()
     closeMenu()
+  }
+
+  const openNotification = async (item: NotificationItem) => {
+    if (project?.id !== item.project_id) {
+      const target = await api.projects.get(item.project_id)
+      setProject({ id: target.id, title: target.title, slug: target.slug })
+    }
+    if (item.kind.startsWith('approval_')) navigate('approvals')
+    else navigate('planning', { planningTab: 'tasks' })
   }
 
   const placeholder = (
@@ -125,13 +180,40 @@ export default function Layout() {
   )
 
   const { title, sub } = TITLES[mainView]
+  const searchResults = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) return []
+    return NAV_ITEMS.filter(item =>
+      `${item.label} ${item.group} ${TITLES[item.view].sub}`.toLowerCase().includes(query),
+    ).slice(0, 6)
+  }, [searchQuery])
+
+  const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape') {
+      setSearchQuery('')
+      setSearchOpen(false)
+      event.currentTarget.blur()
+    } else if (event.key === 'Enter' && searchResults[0]) {
+      event.preventDefault()
+      navigate(searchResults[0].view)
+    }
+  }
 
   return (
     <div className="ab-app">
       {mobileMenuOpen && (
-        <div className="ab-menu-overlay" aria-hidden="true" onClick={closeMenu} />
+        <div className="ab-menu-overlay" aria-hidden="true" onClick={() => {
+          closeMenu()
+          menuBtnRef.current?.focus()
+        }} />
       )}
-      <aside id="ab-sidebar" className={`ab-sidebar${mobileMenuOpen ? ' ab-sidebar--open' : ''}`} data-theme="dark-blue">
+      <aside
+        ref={sidebarRef}
+        id="ab-sidebar"
+        className={`ab-sidebar${mobileMenuOpen ? ' ab-sidebar--open' : ''}`}
+        data-theme="dark-blue"
+        aria-hidden={mobileNavMode && !mobileMenuOpen ? true : undefined}
+      >
         <div className="ab-brand">
           <div className="ab-brand-mark">A</div>
           <div>
@@ -141,7 +223,7 @@ export default function Layout() {
         </div>
 
         <div className="ab-side-scroll">
-          <button className="ab-projsel" type="button" onClick={() => { setMainView('dashboard'); closeMenu() }}>
+          <button className="ab-projsel" type="button" onClick={() => navigate('dashboard')}>
             <span className="pj-mark">{project ? initials(project.title) : 'AB'}</span>
             <span className="pj-meta">
               <span className="pj-name">{project ? project.title : 'All projects'}</span>
@@ -205,12 +287,42 @@ export default function Layout() {
             <div className="ab-tb-sub">{sub}</div>
           </div>
           <div className="ab-tb-spacer" />
-          <label className="ab-search">
-            <Icon name="search" className="ic-14" />
-            <input type="text" placeholder="Search…" aria-label="Search" />
-            <kbd>⌘K</kbd>
-          </label>
-          <NotificationsBell projectId={project?.id ?? null} />
+          <div className="ab-search-wrap">
+            <label className="ab-search">
+              <Icon name="search" className="ic-14" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                placeholder="Go to a view…"
+                aria-label="Quick navigation"
+                aria-expanded={searchOpen && Boolean(searchQuery.trim())}
+                aria-controls="ab-search-results"
+                autoComplete="off"
+                onFocus={() => setSearchOpen(true)}
+                onBlur={event => {
+                  const wrap = event.currentTarget.closest('.ab-search-wrap')
+                  if (!wrap?.contains(event.relatedTarget as Node | null)) setSearchOpen(false)
+                }}
+                onChange={event => { setSearchQuery(event.target.value); setSearchOpen(true) }}
+                onKeyDown={handleSearchKeyDown}
+              />
+              <kbd>{typeof navigator !== 'undefined' && /Mac/.test(navigator.userAgent) ? '⌘K' : 'Ctrl K'}</kbd>
+            </label>
+            {searchOpen && searchQuery.trim() && (
+              <div className="ab-search-results" id="ab-search-results" aria-label="Quick navigation results">
+                {searchResults.length === 0 ? (
+                  <div className="ab-search-empty">No matching view</div>
+                ) : searchResults.map(result => (
+                  <button key={result.view} type="button" onClick={() => navigate(result.view)}>
+                    <span>{result.label}</span>
+                    <small>{result.group}</small>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <NotificationsBell projectId={project?.id ?? null} onOpenItem={item => void openNotification(item)} />
           <button className="ab-iconbtn" type="button" onClick={toggleTheme} aria-label="Toggle theme">
             <Icon name={isDark ? 'sun' : 'moon'} className="ic-18" />
           </button>
@@ -221,8 +333,8 @@ export default function Layout() {
             <div style={{ minWidth: 0 }}>
               {mainView === 'dashboard' && <Dashboard onSelectProject={selectProject} />}
               {mainView === 'cockpit' && (project ? <CockpitPanel projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
-              {mainView === 'planning' && (project ? <PlanningPanel projectId={project.id} /> : placeholder)}
-              {mainView === 'roadmap' && (project ? <RoadmapPanel projectId={project.id} /> : placeholder)}
+              {mainView === 'planning' && (project ? <PlanningPanel projectId={project.id} initialTab={planningTab} /> : placeholder)}
+              {mainView === 'roadmap' && (project ? <RoadmapPanel projectId={project.id} onOpenPlanning={() => navigate('planning', { planningTab: 'tasks' })} /> : placeholder)}
               {mainView === 'timeline' && (project ? <TimelinePanel projectId={project.id} /> : placeholder)}
               {mainView === 'docs' && (project ? <DocsPanel projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
               {mainView === 'context-pack' && (project ? <ContextPackBuilder projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}

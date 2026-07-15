@@ -28,6 +28,10 @@ echo Starting AgentBoard  ^|  API :8000   Web :5173
 echo.
 
 REM --- backend window: migrate to head, then run with hot reload --------------
+REM  Force the external (ChatGPT) API OFF for local UI testing, regardless of
+REM  any leftover value in your environment. setlocal keeps this out of your
+REM  shell; the started window inherits it.
+set "AGENTBOARD_EXTERNAL_API_ENABLED=false"
 cd /d "%ROOT%apps\api"
 start "AgentBoard API (:8000)" cmd /k "call .venv\Scripts\activate.bat && alembic upgrade head && uvicorn app.main:app --reload --port 8000"
 

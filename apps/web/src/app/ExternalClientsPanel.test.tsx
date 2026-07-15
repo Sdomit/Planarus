@@ -115,6 +115,15 @@ describe('ExternalClientsPanel', () => {
     await waitFor(() => expect(mockApi.apiClients.revoke).toHaveBeenCalledWith('apc_1'))
   })
 
+  it('shows project scope, expiry, and last-use safety metadata', async () => {
+    mockApi.apiClients.list.mockResolvedValue([created().client])
+    render(<ExternalClientsPanel onClose={vi.fn()} />)
+    expect(await screen.findByText(/1 project: Project One/)).toBeTruthy()
+    expect(screen.getByText(/Expires/)).toBeTruthy()
+    expect(screen.getByText(/Never used/)).toBeTruthy()
+    expect(screen.queryByText('1p')).toBeNull()
+  })
+
   it('makes no direct network (fetch) request', async () => {
     mockApi.apiClients.create.mockResolvedValue(created())
     render(<ExternalClientsPanel onClose={vi.fn()} />)

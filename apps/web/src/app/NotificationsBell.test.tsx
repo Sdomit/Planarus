@@ -36,11 +36,14 @@ vi.mock('../api/client', () => ({
 
 describe('NotificationsBell', () => {
   it('shows a badge count and opens the feed', async () => {
-    render(<NotificationsBell projectId="proj_1" />)
+    const onOpenItem = vi.fn()
+    render(<NotificationsBell projectId="proj_1" onOpenItem={onOpenItem} />)
     const btn = await screen.findByLabelText('Notifications (2)')
     fireEvent.click(btn)
     expect(screen.getByText('Proposal awaiting review: task.create')).toBeTruthy()
     expect(screen.getByText('Task overdue: Ship it')).toBeTruthy()
     expect(screen.getByText('Desktop alerts')).toBeTruthy()
+    fireEvent.click(screen.getByText('Task overdue: Ship it'))
+    expect(onOpenItem).toHaveBeenCalledWith(expect.objectContaining({ id: 'task_overdue:tsk_1' }))
   })
 })

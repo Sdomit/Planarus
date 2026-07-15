@@ -7,7 +7,8 @@ vi.mock('../api/client', () => ({
   api: {
     projects: { get: vi.fn() },
     phases: { list: vi.fn(), create: vi.fn() },
-    tasks: { list: vi.fn(), create: vi.fn() },
+    stages: { list: vi.fn() },
+    tasks: { list: vi.fn(), create: vi.fn(), update: vi.fn() },
     milestones: { list: vi.fn(), create: vi.fn() },
     decisions: { list: vi.fn(), create: vi.fn() },
     risks: { list: vi.fn(), create: vi.fn() },
@@ -24,13 +25,15 @@ type Fn = ReturnType<typeof vi.fn>
 const mockApi = api as unknown as {
   projects: { get: Fn }
   phases: { list: Fn; create: Fn }
-  tasks: { list: Fn; create: Fn }
+  stages: { list: Fn }
+  tasks: { list: Fn; create: Fn; update: Fn }
   milestones: { list: Fn; create: Fn }
   decisions: { list: Fn; create: Fn }
   risks: { list: Fn; create: Fn }
   blockers: { list: Fn; create: Fn }
   comments: { list: Fn; create: Fn }
   links: { list: Fn; create: Fn }
+  checklistItems: { list: Fn; create: Fn; update: Fn }
 }
 
 const PROJECT = {
@@ -46,6 +49,7 @@ const PROJECT = {
 function setupEmpty() {
   mockApi.projects.get.mockResolvedValue(PROJECT)
   mockApi.phases.list.mockResolvedValue([])
+  mockApi.stages.list.mockResolvedValue([])
   mockApi.tasks.list.mockResolvedValue([])
   mockApi.milestones.list.mockResolvedValue([])
   mockApi.decisions.list.mockResolvedValue([])
@@ -57,6 +61,11 @@ function setupEmpty() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockApi.stages.list.mockResolvedValue([])
+  mockApi.milestones.list.mockResolvedValue([])
+  mockApi.comments.list.mockResolvedValue([])
+  mockApi.links.list.mockResolvedValue([])
+  mockApi.checklistItems.list.mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -83,6 +92,14 @@ describe('PlanningPanel', () => {
     for (const name of ['Phases', 'Tasks', 'Milestones', 'Decisions', 'Risks', 'Comments', 'Links']) {
       expect(screen.getByRole('tab', { name })).toBeTruthy()
     }
+  })
+
+  it('opens on a requested tab', async () => {
+    setupEmpty()
+    render(<PlanningPanel projectId="proj_1" initialTab="tasks" />)
+    await screen.findByText('Test Project')
+    expect(screen.getByRole('tab', { name: 'Tasks' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByText('No tasks yet.')).toBeTruthy()
   })
 
   it('renders milestones with target date when present', async () => {
@@ -200,5 +217,34 @@ describe('PlanningPanel', () => {
     ])
     render(<PlanningPanel projectId="proj_1" />)
     expect(await screen.findByText('1 blocked')).toBeTruthy()
+  })
+
+  it('updates a task phase from the expanded task controls', async () => {
+    setupEmpty()
+    const phase = {
+      id: 'ph_1', project_id: 'proj_1', title: 'Build', description: null,
+      status: 'active', sort_order: 0,
+      created_at: '2026-07-13T00:00:00+00:00', updated_at: '2026-07-13T00:00:00+00:00',
+    }
+    const task = {
+      id: 'tsk_1', project_id: 'proj_1', phase_id: null, stage_id: null,
+      title: 'Connect roadmap', description: null, status: 'backlog', priority: null,
+      due_at: null, sort_order: 0,
+      created_at: '2026-07-13T00:00:00+00:00', updated_at: '2026-07-13T00:00:00+00:00',
+    }
+    mockApi.phases.list.mockResolvedValue([phase])
+    mockApi.tasks.list.mockResolvedValue([task])
+    mockApi.tasks.update.mockResolvedValue({ ...task, phase_id: phase.id })
+
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }))
+    fireEvent.click(screen.getByRole('button', { name: /Connect roadmap/ }))
+    fireEvent.change(screen.getByLabelText('Phase'), { target: { value: phase.id } })
+
+    await waitFor(() => expect(mockApi.tasks.update).toHaveBeenCalledWith('tsk_1', {
+      phase_id: 'ph_1',
+      stage_id: null,
+    }))
   })
 })

@@ -42,23 +42,38 @@
 }
 .ecp-item:last-child { border-bottom: none; }
 .ecp-item-revoked { opacity: 0.5; }
+.ecp-item-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.ecp-item-heading { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 .ecp-item-label {
   font-size: var(--text-sm); font-weight: var(--weight-semibold);
-  color: var(--text-primary); flex: 1; min-width: 0;
+  color: var(--text-primary); min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .ecp-item-keyid {
   font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-tertiary); flex-shrink: 0;
 }
 .ecp-item-meta { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; flex-wrap: wrap; }
+.ecp-item-details {
+  color: var(--text-secondary); font-size: var(--text-xs);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 .ecp-perm {
   font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; font-weight: 600;
   padding: 2px 6px; border-radius: var(--radius-xs);
   background: var(--status-info-bg); border: 1px solid var(--status-info-border); color: var(--status-info-fg);
 }
-.ecp-projects { font-size: var(--text-xs); color: var(--text-tertiary); }
 .ecp-revoked-label {
   font-size: 10px; text-transform: uppercase; font-weight: var(--weight-semibold);
   color: var(--status-danger-fg);
+}
+
+@media (max-width: 640px) {
+  .ecp-toolbar { align-items: stretch; flex-direction: column; }
+  .ecp-ws-label { align-items: stretch; flex-direction: column; }
+  .ecp-item { align-items: stretch; flex-direction: column; gap: var(--space-2); }
+  .ecp-item-heading { justify-content: space-between; }
+  .ecp-item-meta { width: 100%; }
+  .ecp-item-meta .btn { margin-left: auto; }
+  .ecp-item-details { overflow: visible; text-overflow: initial; white-space: normal; line-height: var(--leading-relaxed); }
 }

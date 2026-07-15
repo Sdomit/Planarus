@@ -645,9 +645,21 @@ export const api = {
   },
   tasks: {
     list: (projectId: string) => request<Task[]>(`/projects/${projectId}/tasks`),
-    create: (projectId: string, data: { title: string; status?: string; priority?: string }) =>
+    create: (
+      projectId: string,
+      data: {
+        title: string
+        status?: string
+        priority?: string
+        phase_id?: string
+        stage_id?: string
+      },
+    ) =>
       request<Task>(`/projects/${projectId}/tasks`, { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: Partial<Pick<Task, 'title' | 'status' | 'priority'>>) =>
+    update: (
+      id: string,
+      data: Partial<Pick<Task, 'title' | 'status' | 'priority' | 'phase_id' | 'stage_id' | 'due_at'>>,
+    ) =>
       request<Task>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   },
   decisions: {

@@ -11,13 +11,20 @@ function desktopSupported(): boolean {
 }
 
 /** Topbar bell: in-app notification feed + optional desktop notifications. */
-export default function NotificationsBell({ projectId }: { projectId: string | null }) {
+export default function NotificationsBell({
+  projectId,
+  onOpenItem,
+}: {
+  projectId: string | null
+  onOpenItem: (item: NotificationItem) => void
+}) {
   const [items, setItems] = useState<NotificationItem[]>([])
   const [open, setOpen] = useState(false)
   const [desktopOn, setDesktopOn] = useState(
     () => localStorage.getItem(DESKTOP_KEY) === 'true',
   )
   const knownIds = useRef<Set<string> | null>(null)
+  const bellRef = useRef<HTMLButtonElement>(null)
   const desktopOnRef = useRef(desktopOn)
   desktopOnRef.current = desktopOn
 
@@ -58,6 +65,18 @@ export default function NotificationsBell({ projectId }: { projectId: string | n
     return () => clearInterval(timer)
   }, [refresh])
 
+  useEffect(() => {
+    if (!open) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false)
+        bellRef.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => document.removeEventListener('keydown', closeOnEscape)
+  }, [open])
+
   const toggleDesktop = () => {
     if (desktopOn) {
       setDesktopOn(false)
@@ -80,6 +99,7 @@ export default function NotificationsBell({ projectId }: { projectId: string | n
   return (
     <div style={{ position: 'relative' }}>
       <button
+        ref={bellRef}
         className="ab-iconbtn"
         type="button"
         aria-label={`Notifications (${items.length})`}
@@ -153,11 +173,24 @@ export default function NotificationsBell({ projectId }: { projectId: string | n
               </p>
             ) : (
               items.map((item) => (
-                <div
+                <button
                   key={item.id}
+                  type="button"
+                  className="ab-notification-row"
+                  onClick={() => {
+                    setOpen(false)
+                    onOpenItem(item)
+                  }}
                   style={{
+                    display: 'block',
+                    width: '100%',
                     padding: '8px 0',
+                    background: 'transparent',
+                    border: 0,
                     borderBottom: '1px solid var(--border-subtle, rgba(128,128,128,.15))',
+                    color: 'inherit',
+                    cursor: 'pointer',
+                    textAlign: 'left',
                   }}
                 >
                   <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
@@ -170,7 +203,7 @@ export default function NotificationsBell({ projectId }: { projectId: string | n
                     {item.project_title}
                     {item.detail ? ` · ${item.detail}` : ''}
                   </div>
-                </div>
+                </button>
               ))
             )}
           </div>
