@@ -7,7 +7,9 @@ security model is the point, so we take reports seriously.
 
 **Please do not open a public issue for security problems.**
 
-Email **sarmad.domit@gmail.com** with:
+Report privately through **GitHub's private vulnerability reporting**: on this
+repository, go to the **Security** tab → **Report a vulnerability** (this opens a
+private advisory only the maintainer can see). Include:
 
 - what you found and where (file/endpoint if known),
 - how to reproduce it,
@@ -16,6 +18,10 @@ Email **sarmad.domit@gmail.com** with:
 You'll get an acknowledgement within a few days. Since this is a solo,
 pre-1.0 project, please allow reasonable time for a fix before any public
 disclosure. Coordinated disclosure is appreciated and credited.
+
+> Maintainer note: private reporting must be enabled once under
+> **Settings → Advanced Security → Private vulnerability reporting** for the link
+> above to appear.
 
 ## Supported versions
 
