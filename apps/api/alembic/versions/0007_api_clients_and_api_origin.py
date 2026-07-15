@@ -51,13 +51,18 @@ def upgrade() -> None:
         sa.Column("can_read", sa.Boolean(), nullable=False),
         sa.Column("can_propose", sa.Boolean(), nullable=False),
         sa.Column("project_ids_json", sa.Text(), nullable=False),
-        sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        # sa.true() renders per-dialect (1 on SQLite, true on Postgres); a literal
+        # sa.text("1") is rejected by Postgres for boolean columns (P10.0).
+        sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("created_at", sa.String(), nullable=False),
         sa.Column("expires_at", sa.String(), nullable=False),
         sa.Column("last_used_at", sa.String(), nullable=True),
         sa.Column("revoked_at", sa.String(), nullable=True),
+        # Bare boolean predicates are portable: SQLite treats its 0/1 storage as
+        # truthy/falsy, Postgres uses native booleans. Comparing to the integer 1
+        # is a Postgres type error (P10.0).
         sa.CheckConstraint(
-            "can_read = 1 OR can_propose = 1",
+            "can_read OR can_propose",
             name="ck_apiclient_at_least_one_perm",
         ),
     )
@@ -77,7 +82,10 @@ def upgrade() -> None:
         "approvalrequest",
         ["origin", "actor_ref", "idempotency_key"],
         unique=True,
+        # Both dialects' *_where must be declared; each backend ignores the
+        # other's kwarg, which would silently drop the partial predicate (P10.0).
         sqlite_where=sa.text(_ACTIVE),
+        postgresql_where=sa.text(_ACTIVE),
     )
 
 
@@ -113,7 +121,10 @@ def downgrade() -> None:
         "approvalrequest",
         ["origin", "actor_ref", "idempotency_key"],
         unique=True,
+        # Both dialects' *_where must be declared; each backend ignores the
+        # other's kwarg, which would silently drop the partial predicate (P10.0).
         sqlite_where=sa.text(_ACTIVE),
+        postgresql_where=sa.text(_ACTIVE),
     )
 
     op.drop_index("ix_apiclient_workspace_id", table_name="apiclient")

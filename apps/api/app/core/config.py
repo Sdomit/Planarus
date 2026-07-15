@@ -1,11 +1,17 @@
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     app_name: str = "Approvo"
     app_version: str = "0.1.0"
-    database_url: str = "sqlite:///./agentboard.db"
+    # P10.0: env-overridable so the app (and Alembic, which reads this field via
+    # alembic/env.py) can target Postgres without a code change. AGENTBOARD_* wins
+    # over the platform-conventional DATABASE_URL when both are set.
+    database_url: str = Field(
+        default="sqlite:///./agentboard.db",
+        validation_alias=AliasChoices("AGENTBOARD_DATABASE_URL", "DATABASE_URL"),
+    )
 
     # Phase 7C1 external HTTP API. DISABLED by default; when off, every
     # /api/external/v1 route returns a generic not_found. Per-field env aliases are
