@@ -20,9 +20,11 @@ from sqlmodel import Field, SQLModel
 class ApiClient(SQLModel, table=True):
     __tablename__ = "apiclient"
     __table_args__ = (
-        # At least one capability must be granted (booleans stored as 0/1 in SQLite).
+        # At least one capability must be granted. Bare boolean predicate so the
+        # same SQL is valid on SQLite (0/1 truthiness) and Postgres (native bool);
+        # must stay in sync with migration 0007.
         CheckConstraint(
-            "can_read = 1 OR can_propose = 1",
+            "can_read OR can_propose",
             name="ck_apiclient_at_least_one_perm",
         ),
         # key_id is the public lookup handle for an incoming Bearer credential.
