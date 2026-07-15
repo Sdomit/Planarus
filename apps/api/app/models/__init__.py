@@ -18,6 +18,10 @@ from app.models.milestone import Milestone  # noqa: F401
 from app.models.checklist_item import ChecklistItem  # noqa: F401
 from app.models.comment import Comment  # noqa: F401
 from app.models.link import Link  # noqa: F401
+from app.models.user import User  # noqa: F401
+from app.models.user_identity import UserIdentity  # noqa: F401
+from app.models.workspace_member import WorkspaceMember  # noqa: F401
+from app.models.user_session import UserSession  # noqa: F401
 
 __all__ = [
     "Workspace",
@@ -40,4 +44,8 @@ __all__ = [
     "ChecklistItem",
     "Comment",
     "Link",
+    "User",
+    "UserIdentity",
+    "WorkspaceMember",
+    "UserSession",
 ]
