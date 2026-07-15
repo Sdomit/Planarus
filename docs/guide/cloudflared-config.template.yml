@@ -1,4 +1,4 @@
-# AgentBoard — Cloudflare Tunnel config template.
+# Approvo — Cloudflare Tunnel config template.
 #
 # 1. Copy this file to:  C:\Users\<you>\.cloudflared\config.yml
 # 2. Replace the three <PLACEHOLDERS> below.
@@ -10,7 +10,7 @@ tunnel: agentboard
 credentials-file: C:\Users\<YOUR-WINDOWS-USERNAME>\.cloudflared\<YOUR-TUNNEL-ID>.json
 
 ingress:
-  # Only the read-only external API and the health check reach AgentBoard.
+  # Only the read-only external API and the health check reach Approvo.
   # Every other path is refused at the tunnel (defense in depth).
   # httpHostHeader forces the Host the app sees to equal your public hostname,
   # which must match AGENTBOARD_EXTERNAL_API_ALLOWED_HOSTS exactly (guide Step 2).

@@ -33,7 +33,7 @@ def _seed(client: TestClient, suffix: str = "apr") -> str:
 
 def _hdr(client: TestClient) -> dict:
     token = client.get("/api/v1/local-session").json()["token"]
-    return {"X-AgentBoard-Local-Token": token}
+    return {"X-Approvo-Local-Token": token}
 
 
 def _propose_task_create(session: Session, pid: str, **patch) -> ApprovalRequest:
@@ -70,7 +70,7 @@ def test_state_change_bad_token_401(client: TestClient, session: Session) -> Non
     ar = _propose_task_create(session, pid)
     res = client.post(
         f"/api/v1/approvals/{ar.id}/approve",
-        headers={"X-AgentBoard-Local-Token": "wrong"},
+        headers={"X-Approvo-Local-Token": "wrong"},
     )
     assert res.status_code == 401
 

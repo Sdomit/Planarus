@@ -48,7 +48,7 @@ def _run_tool(spec: ToolSpec, capability: Capability, arguments: dict):
             result = spec.handler(session, capability, args)
     except (OperationalError, ProgrammingError):
         # Schema/DB not available — never leak the SQL/DB URL.
-        raise MCPToolError(CODE_UNAVAILABLE, "AgentBoard data is unavailable")
+        raise MCPToolError(CODE_UNAVAILABLE, "Approvo data is unavailable")
     return (
         [types.TextContent(type="text", text=result.text)],
         result.metadata,

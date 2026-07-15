@@ -2,7 +2,7 @@
 project: golden-project
 kind: project_context
 updated_at: 2026-06-19T00:00:00+00:00
-source_of_truth: AgentBoard
+source_of_truth: Approvo
 generated: true
 pinned: false
 ---

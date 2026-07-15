@@ -38,7 +38,7 @@ describe('approvals client local control token', () => {
     expect(calls.some((c) => c.url.includes('/local-session'))).toBe(true)
     const approveCall = calls.find((c) => c.url.includes('/approve'))
     const headers = (approveCall?.init?.headers ?? {}) as Record<string, string>
-    expect(headers['X-AgentBoard-Local-Token']).toBe('TOK123')
+    expect(headers['X-Approvo-Local-Token']).toBe('TOK123')
 
     // A second state-changing call reuses the cached token (no second fetch).
     await api.approvals.apply('apr_1')
@@ -59,6 +59,6 @@ describe('approvals client local control token', () => {
     expect(calls.some((c) => c.url.includes('/local-session'))).toBe(false)
     const listCall = calls.find((c) => c.url.includes('/approvals'))
     const headers = (listCall?.init?.headers ?? {}) as Record<string, string>
-    expect(headers['X-AgentBoard-Local-Token']).toBeUndefined()
+    expect(headers['X-Approvo-Local-Token']).toBeUndefined()
   })
 })

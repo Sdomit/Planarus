@@ -287,7 +287,7 @@ export default function ContextPackBuilder({ projectId }: ContextPackBuilderProp
               {showCopyConfirm && (
                 <div className="cpb-confirm-dialog" role="dialog" aria-label="Copy confirmation">
                   <p>
-                    This pack will leave AgentBoard when you paste it into an external tool.
+                    This pack will leave Approvo when you paste it into an external tool.
                     {preview.secret_findings.length > 0
                       ? ` ${preview.secret_findings.length} possible secret(s) were flagged (detection is best-effort).`
                       : ' Secret detection is best-effort and not a guarantee.'}

@@ -1,7 +1,7 @@
-# Connect AgentBoard to a private ChatGPT (read-only) — manual setup
+# Connect Approvo to a private ChatGPT (read-only) — manual setup
 
 A plain, follow-along guide for letting **your own private ChatGPT** read your
-AgentBoard projects — safely, read-only, and reversible in one click. You run
+Approvo projects — safely, read-only, and reversible in one click. You run
 every step yourself; nothing here happens automatically.
 
 > **Time:** ~1 hour the first time (almost all of it is the Cloudflare setup).
@@ -12,7 +12,7 @@ every step yourself; nothing here happens automatically.
 
 ## What you need before you start
 
-- **AgentBoard running locally** on this PC (`run-agentboard.bat` opens the API on
+- **Approvo running locally** on this PC (`run-agentboard.bat` opens the API on
   `:8000` and the UI on `:5173`).
 - **A domain name you own**, added to a **free Cloudflare account**
   (e.g. `example.com` — you'll use a subdomain like `agentboard.example.com`).
@@ -22,7 +22,7 @@ every step yourself; nothing here happens automatically.
 
 ```
    ChatGPT  ──►  https://agentboard.example.com   ──►   your PC
-              (Cloudflare, valid HTTPS)      (secure tunnel)   AgentBoard API
+              (Cloudflare, valid HTTPS)      (secure tunnel)   Approvo API
                                                               127.0.0.1:8000
                                                               (read-only)
 ```
@@ -32,7 +32,7 @@ your machine, so there's nothing inbound to expose or firewall.
 
 ---
 
-## Step 1 — Put AgentBoard behind a public HTTPS address (Cloudflare Tunnel)
+## Step 1 — Put Approvo behind a public HTTPS address (Cloudflare Tunnel)
 
 **1a. Install cloudflared.** In PowerShell:
 
@@ -92,7 +92,7 @@ cloudflared tunnel run agentboard
 
 ✅ **You should see:** "Registered tunnel connection" lines. Visiting
 `https://agentboard.example.com/health` in a browser now returns a small JSON
-health response served by AgentBoard.
+health response served by Approvo.
 
 > **Why the `path:` rules?** They make the tunnel forward *only* the read-only API
 > (`/api/external/...`) and the health check — everything else (the local
@@ -102,9 +102,9 @@ health response served by AgentBoard.
 
 ---
 
-## Step 2 — Tell AgentBoard its public name (but keep the door LOCKED)
+## Step 2 — Tell Approvo its public name (but keep the door LOCKED)
 
-AgentBoard only accepts a public hostname you explicitly allow. Set it as a
+Approvo only accepts a public hostname you explicitly allow. Set it as a
 **Windows user environment variable** so the launcher picks it up automatically.
 In PowerShell:
 
@@ -118,15 +118,15 @@ In PowerShell:
 **Do not enable the API yet.** Leave `AGENTBOARD_EXTERNAL_API_ENABLED` unset for
 now — the external door stays locked while you prepare the key.
 
-Then **close every AgentBoard window and its terminal, open a fresh terminal, and
+Then **close every Approvo window and its terminal, open a fresh terminal, and
 run `run-agentboard.bat` again** so the new setting takes effect (the app reads
 these values once at startup).
 
 ---
 
-## Step 3 — Create a read-only key (in the AgentBoard UI)
+## Step 3 — Create a read-only key (in the Approvo UI)
 
-1. In AgentBoard (`http://localhost:5173`), open the **Clients** panel
+1. In Approvo (`http://localhost:5173`), open the **Clients** panel
    (left sidebar → *Agents → Clients*).
 2. Click **+ New key** and fill in:
    - **Label:** `chatgpt-private-gpt-readonly`
@@ -154,7 +154,7 @@ It sets the switch, warns you if you forgot the allowlisted host, and reminds yo
 to restart. (Manual equivalent, if you prefer:
 `[Environment]::SetEnvironmentVariable("AGENTBOARD_EXTERNAL_API_ENABLED","true","User")`.)
 
-Then **restart AgentBoard** (close its windows, open a fresh terminal, run
+Then **restart Approvo** (close its windows, open a fresh terminal, run
 `run-agentboard.bat`).
 
 ✅ **Verify from the public address** (replace the key):
@@ -180,7 +180,7 @@ wrong key, you get an error — that's correct.
 5. In the schema, set the **server URL** to `https://agentboard.example.com`
    (it ships with a placeholder).
 6. **Authentication → API Key**, **Auth Type: Bearer**, and paste your `agbk_` key.
-7. Save, then in the GPT preview ask something like *“List my AgentBoard
+7. Save, then in the GPT preview ask something like *“List my Approvo
    projects”* and confirm it returns your data.
 
 🎉 Done. Your private GPT can now read that one project, read-only.
@@ -205,7 +205,7 @@ Never try to edit a live key; a revoked key can never be re-enabled.
 ## Do / Don't
 
 - ✅ Keep it **read-only** and **“Only me.”**
-- ✅ Keep AgentBoard bound to `127.0.0.1` — the tunnel is the only public listener.
+- ✅ Keep Approvo bound to `127.0.0.1` — the tunnel is the only public listener.
 - ❌ Don't grant `can_propose` on your first key.
 - ❌ Don't import the read-propose contract, and don't share/publish the GPT.
 - ❌ Don't ever bind the app to `0.0.0.0`.

@@ -26,7 +26,7 @@ def test_create_task_proposal_pending_only(client: TestClient, session: Session)
     )
     assert res.metadata["status"] == "pending"
     assert set(res.metadata) == {"approval_id", "status", "action_type", "expires_at", "review_hint"}
-    assert res.metadata["review_hint"].startswith("Pending human review in AgentBoard Approval Queue")
+    assert res.metadata["review_hint"].startswith("Pending human review in Approvo Approval Queue")
     ars = _approvals(session, pid)
     assert len(ars) == 1
     assert ars[0].origin == "mcp" and ars[0].actor_ref == "mcp:test"

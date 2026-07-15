@@ -1,11 +1,11 @@
-# AgentBoard
+# Approvo
 
 > A **local-first AI project cockpit**. One place that converts long AI
 > conversations, implementation plans, Git context, decisions, risks, and
 > execution history into **structured project memory** that humans *and* agents
 > can both use.
 
-AgentBoard is not "another project manager." It is an **AI execution control
+Approvo is not "another project manager." It is an **AI execution control
 plane**: human planning (projects → phases → stages → tasks), an agent context
 layer (Markdown context packs, allowed/forbidden paths, prompts, approval
 gates), and an execution telemetry layer (agent runs, Git state, imports, audit
@@ -31,6 +31,23 @@ One-command local run: `run-agentboard.bat`.
 | Living context pack (read first as an agent) | [context/](context/) |
 | Agent routing instructions | [CLAUDE.md](CLAUDE.md) |
 | Developer setup | [docs/dev/setup.md](docs/dev/setup.md) |
+
+## Quickstart (Docker)
+
+The fastest way to try Approvo — no Python, Node, or pnpm toolchain required:
+
+```bash
+docker compose up --build
+# then open http://localhost:5173
+```
+
+This runs the web UI (nginx) and the API as containers on a private network; the
+external (ChatGPT) API stays **disabled**. Your data — the SQLite DB and any
+project folders you create under `/data` — persists on the host in
+`./agentboard-data`. Stop with `docker compose down`.
+
+Prefer a native setup with hot reload? See
+[docs/dev/setup.md](docs/dev/setup.md) (or `run-agentboard.bat` on Windows).
 
 ## The locked stack (one line)
 
@@ -67,8 +84,13 @@ ChatGPT exposure (human-gated — see
 or Phase 10 groundwork (gated behind a separate architecture review). Live
 objective: [context/NEXT_STEP.md](context/NEXT_STEP.md).
 
+## Contributing & security
+
+Contributions are welcome — start with [CONTRIBUTING.md](CONTRIBUTING.md). Please
+report security issues privately per [SECURITY.md](SECURITY.md), not via public
+issues.
+
 ## License
 
-Undecided; **Apache-2.0** is the recommended default for a future public/commercial
-product. See the licensing note in
+[Apache License 2.0](LICENSE). Rationale in
 [docs/plan/10-risks-and-decisions.md](docs/plan/10-risks-and-decisions.md).

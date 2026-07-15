@@ -14,7 +14,7 @@ Safety model:
   target repo's own ``.git/config`` cannot turn a read into code execution
   (``core.fsmonitor`` is run as a program during index refresh — the
   CVE-2021-43891 class) or make ``git status`` rewrite ``.git/index``. Note: the
-  folder must still be one the user trusts to point AgentBoard at.
+  folder must still be one the user trusts to point Approvo at.
 - Bounded per-command timeout; failures degrade to an ``is_repo=False`` result or
   an ``unread`` marker on ``message`` rather than raising or asserting a false
   negative.

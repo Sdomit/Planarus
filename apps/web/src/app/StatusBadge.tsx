@@ -1,4 +1,4 @@
-// Maps AgentBoard status/priority/severity values to forma badge "tones".
+// Maps Approvo status/priority/severity values to forma badge "tones".
 export type ToneKind =
   | 'project' | 'phase' | 'task' | 'priority'
   | 'decision' | 'severity' | 'riskstatus' | 'milestone'

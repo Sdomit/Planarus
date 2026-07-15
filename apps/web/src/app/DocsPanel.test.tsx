@@ -166,7 +166,7 @@ describe('DocsPanel', () => {
     mockApi.docs.list.mockResolvedValue([DOC_SUMMARY])
     mockApi.docs.get.mockResolvedValue(DOC_FULL)
     mockApi.docs.exportMarkdown.mockRejectedValue(
-      new Error('409: {"detail":"The exported Markdown file was changed outside AgentBoard. Review it before exporting again."}'),
+      new Error('409: {"detail":"The exported Markdown file was changed outside Approvo. Review it before exporting again."}'),
     )
     const confirmSpy = vi.spyOn(window, 'confirm')
 
@@ -178,7 +178,7 @@ describe('DocsPanel', () => {
 
     fireEvent.click(screen.getByText('Export Markdown'))
     await waitFor(() =>
-      expect(screen.getByText(/changed outside AgentBoard/i)).toBeTruthy(),
+      expect(screen.getByText(/changed outside Approvo/i)).toBeTruthy(),
     )
     // exportMarkdown called exactly once — no force-retry
     expect(mockApi.docs.exportMarkdown).toHaveBeenCalledTimes(1)

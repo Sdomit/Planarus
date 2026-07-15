@@ -217,7 +217,7 @@ export default function Layout() {
         <div className="ab-brand">
           <div className="ab-brand-mark">A</div>
           <div>
-            <div className="ab-brand-name">AgentBoard</div>
+            <div className="ab-brand-name">Approvo</div>
             <div className="ab-brand-env">local · :5173</div>
           </div>
         </div>

@@ -47,7 +47,7 @@ def test_reminder_reaches_mailpit(client: TestClient, monkeypatch) -> None:
     client.post(f"/api/v1/projects/{pid}/tasks", json={"title": "Overdue thing", "due_at": _PAST})
 
     token = client.get("/api/v1/local-session").json()["token"]
-    hdr = {"X-AgentBoard-Local-Token": token}
+    hdr = {"X-Approvo-Local-Token": token}
     client.post(
         f"/api/v1/projects/{pid}/notification-rules",
         json={"to_email": f"inbox-{marker}@example.com"},

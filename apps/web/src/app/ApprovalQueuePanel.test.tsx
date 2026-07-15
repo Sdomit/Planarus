@@ -89,7 +89,7 @@ describe('ApprovalQueuePanel', () => {
     await waitFor(() =>
       expect(
         screen.getByText(
-          /Approving allows AgentBoard to apply only this exact proposal once/i,
+          /Approving allows Approvo to apply only this exact proposal once/i,
         ),
       ).toBeTruthy(),
     )

@@ -86,7 +86,7 @@ export default function ApprovalQueuePanel({ projectId }: ApprovalQueuePanelProp
   return (
     <div className="aqp-panel">
       <p className="aqp-notice" role="note">
-        Proposals are reference-only until you approve and apply them. AgentBoard never applies a change on its own.
+        Proposals are reference-only until you approve and apply them. Approvo never applies a change on its own.
       </p>
 
       <div className="aqp-body">
@@ -165,7 +165,7 @@ export default function ApprovalQueuePanel({ projectId }: ApprovalQueuePanelProp
                 )}
 
               <p className="aqp-mandatory">
-                Approving allows AgentBoard to apply only this exact proposal once.
+                Approving allows Approvo to apply only this exact proposal once.
               </p>
 
               <div className="aqp-actions">

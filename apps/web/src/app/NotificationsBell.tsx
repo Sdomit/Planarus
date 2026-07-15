@@ -44,7 +44,7 @@ export default function NotificationsBell({
           Notification.permission === 'granted'
         ) {
           const head = fresh[0]
-          new Notification(`AgentBoard — ${head.project_title}`, {
+          new Notification(`Approvo — ${head.project_title}`, {
             body:
               fresh.length === 1
                 ? head.title
