@@ -1,7 +1,7 @@
 ---
 kind: dev_guide
-updated_at: 2026-07-10
-phase: implementation (through 7C2a)
+updated_at: 2026-07-15
+phase: implementation (Phases 1–9 + 4b on main)
 ---
 
 # Developer setup
@@ -75,8 +75,8 @@ cd apps/api
 python -m pytest
 ```
 
-Expected output: **512 passed, 1 skipped** (the skip is a symlink-privilege
-test on Windows).
+Expected output: **630 passed, 2 skipped** (the skips are a Windows
+symlink-privilege test and the real-Mailpit email integration test).
 
 ### Frontend
 
@@ -85,7 +85,7 @@ cd apps/web
 pnpm test
 ```
 
-Expected output: **54 tests pass**.
+Expected output: **77 tests pass**.
 
 ### Frontend typecheck
 
