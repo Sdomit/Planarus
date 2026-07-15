@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlmodel import Session
 
 from app.core import tenant
+from app.core.config import settings
 from app.core.security import (
     get_local_control_token,
     origin_allowed,
@@ -19,6 +20,7 @@ from app.core.security import (
 )
 from app.core.tenant import tenant_user
 from app.db.session import get_session
+from app.models.project import Project
 from app.models.user import User
 from app.schemas.approval import (
     ApprovalAuditEntry,
@@ -62,22 +64,42 @@ def local_session(request: Request) -> LocalSessionResponse:
     return LocalSessionResponse(token=get_local_control_token())
 
 
+def _require_approval_read(session: Session, approval_id: str, user: Optional[User]):
+    """Fetch an approval and require read access to its workspace (no-op when auth
+    off). Returns the approval; raises 404 if missing."""
+    ar = approval_service.get_approval(session, approval_id)
+    if ar is None:
+        raise HTTPException(status_code=404, detail="approval not found")
+    tenant.require_workspace_access(session, ar.workspace_id, user, *tenant.READ_ROLES)
+    return ar
+
+
 @router.get("/approvals", response_model=list[ApprovalSummary])
 def list_approvals(
     project_id: Optional[str] = None,
     status: Optional[str] = None,
     session: Session = Depends(get_session),
+    user: Optional[User] = Depends(tenant_user),
 ) -> list[ApprovalSummary]:
+    # Hosted mode scopes the queue to one project the caller can read (a
+    # workspace-wide or global queue would leak tenants).
+    if settings.auth_enabled:
+        if project_id is None:
+            raise HTTPException(status_code=400, detail="project_id is required")
+        project = session.get(Project, project_id)
+        if project is None:
+            raise HTTPException(status_code=404, detail="project not found")
+        tenant.require_project_access(session, project, user, *tenant.READ_ROLES)
     return approval_service.list_approvals(session, project_id=project_id, status=status)
 
 
 @router.get("/approvals/{approval_id}", response_model=ApprovalDetail)
 def get_approval(
-    approval_id: str, session: Session = Depends(get_session)
+    approval_id: str,
+    session: Session = Depends(get_session),
+    user: Optional[User] = Depends(tenant_user),
 ) -> ApprovalDetail:
-    ar = approval_service.get_approval(session, approval_id)
-    if ar is None:
-        raise HTTPException(status_code=404, detail="approval not found")
+    ar = _require_approval_read(session, approval_id, user)
     diff = approval_service.build_diff(session, ar)
     is_expired, stale_reason = approval_service.staleness(session, ar)
     summary = ApprovalSummary.model_validate(ar).model_dump()
@@ -93,10 +115,11 @@ def get_approval(
 
 @router.get("/approvals/{approval_id}/audit", response_model=list[ApprovalAuditEntry])
 def approval_audit(
-    approval_id: str, session: Session = Depends(get_session)
+    approval_id: str,
+    session: Session = Depends(get_session),
+    user: Optional[User] = Depends(tenant_user),
 ) -> list[ApprovalAuditEntry]:
-    if approval_service.get_approval(session, approval_id) is None:
-        raise HTTPException(status_code=404, detail="approval not found")
+    _require_approval_read(session, approval_id, user)
     return approval_service.get_proposal_audit(session, approval_id)
 
 
