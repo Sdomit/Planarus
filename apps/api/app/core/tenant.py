@@ -96,3 +96,103 @@ def require_project_access(
     return require_workspace_access(
         session, project.workspace_id, user, *allowed_roles
     )
+
+
+# --- P10.2b: one registry-driven guard for every project-scoped domain route ---
+# Maps a route path/query parameter to a resolver returning the owning
+# ``project_id`` (or None if the entity doesn't exist). Applied uniformly via
+# ``include_router(..., dependencies=[Depends(tenant_guard)])`` in the v1 router,
+# so each domain route is guarded without a per-route edit. A route that carries
+# none of these identifiers (a global/static route) is left untouched.
+def _project_id_via(session: Session, model, entity_id: str, attr: str = "project_id"):
+    from typing import Any
+
+    obj: Any = session.get(model, entity_id)
+    return getattr(obj, attr) if obj is not None else None
+
+
+def _checklist_project_id(session: Session, item_id: str):
+    from app.models.checklist_item import ChecklistItem
+    from app.models.task import Task
+
+    item = session.get(ChecklistItem, item_id)
+    if item is None:
+        return None
+    task = session.get(Task, item.task_id)
+    return task.project_id if task is not None else None
+
+
+def _build_resolvers() -> dict:
+    from app.models.agent_run import AgentRun
+    from app.models.blocker import Blocker
+    from app.models.context_file import ContextFile
+    from app.models.decision import Decision
+    from app.models.doc import Doc
+    from app.models.milestone import Milestone
+    from app.models.notification_rule import NotificationRule
+    from app.models.phase import Phase
+    from app.models.risk import Risk
+    from app.models.stage import Stage
+    from app.models.task import Task
+
+    return {
+        "project_id": lambda s, v: v if s.get(Project, v) is not None else None,
+        "phase_id": lambda s, v: _project_id_via(s, Phase, v),
+        "stage_id": lambda s, v: _project_id_via(s, Stage, v),
+        "task_id": lambda s, v: _project_id_via(s, Task, v),
+        "decision_id": lambda s, v: _project_id_via(s, Decision, v),
+        "risk_id": lambda s, v: _project_id_via(s, Risk, v),
+        "blocker_id": lambda s, v: _project_id_via(s, Blocker, v),
+        "milestone_id": lambda s, v: _project_id_via(s, Milestone, v),
+        "doc_id": lambda s, v: _project_id_via(s, Doc, v),
+        "run_id": lambda s, v: _project_id_via(s, AgentRun, v),
+        "rule_id": lambda s, v: _project_id_via(s, NotificationRule, v),
+        "context_file_id": lambda s, v: _project_id_via(s, ContextFile, v),
+        "item_id": _checklist_project_id,
+    }
+
+
+_RESOLVERS: Optional[dict] = None
+
+
+def tenant_guard(
+    request: Request,
+    session: Session = Depends(get_session),
+    user: Optional[User] = Depends(tenant_user),
+) -> None:
+    """Guard a project-scoped domain route by the caller's workspace role.
+
+    Resolves the owning project from whichever identifier the route carries (a
+    path param, or a ``project_id`` query param), then enforces READ roles for
+    GET/HEAD and WRITE roles for mutations. No-op when auth is disabled; 404 if the
+    referenced entity doesn't exist; leaves genuinely global routes (no tenant
+    identifier) untouched.
+    """
+    if not settings.auth_enabled:
+        return
+    global _RESOLVERS
+    if _RESOLVERS is None:
+        _RESOLVERS = _build_resolvers()
+
+    project_id = None
+    matched = False
+    for name, resolve in _RESOLVERS.items():
+        if name in request.path_params:
+            matched = True
+            project_id = resolve(session, request.path_params[name])
+            break
+    if not matched:
+        qp = request.query_params.get("project_id")
+        if qp is not None:
+            matched = True
+            project_id = _RESOLVERS["project_id"](session, qp)
+    if not matched:
+        return  # no tenant-scoped identifier on this route
+
+    if project_id is None:
+        raise HTTPException(status_code=404, detail="not found")
+    project = session.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="not found")
+    roles = READ_ROLES if request.method in ("GET", "HEAD") else WRITE_ROLES
+    require_project_access(session, project, user, *roles)
