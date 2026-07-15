@@ -164,6 +164,104 @@ def test_audit_event_created_on_project_create(client: TestClient, session) -> N
     assert project_events[0].actor_type == "human"
 
 
+def _create_project(client: TestClient, ws_id: str, slug: str = "p") -> str:
+    return client.post(
+        "/api/v1/projects",
+        json={"workspace_id": ws_id, "title": "P", "slug": slug},
+    ).json()["id"]
+
+
+def test_archive_hides_from_default_list_and_unarchive_restores(client: TestClient) -> None:
+    ws_id = _create_workspace(client)
+    pid = _create_project(client, ws_id, "arch-me")
+
+    arch = client.post(f"/api/v1/projects/{pid}/archive")
+    assert arch.status_code == 200
+    assert arch.json()["status"] == "archived"
+    assert arch.json()["archived_at"] is not None
+
+    # Hidden by default, visible with include_archived.
+    assert all(p["id"] != pid for p in client.get("/api/v1/projects").json())
+    assert any(
+        p["id"] == pid
+        for p in client.get("/api/v1/projects?include_archived=true").json()
+    )
+
+    un = client.post(f"/api/v1/projects/{pid}/unarchive")
+    assert un.status_code == 200
+    assert un.json()["archived_at"] is None
+    assert un.json()["status"] == "active"
+    assert any(p["id"] == pid for p in client.get("/api/v1/projects").json())
+
+
+def test_duplicate_deep_copies_children_with_remapped_ids(client: TestClient) -> None:
+    ws_id = _create_workspace(client)
+    pid = _create_project(client, ws_id, "orig")
+    phase = client.post(f"/api/v1/projects/{pid}/phases", json={"title": "P1"}).json()
+    task = client.post(
+        f"/api/v1/projects/{pid}/tasks",
+        json={"title": "T1", "phase_id": phase["id"]},
+    ).json()
+    client.post(f"/api/v1/tasks/{task['id']}/checklist-items", json={"label": "step"})
+    client.post(
+        f"/api/v1/projects/{pid}/comments",
+        json={"entity_type": "task", "entity_id": task["id"], "body": "note"},
+    )
+
+    dup = client.post(f"/api/v1/projects/{pid}/duplicate")
+    assert dup.status_code == 201
+    new = dup.json()
+    assert new["id"] != pid
+    assert new["title"] == "P (copy)"
+    assert new["slug"] == "orig-copy"
+    assert new["status"] == "idea"
+
+    new_tasks = client.get(f"/api/v1/projects/{new['id']}/tasks").json()
+    assert len(new_tasks) == 1
+    assert new_tasks[0]["id"] != task["id"]  # remapped
+
+    new_phases = client.get(f"/api/v1/projects/{new['id']}/phases").json()
+    assert new_tasks[0]["phase_id"] == new_phases[0]["id"]  # internal FK remapped
+
+    new_chk = client.get(
+        f"/api/v1/tasks/{new_tasks[0]['id']}/checklist-items"
+    ).json()
+    assert len(new_chk) == 1
+
+    new_comments = client.get(f"/api/v1/projects/{new['id']}/comments").json()
+    assert len(new_comments) == 1
+    # Polymorphic entity_id points at the COPIED task, not the source task.
+    assert new_comments[0]["entity_id"] == new_tasks[0]["id"]
+
+
+def test_delete_requires_archive_first(client: TestClient) -> None:
+    ws_id = _create_workspace(client)
+    pid = _create_project(client, ws_id, "live")
+    res = client.delete(f"/api/v1/projects/{pid}")
+    assert res.status_code == 409
+    assert client.get(f"/api/v1/projects/{pid}").status_code == 200  # still there
+
+
+def test_delete_purges_archived_project_and_children(client: TestClient, session) -> None:
+    from app.models.task import Task
+    from sqlmodel import select
+
+    ws_id = _create_workspace(client)
+    pid = _create_project(client, ws_id, "doomed")
+    client.post(f"/api/v1/projects/{pid}/tasks", json={"title": "T"})
+
+    client.post(f"/api/v1/projects/{pid}/archive")
+    res = client.delete(f"/api/v1/projects/{pid}")
+    assert res.status_code == 204
+    assert client.get(f"/api/v1/projects/{pid}").status_code == 404
+    remaining = session.exec(select(Task).where(Task.project_id == pid)).all()
+    assert remaining == []
+
+
+def test_delete_missing_project_404(client: TestClient) -> None:
+    assert client.delete("/api/v1/projects/proj_nope").status_code == 404
+
+
 def test_audit_event_created_on_project_update(client: TestClient, session) -> None:
     from app.models.audit_event import AuditEvent
     from sqlmodel import select

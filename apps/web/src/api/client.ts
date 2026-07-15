@@ -586,6 +586,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const text = await res.text()
     throw new Error(`${res.status}: ${text}`)
   }
+  if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
 }
 
@@ -621,13 +622,22 @@ export const api = {
       request<Workspace>('/workspaces', { method: 'POST', body: JSON.stringify(data) }),
   },
   projects: {
-    list: (workspaceId?: string) =>
-      request<Project[]>(`/projects${workspaceId ? `?workspace_id=${workspaceId}` : ''}`),
+    list: (workspaceId?: string, includeArchived = false) => {
+      const q = new URLSearchParams()
+      if (workspaceId) q.set('workspace_id', workspaceId)
+      if (includeArchived) q.set('include_archived', 'true')
+      const qs = q.toString()
+      return request<Project[]>(`/projects${qs ? `?${qs}` : ''}`)
+    },
     create: (data: ProjectCreate) =>
       request<Project>('/projects', { method: 'POST', body: JSON.stringify(data) }),
     get: (id: string) => request<Project>(`/projects/${id}`),
     update: (id: string, data: Partial<Pick<Project, 'title' | 'summary' | 'status'>>) =>
       request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    archive: (id: string) => request<Project>(`/projects/${id}/archive`, { method: 'POST' }),
+    unarchive: (id: string) => request<Project>(`/projects/${id}/unarchive`, { method: 'POST' }),
+    duplicate: (id: string) => request<Project>(`/projects/${id}/duplicate`, { method: 'POST' }),
+    remove: (id: string) => request<void>(`/projects/${id}`, { method: 'DELETE' }),
   },
   phases: {
     list: (projectId: string) => request<Phase[]>(`/projects/${projectId}/phases`),

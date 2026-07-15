@@ -1,7 +1,13 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { api, Project, Workspace, Task, Risk } from '../api/client'
 import { StatusBadge } from './StatusBadge'
 import { Icon } from './Icon'
+import {
+  UNCATEGORIZED,
+  assignCategory,
+  categoryOf,
+  listCategories,
+} from './categories'
 import './dashboard.css'
 
 const PROJECT_STATUSES = [
@@ -20,6 +26,7 @@ function splitName(title: string): { code: string; rest: string } {
   const m = title.split(/\s+[-—:]\s+/)
   return m.length > 1 ? { code: m[0], rest: m.slice(1).join(' ') } : { code: title, rest: '' }
 }
+const stop = (e: MouseEvent) => e.stopPropagation()
 
 interface ProjAgg { project: Project; tasks: Task[]; risks: Risk[]; done: number; total: number; pct: number }
 interface DashboardProps { onSelectProject?: (p: { id: string; title: string; slug: string }) => void }
@@ -34,7 +41,16 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState({ title: '', slug: '', status: 'idea', summary: '' })
 
-  useEffect(() => { loadData() }, [])
+  // Manage-project state
+  const [showArchived, setShowArchived] = useState(false)
+  const [activeCat, setActiveCat] = useState<string | null>(null)
+  const [cats, setCats] = useState<string[]>(listCategories())
+  const [menuFor, setMenuFor] = useState<string | null>(null)
+  const [moveFor, setMoveFor] = useState<Project | null>(null)
+  const [delFor, setDelFor] = useState<Project | null>(null)
+  const [delText, setDelText] = useState('')
+
+  useEffect(() => { loadData() }, [showArchived])
 
   async function loadData() {
     setLoading(true)
@@ -44,7 +60,7 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
       const ws = workspaces[0] ?? null
       setWorkspace(ws)
       if (ws) {
-        const projs = await api.projects.list(ws.id)
+        const projs = await api.projects.list(ws.id, showArchived)
         const data = await Promise.all(
           projs.map(async (project) => {
             const [tasks, risks] = await Promise.all([
@@ -57,6 +73,7 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
           }),
         )
         setAggs(data)
+        setCats(listCategories())
         const pend = await api.approvals.list(undefined, 'pending').catch(() => [])
         setPending(pend.length)
       }
@@ -99,6 +116,35 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
     }
   }
 
+  // Run an action then refresh; errors surface in the banner.
+  async function act(fn: () => Promise<unknown>) {
+    setMenuFor(null)
+    try {
+      await fn()
+      await loadData()
+    } catch (e) {
+      setError(String(e))
+    }
+  }
+
+  async function confirmDelete() {
+    if (!delFor) return
+    const id = delFor.id
+    setDelFor(null)
+    setDelText('')
+    await act(async () => {
+      await api.projects.remove(id)
+      assignCategory(id, null)
+    })
+  }
+
+  function moveTo(category: string | null) {
+    if (!moveFor) return
+    assignCategory(moveFor.id, category)
+    setCats(listCategories())
+    setMoveFor(null)
+  }
+
   if (loading) return <div className="ab-state"><span className="spinner spinner-sm" /> Loading projects…</div>
   if (error) {
     return (
@@ -117,26 +163,41 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
     )
   }
 
-  const projects = aggs.map((a) => a.project)
-  const activeCount = projects.filter((p) => p.status === 'active').length
-  const openTasks = aggs.reduce((n, a) => n + a.tasks.filter((t) => !DONE_TASK.has(t.status)).length, 0)
-  const openRisks = aggs.reduce((n, a) => n + a.risks.filter((r) => r.status === 'open').length, 0)
-  const criticalRisks = aggs.reduce((n, a) => n + a.risks.filter((r) => r.severity === 'critical').length, 0)
+  const liveAggs = aggs.filter((a) => !a.project.archived_at)
+  const activeCount = liveAggs.filter((a) => a.project.status === 'active').length
+  const openTasks = liveAggs.reduce((n, a) => n + a.tasks.filter((t) => !DONE_TASK.has(t.status)).length, 0)
+  const openRisks = liveAggs.reduce((n, a) => n + a.risks.filter((r) => r.status === 'open').length, 0)
+  const criticalRisks = liveAggs.reduce((n, a) => n + a.risks.filter((r) => r.severity === 'critical').length, 0)
 
   const kpis = [
-    { label: 'Active projects', value: activeCount, foot: `of ${projects.length} total` },
+    { label: 'Active projects', value: activeCount, foot: `of ${liveAggs.length} total` },
     { label: 'Open tasks', value: openTasks, foot: 'in progress' },
     { label: 'Pending approvals', value: pending, foot: pending ? 'awaiting review' : 'queue clear' },
     { label: 'Open risks', value: openRisks, foot: `${criticalRisks} critical` },
   ]
 
+  const visibleAggs = aggs.filter(({ project: p }) => {
+    if (activeCat === null) return true
+    const c = categoryOf(p.id)
+    return activeCat === UNCATEGORIZED ? c === null : c === activeCat
+  })
+
   return (
     <section className="anim-fade-in-up">
       <div className="ab-section-head">
         <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, letterSpacing: '-0.015em', margin: 0, color: 'var(--text-primary)' }}>All projects</h2>
-        <button className="btn btn-solid btn-md" type="button" onClick={() => setShowCreate(true)}>
-          <Icon name="plus" className="ic-14" /> New project
-        </button>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+          <button
+            className={`btn btn-sm ${showArchived ? 'btn-outline' : 'btn-ghost'}`}
+            type="button"
+            onClick={() => setShowArchived((v) => !v)}
+          >
+            {showArchived ? 'Hide archived' : 'Show archived'}
+          </button>
+          <button className="btn btn-solid btn-md" type="button" onClick={() => setShowCreate(true)}>
+            <Icon name="plus" className="ic-14" /> New project
+          </button>
+        </div>
       </div>
 
       <div className="ab-kpis stagger" style={{ marginBottom: 'var(--space-6)' }}>
@@ -149,14 +210,35 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
         ))}
       </div>
 
-      {projects.length === 0 ? (
+      {cats.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
+          {[
+            { key: null as string | null, label: 'All' },
+            ...cats.map((c) => ({ key: c as string | null, label: c })),
+            { key: UNCATEGORIZED as string | null, label: 'Uncategorized' },
+          ].map((chip) => (
+            <button
+              key={chip.label}
+              type="button"
+              className={`btn btn-sm ${activeCat === chip.key ? 'btn-solid' : 'btn-ghost'}`}
+              onClick={() => setActiveCat(chip.key)}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {visibleAggs.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: 'var(--space-10)', color: 'var(--text-secondary)' }}>
-          No projects yet. Create your first project.
+          {aggs.length === 0 ? 'No projects yet. Create your first project.' : 'No projects in this view.'}
         </div>
       ) : (
         <div className="ab-proj-grid stagger">
-          {aggs.map(({ project: p, pct, done, total }) => {
+          {visibleAggs.map(({ project: p, pct, done, total }) => {
             const nm = splitName(p.title)
+            const cat = categoryOf(p.id)
+            const archived = !!p.archived_at
             const open = () => onSelectProject?.({ id: p.id, title: p.title, slug: p.slug })
             return (
               <article
@@ -166,6 +248,7 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
                 tabIndex={0}
                 onClick={open}
                 onKeyDown={(e) => { if (e.key === 'Enter') open() }}
+                style={archived ? { opacity: 0.72 } : undefined}
               >
                 <div className="ab-proj-top">
                   <div className="ab-proj-mark" style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)' }}>{initials(p.title)}</div>
@@ -174,6 +257,42 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
                     <div className="ab-proj-sub">{nm.rest || p.slug}</div>
                   </div>
                   <StatusBadge kind="project" value={p.status} />
+                  <div style={{ position: 'relative' }} onClick={stop}>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      type="button"
+                      aria-label="Project actions"
+                      style={{ padding: '2px 8px', lineHeight: 1 }}
+                      onClick={() => setMenuFor((m) => (m === p.id ? null : p.id))}
+                    >⋯</button>
+                    {menuFor === p.id && (
+                      <>
+                        <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setMenuFor(null)} />
+                        <div
+                          role="menu"
+                          style={{
+                            position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 41,
+                            minWidth: 180, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
+                            borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-md)', padding: 'var(--space-1)',
+                            display: 'flex', flexDirection: 'column',
+                          }}
+                        >
+                          {!archived && <MenuItem onClick={() => act(() => api.projects.update(p.id, { status: 'active' }))}>Set active</MenuItem>}
+                          {!archived && <MenuItem onClick={() => act(() => api.projects.update(p.id, { status: 'done' }))}>Set done</MenuItem>}
+                          <MenuItem onClick={() => act(() => api.projects.duplicate(p.id))}>Duplicate</MenuItem>
+                          <MenuItem onClick={() => { setMenuFor(null); setMoveFor(p) }}>Move to category…</MenuItem>
+                          {archived ? (
+                            <>
+                              <MenuItem onClick={() => act(() => api.projects.unarchive(p.id))}>Restore</MenuItem>
+                              <MenuItem danger onClick={() => { setMenuFor(null); setDelFor(p); setDelText('') }}>Delete permanently…</MenuItem>
+                            </>
+                          ) : (
+                            <MenuItem onClick={() => act(() => api.projects.archive(p.id))}>Archive</MenuItem>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
                 {p.summary && <div className="ab-proj-desc">{p.summary}</div>}
                 <div>
@@ -183,7 +302,10 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
                   <div className="ab-meter"><span style={{ width: `${pct}%` }} /></div>
                 </div>
                 <div className="ab-proj-foot">
-                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Updated {new Date(p.updated_at).toLocaleDateString()}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                    {cat ? <span style={{ marginRight: 8, color: 'var(--text-accent)' }}>#{cat}</span> : null}
+                    Updated {new Date(p.updated_at).toLocaleDateString()}
+                  </span>
                   {p.priority && <StatusBadge kind="priority" value={p.priority} />}
                 </div>
               </article>
@@ -236,6 +358,120 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
           </div>
         </div>
       )}
+
+      {moveFor && (
+        <MoveModal
+          project={moveFor}
+          categories={cats}
+          current={categoryOf(moveFor.id)}
+          onClose={() => setMoveFor(null)}
+          onMove={moveTo}
+        />
+      )}
+
+      {delFor && (
+        <div className="modal-overlay" onClick={() => setDelFor(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">Delete project permanently</h2>
+              <button className="modal-close" type="button" aria-label="Close" onClick={() => setDelFor(null)}>
+                <Icon name="x" className="ic-18" />
+              </button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+              <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>
+                This <strong>permanently</strong> deletes “{delFor.title}” and all of its tasks, docs,
+                decisions, comments, and history. This cannot be undone.
+              </p>
+              <div className="form-field">
+                <label className="form-label" htmlFor="del-confirm">
+                  Type <strong>{delFor.title}</strong> to confirm
+                </label>
+                <input id="del-confirm" className="input" value={delText} autoFocus
+                  onChange={(e) => setDelText(e.target.value)} placeholder={delFor.title} />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDelFor(null)}>Cancel</button>
+              <button
+                type="button"
+                className="btn btn-destructive btn-sm"
+                disabled={delText !== delFor.title}
+                onClick={confirmDelete}
+              >Delete permanently</button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
+  )
+}
+
+function MenuItem({ children, onClick, danger }: { children: ReactNode; onClick: () => void; danger?: boolean }) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      style={{
+        textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer',
+        padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)',
+        fontSize: 'var(--text-sm)', color: danger ? 'var(--status-danger-fg)' : 'var(--text-primary)',
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-muted)')}
+      onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+    >{children}</button>
+  )
+}
+
+function MoveModal({
+  project, categories, current, onClose, onMove,
+}: {
+  project: Project
+  categories: string[]
+  current: string | null
+  onClose: () => void
+  onMove: (category: string | null) => void
+}) {
+  const [selected, setSelected] = useState<string>(current ?? UNCATEGORIZED)
+  const [fresh, setFresh] = useState('')
+  function submit(e: FormEvent) {
+    e.preventDefault()
+    const n = fresh.trim()
+    if (n) onMove(n)
+    else onMove(selected === UNCATEGORIZED ? null : selected)
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2 className="modal-title">Move “{project.title}”</h2>
+          <button className="modal-close" type="button" aria-label="Close" onClick={onClose}>
+            <Icon name="x" className="ic-18" />
+          </button>
+        </div>
+        <form onSubmit={submit}>
+          <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
+              {[UNCATEGORIZED, ...categories].map((c) => (
+                <label key={c} style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', fontSize: 'var(--text-sm)', cursor: 'pointer' }}>
+                  <input type="radio" name="cat" checked={selected === c && !fresh.trim()} onChange={() => { setSelected(c); setFresh('') }} />
+                  {c === UNCATEGORIZED ? 'Uncategorized' : c}
+                </label>
+              ))}
+            </div>
+            <div className="form-field">
+              <label className="form-label" htmlFor="mv-new">Or new category</label>
+              <input id="mv-new" className="input" value={fresh}
+                onChange={(e) => setFresh(e.target.value)} placeholder="e.g. Clients" />
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-solid btn-sm">Move</button>
+          </div>
+        </form>
+      </div>
+    </div>
   )
 }
