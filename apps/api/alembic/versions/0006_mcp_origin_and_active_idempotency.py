@@ -42,13 +42,17 @@ def upgrade() -> None:
             "ck_approval_origin", "origin IN ('local', 'mcp')"
         )
 
-    # Active-only partial unique index.
+    # Active-only partial unique index. The predicate must be declared per
+    # dialect: each backend only honors its own *_where kwarg and silently
+    # ignores the other's, so omitting one would silently widen the index to a
+    # full unique constraint on that backend (P10.0).
     op.create_index(
         "uq_approval_active_idem",
         "approvalrequest",
         ["origin", "actor_ref", "idempotency_key"],
         unique=True,
         sqlite_where=sa.text(_ACTIVE),
+        postgresql_where=sa.text(_ACTIVE),
     )
 
 
