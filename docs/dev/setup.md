@@ -51,6 +51,20 @@ uvicorn app.main:app --reload --port 8000
 #   http://localhost:8000/docs   (Swagger UI)
 ```
 
+### Optional: load the Approvo project into the app (dogfooding)
+
+Approvo tracks its own roadmap. After migrating, seed the running DB with the
+live project — phases, the Phase 10 slices as stages, follow-up tasks, and launch
+milestones — so you can follow progress in the Roadmap / Task Board instead of
+only the Markdown context pack. Idempotent (safe to re-run); honors
+`AGENTBOARD_DATABASE_URL`:
+
+```bash
+python scripts/seed_approvo_project.py
+```
+
+Kept in sync with `context/NEXT_STEP.md` each slice.
+
 ## Frontend (apps/web)
 
 ```bash
