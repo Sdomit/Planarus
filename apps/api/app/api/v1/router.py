@@ -4,6 +4,7 @@ from app.api.v1.endpoints import (
     agent_runs,
     api_clients,
     approvals,
+    auth,
     blockers,
     checklist_items,
     comments,
@@ -14,6 +15,7 @@ from app.api.v1.endpoints import (
     git,
     info,
     links,
+    members,
     milestones,
     notifications,
     phases,
@@ -28,6 +30,8 @@ from app.api.v1.endpoints import (
 
 router = APIRouter()
 router.include_router(info.router, tags=["info"])
+router.include_router(auth.router, tags=["auth"])
+router.include_router(members.router, tags=["members"])
 router.include_router(workspaces.router, tags=["workspaces"])
 router.include_router(projects.router, tags=["projects"])
 router.include_router(context.router, tags=["context"])

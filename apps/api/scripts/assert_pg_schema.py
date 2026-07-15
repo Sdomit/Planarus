@@ -38,6 +38,11 @@ REQUIRED_TABLES = {
     "checklistitem",
     "comment",
     "link",
+    # Phase 10.1 identity layer
+    "appuser",
+    "useridentity",
+    "workspacemember",
+    "usersession",
 }
 
 
@@ -93,6 +98,35 @@ def main() -> int:
             raise AssertionError(
                 "ck_apiclient_at_least_one_perm accepted a both-false row"
             )
+        finally:
+            conn.rollback()
+
+        # Phase 10.1: workspacemember.role CHECK must reject an invalid role on PG
+        # (bare enum CHECK, dialect-portable).
+        conn.execute(
+            text(
+                "INSERT INTO workspace (id, name, slug, created_at, updated_at)"
+                " VALUES ('_pgassert_w2', 'w', '_pgassert_w2', 't', 't')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO appuser (id, email, display_name, created_at, updated_at)"
+                " VALUES ('_pgassert_u', 'u@pgassert.test', 'U', 't', 't')"
+            )
+        )
+        try:
+            conn.execute(
+                text(
+                    "INSERT INTO workspacemember (id, workspace_id, user_id, role,"
+                    " created_at, updated_at) VALUES ('_pgassert_m', '_pgassert_w2',"
+                    " '_pgassert_u', 'superuser', 't', 't')"
+                )
+            )
+        except Exception as exc:  # expected: role CHECK violation
+            assert "ck_workspacemember_role" in str(exc), exc
+        else:
+            raise AssertionError("ck_workspacemember_role accepted an invalid role")
         finally:
             conn.rollback()
 
