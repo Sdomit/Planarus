@@ -19,12 +19,25 @@ import secrets
 
 from fastapi import Header, HTTPException, Request
 
+from app.core.config import settings
+
 # The only origins the local UI is served from in dev/desktop. Shared with the
 # CORS middleware in app.main so the two never drift.
 LOCAL_UI_ORIGINS: tuple[str, ...] = (
     "http://localhost:5173",
     "http://localhost:3000",
 )
+
+
+def allowed_ui_origins() -> tuple[str, ...]:
+    """Local dev origins plus any hosted web origins configured via
+    ``AGENTBOARD_WEB_ORIGINS`` (P10.4). Empty config → just the local origins, so
+    local behavior is unchanged.
+    """
+    extra = tuple(
+        o.strip() for o in settings.web_origins.split(",") if o.strip()
+    )
+    return LOCAL_UI_ORIGINS + extra
 
 # Generated once at import (process start); in-memory only. Never persisted.
 _LOCAL_CONTROL_TOKEN: str = secrets.token_urlsafe(32)
@@ -42,7 +55,7 @@ def origin_allowed(origin: str | None) -> bool:
     rejected. Non-browser local callers (no Origin) are outside the browser
     threat model and are allowed.
     """
-    return origin is None or origin in LOCAL_UI_ORIGINS
+    return origin is None or origin in allowed_ui_origins()
 
 
 def require_local_control(
