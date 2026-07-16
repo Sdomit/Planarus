@@ -13,6 +13,13 @@ running app; there is no wired sync path yet.
 """
 from app.sync.apply import apply_plan
 from app.sync.baseline import load_baseline, save_baseline
+from app.sync.transport import (
+    ScopeViolation,
+    build_snapshot,
+    export_records,
+    import_change_set,
+    snapshot_manifest,
+)
 from app.sync.diff import (
     Change,
     ChangeKind,
@@ -34,4 +41,9 @@ __all__ = [
     "apply_plan",
     "load_baseline",
     "save_baseline",
+    "build_snapshot",
+    "snapshot_manifest",
+    "export_records",
+    "import_change_set",
+    "ScopeViolation",
 ]
