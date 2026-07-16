@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import TimelinePanel from './TimelinePanel'
+import TimelinePanel, { groupEventsByDay } from './TimelinePanel'
+
+const ev = (id: string, at: string) =>
+  ({ id, at, event_type: 'create', entity_type: 'task', entity_id: null, actor_type: 'human', label: id })
 
 vi.mock('../api/client', () => ({
   api: {
@@ -39,5 +42,17 @@ describe('TimelinePanel', () => {
     expect(await screen.findByText('update task — Fix login bug')).toBeTruthy()
     expect(screen.getByText('create decision — Use SQLite')).toBeTruthy()
     expect(screen.getAllByText('human').length).toBe(2)
+  })
+
+  it('groups events into consecutive same-day buckets, order preserved', () => {
+    // Local-time (no Z) midday values so day bucketing is timezone-stable.
+    const groups = groupEventsByDay([
+      ev('a', '2026-07-10T14:00:00'),
+      ev('b', '2026-07-10T09:00:00'),
+      ev('c', '2026-07-09T12:00:00'),
+    ])
+    expect(groups.length).toBe(2)
+    expect(groups[0].events.map((e) => e.id)).toEqual(['a', 'b'])
+    expect(groups[1].events.map((e) => e.id)).toEqual(['c'])
   })
 })
