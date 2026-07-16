@@ -35,7 +35,8 @@ describe('RoadmapPanel', () => {
   it('renders overall + per-phase progress with rollups', async () => {
     const onOpenPlanning = vi.fn()
     render(<RoadmapPanel projectId="proj_1" onOpenPlanning={onOpenPlanning} />)
-    expect(await screen.findByText('Overall 20%')).toBeTruthy()
+    expect(await screen.findByText('Overall progress')).toBeTruthy()
+    expect(screen.getByText('20%')).toBeTruthy()
     expect(screen.getByText('Phase One')).toBeTruthy()
     expect(screen.getByText('Stage A')).toBeTruthy()
     expect(screen.getByText('Unphased tasks')).toBeTruthy()
