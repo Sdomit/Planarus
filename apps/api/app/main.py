@@ -28,7 +28,7 @@ from app.core.exceptions import (
     PolicyError,
     SecretDetectedError,
 )
-from app.core.security import LOCAL_UI_ORIGINS
+from app.core.security import allowed_ui_origins
 from app.fsmemory.path_safety import PathSafetyError
 
 
@@ -83,7 +83,7 @@ def create_app() -> FastAPI:
     # allowlist + cookie rejection + body cap before routing.
     app.add_middleware(
         PathScopedCORS,
-        allow_origins=list(LOCAL_UI_ORIGINS),
+        allow_origins=list(allowed_ui_origins()),
         allow_methods=["*"],
         allow_headers=["*"],
     )

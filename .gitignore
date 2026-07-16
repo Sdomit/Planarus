@@ -43,3 +43,6 @@ secrets/
 
 # Local QA artifacts (Playwright MCP screenshots/logs — not source)
 .playwright-mcp/
+
+# Local ops notes — machine/session-specific reminders, never published
+context/LOCAL_OPS.md

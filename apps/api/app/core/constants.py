@@ -298,3 +298,23 @@ def comment_author_type_check_sql(column: str = "author_type") -> str:
 
 def link_entity_type_check_sql(column: str = "entity_type") -> str:
     return _check_sql(column, REF_ENTITY_TYPES)
+
+
+# --- Phase 10.1: identity + workspace membership (hosted mode) -----------------
+# Workspace-scoped RBAC roles (D19). Capability is nested: owner ⊃ editor ⊃
+# viewer. owner manages membership + (from P10.2) approves/applies; editor
+# creates/edits domain state + proposes; viewer is read-only.
+WORKSPACE_ROLES: tuple[str, ...] = ("owner", "editor", "viewer")
+
+# Authentication identity providers. "dev" is a password-less, doubly-gated local
+# provider for bootstrap + tests (never usable unless BOTH AGENTBOARD_AUTH_ENABLED
+# and AGENTBOARD_AUTH_DEV_LOGIN are on); real OAuth providers wire in at P10.1b.
+AUTH_PROVIDERS: tuple[str, ...] = ("dev", "google", "github")
+
+
+def workspace_role_check_sql(column: str = "role") -> str:
+    return _check_sql(column, WORKSPACE_ROLES)
+
+
+def auth_provider_check_sql(column: str = "provider") -> str:
+    return _check_sql(column, AUTH_PROVIDERS)
