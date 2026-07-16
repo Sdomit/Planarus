@@ -71,7 +71,9 @@ def read_settings(session: Session) -> SettingsRead:
 
 
 def write_settings(session: Session, data: SettingsUpdate) -> SettingsRead:
-    changed = data.model_dump(exclude_unset=True)
+    # exclude_none: an explicit JSON null must not be stored (str(None) would
+    # otherwise become the literal From address "None").
+    changed = data.model_dump(exclude_unset=True, exclude_none=True)
     for key, value in changed.items():
         set_setting(session, key, value)
         # Audit key + value — all switch values are non-secret (bool / from-address).

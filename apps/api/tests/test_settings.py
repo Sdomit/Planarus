@@ -69,6 +69,17 @@ def test_put_settings_roundtrip(client):
     assert client.get("/api/v1/settings").json()["email_from"] == "ops@example.com"
 
 
+def test_put_settings_ignores_explicit_null(client):
+    res = client.put(
+        "/api/v1/settings",
+        headers=local_hdr(client),
+        json={"email_from": None},
+    )
+    assert res.status_code == 200, res.text
+    # null is ignored, not stored — the env default survives, never "None".
+    assert res.json()["email_from"] != "None"
+
+
 def test_put_settings_rejects_unknown_key(client):
     res = client.put(
         "/api/v1/settings",
