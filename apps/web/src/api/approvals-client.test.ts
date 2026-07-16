@@ -46,6 +46,26 @@ describe('approvals client local control token', () => {
     expect(sessionFetches.length).toBe(1)
   })
 
+  it('keeps Content-Type alongside the token on body-carrying control calls', async () => {
+    // Regression: the token headers used to REPLACE the default headers, dropping
+    // Content-Type — fetch fell back to text/plain and FastAPI 422'd the body.
+    const calls: Call[] = []
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init })
+      if (url.endsWith('/local-session')) return fakeResponse({ token: 'TOK123' })
+      return fakeResponse({ id: 'apr_1', status: 'rejected' })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await api.approvals.reject('apr_1', 'nope')
+
+    const rejectCall = calls.find((c) => c.url.includes('/reject'))
+    const headers = (rejectCall?.init?.headers ?? {}) as Record<string, string>
+    expect(headers['Content-Type']).toBe('application/json')
+    expect(headers['X-Approvo-Local-Token']).toBe('TOK123')
+    expect(rejectCall?.init?.body).toBe(JSON.stringify({ reason: 'nope' }))
+  })
+
   it('does not attach the token (or fetch a session) for read-only GETs', async () => {
     const calls: Call[] = []
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {

@@ -597,9 +597,13 @@ export interface AppSettingsUpdate {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // init is spread FIRST so the headers merge below always wins — a caller-supplied
+  // headers object (e.g. controlRequest's token) must add to, not replace, the
+  // Content-Type. The old order dropped Content-Type on every body-carrying
+  // control call and FastAPI 422'd the raw text/plain body.
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
     ...init,
+    headers: { 'Content-Type': 'application/json', ...init?.headers },
   })
   if (!res.ok) {
     const text = await res.text()
