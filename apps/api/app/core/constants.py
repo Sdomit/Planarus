@@ -281,7 +281,18 @@ REF_ENTITY_TYPES: tuple[str, ...] = (
     "blocker",
     "milestone",
     "doc",
+    "calendar_event",
 )
+
+
+# --- Phase 15.12: CalendarEvent (calendar surface) ----------------------------
+# A first-class dated event. Statuses mirror the common calendar vocabulary
+# (Google/CalDAV): confirmed / tentative / cancelled.
+CALENDAR_EVENT_STATUSES: tuple[str, ...] = ("confirmed", "tentative", "cancelled")
+
+
+def calendar_event_status_check_sql(column: str = "status") -> str:
+    return _check_sql(column, CALENDAR_EVENT_STATUSES)
 
 # Who authored a comment. Local-app comments are "human"; the field exists so an
 # approval-gated agent comment can be attributed without a schema change later.
