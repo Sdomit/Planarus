@@ -55,6 +55,7 @@ PHASES: list[dict] = [
         # slices modeled as stages; blocked = gated on local product validation
         "stages": [
             {"title": "P10.0 — Postgres-portability harness", "status": "done"},
+            {"title": "P10.1b — Real OAuth (Google/GitHub)", "status": "done"},
             {
                 "title": "P10.1 — Identity + workspace membership",
                 "status": "done",
