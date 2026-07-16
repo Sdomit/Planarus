@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     storage_backend: str = Field(
         default="local", validation_alias="AGENTBOARD_STORAGE_BACKEND"
     )
+    # P10.3b — S3 backend config (used only when storage_backend == "s3").
+    storage_s3_bucket: str = Field(default="", validation_alias="AGENTBOARD_S3_BUCKET")
+    storage_s3_prefix: str = Field(default="", validation_alias="AGENTBOARD_S3_PREFIX")
+    storage_s3_region: str = Field(default="", validation_alias="AGENTBOARD_S3_REGION")
+    storage_s3_endpoint_url: str = Field(
+        default="", validation_alias="AGENTBOARD_S3_ENDPOINT_URL"
+    )
 
     # Phase 10.4 (hosted deploy) — extra allowed browser origins for the hosted
     # web app, comma-separated (e.g. "https://app.example.com"). Empty (default)
@@ -68,6 +75,22 @@ class Settings(BaseSettings):
     # These are added to the CORS allowlist and the Origin check for the local
     # control-token endpoints.
     web_origins: str = Field(default="", validation_alias="AGENTBOARD_WEB_ORIGINS")
+
+    # Phase 10.1b — real OAuth providers. A provider is only available when its
+    # client id is set; unset (default) → its routes 404. Secrets are never logged
+    # or returned. Requires the optional [oauth] extra (httpx) at runtime.
+    oauth_google_client_id: str = Field(
+        default="", validation_alias="AGENTBOARD_OAUTH_GOOGLE_CLIENT_ID"
+    )
+    oauth_google_client_secret: str = Field(
+        default="", validation_alias="AGENTBOARD_OAUTH_GOOGLE_CLIENT_SECRET"
+    )
+    oauth_github_client_id: str = Field(
+        default="", validation_alias="AGENTBOARD_OAUTH_GITHUB_CLIENT_ID"
+    )
+    oauth_github_client_secret: str = Field(
+        default="", validation_alias="AGENTBOARD_OAUTH_GITHUB_CLIENT_SECRET"
+    )
 
 
 settings = Settings()

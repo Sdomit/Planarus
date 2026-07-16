@@ -55,6 +55,7 @@ PHASES: list[dict] = [
         # slices modeled as stages; blocked = gated on local product validation
         "stages": [
             {"title": "P10.0 — Postgres-portability harness", "status": "done"},
+            {"title": "P10.1b — Real OAuth (Google/GitHub)", "status": "done"},
             {
                 "title": "P10.1 — Identity + workspace membership",
                 "status": "done",
@@ -83,9 +84,11 @@ PHASES: list[dict] = [
                 ],
             },
             {"title": "P10.3 — Storage adapter (Storage protocol + backends)", "status": "done"},
+            {"title": "P10.3b — S3 storage backend", "status": "done"},
             {"title": "P10.4 — Hosted deploy shape (config + docs)", "status": "done"},
             {"title": "P10.5 — SQLite→Postgres ETL (gate lifted, D24)", "status": "done"},
             {"title": "P10.6 — Sync foundation: manifest + conflict detection", "status": "done"},
+            {"title": "P10.6b — Sync apply + baseline persistence", "status": "done"},
         ],
     },
 ]

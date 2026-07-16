@@ -87,14 +87,19 @@ def _normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
-def dev_login(
-    session: Session, email: str, display_name: Optional[str]
+def login_with_identity(
+    session: Session,
+    provider: str,
+    subject: str,
+    email: str,
+    display_name: Optional[str],
 ) -> tuple[User, str]:
-    """Password-less get-or-create login via the ``dev`` provider.
+    """Get-or-create a user for a ``(provider, subject)`` identity and open a session.
 
-    Doubly-gated at the endpoint (auth + dev-login flags). Finds the user by email
-    or creates one, ensures a ``dev`` identity is linked, and returns the user plus
-    a fresh raw session token.
+    The account key is the normalized email — a user who already exists (e.g. via a
+    different provider) gets the new identity linked rather than a duplicate account.
+    Shared by the dev provider and the real OAuth providers (P10.1b). Returns the
+    user plus a fresh raw session token.
     """
     norm = _normalize_email(email)
     user = session.exec(select(User).where(User.email == norm)).first()
@@ -118,8 +123,8 @@ def dev_login(
         )
     identity = session.exec(
         select(UserIdentity).where(
-            UserIdentity.provider == "dev",
-            UserIdentity.provider_subject == norm,
+            UserIdentity.provider == provider,
+            UserIdentity.provider_subject == subject,
         )
     ).first()
     if identity is None:
@@ -127,8 +132,8 @@ def dev_login(
             UserIdentity(
                 id=new_id("uid"),
                 user_id=user.id,
-                provider="dev",
-                provider_subject=norm,
+                provider=provider,
+                provider_subject=subject,
                 created_at=now_utc(),
             )
         )
@@ -136,6 +141,18 @@ def dev_login(
     session.commit()
     session.refresh(user)
     return user, raw_token
+
+
+def dev_login(
+    session: Session, email: str, display_name: Optional[str]
+) -> tuple[User, str]:
+    """Password-less get-or-create login via the ``dev`` provider (subject = email).
+
+    Doubly-gated at the endpoint (auth + dev-login flags).
+    """
+    return login_with_identity(
+        session, "dev", _normalize_email(email), email, display_name
+    )
 
 
 # --- membership ---------------------------------------------------------------

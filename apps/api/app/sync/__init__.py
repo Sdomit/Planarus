@@ -11,6 +11,8 @@ planning engine they build on.
 Standalone and off by default: importing this package changes nothing about the
 running app; there is no wired sync path yet.
 """
+from app.sync.apply import apply_plan
+from app.sync.baseline import load_baseline, save_baseline
 from app.sync.diff import (
     Change,
     ChangeKind,
@@ -29,4 +31,7 @@ __all__ = [
     "SyncPlan",
     "three_way_diff",
     "resolve_conflicts",
+    "apply_plan",
+    "load_baseline",
+    "save_baseline",
 ]
