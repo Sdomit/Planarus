@@ -140,6 +140,41 @@ export interface Milestone {
   updated_at: string
 }
 
+export interface CalendarEvent {
+  id: string
+  project_id: string
+  phase_id: string | null
+  title: string
+  description: string | null
+  location: string | null
+  status: string
+  start_at: string
+  end_at: string | null
+  all_day: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+/** A normalized entry in the aggregated calendar feed. */
+export interface CalendarItem {
+  id: string
+  source: 'event' | 'milestone' | 'task'
+  ref_id: string
+  title: string
+  start_at: string
+  end_at: string | null
+  all_day: boolean
+  status: string | null
+  phase_id: string | null
+}
+
+export interface ProjectCalendar {
+  project_id: string
+  generated_at: string
+  items: CalendarItem[]
+}
+
 export interface ChecklistItem {
   id: string
   task_id: string
@@ -728,6 +763,39 @@ export const api = {
       request<Milestone>(`/projects/${projectId}/milestones`, { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, data: Partial<Pick<Milestone, 'title' | 'status' | 'target_date' | 'phase_id'>>) =>
       request<Milestone>(`/milestones/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+  calendarEvents: {
+    list: (projectId: string) => request<CalendarEvent[]>(`/projects/${projectId}/calendar-events`),
+    create: (
+      projectId: string,
+      data: {
+        title: string
+        start_at: string
+        end_at?: string | null
+        all_day?: boolean
+        status?: string
+        description?: string
+        location?: string
+        phase_id?: string
+      },
+    ) =>
+      request<CalendarEvent>(`/projects/${projectId}/calendar-events`, { method: 'POST', body: JSON.stringify(data) }),
+    update: (
+      id: string,
+      data: Partial<Pick<CalendarEvent, 'title' | 'start_at' | 'end_at' | 'all_day' | 'status' | 'description' | 'location' | 'phase_id'>>,
+    ) =>
+      request<CalendarEvent>(`/calendar-events/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    remove: (id: string) =>
+      request<void>(`/calendar-events/${id}`, { method: 'DELETE' }),
+  },
+  calendar: {
+    get: (projectId: string, params?: { from?: string; to?: string }) => {
+      const q = new URLSearchParams()
+      if (params?.from) q.set('from', params.from)
+      if (params?.to) q.set('to', params.to)
+      const qs = q.toString()
+      return request<ProjectCalendar>(`/projects/${projectId}/calendar${qs ? `?${qs}` : ''}`)
+    },
   },
   checklistItems: {
     list: (taskId: string) => request<ChecklistItem[]>(`/tasks/${taskId}/checklist-items`),
