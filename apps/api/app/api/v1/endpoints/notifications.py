@@ -9,6 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session
 
+from app.core.config import settings
 from app.core.security import require_local_control
 from app.db.session import get_session
 from app.schemas.notifications import (
@@ -29,6 +30,13 @@ def get_notifications(
     project_id: Optional[str] = Query(default=None),
     session: Session = Depends(get_session),
 ) -> NotificationFeed:
+    # In hosted mode a project_id is required so the guard can scope the feed to a
+    # workspace the caller belongs to — a cross-project feed would leak tenants.
+    if settings.auth_enabled and project_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="project_id is required",
+        )
     try:
         return notification_service.build_feed(session, project_id)
     except ValueError:

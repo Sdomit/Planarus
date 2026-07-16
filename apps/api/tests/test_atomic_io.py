@@ -1,7 +1,8 @@
 import pytest
 
 from app.fsmemory import atomic_io
-from app.fsmemory.path_safety import PathSafetyError
+from app.fsmemory.path_safety import PathSafetyError, safe_makedirs
+from app.storage import local as local_backend
 
 
 def test_write_and_read_roundtrip(tmp_path):
@@ -41,13 +42,15 @@ def test_rejects_escape(tmp_path):
 
 
 def test_temp_cleanup_on_replace_failure(tmp_path, monkeypatch):
+    # The atomic temp+replace behavior now lives in the local storage backend
+    # (P10.3); atomic_io.write_bytes delegates to it. Patch os.replace there.
     root = str(tmp_path)
-    atomic_io.safe_makedirs(root, "context")
+    safe_makedirs(root, "context")
 
     def boom(*_a, **_k):
         raise RuntimeError("disk full")
 
-    monkeypatch.setattr(atomic_io.os, "replace", boom)
+    monkeypatch.setattr(local_backend.os, "replace", boom)
     with pytest.raises(RuntimeError):
         atomic_io.write_bytes(root, "context/A.md", b"data")
 
