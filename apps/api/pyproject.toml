@@ -19,6 +19,11 @@ dev = [
     "pytest>=8.0.0",
     "httpx>=0.27.0",
 ]
+# P10.0: driver for the Postgres dialect CI job; the app itself stays
+# SQLite-by-default and never requires this locally.
+postgres = [
+    "psycopg2-binary>=2.9",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -37,3 +37,39 @@ jobs:
       - run: pnpm test:web
       - run: pnpm typecheck:web
       - run: pnpm build:web
+
+  api-postgres:
+    name: API migrations (Postgres dialect)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: approvo
+          POSTGRES_PASSWORD: approvo
+          POSTGRES_DB: approvo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U approvo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      AGENTBOARD_DATABASE_URL: postgresql+psycopg2://approvo:approvo@localhost:5432/approvo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -e ".[dev,postgres]"
+      - name: Migrate to head, assert schema, roundtrip
+        run: |
+          alembic upgrade head
+          python scripts/assert_pg_schema.py
+          alembic downgrade base
+          alembic upgrade head
