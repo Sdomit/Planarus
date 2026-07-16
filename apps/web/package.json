@@ -14,6 +14,7 @@
     "@excalidraw/excalidraw": "^0.18.1",
     "@tiptap/extension-code-block": "^3.27.1",
     "@tiptap/extension-highlight": "^3.27.4",
+    "@tiptap/extension-image": "^3.27.4",
     "@tiptap/extension-link": "^3.27.1",
     "@tiptap/extension-list": "^3.27.1",
     "@tiptap/extension-subscript": "^3.27.4",

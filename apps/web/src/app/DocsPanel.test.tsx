@@ -6,6 +6,7 @@ import Highlight from '@tiptap/extension-highlight'
 import Subscript from '@tiptap/extension-subscript'
 import Superscript from '@tiptap/extension-superscript'
 import { TaskList, TaskItem } from '@tiptap/extension-list'
+import Image from '@tiptap/extension-image'
 import DocsPanel, { serializeToMarkdown } from './DocsPanel'
 
 // CanvasEditor pulls in Excalidraw, which can't evaluate under jsdom (no canvas).
@@ -209,7 +210,7 @@ describe('serializeToMarkdown', () => {
       element: el,
       extensions: [
         StarterKit.configure({ link: { openOnClick: false } }),
-        Highlight, Subscript, Superscript, TaskList, TaskItem,
+        Highlight, Subscript, Superscript, TaskList, TaskItem, Image,
       ],
     })
   })
@@ -272,6 +273,11 @@ describe('serializeToMarkdown', () => {
     const md = serializeToMarkdown(editor.state.doc)
     expect(md).toContain('H<sub>2</sub>O')
     expect(md).toContain('x<sup>2</sup>')
+  })
+
+  it('serializes image as Markdown', () => {
+    act(() => { editor.commands.setContent('<img src="https://ex.com/a.png" alt="a pic">') })
+    expect(serializeToMarkdown(editor.state.doc)).toContain('![a pic](https://ex.com/a.png)')
   })
 
   it('serializes task list as GFM checkboxes', () => {
