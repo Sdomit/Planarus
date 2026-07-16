@@ -23,6 +23,7 @@ from app.api.v1.endpoints import (
     risks,
     roadmap,
     stages,
+    sync,
     tasks,
     timeline,
     workspaces,
@@ -67,3 +68,4 @@ router.include_router(roadmap.router, tags=["roadmap"], dependencies=_GUARD)
 router.include_router(timeline.router, tags=["timeline"], dependencies=_GUARD)
 router.include_router(agent_runs.router, tags=["agent-runs"], dependencies=_GUARD)
 router.include_router(notifications.router, tags=["notifications"], dependencies=_GUARD)
+router.include_router(sync.router, tags=["sync"], dependencies=_GUARD)
