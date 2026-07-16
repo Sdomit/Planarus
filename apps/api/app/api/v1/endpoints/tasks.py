@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
 from app.db.session import get_session
+from app.schemas.reorder import ReorderRequest
 from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
 from app.services import task_service
 
@@ -51,3 +52,28 @@ def update_task(
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     return task
+
+
+@router.post("/projects/{project_id}/tasks/reorder", response_model=list[TaskRead])
+def reorder_tasks(
+    project_id: str,
+    data: ReorderRequest,
+    session: Session = Depends(get_session),
+) -> list[TaskRead]:
+    try:
+        return task_service.reorder_tasks(session, project_id, data.ids)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        )
+
+
+@router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_task(
+    task_id: str,
+    session: Session = Depends(get_session),
+) -> None:
+    if not task_service.delete_task(session, task_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")

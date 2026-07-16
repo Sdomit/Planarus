@@ -93,3 +93,21 @@ def update_blocker(
     session.commit()
     session.refresh(blocker)
     return blocker
+
+
+def delete_blocker(session: Session, blocker_id: str) -> bool:
+    blocker = session.get(Blocker, blocker_id)
+    if blocker is None:
+        return False
+    project_id = blocker.project_id
+    session.delete(blocker)
+    create_audit_event(
+        session,
+        event_type="delete",
+        actor_type="human",
+        entity_type="blocker",
+        entity_id=blocker_id,
+        project_id=project_id,
+    )
+    session.commit()
+    return True

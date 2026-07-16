@@ -49,3 +49,14 @@ def update_blocker(
             status_code=status.HTTP_404_NOT_FOUND, detail="Blocker not found"
         )
     return blocker
+
+
+@router.delete("/blockers/{blocker_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_blocker(
+    blocker_id: str,
+    session: Session = Depends(get_session),
+) -> None:
+    if not blocker_service.delete_blocker(session, blocker_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Blocker not found"
+        )
