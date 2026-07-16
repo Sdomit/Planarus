@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
     "@tiptap/extension-code-block": "^3.27.1",
     "@tiptap/extension-link": "^3.27.1",
     "@tiptap/react": "^3.27.1",

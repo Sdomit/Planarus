@@ -124,11 +124,15 @@ DOC_TYPES: tuple[str, ...] = (
     "plan",
     "reference",
     "other",
+    "canvas",  # Phase 13: an Excalidraw whiteboard is a Doc
 )
 
 DOC_STATUSES: tuple[str, ...] = ("draft", "published")
 
-DOC_FORMATS: tuple[str, ...] = ("tiptap_json",)
+# tiptap_json = rich text (Tiptap/ProseMirror); excalidraw = canvas scene JSON.
+# Widening this requires a paired migration rewriting ck_doc_format (0013 for
+# 'excalidraw').
+DOC_FORMATS: tuple[str, ...] = ("tiptap_json", "excalidraw")
 
 
 def doc_type_check_sql(column: str = "doc_type") -> str:
