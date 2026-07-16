@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   api, Blocker, ChecklistItem, Comment, Decision, Link, Milestone, Phase, Project, Risk, Stage, Task,
 } from '../api/client'
@@ -24,13 +24,32 @@ const MILESTONE_STATUSES = ['planned', 'active', 'achieved', 'missed', 'canceled
 const DECISION_STATUSES = ['proposed', 'accepted', 'superseded', 'reversed']
 const RISK_SEVERITIES = ['low', 'medium', 'high', 'critical']
 const RISK_STATUSES = ['open', 'monitoring', 'mitigated', 'accepted', 'closed']
+const BLOCKER_STATUSES = ['open', 'resolved', 'canceled']
 
-const BOARD_COLS = [
+type BoardCol = { key: string; label: string; statuses: string[]; dot: string }
+
+// "Flow" board: the 4 Microsoft-Planner-style buckets.
+const BOARD_COLS: BoardCol[] = [
   { key: 'backlog',  label: 'Backlog',  statuses: ['backlog'],                            dot: 'var(--text-tertiary)' },
   { key: 'active',   label: 'Active',   statuses: ['ready', 'in_progress'],               dot: 'var(--status-info-fg)' },
   { key: 'review',   label: 'Review',   statuses: ['waiting', 'needs_review', 'blocked'], dot: 'var(--status-warning-fg)' },
   { key: 'done',     label: 'Done',     statuses: ['done', 'canceled'],                   dot: 'var(--status-success-fg)' },
 ]
+
+// "Status" board: one column per canonical status (matches the list's statuses).
+const STATUS_DOT: Record<string, string> = {
+  backlog: 'var(--text-tertiary)', ready: 'var(--status-info-fg)', in_progress: 'var(--status-info-fg)',
+  waiting: 'var(--status-warning-fg)', needs_review: 'var(--status-warning-fg)', blocked: 'var(--status-danger-fg)',
+  done: 'var(--status-success-fg)', canceled: 'var(--text-tertiary)',
+}
+const STATUS_COLS: BoardCol[] = TASK_STATUSES.map(s => ({
+  key: s, label: s.replace(/_/g, ' '), statuses: [s], dot: STATUS_DOT[s] ?? 'var(--text-tertiary)',
+}))
+
+/** Status a task takes when dropped on `col`; null when it already fits there (no change / no write). */
+export function nextStatusForColumn(taskStatus: string, col: Pick<BoardCol, 'statuses'>): string | null {
+  return col.statuses.includes(taskStatus) ? null : col.statuses[0]
+}
 
 export default function PlanningPanel({
   projectId,
@@ -320,15 +339,34 @@ export default function PlanningPanel({
           </form>
         )}
 
-        {tab === 'phases' && <PhasesList phases={phases} />}
+        {tab === 'phases' && (
+          <PhasesList phases={phases} onPhaseUpdated={updated =>
+            setPhases(prev => prev.map(p => p.id === updated.id ? updated : p))
+          } />
+        )}
         {tab === 'tasks' && (
-          <TasksList tasks={tasks} phases={phases} stages={stages} onTaskUpdated={updated =>
+          <TasksList tasks={tasks} phases={phases} stages={stages} projectId={project.id} onTaskUpdated={updated =>
             setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))
           } />
         )}
-        {tab === 'milestones' && <MilestonesList milestones={milestones} />}
-        {tab === 'decisions' && <DecisionsList decisions={decisions} />}
-        {tab === 'risks' && <RisksList risks={risks} blockers={openBlockers} />}
+        {tab === 'milestones' && (
+          <MilestonesList milestones={milestones} onMilestoneUpdated={updated =>
+            setMilestones(prev => prev.map(m => m.id === updated.id ? updated : m))
+          } />
+        )}
+        {tab === 'decisions' && (
+          <DecisionsList decisions={decisions} onDecisionUpdated={updated =>
+            setDecisions(prev => prev.map(d => d.id === updated.id ? updated : d))
+          } />
+        )}
+        {tab === 'risks' && (
+          <RisksList
+            risks={risks}
+            blockers={openBlockers}
+            onRiskUpdated={updated => setRisks(prev => prev.map(r => r.id === updated.id ? updated : r))}
+            onBlockerUpdated={updated => setBlockers(prev => prev.map(b => b.id === updated.id ? updated : b))}
+          />
+        )}
         {tab === 'comments' && <CommentsList comments={comments} />}
         {tab === 'links' && <LinksList links={links} />}
       </div>
@@ -338,17 +376,78 @@ export default function PlanningPanel({
 
 const EMPTY = { color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)', margin: 0 } as const
 
-function PhasesList({ phases }: { phases: Phase[] }) {
+/** Generic click-to-expand row shell: header stays visible, detail body toggles below it. */
+function ExpandableRow({
+  id, header, children, className = '',
+}: { id: string; header: React.ReactNode; children: React.ReactNode; className?: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <li className={`pp-row pp-row-expandable${className ? ` ${className}` : ''}`}>
+      <button
+        type="button"
+        className="pp-row-main"
+        onClick={() => setOpen(v => !v)}
+        aria-expanded={open}
+        aria-controls={`row-details-${id}`}
+      >
+        <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+        {header}
+      </button>
+      {open && <div className="pp-task-details" id={`row-details-${id}`}>{children}</div>}
+    </li>
+  )
+}
+
+/** Shared PATCH-and-report-error plumbing for a single expandable row's edit controls. */
+function useRowUpdate<T>(updateFn: (patch: Partial<T>) => Promise<T>, onUpdated: (t: T) => void) {
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const update = async (patch: Partial<T>) => {
+    setSaving(true); setError(null)
+    try {
+      onUpdated(await updateFn(patch))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+  return { saving, error, update }
+}
+
+function PhasesList({ phases, onPhaseUpdated }: { phases: Phase[]; onPhaseUpdated: (p: Phase) => void }) {
   if (phases.length === 0) return <p style={EMPTY}>No phases yet.</p>
   return (
     <ul className="pp-rows">
       {phases.map(ph => (
-        <li key={ph.id} className="pp-row">
-          <span className="pp-row-title">{ph.title}</span>
-          <StatusBadge kind="phase" value={ph.status} />
-        </li>
+        <PhaseRow key={ph.id} phase={ph} onUpdated={onPhaseUpdated} />
       ))}
     </ul>
+  )
+}
+
+function PhaseRow({ phase, onUpdated }: { phase: Phase; onUpdated: (p: Phase) => void }) {
+  const { saving, error, update } = useRowUpdate(patch => api.phases.update(phase.id, patch), onUpdated)
+  return (
+    <ExpandableRow
+      id={phase.id}
+      header={<>
+        <span className="pp-row-title">{phase.title}</span>
+        <StatusBadge kind="phase" value={phase.status} />
+      </>}
+    >
+      {phase.description && <p className="pp-row-desc">{phase.description}</p>}
+      <div className="pp-task-controls" role="group" aria-label={`Edit ${phase.title}`}>
+        <label>
+          <span>Status</span>
+          <select className="input select input-sm" value={phase.status} disabled={saving}
+            onChange={e => void update({ status: e.target.value })}>
+            {PHASE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </label>
+      </div>
+      {error && <p className="form-error" role="alert">{error}</p>}
+    </ExpandableRow>
   )
 }
 
@@ -356,63 +455,53 @@ interface TasksListProps {
   tasks: Task[]
   phases: Phase[]
   stages: Stage[]
+  projectId: string
   onTaskUpdated: (task: Task) => void
 }
 
-function TasksList({ tasks, phases, stages, onTaskUpdated }: TasksListProps) {
+// List filter: 'open' = not done/canceled (default), 'all' = everything, else an exact status.
+const LIST_FILTERS = ['open', 'all', ...TASK_STATUSES]
+
+function TasksList({ tasks, phases, stages, projectId, onTaskUpdated }: TasksListProps) {
   const [view, setView] = useState<'list' | 'board'>('list')
-  const active = tasks.filter(t => t.status !== 'done' && t.status !== 'canceled')
-  const done = tasks.length - active.length
-  const phaseTitle = new Map(phases.map(phase => [phase.id, phase.title]))
+  const [filter, setFilter] = useState('open')
+  const done = tasks.filter(t => t.status === 'done' || t.status === 'canceled').length
 
   if (tasks.length === 0) return <p style={EMPTY}>No tasks yet.</p>
+
+  const shown = tasks.filter(t => {
+    if (filter === 'all') return true
+    if (filter === 'open') return t.status !== 'done' && t.status !== 'canceled'
+    return t.status === filter
+  })
 
   return (
     <>
       <div className="pp-toolbar">
-        <div className="ab-seg">
-          <button type="button" aria-pressed={view === 'list'} className={view === 'list' ? 'active' : ''} onClick={() => setView('list')}>List</button>
-          <button type="button" aria-pressed={view === 'board'} className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>Board</button>
+        <div className="pp-toolbar-group">
+          <div className="ab-seg">
+            <button type="button" aria-pressed={view === 'list'} className={view === 'list' ? 'active' : ''} onClick={() => setView('list')}>List</button>
+            <button type="button" aria-pressed={view === 'board'} className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>Board</button>
+          </div>
+          {view === 'list' && (
+            <select className="input select input-sm" aria-label="Filter tasks" value={filter} onChange={e => setFilter(e.target.value)}>
+              {LIST_FILTERS.map(f => (
+                <option key={f} value={f}>{f === 'open' ? 'Open' : f === 'all' ? 'All' : f.replace(/_/g, ' ')}</option>
+              ))}
+            </select>
+          )}
         </div>
         {done > 0 && <span className="pp-done-lbl">{done} done</span>}
       </div>
 
       {view === 'board' ? (
-        <div className="pp-board-wrap">
-          <div className="ab-board">
-            {BOARD_COLS.map(col => {
-              const colTasks = tasks.filter(t => col.statuses.includes(t.status))
-              return (
-                <div key={col.key} className="ab-col">
-                  <div className="ab-col-head">
-                    <span className="ab-col-dot" style={{ background: col.dot }} />
-                    <span className="ab-col-title">{col.label}</span>
-                    <span className="ab-col-count">{colTasks.length}</span>
-                  </div>
-                  {colTasks.map(t => (
-                    <div key={t.id} className="ab-task-card">
-                      <div className="ab-task-title">{t.title}</div>
-                      <div className="ab-task-foot">
-                        {t.phase_id && <span className="pp-card-phase">{phaseTitle.get(t.phase_id)}</span>}
-                        <StatusBadge kind="task" value={t.status} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
-            })}
-          </div>
-        </div>
+        <TaskBoard tasks={tasks} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated} />
+      ) : shown.length === 0 ? (
+        <p style={EMPTY}>No tasks match this filter.</p>
       ) : (
         <ul className="pp-rows">
-          {active.map(t => (
-            <TaskRow
-              key={t.id}
-              task={t}
-              phases={phases}
-              stages={stages}
-              onTaskUpdated={onTaskUpdated}
-            />
+          {shown.map(t => (
+            <TaskRow key={t.id} task={t} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated} />
           ))}
         </ul>
       )}
@@ -420,31 +509,125 @@ function TasksList({ tasks, phases, stages, onTaskUpdated }: TasksListProps) {
   )
 }
 
-/** A task row that expands to show task controls and checklist items. */
-interface TaskRowProps {
-  task: Task
-  phases: Phase[]
-  stages: Stage[]
-  onTaskUpdated: (task: Task) => void
+/** Kanban board with two groupings (Flow buckets / per-status), drag-to-restatus, and click-to-open. */
+function TaskBoard({ tasks, phases, stages, projectId, onTaskUpdated }: TasksListProps) {
+  const [group, setGroup] = useState<'flow' | 'status'>('flow')
+  const [openId, setOpenId] = useState<string | null>(null)
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [overCol, setOverCol] = useState<string | null>(null)
+  const cols = group === 'flow' ? BOARD_COLS : STATUS_COLS
+  const phaseTitle = new Map(phases.map(phase => [phase.id, phase.title]))
+  const openTask = tasks.find(t => t.id === openId) ?? null
+
+  async function dropOn(col: BoardCol) {
+    setOverCol(null)
+    const id = dragId
+    setDragId(null)
+    if (!id) return
+    const task = tasks.find(t => t.id === id)
+    if (!task) return
+    const status = nextStatusForColumn(task.status, col)
+    if (!status) return
+    try {
+      onTaskUpdated(await api.tasks.update(id, { status }))
+    } catch {
+      /* leave the card where it was on failure */
+    }
+  }
+
+  return (
+    <>
+      <div className="pp-toolbar">
+        <div className="ab-seg" role="group" aria-label="Board grouping">
+          <button type="button" aria-pressed={group === 'flow'} className={group === 'flow' ? 'active' : ''} onClick={() => setGroup('flow')}>Flow</button>
+          <button type="button" aria-pressed={group === 'status'} className={group === 'status' ? 'active' : ''} onClick={() => setGroup('status')}>Status</button>
+        </div>
+        <span className="pp-done-lbl">Drag a card to change its status</span>
+      </div>
+      <div className="pp-board-wrap">
+        <div className="ab-board">
+          {cols.map(col => {
+            const colTasks = tasks.filter(t => col.statuses.includes(t.status))
+            return (
+              <div
+                key={col.key}
+                className={`ab-col${overCol === col.key ? ' ab-col-over' : ''}`}
+                onDragOver={e => { e.preventDefault(); if (overCol !== col.key) setOverCol(col.key) }}
+                onDragLeave={() => setOverCol(c => (c === col.key ? null : c))}
+                onDrop={() => void dropOn(col)}
+              >
+                <div className="ab-col-head">
+                  <span className="ab-col-dot" style={{ background: col.dot }} />
+                  <span className="ab-col-title">{col.label}</span>
+                  <span className="ab-col-count">{colTasks.length}</span>
+                </div>
+                {colTasks.map(t => (
+                  <div
+                    key={t.id}
+                    className="ab-task-card"
+                    draggable
+                    role="button"
+                    tabIndex={0}
+                    onDragStart={() => setDragId(t.id)}
+                    onDragEnd={() => { setDragId(null); setOverCol(null) }}
+                    onClick={() => setOpenId(t.id)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); setOpenId(t.id) } }}
+                  >
+                    <div className="ab-task-title">{t.title}</div>
+                    <div className="ab-task-foot">
+                      {t.phase_id && <span className="pp-card-phase">{phaseTitle.get(t.phase_id)}</span>}
+                      <StatusBadge kind="task" value={t.status} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      {openTask && (
+        <TaskDialog task={openTask} phases={phases} stages={stages} projectId={projectId}
+          onClose={() => setOpenId(null)} onTaskUpdated={onTaskUpdated} />
+      )}
+    </>
+  )
 }
 
-function TaskRow({ task, phases, stages, onTaskUpdated }: TaskRowProps) {
-  const [open, setOpen] = useState(false)
+/** Card detail as a native modal dialog (Esc / backdrop / ✕ all close it). */
+function TaskDialog({ task, phases, stages, projectId, onClose, onTaskUpdated }: {
+  task: Task; phases: Phase[]; stages: Stage[]; projectId: string
+  onClose: () => void; onTaskUpdated: (task: Task) => void
+}) {
+  const ref = useRef<HTMLDialogElement>(null)
+  useEffect(() => { ref.current?.showModal?.() }, [])
+  const close = () => ref.current?.close()
+  return (
+    <dialog
+      ref={ref}
+      className="pp-dialog"
+      onClose={onClose}
+      onClick={e => { if (e.target === ref.current) close() }}
+    >
+      <div className="pp-dialog-head">
+        <span className="pp-dialog-title">{task.title}</span>
+        <button type="button" className="btn btn-outline btn-sm" onClick={close} aria-label="Close">✕</button>
+      </div>
+      <TaskDetailBody task={task} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated} />
+    </dialog>
+  )
+}
+
+/** Shared task detail: status/priority/phase/stage controls, checklist, and comments. */
+function TaskDetailBody({ task, phases, stages, projectId, onTaskUpdated }: {
+  task: Task; phases: Phase[]; stages: Stage[]; projectId: string; onTaskUpdated: (task: Task) => void
+}) {
   const [items, setItems] = useState<ChecklistItem[]>([])
-  const [loaded, setLoaded] = useState(false)
   const [label, setLabel] = useState('')
   const [saving, setSaving] = useState(false)
   const [taskError, setTaskError] = useState<string | null>(null)
   const taskStages = task.phase_id ? stages.filter(stage => stage.phase_id === task.phase_id) : []
 
-  async function toggleOpen() {
-    const next = !open
-    setOpen(next)
-    if (next && !loaded) {
-      setItems(await api.checklistItems.list(task.id))
-      setLoaded(true)
-    }
-  }
+  useEffect(() => { void api.checklistItems.list(task.id).then(setItems) }, [task.id])
 
   async function addItem(e: React.FormEvent) {
     e.preventDefault()
@@ -470,113 +653,213 @@ function TaskRow({ task, phases, stages, onTaskUpdated }: TaskRowProps) {
     }
   }
 
-  const doneCount = items.filter(i => i.done).length
+  return (
+    <div className="pp-task-details" id={`task-details-${task.id}`}>
+      <div className="pp-task-controls" role="group" aria-label={`Edit ${task.title}`}>
+        <label>
+          <span>Status</span>
+          <select className="input select input-sm" value={task.status} disabled={saving}
+            onChange={event => void updateTask({ status: event.target.value })}>
+            {TASK_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Priority</span>
+          <select className="input select input-sm" value={task.priority ?? ''} disabled={saving}
+            onChange={event => void updateTask({ priority: event.target.value || null })}>
+            {TASK_PRIORITIES.map(priority => <option key={priority || 'none'} value={priority}>{priority || 'none'}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Phase</span>
+          <select className="input select input-sm" value={task.phase_id ?? ''} disabled={saving}
+            onChange={event => {
+              const phaseId = event.target.value || null
+              const stageStillFits = stages.some(stage => stage.id === task.stage_id && stage.phase_id === phaseId)
+              void updateTask({ phase_id: phaseId, stage_id: stageStillFits ? task.stage_id : null })
+            }}>
+            <option value="">Unphased</option>
+            {phases.map(phase => <option key={phase.id} value={phase.id}>{phase.title}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Stage</span>
+          <select className="input select input-sm" value={task.stage_id ?? ''}
+            disabled={saving || !task.phase_id || taskStages.length === 0}
+            onChange={event => void updateTask({ stage_id: event.target.value || null })}>
+            <option value="">No stage</option>
+            {taskStages.map(stage => <option key={stage.id} value={stage.id}>{stage.title}</option>)}
+          </select>
+        </label>
+      </div>
+      {taskError && <p className="form-error" role="alert">{taskError}</p>}
+      <div className="pp-checklist">
+        {items.map(i => (
+          <label key={i.id} className="pp-check">
+            <input type="checkbox" checked={i.done} onChange={() => toggleDone(i)} />
+            <span className={i.done ? 'pp-check-done' : ''}>{i.label}</span>
+          </label>
+        ))}
+        <form className="pp-check-add" onSubmit={addItem}>
+          <input className="input" placeholder="Add checklist item…" aria-label={`Add checklist item to ${task.title}`}
+            value={label} onChange={e => setLabel(e.target.value)} />
+          <button type="submit" className="btn btn-outline btn-sm">Add</button>
+        </form>
+      </div>
+      <TaskComments projectId={projectId} taskId={task.id} />
+    </div>
+  )
+}
 
+/** Task-scoped comment thread (reuses the project comments API with entity_type='task'). */
+function TaskComments({ projectId, taskId }: { projectId: string; taskId: string }) {
+  const [comments, setComments] = useState<Comment[]>([])
+  const [body, setBody] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    void api.comments.list(projectId, { entity_type: 'task', entity_id: taskId }).then(setComments)
+  }, [projectId, taskId])
+
+  async function add(e: React.FormEvent) {
+    e.preventDefault()
+    if (!body.trim()) return
+    setSaving(true)
+    try {
+      const c = await api.comments.create(projectId, { entity_type: 'task', entity_id: taskId, body: body.trim() })
+      setComments(prev => [...prev, c]); setBody('')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="pp-comments">
+      <p className="pp-section-lbl">Comments</p>
+      {comments.map(c => (
+        <div key={c.id} className="pp-comment">
+          <span className="pp-comment-body">{c.body}</span>
+          <span className="pp-comment-meta">{c.author_type} · {c.created_at.slice(0, 10)}</span>
+        </div>
+      ))}
+      <form className="pp-comment-add" onSubmit={add}>
+        <textarea className="input" placeholder="Add a comment…" aria-label="Add a comment"
+          value={body} onChange={e => setBody(e.target.value)} />
+        <button type="submit" className="btn btn-outline btn-sm" disabled={saving} style={{ alignSelf: 'flex-start' }}>
+          {saving ? 'Saving…' : 'Comment'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
+/** A task row that expands to reveal the shared task detail (controls, checklist, comments). */
+function TaskRow({ task, phases, stages, projectId, onTaskUpdated }: {
+  task: Task; phases: Phase[]; stages: Stage[]; projectId: string; onTaskUpdated: (task: Task) => void
+}) {
+  const [open, setOpen] = useState(false)
   return (
     <li className="pp-row pp-row-expandable">
       <button
         type="button"
         className="pp-row-main"
-        onClick={toggleOpen}
+        onClick={() => setOpen(v => !v)}
         aria-expanded={open}
         aria-controls={`task-details-${task.id}`}
       >
         <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
         <span className="pp-row-title">{task.title}</span>
-        {loaded && items.length > 0 && <span className="pp-check-count">{doneCount}/{items.length}</span>}
         <StatusBadge kind="task" value={task.status} />
       </button>
-      {open && (
-        <div className="pp-task-details" id={`task-details-${task.id}`}>
-          <div className="pp-task-controls" role="group" aria-label={`Edit ${task.title}`}>
-            <label>
-              <span>Status</span>
-              <select className="input select input-sm" value={task.status} disabled={saving}
-                onChange={event => void updateTask({ status: event.target.value })}>
-                {TASK_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>Priority</span>
-              <select className="input select input-sm" value={task.priority ?? ''} disabled={saving}
-                onChange={event => void updateTask({ priority: event.target.value || null })}>
-                {TASK_PRIORITIES.map(priority => <option key={priority || 'none'} value={priority}>{priority || 'none'}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>Phase</span>
-              <select className="input select input-sm" value={task.phase_id ?? ''} disabled={saving}
-                onChange={event => {
-                  const phaseId = event.target.value || null
-                  const stageStillFits = stages.some(stage => stage.id === task.stage_id && stage.phase_id === phaseId)
-                  void updateTask({ phase_id: phaseId, stage_id: stageStillFits ? task.stage_id : null })
-                }}>
-                <option value="">Unphased</option>
-                {phases.map(phase => <option key={phase.id} value={phase.id}>{phase.title}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>Stage</span>
-              <select className="input select input-sm" value={task.stage_id ?? ''}
-                disabled={saving || !task.phase_id || taskStages.length === 0}
-                onChange={event => void updateTask({ stage_id: event.target.value || null })}>
-                <option value="">No stage</option>
-                {taskStages.map(stage => <option key={stage.id} value={stage.id}>{stage.title}</option>)}
-              </select>
-            </label>
-          </div>
-          {taskError && <p className="form-error" role="alert">{taskError}</p>}
-          <div className="pp-checklist">
-          {items.map(i => (
-            <label key={i.id} className="pp-check">
-              <input type="checkbox" checked={i.done} onChange={() => toggleDone(i)} />
-              <span className={i.done ? 'pp-check-done' : ''}>{i.label}</span>
-            </label>
-          ))}
-          <form className="pp-check-add" onSubmit={addItem}>
-            <input className="input" placeholder="Add checklist item…" aria-label={`Add checklist item to ${task.title}`}
-              value={label} onChange={e => setLabel(e.target.value)} />
-            <button type="submit" className="btn btn-outline btn-sm">Add</button>
-          </form>
-          </div>
-        </div>
-      )}
+      {open && <TaskDetailBody task={task} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated} />}
     </li>
   )
 }
 
-function MilestonesList({ milestones }: { milestones: Milestone[] }) {
+function MilestonesList({ milestones, onMilestoneUpdated }: { milestones: Milestone[]; onMilestoneUpdated: (m: Milestone) => void }) {
   if (milestones.length === 0) return <p style={EMPTY}>No milestones yet.</p>
   const sorted = [...milestones].sort((a, b) =>
     (a.target_date || '9999-99-99').localeCompare(b.target_date || '9999-99-99') || a.sort_order - b.sort_order)
   return (
     <ul className="pp-rows">
       {sorted.map(m => (
-        <li key={m.id} className="pp-row">
-          <span className="pp-row-title">{m.title}</span>
-          {m.target_date && <span className="pp-meta">{m.target_date}</span>}
-          <StatusBadge kind="milestone" value={m.status} />
-        </li>
+        <MilestoneRow key={m.id} milestone={m} onUpdated={onMilestoneUpdated} />
       ))}
     </ul>
   )
 }
 
-function DecisionsList({ decisions }: { decisions: Decision[] }) {
+function MilestoneRow({ milestone, onUpdated }: { milestone: Milestone; onUpdated: (m: Milestone) => void }) {
+  const { saving, error, update } = useRowUpdate(patch => api.milestones.update(milestone.id, patch), onUpdated)
+  return (
+    <ExpandableRow
+      id={milestone.id}
+      header={<>
+        <span className="pp-row-title">{milestone.title}</span>
+        {milestone.target_date && <span className="pp-meta">{milestone.target_date}</span>}
+        <StatusBadge kind="milestone" value={milestone.status} />
+      </>}
+    >
+      {milestone.description && <p className="pp-row-desc">{milestone.description}</p>}
+      <div className="pp-task-controls" role="group" aria-label={`Edit ${milestone.title}`}>
+        <label>
+          <span>Status</span>
+          <select className="input select input-sm" value={milestone.status} disabled={saving}
+            onChange={e => void update({ status: e.target.value })}>
+            {MILESTONE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Target date</span>
+          <input type="date" className="input input-sm" value={milestone.target_date ?? ''} disabled={saving}
+            onChange={e => void update({ target_date: e.target.value || null })} />
+        </label>
+      </div>
+      {error && <p className="form-error" role="alert">{error}</p>}
+    </ExpandableRow>
+  )
+}
+
+function DecisionsList({ decisions, onDecisionUpdated }: { decisions: Decision[]; onDecisionUpdated: (d: Decision) => void }) {
   if (decisions.length === 0) return <p style={EMPTY}>No decisions yet.</p>
   return (
     <ul className="pp-rows">
       {decisions.map(d => (
-        <li key={d.id} className="pp-row">
-          <span className="pp-row-title">{d.title}</span>
-          <StatusBadge kind="decision" value={d.status} />
-        </li>
+        <DecisionRow key={d.id} decision={d} onUpdated={onDecisionUpdated} />
       ))}
     </ul>
   )
 }
 
-function RisksList({ risks, blockers }: { risks: Risk[]; blockers: Blocker[] }) {
+function DecisionRow({ decision, onUpdated }: { decision: Decision; onUpdated: (d: Decision) => void }) {
+  const { saving, error, update } = useRowUpdate(patch => api.decisions.update(decision.id, patch), onUpdated)
+  return (
+    <ExpandableRow
+      id={decision.id}
+      header={<>
+        <span className="pp-row-title">{decision.title}</span>
+        <StatusBadge kind="decision" value={decision.status} />
+      </>}
+    >
+      <p className="pp-row-desc">{decision.decision}</p>
+      {decision.context && <p className="pp-row-desc">{decision.context}</p>}
+      <div className="pp-task-controls" role="group" aria-label={`Edit ${decision.title}`}>
+        <label>
+          <span>Status</span>
+          <select className="input select input-sm" value={decision.status} disabled={saving}
+            onChange={e => void update({ status: e.target.value })}>
+            {DECISION_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </label>
+      </div>
+      {error && <p className="form-error" role="alert">{error}</p>}
+    </ExpandableRow>
+  )
+}
+
+function RisksList({
+  risks, blockers, onRiskUpdated, onBlockerUpdated,
+}: { risks: Risk[]; blockers: Blocker[]; onRiskUpdated: (r: Risk) => void; onBlockerUpdated: (b: Blocker) => void }) {
   const open = risks.filter(r => !['mitigated', 'accepted', 'closed'].includes(r.status))
   if (open.length === 0 && blockers.length === 0)
     return <p style={EMPTY}>No open risks or blockers.</p>
@@ -585,11 +868,7 @@ function RisksList({ risks, blockers }: { risks: Risk[]; blockers: Blocker[] }) 
       {open.length > 0 && (
         <ul className="pp-rows">
           {open.map(r => (
-            <li key={r.id} className="pp-row">
-              <span className="pp-row-title">{r.title}</span>
-              <StatusBadge kind="severity" value={r.severity} />
-              <StatusBadge kind="riskstatus" value={r.status} />
-            </li>
+            <RiskRow key={r.id} risk={r} onUpdated={onRiskUpdated} />
           ))}
         </ul>
       )}
@@ -598,14 +877,69 @@ function RisksList({ risks, blockers }: { risks: Risk[]; blockers: Blocker[] }) 
           <p className="pp-section-lbl">Blockers</p>
           <ul className="pp-rows">
             {blockers.map(b => (
-              <li key={b.id} className="pp-row pp-row-blocker">
-                <span className="pp-row-title">{b.title}</span>
-              </li>
+              <BlockerRow key={b.id} blocker={b} onUpdated={onBlockerUpdated} />
             ))}
           </ul>
         </>
       )}
     </>
+  )
+}
+
+function RiskRow({ risk, onUpdated }: { risk: Risk; onUpdated: (r: Risk) => void }) {
+  const { saving, error, update } = useRowUpdate(patch => api.risks.update(risk.id, patch), onUpdated)
+  return (
+    <ExpandableRow
+      id={risk.id}
+      header={<>
+        <span className="pp-row-title">{risk.title}</span>
+        <StatusBadge kind="severity" value={risk.severity} />
+        <StatusBadge kind="riskstatus" value={risk.status} />
+      </>}
+    >
+      {risk.description && <p className="pp-row-desc">{risk.description}</p>}
+      {risk.mitigation && <p className="pp-row-desc"><strong>Mitigation:</strong> {risk.mitigation}</p>}
+      <div className="pp-task-controls" role="group" aria-label={`Edit ${risk.title}`}>
+        <label>
+          <span>Severity</span>
+          <select className="input select input-sm" value={risk.severity} disabled={saving}
+            onChange={e => void update({ severity: e.target.value })}>
+            {RISK_SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Status</span>
+          <select className="input select input-sm" value={risk.status} disabled={saving}
+            onChange={e => void update({ status: e.target.value })}>
+            {RISK_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </label>
+      </div>
+      {error && <p className="form-error" role="alert">{error}</p>}
+    </ExpandableRow>
+  )
+}
+
+function BlockerRow({ blocker, onUpdated }: { blocker: Blocker; onUpdated: (b: Blocker) => void }) {
+  const { saving, error, update } = useRowUpdate(patch => api.blockers.update(blocker.id, patch), onUpdated)
+  return (
+    <ExpandableRow
+      id={blocker.id}
+      className="pp-row-blocker"
+      header={<span className="pp-row-title">{blocker.title}</span>}
+    >
+      {blocker.description && <p className="pp-row-desc">{blocker.description}</p>}
+      <div className="pp-task-controls" role="group" aria-label={`Edit ${blocker.title}`}>
+        <label>
+          <span>Status</span>
+          <select className="input select input-sm" value={blocker.status} disabled={saving}
+            onChange={e => void update({ status: e.target.value })}>
+            {BLOCKER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </label>
+      </div>
+      {error && <p className="form-error" role="alert">{error}</p>}
+    </ExpandableRow>
   )
 }
 
