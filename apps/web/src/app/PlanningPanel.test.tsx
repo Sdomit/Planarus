@@ -1,12 +1,22 @@
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import PlanningPanel from './PlanningPanel'
+import PlanningPanel, { nextStatusForColumn } from './PlanningPanel'
+
+describe('nextStatusForColumn', () => {
+  const review = { statuses: ['waiting', 'needs_review', 'blocked'] }
+  it('returns the column primary status when the task is elsewhere', () => {
+    expect(nextStatusForColumn('backlog', review)).toBe('waiting')
+  })
+  it('returns null (no write) when the task already fits the column', () => {
+    expect(nextStatusForColumn('blocked', review)).toBeNull()
+  })
+})
 
 // Stub api module so tests don't hit network
 vi.mock('../api/client', () => ({
   api: {
     projects: { get: vi.fn() },
-    phases: { list: vi.fn(), create: vi.fn() },
+    phases: { list: vi.fn(), create: vi.fn(), update: vi.fn() },
     stages: { list: vi.fn() },
     tasks: { list: vi.fn(), create: vi.fn(), update: vi.fn() },
     milestones: { list: vi.fn(), create: vi.fn() },
@@ -24,7 +34,7 @@ import { api } from '../api/client'
 type Fn = ReturnType<typeof vi.fn>
 const mockApi = api as unknown as {
   projects: { get: Fn }
-  phases: { list: Fn; create: Fn }
+  phases: { list: Fn; create: Fn; update: Fn }
   stages: { list: Fn }
   tasks: { list: Fn; create: Fn; update: Fn }
   milestones: { list: Fn; create: Fn }
@@ -246,5 +256,25 @@ describe('PlanningPanel', () => {
       phase_id: 'ph_1',
       stage_id: null,
     }))
+  })
+
+  it('expands a phase to reveal its description and patches status', async () => {
+    setupEmpty()
+    const phase = {
+      id: 'ph_1', project_id: 'proj_1', title: 'Foundation', description: 'Groundwork and scaffolding',
+      status: 'planned', sort_order: 0,
+      created_at: '2026-07-13T00:00:00+00:00', updated_at: '2026-07-13T00:00:00+00:00',
+    }
+    mockApi.phases.list.mockResolvedValue([phase])
+    mockApi.phases.update.mockResolvedValue({ ...phase, status: 'active' })
+
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    // description is hidden until the row is expanded
+    expect(screen.queryByText('Groundwork and scaffolding')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Foundation/ }))
+    expect(screen.getByText('Groundwork and scaffolding')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'active' } })
+    await waitFor(() => expect(mockApi.phases.update).toHaveBeenCalledWith('ph_1', { status: 'active' }))
   })
 })

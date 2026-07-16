@@ -53,6 +53,26 @@ html, body { height: 100%; margin: 0; }
   .ab-projsel .pj-meta { flex: 1; min-width: 0; }
   .ab-projsel .pj-name { font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ab-projsel .pj-sub { font-size: 11px; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ab-projsel-wrap { position: relative; margin-bottom: var(--space-2); }
+  .ab-projsel-wrap .ab-projsel { margin-bottom: 0; }
+  .ab-projsel-wrap .ic { flex-shrink: 0; color: var(--text-tertiary); }
+  /* ponytail: absolute inside the overflow:auto sidebar, so it clips if the list is long AND the
+     selector sits near the bottom. Fine at a few projects (opens downward from the top, 320px + own
+     scroll). Upgrade path if project counts grow: render via a portal / floating-ui. */
+  .ab-projsel-menu {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30;
+    background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg); max-height: 320px; overflow-y: auto; padding: var(--space-1);
+  }
+  .ab-projsel-item {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%;
+    padding: var(--space-2) var(--space-2-5); border-radius: var(--radius-sm); border: none; background: transparent;
+    text-align: left; cursor: pointer; font: inherit; color: var(--text-primary);
+  }
+  .ab-projsel-item:hover, .ab-projsel-item[aria-selected="true"] { background: var(--bg-muted); }
+  .ab-projsel-item .pj-name { font-size: var(--text-sm); font-weight: 600; }
+  .ab-projsel-item .pj-sub { font-size: 11px; color: var(--text-tertiary); }
+  .ab-projsel-empty { padding: var(--space-2) var(--space-2-5); font-size: var(--text-sm); color: var(--text-tertiary); }
 
   /* sidebar nav items are <button>s — reset native chrome and lift contrast on the dark canvas */
   .ab-sidebar .sidebar-nav-item {

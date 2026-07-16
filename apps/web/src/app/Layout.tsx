@@ -15,7 +15,7 @@ import RemindersPanel from './RemindersPanel'
 import SettingsPanel from './SettingsPanel'
 import NotificationsBell from './NotificationsBell'
 import { Icon } from './Icon'
-import { api, type NotificationItem } from '../api/client'
+import { api, type NotificationItem, type Project } from '../api/client'
 import './layout.css'
 
 type MainView =
@@ -95,9 +95,12 @@ export default function Layout() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [planningTab, setPlanningTab] = useState<'phases' | 'tasks'>('phases')
+  const [projMenuOpen, setProjMenuOpen] = useState(false)
+  const [projects, setProjects] = useState<Project[] | null>(null)
   const menuBtnRef = useRef<HTMLButtonElement>(null)
   const sidebarRef = useRef<HTMLElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const projMenuRef = useRef<HTMLDivElement>(null)
 
   const isDark = theme.startsWith('dark')
   const toggleTheme = () => {
@@ -145,6 +148,22 @@ export default function Layout() {
     document.addEventListener('keydown', handleShortcut)
     return () => document.removeEventListener('keydown', handleShortcut)
   }, [])
+
+  useEffect(() => {
+    if (!projMenuOpen) return
+    // Refetch each open so newly created/renamed projects show; keep the cached list visible meanwhile.
+    api.projects.list().then(setProjects).catch(() => setProjects(prev => prev ?? []))
+    const handleClick = (e: MouseEvent) => {
+      if (!projMenuRef.current?.contains(e.target as Node)) setProjMenuOpen(false)
+    }
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setProjMenuOpen(false) }
+    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [projMenuOpen])
 
   const closeMenu = () => setMobileMenuOpen(false)
 
@@ -228,13 +247,52 @@ export default function Layout() {
         </div>
 
         <div className="ab-side-scroll">
-          <button className="ab-projsel" type="button" onClick={() => navigate('dashboard')}>
-            <span className="pj-mark">{project ? initials(project.title) : 'AB'}</span>
-            <span className="pj-meta">
-              <span className="pj-name">{project ? project.title : 'All projects'}</span>
-              <span className="pj-sub">{project ? project.slug : 'Select a project'}</span>
-            </span>
-          </button>
+          <div className="ab-projsel-wrap" ref={projMenuRef}>
+            <button
+              className="ab-projsel"
+              type="button"
+              aria-haspopup="listbox"
+              aria-expanded={projMenuOpen}
+              onClick={() => setProjMenuOpen(v => !v)}
+            >
+              <span className="pj-mark">{project ? initials(project.title) : 'AB'}</span>
+              <span className="pj-meta">
+                <span className="pj-name">{project ? project.title : 'All projects'}</span>
+                <span className="pj-sub">{project ? project.slug : 'Select a project'}</span>
+              </span>
+              <Icon name="chevron-down" className="ic-14" />
+            </button>
+            {projMenuOpen && (
+              <div className="ab-projsel-menu" role="listbox">
+                <button
+                  type="button"
+                  className="ab-projsel-item"
+                  role="option"
+                  aria-selected={!project}
+                  onClick={() => { setProject(null); setProjMenuOpen(false); navigate('dashboard') }}
+                >
+                  All projects
+                </button>
+                {projects === null ? (
+                  <div className="ab-projsel-empty">Loading…</div>
+                ) : projects.length === 0 ? (
+                  <div className="ab-projsel-empty">No projects yet</div>
+                ) : projects.map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className="ab-projsel-item"
+                    role="option"
+                    aria-selected={project?.id === p.id}
+                    onClick={() => { selectProject({ id: p.id, title: p.title, slug: p.slug }); setProjMenuOpen(false) }}
+                  >
+                    <span className="pj-name">{p.title}</span>
+                    <span className="pj-sub">{p.slug}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {NAV.map((grp) => (
             <nav className="sidebar-nav" aria-label={grp.group} key={grp.group}>
