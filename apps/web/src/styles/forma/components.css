@@ -303,6 +303,7 @@ textarea.input { height: auto; padding: var(--space-2-5) var(--space-3); resize:
   transform: translateY(-2px);
 }
 .card-interactive:active { transform: translateY(0); box-shadow: var(--shadow-sm); }
+.card-interactive:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Card subcomponents */
 .card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-4); }
