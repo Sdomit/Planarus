@@ -67,3 +67,10 @@
 .dp-state.dp-error { color: var(--status-danger-fg); }
 
 .ab-tbtn-it { font-style: italic; font-weight: 700; font-family: Georgia, "Times New Roman", serif; font-size: 14px; line-height: 1; }
+
+/* Task list: flatten the <ul>/checkbox markup Tiptap emits into a checkbox row. */
+.ab-prose ul[data-type="taskList"] { list-style: none; padding-left: 0; }
+.ab-prose ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: var(--space-2); }
+.ab-prose ul[data-type="taskList"] li > label { margin-top: 0.25em; user-select: none; }
+.ab-prose ul[data-type="taskList"] li > div { flex: 1; min-width: 0; }
+.ab-prose ul[data-type="taskList"] li > div > p { margin: 0; }
