@@ -8,6 +8,7 @@ from app.models.phase import Phase
 from app.models.project import Project
 from app.schemas.milestone import MilestoneCreate, MilestoneUpdate
 from app.services.audit_service import create_audit_event
+from app.services.planning_reorder import apply_reorder
 
 
 def list_milestones(session: Session, project_id: str) -> list[Milestone]:
@@ -87,3 +88,33 @@ def update_milestone(
     session.commit()
     session.refresh(milestone)
     return milestone
+
+
+def delete_milestone(session: Session, milestone_id: str) -> bool:
+    milestone = session.get(Milestone, milestone_id)
+    if milestone is None:
+        return False
+    project_id = milestone.project_id
+    session.delete(milestone)
+    create_audit_event(
+        session,
+        event_type="delete",
+        actor_type="human",
+        entity_type="milestone",
+        entity_id=milestone_id,
+        project_id=project_id,
+    )
+    session.commit()
+    return True
+
+
+def reorder_milestones(
+    session: Session, project_id: str, ids: list[str]
+) -> list[Milestone]:
+    if session.get(Project, project_id) is None:
+        raise LookupError(f"project '{project_id}' not found")
+    rows = {m.id: m for m in list_milestones(session, project_id)}
+    apply_reorder(
+        session, project_id=project_id, entity_type="milestone", rows=rows, ids=ids
+    )
+    return list_milestones(session, project_id)

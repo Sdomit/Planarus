@@ -42,3 +42,12 @@ def update_risk(
     if risk is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
     return risk
+
+
+@router.delete("/risks/{risk_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_risk(
+    risk_id: str,
+    session: Session = Depends(get_session),
+) -> None:
+    if not risk_service.delete_risk(session, risk_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
