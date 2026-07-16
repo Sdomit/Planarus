@@ -5,6 +5,7 @@ import Highlight from '@tiptap/extension-highlight'
 import Subscript from '@tiptap/extension-subscript'
 import Superscript from '@tiptap/extension-superscript'
 import { TaskList, TaskItem } from '@tiptap/extension-list'
+import Image from '@tiptap/extension-image'
 import { MarkdownSerializer } from 'prosemirror-markdown'
 import { api, type Doc, type DocSummary } from '../api/client'
 import { StatusBadge } from './StatusBadge'
@@ -55,6 +56,14 @@ const _docSerializer = new MarkdownSerializer(
     },
     horizontalRule(state, node) {
       state.write((node.attrs.markup as string) || '---'); state.closeBlock(node)
+    },
+    // Block image → ![alt](src "title"). alt is escaped so a "]" can't break the
+    // syntax; src is left raw (matches the link handler). ponytail: a src with
+    // a literal ")" would need <angle-bracket> wrapping — rare, deferred.
+    image(state, node) {
+      const alt = state.esc((node.attrs.alt as string) || '')
+      const title = node.attrs.title ? ` "${node.attrs.title as string}"` : ''
+      state.write(`![${alt}](${node.attrs.src as string}${title})`); state.closeBlock(node)
     },
   },
   {
@@ -225,6 +234,14 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
     else chain.setLink({ href: url.trim() }).run()
   }
 
+  // Insert an image by URL; prompt for alt text (accessibility).
+  const addImage = () => {
+    const url = window.prompt('Image URL')
+    if (!url || !url.trim()) return
+    const alt = window.prompt('Alt text (describe the image)') ?? ''
+    editor.chain().focus().setImage({ src: url.trim(), alt }).run()
+  }
+
   return (
     <div className="ab-toolbar" role="toolbar" aria-label="Editor toolbar">
       <button type="button" title="Bold"
@@ -275,6 +292,9 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
       <button type="button" title="Link"
         className={`ab-tbtn${editor.isActive('link') ? ' active' : ''}`}
         onClick={setLink}>🔗</button>
+      <button type="button" title="Image"
+        className="ab-tbtn"
+        onClick={addImage}>🖼</button>
     </div>
   )
 }
@@ -322,6 +342,7 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
       Superscript,
       TaskList,
       TaskItem.configure({ nested: true }),
+      Image,
     ],
     content: '',
     onUpdate: () => setSaveState('unsaved'),
