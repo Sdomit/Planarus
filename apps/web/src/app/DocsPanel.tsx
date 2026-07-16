@@ -1,12 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import CodeBlock from '@tiptap/extension-code-block'
-import Link from '@tiptap/extension-link'
+import Highlight from '@tiptap/extension-highlight'
+import Subscript from '@tiptap/extension-subscript'
+import Superscript from '@tiptap/extension-superscript'
+import { TaskList, TaskItem } from '@tiptap/extension-list'
+import Image from '@tiptap/extension-image'
 import { MarkdownSerializer } from 'prosemirror-markdown'
 import { api, type Doc, type DocSummary } from '../api/client'
 import { StatusBadge } from './StatusBadge'
 import './docs-panel.css'
+
+// Excalidraw is heavy (~1MB) and pulls in browser-only modules that crash under
+// jsdom at import time — lazy-load it so it's fetched only when a canvas opens.
+const CanvasEditor = lazy(() =>
+  import('./CanvasEditor').then((m) => ({ default: m.CanvasEditor })),
+)
 
 // ---------------------------------------------------------------------------
 // ProseMirror → Markdown serializer (Tiptap camelCase node/mark names)
@@ -28,6 +37,13 @@ const _docSerializer = new MarkdownSerializer(
       state.renderList(node, '  ', (i: number) => `${start + i}. `)
     },
     listItem(state, node) { state.renderContent(node) },
+    // GFM task list: "- [ ] item" / "- [x] item". The checkbox state lives on
+    // the item, so taskList supplies the "- " bullet and taskItem the "[x] ".
+    taskList(state, node) { state.renderList(node, '  ', () => '- ') },
+    taskItem(state, node) {
+      state.write(`[${node.attrs.checked ? 'x' : ' '}] `)
+      state.renderContent(node)
+    },
     codeBlock(state, node) {
       state.write('```' + ((node.attrs.language as string) || '') + '\n')
       state.text(node.textContent, false); state.ensureNewLine()
@@ -41,12 +57,26 @@ const _docSerializer = new MarkdownSerializer(
     horizontalRule(state, node) {
       state.write((node.attrs.markup as string) || '---'); state.closeBlock(node)
     },
+    // Block image → ![alt](src "title"). alt is escaped so a "]" can't break the
+    // syntax; src is left raw (matches the link handler). ponytail: a src with
+    // a literal ")" would need <angle-bracket> wrapping — rare, deferred.
+    image(state, node) {
+      const alt = state.esc((node.attrs.alt as string) || '')
+      const title = node.attrs.title ? ` "${node.attrs.title as string}"` : ''
+      state.write(`![${alt}](${node.attrs.src as string}${title})`); state.closeBlock(node)
+    },
   },
   {
-    bold:   { open: '**', close: '**', mixable: true, expelEnclosingWhitespace: true },
-    italic: { open: '*',  close: '*',  mixable: true, expelEnclosingWhitespace: true },
-    strike: { open: '~~', close: '~~', mixable: true, expelEnclosingWhitespace: true },
-    code:   { open: '`',  close: '`',  escape: false, expelEnclosingWhitespace: true },
+    bold:      { open: '**', close: '**', mixable: true, expelEnclosingWhitespace: true },
+    italic:    { open: '*',  close: '*',  mixable: true, expelEnclosingWhitespace: true },
+    strike:    { open: '~~', close: '~~', mixable: true, expelEnclosingWhitespace: true },
+    code:      { open: '`',  close: '`',  escape: false, expelEnclosingWhitespace: true },
+    // No native Markdown syntax → inline HTML (renders in GFM). Highlight uses
+    // the "==" convention supported by Pandoc/many renderers.
+    highlight:   { open: '==',    close: '==',     mixable: true, expelEnclosingWhitespace: true },
+    underline:   { open: '<u>',   close: '</u>',   mixable: true, expelEnclosingWhitespace: true },
+    subscript:   { open: '<sub>', close: '</sub>', mixable: true, expelEnclosingWhitespace: true },
+    superscript: { open: '<sup>', close: '</sup>', mixable: true, expelEnclosingWhitespace: true },
     link: {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       open: (_state, _mark, _parent, _index) => '[',
@@ -60,7 +90,7 @@ export function serializeToMarkdown(doc: any): string { // eslint-disable-line @
   return _docSerializer.serialize(doc)
 }
 
-const DOC_TYPES = ['note', 'spec', 'research', 'plan', 'reference', 'other'] as const
+const DOC_TYPES = ['note', 'spec', 'research', 'plan', 'reference', 'canvas', 'other'] as const
 
 // ---------------------------------------------------------------------------
 // Doc list view
@@ -148,7 +178,9 @@ function CreateDocForm({ projectId, onCreated, onCancel }: CreateDocFormProps) {
     e.preventDefault()
     if (!title.trim()) return
     setSaving(true); setError(null)
-    api.docs.create(projectId, { title: title.trim(), doc_type: docType })
+    // A 'canvas' doc is an Excalidraw whiteboard; any other type is a Tiptap doc.
+    const editor_format = docType === 'canvas' ? 'excalidraw' : undefined
+    api.docs.create(projectId, { title: title.trim(), doc_type: docType, editor_format })
       .then(onCreated)
       .catch((err: Error) => setError(err.message))
       .finally(() => setSaving(false))
@@ -190,6 +222,26 @@ function CreateDocForm({ projectId, onCreated, onCancel }: CreateDocFormProps) {
 
 function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
   if (!editor) return null
+
+  // Prompt for a URL; empty input removes the link. extendMarkRange lets the
+  // command act on the whole link even when the cursor is just inside it.
+  const setLink = () => {
+    const prev = editor.getAttributes('link').href as string | undefined
+    const url = window.prompt('Link URL', prev ?? 'https://')
+    if (url === null) return // cancelled
+    const chain = editor.chain().focus().extendMarkRange('link')
+    if (url.trim() === '') chain.unsetLink().run()
+    else chain.setLink({ href: url.trim() }).run()
+  }
+
+  // Insert an image by URL; prompt for alt text (accessibility).
+  const addImage = () => {
+    const url = window.prompt('Image URL')
+    if (!url || !url.trim()) return
+    const alt = window.prompt('Alt text (describe the image)') ?? ''
+    editor.chain().focus().setImage({ src: url.trim(), alt }).run()
+  }
+
   return (
     <div className="ab-toolbar" role="toolbar" aria-label="Editor toolbar">
       <button type="button" title="Bold"
@@ -198,6 +250,21 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
       <button type="button" title="Italic"
         className={`ab-tbtn${editor.isActive('italic') ? ' active' : ''}`}
         onClick={() => editor.chain().focus().toggleItalic().run()}><span className="ab-tbtn-it" aria-hidden="true">I</span></button>
+      <button type="button" title="Underline"
+        className={`ab-tbtn${editor.isActive('underline') ? ' active' : ''}`}
+        onClick={() => editor.chain().focus().toggleUnderline().run()}><u aria-hidden="true">U</u></button>
+      <button type="button" title="Strikethrough"
+        className={`ab-tbtn${editor.isActive('strike') ? ' active' : ''}`}
+        onClick={() => editor.chain().focus().toggleStrike().run()}><s aria-hidden="true">S</s></button>
+      <button type="button" title="Highlight"
+        className={`ab-tbtn${editor.isActive('highlight') ? ' active' : ''}`}
+        onClick={() => editor.chain().focus().toggleHighlight().run()}><mark aria-hidden="true">H</mark></button>
+      <button type="button" title="Subscript"
+        className={`ab-tbtn${editor.isActive('subscript') ? ' active' : ''}`}
+        onClick={() => editor.chain().focus().toggleSubscript().run()}>X<sub aria-hidden="true">2</sub></button>
+      <button type="button" title="Superscript"
+        className={`ab-tbtn${editor.isActive('superscript') ? ' active' : ''}`}
+        onClick={() => editor.chain().focus().toggleSuperscript().run()}>X<sup aria-hidden="true">2</sup></button>
       <span className="ab-tdiv" />
       <button type="button" title="Heading 1"
         className={`ab-tbtn${editor.isActive('heading', { level: 1 }) ? ' active' : ''}`}
@@ -209,9 +276,25 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
       <button type="button" title="Bullet list"
         className={`ab-tbtn${editor.isActive('bulletList') ? ' active' : ''}`}
         onClick={() => editor.chain().focus().toggleBulletList().run()}>•</button>
+      <button type="button" title="Ordered list"
+        className={`ab-tbtn${editor.isActive('orderedList') ? ' active' : ''}`}
+        onClick={() => editor.chain().focus().toggleOrderedList().run()}>1.</button>
+      <button type="button" title="Task list"
+        className={`ab-tbtn${editor.isActive('taskList') ? ' active' : ''}`}
+        onClick={() => editor.chain().focus().toggleTaskList().run()}>☑</button>
+      <button type="button" title="Blockquote"
+        className={`ab-tbtn${editor.isActive('blockquote') ? ' active' : ''}`}
+        onClick={() => editor.chain().focus().toggleBlockquote().run()}>❝</button>
       <button type="button" title="Code block"
         className={`ab-tbtn${editor.isActive('codeBlock') ? ' active' : ''}`}
         onClick={() => editor.chain().focus().toggleCodeBlock().run()}>{'{}'}</button>
+      <span className="ab-tdiv" />
+      <button type="button" title="Link"
+        className={`ab-tbtn${editor.isActive('link') ? ' active' : ''}`}
+        onClick={setLink}>🔗</button>
+      <button type="button" title="Image"
+        className="ab-tbtn"
+        onClick={addImage}>🖼</button>
     </div>
   )
 }
@@ -244,7 +327,23 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
   const docRef = useRef<Doc | null>(null)
 
   const editor = useEditor({
-    extensions: [StarterKit, CodeBlock, Link.configure({ openOnClick: false })],
+    extensions: [
+      // StarterKit v3 bundles Link + Underline; configure/enable them here
+      // rather than adding second extensions (which triggers duplicate-name warnings).
+      StarterKit.configure({
+        link: {
+          openOnClick: false,
+          autolink: true,
+          HTMLAttributes: { rel: 'noopener noreferrer nofollow', target: '_blank' },
+        },
+      }),
+      Highlight,
+      Subscript,
+      Superscript,
+      TaskList,
+      TaskItem.configure({ nested: true }),
+      Image,
+    ],
     content: '',
     onUpdate: () => setSaveState('unsaved'),
   })
@@ -346,16 +445,22 @@ interface DocsPanelProps { projectId: string; onClose: () => void }
 
 export default function DocsPanel({ projectId, onClose }: DocsPanelProps) {
   const [view, setView] = useState<'list' | 'new' | 'editor'>('list')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selected, setSelected] = useState<{ id: string; format: string } | null>(null)
 
-  const handleSelect = (doc: DocSummary) => { setSelectedId(doc.id); setView('editor') }
-  const handleCreated = (doc: Doc) => { setSelectedId(doc.id); setView('editor') }
+  const handleSelect = (doc: DocSummary) => { setSelected({ id: doc.id, format: doc.editor_format }); setView('editor') }
+  const handleCreated = (doc: Doc) => { setSelected({ id: doc.id, format: doc.editor_format }); setView('editor') }
 
   return (
     <div className="dp-panel">
       {view === 'list' && <DocList projectId={projectId} onSelect={handleSelect} onNew={() => setView('new')} onClose={onClose} />}
       {view === 'new' && <CreateDocForm projectId={projectId} onCreated={handleCreated} onCancel={() => setView('list')} />}
-      {view === 'editor' && selectedId && <DocEditor docId={selectedId} onBack={() => setView('list')} />}
+      {view === 'editor' && selected && (
+        selected.format === 'excalidraw'
+          ? <Suspense fallback={<p className="dp-state">Loading canvas…</p>}>
+              <CanvasEditor docId={selected.id} onBack={() => setView('list')} />
+            </Suspense>
+          : <DocEditor docId={selected.id} onBack={() => setView('list')} />
+      )}
     </div>
   )
 }

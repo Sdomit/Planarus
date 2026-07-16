@@ -60,7 +60,34 @@ def test_create_doc_minimal(client: TestClient) -> None:
     assert data["slug"] == "my-doc"
     assert data["content_json"] == _EMPTY_JSON
     assert data["markdown_cache"] == ""
+    assert data["editor_format"] == "tiptap_json"  # default when omitted
     assert data["project_id"] == pid
+
+
+def test_create_canvas_doc(client: TestClient) -> None:
+    """Phase 13: editor_format='excalidraw' creates a canvas seeded with an
+    empty, parseable Excalidraw scene."""
+    _, pid = _seed(client)
+    res = client.post(
+        f"/api/v1/projects/{pid}/docs",
+        json={"title": "Board", "doc_type": "canvas", "editor_format": "excalidraw"},
+    )
+    assert res.status_code == 201
+    data = res.json()
+    assert data["doc_type"] == "canvas"
+    assert data["editor_format"] == "excalidraw"
+    scene = json.loads(data["content_json"])
+    assert scene["type"] == "excalidraw"
+    assert scene["elements"] == []
+
+
+def test_create_doc_rejects_unknown_editor_format(client: TestClient) -> None:
+    _, pid = _seed(client)
+    res = client.post(
+        f"/api/v1/projects/{pid}/docs",
+        json={"title": "X", "doc_type": "note", "editor_format": "bogus"},
+    )
+    assert res.status_code == 422
 
 
 def test_create_doc_all_types(client: TestClient) -> None:

@@ -2,8 +2,16 @@ import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-libra
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest'
 import { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import Link from '@tiptap/extension-link'
+import Highlight from '@tiptap/extension-highlight'
+import Subscript from '@tiptap/extension-subscript'
+import Superscript from '@tiptap/extension-superscript'
+import { TaskList, TaskItem } from '@tiptap/extension-list'
+import Image from '@tiptap/extension-image'
 import DocsPanel, { serializeToMarkdown } from './DocsPanel'
+
+// CanvasEditor pulls in Excalidraw, which can't evaluate under jsdom (no canvas).
+// These tests don't exercise the canvas, so stub it out.
+vi.mock('./CanvasEditor', () => ({ CanvasEditor: () => null }))
 
 vi.mock('../api/client', () => ({
   api: {
@@ -200,7 +208,10 @@ describe('serializeToMarkdown', () => {
     document.body.appendChild(el)
     editor = new Editor({
       element: el,
-      extensions: [StarterKit, Link.configure({ openOnClick: false })],
+      extensions: [
+        StarterKit.configure({ link: { openOnClick: false } }),
+        Highlight, Subscript, Superscript, TaskList, TaskItem, Image,
+      ],
     })
   })
 
@@ -245,6 +256,42 @@ describe('serializeToMarkdown', () => {
   it('serializes blockquote', () => {
     act(() => { editor.commands.setContent('<blockquote><p>A quote</p></blockquote>') })
     expect(serializeToMarkdown(editor.state.doc)).toContain('> A quote')
+  })
+
+  it('serializes underline as inline HTML', () => {
+    act(() => { editor.commands.setContent('<p><u>underlined</u></p>') })
+    expect(serializeToMarkdown(editor.state.doc)).toContain('<u>underlined</u>')
+  })
+
+  it('serializes highlight with == markers', () => {
+    act(() => { editor.commands.setContent('<p><mark>marked</mark></p>') })
+    expect(serializeToMarkdown(editor.state.doc)).toContain('==marked==')
+  })
+
+  it('serializes subscript and superscript as inline HTML', () => {
+    act(() => { editor.commands.setContent('<p>H<sub>2</sub>O and x<sup>2</sup></p>') })
+    const md = serializeToMarkdown(editor.state.doc)
+    expect(md).toContain('H<sub>2</sub>O')
+    expect(md).toContain('x<sup>2</sup>')
+  })
+
+  it('serializes image as Markdown', () => {
+    act(() => { editor.commands.setContent('<img src="https://ex.com/a.png" alt="a pic">') })
+    expect(serializeToMarkdown(editor.state.doc)).toContain('![a pic](https://ex.com/a.png)')
+  })
+
+  it('serializes task list as GFM checkboxes', () => {
+    act(() => {
+      editor.commands.setContent(
+        '<ul data-type="taskList">' +
+        '<li data-type="taskItem" data-checked="true"><p>done</p></li>' +
+        '<li data-type="taskItem" data-checked="false"><p>todo</p></li>' +
+        '</ul>',
+      )
+    })
+    const md = serializeToMarkdown(editor.state.doc)
+    expect(md).toContain('- [x] done')
+    expect(md).toContain('- [ ] todo')
   })
 
   it('serializes code block with fence markers', () => {
