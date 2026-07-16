@@ -12,6 +12,7 @@ import ApprovalQueuePanel from './ApprovalQueuePanel'
 import ExternalClientsPanel from './ExternalClientsPanel'
 import AgentRunsPanel from './AgentRunsPanel'
 import RemindersPanel from './RemindersPanel'
+import SettingsPanel from './SettingsPanel'
 import NotificationsBell from './NotificationsBell'
 import { Icon } from './Icon'
 import { api, type NotificationItem } from '../api/client'
@@ -20,7 +21,7 @@ import './layout.css'
 type MainView =
   | 'dashboard' | 'cockpit' | 'planning' | 'roadmap' | 'timeline' | 'docs'
   | 'context-pack' | 'context-files' | 'preview' | 'approvals' | 'clients'
-  | 'agent-runs' | 'reminders'
+  | 'agent-runs' | 'reminders' | 'settings'
 
 interface SelectedProject {
   id: string
@@ -48,6 +49,9 @@ const NAV: { group: string; items: { view: MainView; label: string; icon: string
     { view: 'agent-runs', label: 'Agent Runs', icon: 'table' },
     { view: 'reminders', label: 'Reminders', icon: 'bell' },
   ] },
+  { group: 'System', items: [
+    { view: 'settings', label: 'Settings', icon: 'settings' },
+  ] },
 ]
 
 const NAV_ITEMS = NAV.flatMap(group => group.items.map(item => ({ ...item, group: group.group })))
@@ -70,6 +74,7 @@ const TITLES: Record<MainView, { title: string; sub: string }> = {
   clients: { title: 'External API Clients', sub: 'Machine keys & scopes' },
   'agent-runs': { title: 'Agent Runs', sub: 'Execution telemetry & analytics' },
   reminders: { title: 'Reminders', sub: 'Email reminders & send history' },
+  settings: { title: 'Settings', sub: 'Connections & runtime switches' },
 }
 
 function initials(s: string): string {
@@ -344,6 +349,7 @@ export default function Layout() {
               {mainView === 'clients' && <ExternalClientsPanel onClose={() => setMainView('dashboard')} />}
               {mainView === 'agent-runs' && (project ? <AgentRunsPanel projectId={project.id} /> : placeholder)}
               {mainView === 'reminders' && (project ? <RemindersPanel projectId={project.id} /> : placeholder)}
+              {mainView === 'settings' && <SettingsPanel />}
             </div>
           </div>
         </main>
