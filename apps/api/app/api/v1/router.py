@@ -22,6 +22,7 @@ from app.api.v1.endpoints import (
     projects,
     risks,
     roadmap,
+    settings,
     stages,
     sync,
     tasks,
@@ -69,3 +70,6 @@ router.include_router(timeline.router, tags=["timeline"], dependencies=_GUARD)
 router.include_router(agent_runs.router, tags=["agent-runs"], dependencies=_GUARD)
 router.include_router(notifications.router, tags=["notifications"], dependencies=_GUARD)
 router.include_router(sync.router, tags=["sync"], dependencies=_GUARD)
+# Settings is a global, control-token-gated surface (no project scope), so it is
+# not under _GUARD — like info/auth/members/workspaces above.
+router.include_router(settings.router, tags=["settings"])
