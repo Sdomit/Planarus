@@ -14,6 +14,7 @@ _MAX_CONTENT_BYTES = 2 * 1024 * 1024  # 2 MB
 class DocCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     doc_type: str
+    editor_format: str = "tiptap_json"  # Phase 13: 'excalidraw' creates a canvas
     status: str = "draft"
     sort_order: int = 0
     parent_doc_id: Optional[str] = None
@@ -24,6 +25,15 @@ class DocCreate(BaseModel):
     def validate_doc_type(cls, v: str) -> str:
         if v not in _DOC_TYPES:
             raise ValueError(f"doc_type must be one of: {', '.join(sorted(_DOC_TYPES))}")
+        return v
+
+    @field_validator("editor_format")
+    @classmethod
+    def validate_editor_format(cls, v: str) -> str:
+        if v not in _DOC_FORMATS:
+            raise ValueError(
+                f"editor_format must be one of: {', '.join(sorted(_DOC_FORMATS))}"
+            )
         return v
 
     @field_validator("status")
@@ -81,6 +91,7 @@ class DocSummary(BaseModel):
     title: str
     slug: str
     doc_type: str
+    editor_format: str
     status: str
     sort_order: int
     version: int

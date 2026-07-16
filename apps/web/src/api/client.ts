@@ -177,6 +177,7 @@ export interface DocSummary {
   title: string
   slug: string
   doc_type: string
+  editor_format: string
   status: string
   sort_order: number
   version: number
@@ -197,6 +198,7 @@ export interface Doc extends DocSummary {
 export interface DocCreate {
   title: string
   doc_type: string
+  editor_format?: string
   status?: string
   sort_order?: number
   parent_doc_id?: string | null
