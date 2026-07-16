@@ -625,6 +625,7 @@ function TaskDetailBody({ task, phases, stages, projectId, onTaskUpdated }: {
   const [label, setLabel] = useState('')
   const [saving, setSaving] = useState(false)
   const [taskError, setTaskError] = useState<string | null>(null)
+  const [checklistError, setChecklistError] = useState<string | null>(null)
   const taskStages = task.phase_id ? stages.filter(stage => stage.phase_id === task.phase_id) : []
 
   useEffect(() => { void api.checklistItems.list(task.id).then(setItems) }, [task.id])
@@ -632,13 +633,33 @@ function TaskDetailBody({ task, phases, stages, projectId, onTaskUpdated }: {
   async function addItem(e: React.FormEvent) {
     e.preventDefault()
     if (!label.trim()) return
-    const item = await api.checklistItems.create(task.id, { label: label.trim() })
-    setItems(prev => [...prev, item]); setLabel('')
+    setChecklistError(null)
+    try {
+      const item = await api.checklistItems.create(task.id, { label: label.trim() })
+      setItems(prev => [...prev, item]); setLabel('')
+    } catch (error) {
+      setChecklistError(error instanceof Error ? error.message : String(error))
+    }
   }
 
   async function toggleDone(item: ChecklistItem) {
-    const updated = await api.checklistItems.update(item.id, { done: !item.done })
-    setItems(prev => prev.map(i => (i.id === updated.id ? updated : i)))
+    setChecklistError(null)
+    try {
+      const updated = await api.checklistItems.update(item.id, { done: !item.done })
+      setItems(prev => prev.map(i => (i.id === updated.id ? updated : i)))
+    } catch (error) {
+      setChecklistError(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  async function removeItem(item: ChecklistItem) {
+    setChecklistError(null)
+    try {
+      await api.checklistItems.remove(item.id)
+      setItems(prev => prev.filter(i => i.id !== item.id))
+    } catch (error) {
+      setChecklistError(error instanceof Error ? error.message : String(error))
+    }
   }
 
   async function updateTask(patch: Parameters<typeof api.tasks.update>[1]) {
@@ -695,11 +716,16 @@ function TaskDetailBody({ task, phases, stages, projectId, onTaskUpdated }: {
       {taskError && <p className="form-error" role="alert">{taskError}</p>}
       <div className="pp-checklist">
         {items.map(i => (
-          <label key={i.id} className="pp-check">
-            <input type="checkbox" checked={i.done} onChange={() => toggleDone(i)} />
-            <span className={i.done ? 'pp-check-done' : ''}>{i.label}</span>
-          </label>
+          <div key={i.id} className="pp-check-row">
+            <label className="pp-check">
+              <input type="checkbox" checked={i.done} onChange={() => toggleDone(i)} />
+              <span className={i.done ? 'pp-check-done' : ''}>{i.label}</span>
+            </label>
+            <button type="button" className="pp-check-remove" aria-label={`Remove ${i.label}`}
+              onClick={() => removeItem(i)}>×</button>
+          </div>
         ))}
+        {checklistError && <p className="form-error" role="alert">{checklistError}</p>}
         <form className="pp-check-add" onSubmit={addItem}>
           <input className="input" placeholder="Add checklist item…" aria-label={`Add checklist item to ${task.title}`}
             value={label} onChange={e => setLabel(e.target.value)} />
