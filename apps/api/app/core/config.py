@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     storage_backend: str = Field(
         default="local", validation_alias="AGENTBOARD_STORAGE_BACKEND"
     )
+    # P10.3b — S3 backend config (used only when storage_backend == "s3").
+    storage_s3_bucket: str = Field(default="", validation_alias="AGENTBOARD_S3_BUCKET")
+    storage_s3_prefix: str = Field(default="", validation_alias="AGENTBOARD_S3_PREFIX")
+    storage_s3_region: str = Field(default="", validation_alias="AGENTBOARD_S3_REGION")
+    storage_s3_endpoint_url: str = Field(
+        default="", validation_alias="AGENTBOARD_S3_ENDPOINT_URL"
+    )
 
     # Phase 10.4 (hosted deploy) — extra allowed browser origins for the hosted
     # web app, comma-separated (e.g. "https://app.example.com"). Empty (default)

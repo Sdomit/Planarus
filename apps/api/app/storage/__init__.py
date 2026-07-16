@@ -43,12 +43,21 @@ def get_storage() -> Storage:
     """
     name = settings.storage_backend
     if name not in _cache:
-        try:
+        if name == "s3":
+            from app.storage.s3 import S3Storage  # lazy: boto3 only if selected
+
+            _cache[name] = S3Storage(
+                bucket=settings.storage_s3_bucket,
+                prefix=settings.storage_s3_prefix,
+                region=settings.storage_s3_region or None,
+                endpoint_url=settings.storage_s3_endpoint_url or None,
+            )
+        elif name in _BACKENDS:
             _cache[name] = _BACKENDS[name]()
-        except KeyError:
+        else:
             raise StorageError(
                 f"unknown storage backend {name!r}; expected one of "
-                f"{', '.join(sorted(_BACKENDS))}"
+                f"{', '.join(sorted(_BACKENDS))}, s3"
             )
     return _cache[name]
 
