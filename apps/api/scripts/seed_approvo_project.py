@@ -84,8 +84,8 @@ PHASES: list[dict] = [
             },
             {"title": "P10.3 — Storage adapter (Storage protocol + backends)", "status": "done"},
             {"title": "P10.4 — Hosted deploy shape (config + docs)", "status": "done"},
-            {"title": "P10.5 — SQLite→Postgres ETL (gated on validation)", "status": "blocked"},
-            {"title": "P10.6 — Sync (gated on validation)", "status": "blocked"},
+            {"title": "P10.5 — SQLite→Postgres ETL (gate lifted, D24)", "status": "done"},
+            {"title": "P10.6 — Sync foundation: manifest + conflict detection", "status": "done"},
         ],
     },
 ]
