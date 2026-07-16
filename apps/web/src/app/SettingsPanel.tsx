@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react'
-import { api, type AppSettings } from '../api/client'
+import { api, type AppSettings, type AppSettingsUpdate } from '../api/client'
+
+const SWITCH_KEYS = ['email_enabled', 'email_from', 'external_api_active'] as const
 
 // Phase 9B settings surface. Switch tier is editable; the env ceiling is shown
 // read-only and always wins — a toggle here can never widen exposure.
 export default function SettingsPanel() {
   const [s, setS] = useState<AppSettings | null>(null)
+  // Last server state — Save sends only keys the user actually changed, so an
+  // untouched switch never gets pinned into a DB row (env default stays live).
+  const [initial, setInitial] = useState<AppSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -12,7 +17,7 @@ export default function SettingsPanel() {
 
   useEffect(() => {
     api.settings.get()
-      .then(setS)
+      .then(data => { setS(data); setInitial(data) })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false))
   }, [])
@@ -23,15 +28,16 @@ export default function SettingsPanel() {
   }
 
   const save = () => {
-    if (!s) return
+    if (!s || !initial) return
+    const changed: AppSettingsUpdate = {}
+    for (const k of SWITCH_KEYS) {
+      if (s[k] !== initial[k]) (changed as Record<string, unknown>)[k] = s[k]
+    }
+    if (Object.keys(changed).length === 0) { setSaved(true); return }
     setSaving(true); setError(null)
     api.settings
-      .update({
-        email_enabled: s.email_enabled,
-        email_from: s.email_from,
-        external_api_active: s.external_api_active,
-      })
-      .then(fresh => { setS(fresh); setSaved(true) })
+      .update(changed)
+      .then(fresh => { setS(fresh); setInitial(fresh); setSaved(true) })
       .catch((e: Error) => setError(e.message))
       .finally(() => setSaving(false))
   }

@@ -32,18 +32,14 @@ describe('SettingsPanel', () => {
     expect(screen.getByText(/Inert until/)).toBeTruthy()
   })
 
-  it('saves the switch values and confirms', async () => {
+  it('saves only the changed switch and confirms', async () => {
     render(<SettingsPanel />)
     await screen.findByDisplayValue('approvo@localhost')
     fireEvent.click(screen.getByLabelText('Send email reminders'))
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    await waitFor(() =>
-      expect(update).toHaveBeenCalledWith({
-        email_enabled: true,
-        email_from: 'approvo@localhost',
-        external_api_active: true,
-      }),
-    )
+    // Only the touched key is sent — untouched switches must not get pinned
+    // into DB rows (their env defaults stay live).
+    await waitFor(() => expect(update).toHaveBeenCalledWith({ email_enabled: true }))
     expect(await screen.findByText('Saved ✓')).toBeTruthy()
   })
 })
