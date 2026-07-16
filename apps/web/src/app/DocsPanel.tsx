@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import CodeBlock from '@tiptap/extension-code-block'
@@ -7,6 +7,12 @@ import { MarkdownSerializer } from 'prosemirror-markdown'
 import { api, type Doc, type DocSummary } from '../api/client'
 import { StatusBadge } from './StatusBadge'
 import './docs-panel.css'
+
+// Excalidraw is heavy (~1MB) and pulls in browser-only modules that crash under
+// jsdom at import time — lazy-load it so it's fetched only when a canvas opens.
+const CanvasEditor = lazy(() =>
+  import('./CanvasEditor').then((m) => ({ default: m.CanvasEditor })),
+)
 
 // ---------------------------------------------------------------------------
 // ProseMirror → Markdown serializer (Tiptap camelCase node/mark names)
@@ -60,7 +66,7 @@ export function serializeToMarkdown(doc: any): string { // eslint-disable-line @
   return _docSerializer.serialize(doc)
 }
 
-const DOC_TYPES = ['note', 'spec', 'research', 'plan', 'reference', 'other'] as const
+const DOC_TYPES = ['note', 'spec', 'research', 'plan', 'reference', 'canvas', 'other'] as const
 
 // ---------------------------------------------------------------------------
 // Doc list view
@@ -148,7 +154,9 @@ function CreateDocForm({ projectId, onCreated, onCancel }: CreateDocFormProps) {
     e.preventDefault()
     if (!title.trim()) return
     setSaving(true); setError(null)
-    api.docs.create(projectId, { title: title.trim(), doc_type: docType })
+    // A 'canvas' doc is an Excalidraw whiteboard; any other type is a Tiptap doc.
+    const editor_format = docType === 'canvas' ? 'excalidraw' : undefined
+    api.docs.create(projectId, { title: title.trim(), doc_type: docType, editor_format })
       .then(onCreated)
       .catch((err: Error) => setError(err.message))
       .finally(() => setSaving(false))
@@ -346,16 +354,22 @@ interface DocsPanelProps { projectId: string; onClose: () => void }
 
 export default function DocsPanel({ projectId, onClose }: DocsPanelProps) {
   const [view, setView] = useState<'list' | 'new' | 'editor'>('list')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selected, setSelected] = useState<{ id: string; format: string } | null>(null)
 
-  const handleSelect = (doc: DocSummary) => { setSelectedId(doc.id); setView('editor') }
-  const handleCreated = (doc: Doc) => { setSelectedId(doc.id); setView('editor') }
+  const handleSelect = (doc: DocSummary) => { setSelected({ id: doc.id, format: doc.editor_format }); setView('editor') }
+  const handleCreated = (doc: Doc) => { setSelected({ id: doc.id, format: doc.editor_format }); setView('editor') }
 
   return (
     <div className="dp-panel">
       {view === 'list' && <DocList projectId={projectId} onSelect={handleSelect} onNew={() => setView('new')} onClose={onClose} />}
       {view === 'new' && <CreateDocForm projectId={projectId} onCreated={handleCreated} onCancel={() => setView('list')} />}
-      {view === 'editor' && selectedId && <DocEditor docId={selectedId} onBack={() => setView('list')} />}
+      {view === 'editor' && selected && (
+        selected.format === 'excalidraw'
+          ? <Suspense fallback={<p className="dp-state">Loading canvas…</p>}>
+              <CanvasEditor docId={selected.id} onBack={() => setView('list')} />
+            </Suspense>
+          : <DocEditor docId={selected.id} onBack={() => setView('list')} />
+      )}
     </div>
   )
 }

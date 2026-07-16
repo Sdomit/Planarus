@@ -33,6 +33,11 @@ _TYPE_SUBFOLDER: dict[str, str] = {
 }
 
 _EMPTY_CONTENT_JSON = '{"type": "doc", "content": [{"type": "paragraph"}]}'
+# Phase 13: an empty Excalidraw scene. The frontend hydrates initialData from it.
+_EMPTY_CANVAS_JSON = (
+    '{"type": "excalidraw", "version": 2, "source": "approvo",'
+    ' "elements": [], "appState": {}, "files": {}}'
+)
 
 
 # ---------------------------------------------------------------------------
@@ -81,8 +86,12 @@ def create_doc(session: Session, project_id: str, payload: DocCreate) -> Doc:
         title=payload.title,
         slug=slug,
         doc_type=payload.doc_type,
-        editor_format="tiptap_json",
-        content_json=_EMPTY_CONTENT_JSON,
+        editor_format=payload.editor_format,
+        content_json=(
+            _EMPTY_CANVAS_JSON
+            if payload.editor_format == "excalidraw"
+            else _EMPTY_CONTENT_JSON
+        ),
         markdown_cache="",
         status=payload.status,
         sort_order=payload.sort_order,
