@@ -18,11 +18,24 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "httpx>=0.27.0",
+    # P10.3b: mocked S3 so the s3 storage backend is covered in CI without AWS.
+    # Pulls boto3, so the s3 backend imports resolve in the test run too.
+    "moto[s3]>=5.0",
 ]
 # P10.0: driver for the Postgres dialect CI job; the app itself stays
 # SQLite-by-default and never requires this locally.
 postgres = [
     "psycopg2-binary>=2.9",
+]
+# P10.1b: HTTP client for real OAuth token/userinfo calls. Only needed when an
+# OAuth provider is configured; the dev-login provider and tests don't require it.
+oauth = [
+    "httpx>=0.27.0",
+]
+# P10.3b: AWS SDK for the S3 storage backend. Only needed when
+# AGENTBOARD_STORAGE_BACKEND=s3; local/memory backends never import it.
+s3 = [
+    "boto3>=1.34",
 ]
 
 [tool.pytest.ini_options]
