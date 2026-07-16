@@ -46,3 +46,7 @@ secrets/
 
 # Local ops notes — machine/session-specific reminders, never published
 context/LOCAL_OPS.md
+
+# Local agent/tooling config — machine paths + capability ids, never published
+.claude/
+.mcp.json
