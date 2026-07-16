@@ -89,6 +89,7 @@ PHASES: list[dict] = [
             {"title": "P10.5 — SQLite→Postgres ETL (gate lifted, D24)", "status": "done"},
             {"title": "P10.6 — Sync foundation: manifest + conflict detection", "status": "done"},
             {"title": "P10.6b — Sync apply + baseline persistence", "status": "done"},
+            {"title": "P10.6c — Cross-machine sync transport (snapshot/push)", "status": "done"},
         ],
     },
 ]
