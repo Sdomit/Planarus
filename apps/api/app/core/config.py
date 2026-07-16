@@ -69,5 +69,21 @@ class Settings(BaseSettings):
     # control-token endpoints.
     web_origins: str = Field(default="", validation_alias="AGENTBOARD_WEB_ORIGINS")
 
+    # Phase 10.1b — real OAuth providers. A provider is only available when its
+    # client id is set; unset (default) → its routes 404. Secrets are never logged
+    # or returned. Requires the optional [oauth] extra (httpx) at runtime.
+    oauth_google_client_id: str = Field(
+        default="", validation_alias="AGENTBOARD_OAUTH_GOOGLE_CLIENT_ID"
+    )
+    oauth_google_client_secret: str = Field(
+        default="", validation_alias="AGENTBOARD_OAUTH_GOOGLE_CLIENT_SECRET"
+    )
+    oauth_github_client_id: str = Field(
+        default="", validation_alias="AGENTBOARD_OAUTH_GITHUB_CLIENT_ID"
+    )
+    oauth_github_client_secret: str = Field(
+        default="", validation_alias="AGENTBOARD_OAUTH_GITHUB_CLIENT_SECRET"
+    )
+
 
 settings = Settings()

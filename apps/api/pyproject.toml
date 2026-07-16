@@ -24,6 +24,11 @@ dev = [
 postgres = [
     "psycopg2-binary>=2.9",
 ]
+# P10.1b: HTTP client for real OAuth token/userinfo calls. Only needed when an
+# OAuth provider is configured; the dev-login provider and tests don't require it.
+oauth = [
+    "httpx>=0.27.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
