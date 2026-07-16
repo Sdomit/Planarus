@@ -577,6 +577,25 @@ export interface ReminderSendResult {
   outcomes: ReminderOutcome[]
 }
 
+// --- Runtime settings (Phase 9B) --------------------------------------------
+
+export interface AppSettings {
+  // switch tier (editable)
+  email_enabled: boolean
+  email_from: string
+  external_api_active: boolean
+  // ceiling tier (env-owned, read-only status)
+  external_api_permitted_by_env: boolean
+  external_api_hosts_configured: boolean
+  email_smtp_loopback: boolean
+}
+
+export interface AppSettingsUpdate {
+  email_enabled?: boolean
+  email_from?: string
+  external_api_active?: boolean
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json', ...init?.headers },
@@ -881,5 +900,12 @@ export const api = {
       }),
     emailLog: (projectId: string, limit = 50) =>
       request<EmailLogEntry[]>(`/projects/${projectId}/email-log?limit=${limit}`),
+  },
+  // Runtime settings (Phase 9B). GET is a plain local read; PUT changes a
+  // connection's effective state → local-control-gated.
+  settings: {
+    get: () => request<AppSettings>('/settings'),
+    update: (data: AppSettingsUpdate) =>
+      controlRequest<AppSettings>('/settings', { method: 'PUT', body: JSON.stringify(data) }),
   },
 }

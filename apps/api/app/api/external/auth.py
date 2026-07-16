@@ -31,6 +31,7 @@ from app.db.session import get_session
 from app.mcp.capabilities import Capability, capability_from_api_client
 from app.models.api_client import ApiClient
 from app.services import api_credentials
+from app.services.settings_service import external_api_active
 
 
 def _now_iso() -> str:
@@ -97,6 +98,14 @@ def _touch_last_used(session: Session, client: ApiClient) -> None:
 def _authenticate(
     request: Request, session: Session, authorization: Optional[str]
 ) -> tuple[ApiClient, Capability]:
+    # Phase 9B switch: env ceiling (checked in middleware) permits the external API,
+    # but the DB switch can still turn it off. Off → the SAME generic 404 the
+    # middleware emits when disabled, so "off in Settings" is indistinguishable from
+    # "not exposed". Checked before any auth work so it short-circuits Argon2/limits.
+    if not external_api_active(session):
+        raise ExternalProblem(
+            404, "not_found", "Not Found", "the requested resource was not found"
+        )
     parsed = api_credentials.parse_authorization(authorization)
     if parsed is None:
         api_credentials.dummy_verify()

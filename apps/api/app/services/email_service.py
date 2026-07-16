@@ -29,6 +29,7 @@ from app.models.task import Task
 from app.prompt.secrets import scan
 from app.services.audit_service import create_audit_event
 from app.services.notification_service import _TASK_OPEN, due_task_buckets
+from app.services.settings_service import get_setting
 from app.schemas.notifications import ReminderOutcome, ReminderSendResult
 
 # ponytail: fixed daily cap; make it a setting if a real use case ever needs more.
@@ -128,10 +129,12 @@ def send_project_reminders(session: Session, project_id: str) -> ReminderSendRes
     if project is None:
         raise ValueError(f"project '{project_id}' not found")
 
-    if not settings.email_enabled:
+    # Live switch (DB row) within the env default — a UI toggle takes effect
+    # without a restart; env-only deployments (no row) behave exactly as before.
+    if not get_setting(session, "email_enabled", settings.email_enabled):
         raise ConflictError(
-            "email sending is disabled — set AGENTBOARD_EMAIL_ENABLED=true "
-            "(local Mailpit only)"
+            "email sending is disabled — enable it in Settings or set "
+            "AGENTBOARD_EMAIL_ENABLED=true (local Mailpit only)"
         )
     if settings.smtp_host.strip().lower() not in _LOOPBACK_HOSTS:
         raise ConflictError(
@@ -189,7 +192,7 @@ def send_project_reminders(session: Session, project_id: str) -> ReminderSendRes
             continue
 
         msg = EmailMessage()
-        msg["From"] = settings.email_from
+        msg["From"] = get_setting(session, "email_from", settings.email_from)
         msg["To"] = rule.to_email
         msg["Subject"] = subject
         msg.set_content(body)
