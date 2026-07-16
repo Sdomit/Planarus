@@ -25,7 +25,7 @@ vi.mock('../api/client', () => ({
     blockers: { list: vi.fn(), create: vi.fn() },
     comments: { list: vi.fn(), create: vi.fn() },
     links: { list: vi.fn(), create: vi.fn() },
-    checklistItems: { list: vi.fn(), create: vi.fn(), update: vi.fn() },
+    checklistItems: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
   },
 }))
 
@@ -43,7 +43,7 @@ const mockApi = api as unknown as {
   blockers: { list: Fn; create: Fn }
   comments: { list: Fn; create: Fn }
   links: { list: Fn; create: Fn }
-  checklistItems: { list: Fn; create: Fn; update: Fn }
+  checklistItems: { list: Fn; create: Fn; update: Fn; remove: Fn }
 }
 
 const PROJECT = {
@@ -256,6 +256,33 @@ describe('PlanningPanel', () => {
       phase_id: 'ph_1',
       stage_id: null,
     }))
+  })
+
+  it('removes a checklist item from the expanded task', async () => {
+    setupEmpty()
+    const task = {
+      id: 'tsk_1', project_id: 'proj_1', phase_id: null, stage_id: null,
+      title: 'Ship it', description: null, status: 'backlog', priority: null,
+      due_at: null, sort_order: 0,
+      created_at: '2026-07-13T00:00:00+00:00', updated_at: '2026-07-13T00:00:00+00:00',
+    }
+    const item = {
+      id: 'cli_1', task_id: 'tsk_1', label: 'Write docs', done: false, sort_order: 0,
+      created_at: '2026-07-13T00:00:00+00:00', updated_at: '2026-07-13T00:00:00+00:00',
+    }
+    mockApi.tasks.list.mockResolvedValue([task])
+    mockApi.checklistItems.list.mockResolvedValue([item])
+    mockApi.checklistItems.remove.mockResolvedValue(undefined)
+
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }))
+    fireEvent.click(screen.getByRole('button', { name: /Ship it/ }))
+    expect(await screen.findByText('Write docs')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Write docs' }))
+    await waitFor(() => expect(mockApi.checklistItems.remove).toHaveBeenCalledWith('cli_1'))
+    await waitFor(() => expect(screen.queryByText('Write docs')).toBeNull())
   })
 
   it('expands a phase to reveal its description and patches status', async () => {

@@ -50,3 +50,16 @@ def update_checklist_item(
             status_code=status.HTTP_404_NOT_FOUND, detail="Checklist item not found"
         )
     return item
+
+
+@router.delete(
+    "/checklist-items/{item_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+def delete_checklist_item(
+    item_id: str,
+    session: Session = Depends(get_session),
+) -> None:
+    if not checklist_service.delete_checklist_item(session, item_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Checklist item not found"
+        )
