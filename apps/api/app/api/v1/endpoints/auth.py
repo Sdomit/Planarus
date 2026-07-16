@@ -4,7 +4,7 @@ Mounted always but gated by ``require_auth_enabled`` — when auth is disabled t
 whole surface 404s and the app is the local single-user tool. No tenant
 enforcement on domain routes yet (P10.2).
 """
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlmodel import Session, select
 
 from app.core.auth_deps import get_current_user, require_auth_enabled
@@ -18,7 +18,7 @@ from app.schemas.auth import (
     UserRead,
     WorkspaceMembershipRead,
 )
-from app.services import auth_service
+from app.services import auth_service, oauth
 
 router = APIRouter(dependencies=[Depends(require_auth_enabled)])
 
@@ -82,3 +82,48 @@ def logout(
     response.delete_cookie(auth_service.SESSION_COOKIE, path="/")
     response.status_code = status.HTTP_204_NO_CONTENT
     return response
+
+
+# --- P10.1b: real OAuth (Google/GitHub) ---------------------------------------
+@router.get("/auth/oauth/providers")
+def oauth_providers() -> dict:
+    """Which OAuth providers are configured (have a client id set)."""
+    return {"providers": oauth.available_providers()}
+
+
+@router.get("/auth/oauth/{provider}/start")
+def oauth_start(
+    provider: str,
+    redirect_uri: str = Query(..., description="the callback URL registered with the provider"),
+) -> dict:
+    """Return the provider authorization URL (with a signed CSRF state) to redirect
+    the browser to. 404 if the provider isn't configured."""
+    if oauth.get_provider(provider) is None:
+        raise HTTPException(status_code=404, detail="unknown or unconfigured provider")
+    state = oauth.make_state(redirect_uri)
+    return {"authorize_url": oauth.get_provider(provider).authorize_url(state, redirect_uri)}
+
+
+@router.get("/auth/oauth/{provider}/callback", response_model=AuthMeRead)
+def oauth_callback(
+    provider: str,
+    response: Response,
+    code: str = Query(...),
+    state: str = Query(...),
+    session: Session = Depends(get_session),
+) -> AuthMeRead:
+    """Exchange the auth code, get-or-create the user, and open a session."""
+    prov = oauth.get_provider(provider)
+    if prov is None:
+        raise HTTPException(status_code=404, detail="unknown or unconfigured provider")
+    redirect_uri = oauth.verify_state(state)
+    if redirect_uri is None:
+        raise HTTPException(status_code=400, detail="invalid or expired state")
+    identity = prov.exchange_code(code, redirect_uri)
+    if not identity.email:
+        raise HTTPException(status_code=400, detail="provider did not return an email")
+    user, raw_token = auth_service.login_with_identity(
+        session, identity.provider, identity.subject, identity.email, identity.display_name
+    )
+    _set_session_cookie(response, raw_token)
+    return _me(session, user)
