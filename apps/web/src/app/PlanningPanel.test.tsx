@@ -249,7 +249,7 @@ describe('PlanningPanel', () => {
     render(<PlanningPanel projectId="proj_1" />)
     await screen.findByText('Test Project')
     fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }))
-    fireEvent.click(screen.getByRole('button', { name: /Connect roadmap/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Connect roadmap' }))
     fireEvent.change(screen.getByLabelText('Phase'), { target: { value: phase.id } })
 
     await waitFor(() => expect(mockApi.tasks.update).toHaveBeenCalledWith('tsk_1', {
