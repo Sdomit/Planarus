@@ -16,9 +16,10 @@ const DONE_MILESTONE = new Set(['achieved', 'missed', 'canceled'])
 interface CockpitPanelProps {
   projectId: string
   onClose: () => void
+  onOpenCanvas: () => void
 }
 
-export default function CockpitPanel({ projectId }: CockpitPanelProps) {
+export default function CockpitPanel({ projectId, onOpenCanvas }: CockpitPanelProps) {
   const [project, setProject] = useState<Project | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
   const [risks, setRisks] = useState<Risk[]>([])
@@ -102,6 +103,9 @@ export default function CockpitPanel({ projectId }: CockpitPanelProps) {
           </h2>
           <StatusBadge kind="project" value={project.status} />
         </div>
+        <button className="btn btn-outline btn-sm" type="button" onClick={onOpenCanvas} title="Open this project's canvas">
+          <Icon name="palette" className="ic-16" /> Canvas
+        </button>
       </div>
 
       {project.summary && (
