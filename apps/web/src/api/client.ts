@@ -790,6 +790,12 @@ export const api = {
       request<StatusOption[]>(`/projects/${projectId}/status-options?entity_type=${entityType}`),
     create: (projectId: string, data: { entity_type: string; label: string; color?: string }) =>
       request<StatusOption>(`/projects/${projectId}/status-options`, { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: { label?: string; color?: string | null }) =>
+      request<StatusOption>(`/status-options/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    reorder: (projectId: string, entityType: string, ids: string[]) =>
+      request<StatusOption[]>(`/projects/${projectId}/status-options/reorder?entity_type=${entityType}`, {
+        method: 'POST', body: JSON.stringify({ ids }),
+      }),
     remove: (id: string) => request<void>(`/status-options/${id}`, { method: 'DELETE' }),
   },
   decisions: {

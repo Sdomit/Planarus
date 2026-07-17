@@ -1,3 +1,4 @@
+import re
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -5,6 +6,15 @@ from pydantic import BaseModel, Field, field_validator
 from app.core.constants import STATUS_OPTION_ENTITY_TYPES
 
 _ENTITY_TYPES = frozenset(STATUS_OPTION_ENTITY_TYPES)
+_HEX_COLOR = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+
+def _validate_color(v: Optional[str]) -> Optional[str]:
+    if v is None or v == "":
+        return None
+    if not _HEX_COLOR.match(v):
+        raise ValueError("color must be a hex value like #8b5cf6")
+    return v.lower()
 
 
 class StatusOptionCreate(BaseModel):
@@ -21,10 +31,20 @@ class StatusOptionCreate(BaseModel):
             )
         return v
 
+    @field_validator("color")
+    @classmethod
+    def validate_color(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_color(v)
+
 
 class StatusOptionUpdate(BaseModel):
     label: Optional[str] = Field(default=None, min_length=1, max_length=60)
     color: Optional[str] = None
+
+    @field_validator("color")
+    @classmethod
+    def validate_color(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_color(v)
 
 
 class StatusOptionRead(BaseModel):

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import PlanningPanel, { nextStatusForColumn } from './PlanningPanel'
 
@@ -26,7 +26,7 @@ vi.mock('../api/client', () => ({
     comments: { list: vi.fn(), create: vi.fn() },
     links: { list: vi.fn(), create: vi.fn() },
     checklistItems: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
-    statusOptions: { list: vi.fn(async () => []), create: vi.fn(), remove: vi.fn() },
+    statusOptions: { list: vi.fn(async () => []), create: vi.fn(), update: vi.fn(), reorder: vi.fn(), remove: vi.fn() },
   },
 }))
 
@@ -45,7 +45,7 @@ const mockApi = api as unknown as {
   comments: { list: Fn; create: Fn }
   links: { list: Fn; create: Fn }
   checklistItems: { list: Fn; create: Fn; update: Fn; remove: Fn }
-  statusOptions: { list: Fn; create: Fn; remove: Fn }
+  statusOptions: { list: Fn; create: Fn; update: Fn; reorder: Fn; remove: Fn }
 }
 
 const PROJECT = {
@@ -323,7 +323,7 @@ describe('PlanningPanel', () => {
     render(<PlanningPanel projectId="proj_1" />)
     await screen.findByText('Test Project')
     fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }))
-    fireEvent.click(screen.getByRole('button', { name: /Ship it/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ship it' }))
     expect(await screen.findByText('Write docs')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove Write docs' }))
@@ -364,5 +364,74 @@ describe('PlanningPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Change status of Foundation' }))
     fireEvent.click(screen.getByRole('option', { name: 'active' }))
     await waitFor(() => expect(mockApi.phases.update).toHaveBeenCalledWith('ph_1', { status: 'active' }))
+  })
+})
+
+describe('StatusManager (manage statuses)', () => {
+  const BUILTINS = ['backlog', 'ready', 'in_progress', 'waiting', 'needs_review', 'blocked', 'done', 'canceled']
+    .map((k, i) => ({ id: null, key: k, label: k, color: null, sort_order: i, builtin: true }))
+  const CUSTOM_A = { id: 'sto_a', key: 'in_review', label: 'In Review', color: '#8b5cf6', sort_order: 8, builtin: false }
+  const CUSTOM_B = { id: 'sto_b', key: 'on_hold', label: 'On Hold', color: null, sort_order: 9, builtin: false }
+
+  async function openTaskManager() {
+    setupEmpty()
+    mockApi.statusOptions.list.mockImplementation(async (_pid: string, entity = 'task') =>
+      entity === 'task' ? [...BUILTINS, CUSTOM_A, CUSTOM_B] : [])
+    render(<PlanningPanel projectId="proj_1" initialTab="tasks" />)
+    await screen.findByText('Test Project')
+    fireEvent.click(screen.getByRole('button', { name: 'Manage statuses' }))
+    return await screen.findByRole('dialog')
+  }
+
+  it('lists built-in and custom statuses', async () => {
+    const dialog = await openTaskManager()
+    expect(within(dialog).getByLabelText('Rename In Review')).toBeTruthy()
+    expect(within(dialog).getByLabelText('Rename On Hold')).toBeTruthy()
+    expect(within(dialog).getAllByText('built-in').length).toBe(BUILTINS.length)
+  })
+
+  it('renames a custom status (keeping its key)', async () => {
+    const dialog = await openTaskManager()
+    const input = within(dialog).getByLabelText('Rename In Review')
+    fireEvent.change(input, { target: { value: 'Under Review' } })
+    fireEvent.blur(input)
+    await waitFor(() =>
+      expect(mockApi.statusOptions.update).toHaveBeenCalledWith('sto_a', { label: 'Under Review' }))
+  })
+
+  it('recolors a custom status', async () => {
+    const dialog = await openTaskManager()
+    fireEvent.change(within(dialog).getByLabelText('Color for On Hold'), { target: { value: '#22c55e' } })
+    await waitFor(() =>
+      expect(mockApi.statusOptions.update).toHaveBeenCalledWith('sto_b', { color: '#22c55e' }))
+  })
+
+  it('reorders custom statuses with the up control', async () => {
+    const dialog = await openTaskManager()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Move On Hold up' }))
+    await waitFor(() =>
+      expect(mockApi.statusOptions.reorder).toHaveBeenCalledWith('proj_1', 'task', ['sto_b', 'sto_a']))
+  })
+
+  it('deletes a custom status', async () => {
+    const dialog = await openTaskManager()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete In Review' }))
+    await waitFor(() => expect(mockApi.statusOptions.remove).toHaveBeenCalledWith('sto_a'))
+  })
+
+  it('adds a new status from the manager', async () => {
+    const dialog = await openTaskManager()
+    fireEvent.change(within(dialog).getByLabelText('New status name'), { target: { value: 'Verifying' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
+    await waitFor(() => expect(mockApi.statusOptions.create).toHaveBeenCalledWith(
+      'proj_1', expect.objectContaining({ entity_type: 'task', label: 'Verifying' })))
+  })
+
+  it('surfaces a delete-in-use error without crashing', async () => {
+    const dialog = await openTaskManager()
+    mockApi.statusOptions.remove.mockRejectedValueOnce(new Error('cannot delete a status that is still in use'))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete On Hold' }))
+    expect(await within(dialog).findByRole('alert')).toBeTruthy()
+    expect(within(dialog).getByText(/still in use/)).toBeTruthy()
   })
 })

@@ -3,6 +3,7 @@ from sqlmodel import Session
 
 from app.db.session import get_session
 from app.models.status_option import StatusOption
+from app.schemas.reorder import ReorderRequest
 from app.schemas.status_option import (
     StatusOptionCreate,
     StatusOptionRead,
@@ -47,6 +48,26 @@ def create_status_option(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
     return _to_read(opt)
+
+
+@router.post(
+    "/projects/{project_id}/status-options/reorder",
+    response_model=list[StatusOptionRead],
+)
+def reorder_status_options(
+    project_id: str,
+    data: ReorderRequest,
+    entity_type: str = Query(default="task"),
+    session: Session = Depends(get_session),
+) -> list[StatusOptionRead]:
+    try:
+        return status_option_service.reorder_status_options(
+            session, project_id, entity_type, data.ids
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        )
 
 
 @router.patch("/status-options/{option_id}", response_model=StatusOptionRead)
