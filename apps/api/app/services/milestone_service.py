@@ -7,8 +7,14 @@ from app.models.milestone import Milestone
 from app.models.phase import Phase
 from app.models.project import Project
 from app.schemas.milestone import MilestoneCreate, MilestoneUpdate
+from app.services import status_option_service
 from app.services.audit_service import create_audit_event
 from app.services.planning_reorder import apply_reorder
+
+
+def _validate_status(session: Session, project_id: str, status: str) -> None:
+    if status not in status_option_service.allowed_status_keys(session, project_id, "milestone"):
+        raise ValueError(f"status '{status}' is not defined for this project")
 
 
 def list_milestones(session: Session, project_id: str) -> list[Milestone]:
@@ -33,6 +39,7 @@ def create_milestone(
 ) -> Milestone:
     if session.get(Project, project_id) is None:
         raise ValueError(f"project '{project_id}' not found")
+    _validate_status(session, project_id, data.status)
     _validate_phase(session, project_id, data.phase_id)
 
     now = now_utc()
@@ -70,6 +77,8 @@ def update_milestone(
         return None
 
     update_data = data.model_dump(exclude_unset=True)
+    if update_data.get("status") is not None:
+        _validate_status(session, milestone.project_id, update_data["status"])
     if "phase_id" in update_data:
         _validate_phase(session, milestone.project_id, update_data["phase_id"])
 

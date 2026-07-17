@@ -1,15 +1,13 @@
 from typing import Optional
 
-from sqlalchemy import CheckConstraint, Index
+from sqlalchemy import Index
 from sqlmodel import Field, SQLModel
-
-from app.core.constants import milestone_status_check_sql
 
 
 class Milestone(SQLModel, table=True):
     __tablename__ = "milestone"
+    # Phase 15.5: no `status` CHECK — custom statuses validated in the service layer.
     __table_args__ = (
-        CheckConstraint(milestone_status_check_sql(), name="ck_milestone_status"),
         Index("ix_milestone_project_status", "project_id", "status"),
         Index("ix_milestone_project_sort", "project_id", "sort_order"),
     )

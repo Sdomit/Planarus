@@ -29,8 +29,10 @@ def create_decision(
 ) -> DecisionRead:
     try:
         return decision_service.create_decision(session, project_id, data)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    except ValueError as exc:
+        if "project" in str(exc) and "not found" in str(exc):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 
 
 @router.patch("/decisions/{decision_id}", response_model=DecisionRead)
@@ -39,7 +41,10 @@ def update_decision(
     data: DecisionUpdate,
     session: Session = Depends(get_session),
 ) -> DecisionRead:
-    decision = decision_service.update_decision(session, decision_id, data)
+    try:
+        decision = decision_service.update_decision(session, decision_id, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if decision is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Decision not found"

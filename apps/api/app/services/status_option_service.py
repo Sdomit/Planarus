@@ -6,6 +6,8 @@ from sqlmodel import Session, select
 
 from app.core.constants import BUILTIN_STATUS_KEYS
 from app.core.utils import new_id, now_utc
+from app.models.decision import Decision
+from app.models.milestone import Milestone
 from app.models.phase import Phase
 from app.models.project import Project
 from app.models.risk import Risk
@@ -23,6 +25,8 @@ _STATUS_MODELS = {
     "task": (Task, "status"),
     "phase": (Phase, "status"),
     "risk": (Risk, "status"),
+    "milestone": (Milestone, "status"),
+    "decision": (Decision, "status"),
 }
 
 
