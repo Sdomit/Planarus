@@ -8,6 +8,7 @@ from app.api.v1.endpoints import (
     blockers,
     calendar,
     calendar_events,
+    calendar_sync,
     checklist_items,
     comments,
     context,
@@ -61,6 +62,7 @@ router.include_router(
     calendar_events.router, tags=["calendar-events"], dependencies=_GUARD
 )
 router.include_router(calendar.router, tags=["calendar"], dependencies=_GUARD)
+router.include_router(calendar_sync.router, tags=["calendar-sync"], dependencies=_GUARD)
 router.include_router(
     checklist_items.router, tags=["checklist-items"], dependencies=_GUARD
 )

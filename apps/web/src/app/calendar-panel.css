@@ -154,6 +154,19 @@
 .cal-agenda-date--today .cal-agenda-num { color: var(--accent); }
 .cal-agenda-items { display: flex; flex-direction: column; gap: var(--space-1-5); flex: 1; min-width: 0; }
 
+/* ── Sync dialog ──────────────────────────────────────────── */
+.cal-sync-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.cal-sync-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); }
+.cal-sync-acct { font-size: var(--text-sm); font-weight: var(--weight-semibold); color: var(--text-primary); text-transform: capitalize; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-sync-meta { font-size: var(--text-xs); color: var(--text-tertiary); }
+.cal-sync-status { text-transform: capitalize; font-weight: 600; }
+.cal-sync-status--connected { color: var(--status-success-fg, var(--text-secondary)); }
+.cal-sync-status--error { color: var(--status-danger-fg, var(--text-secondary)); }
+.cal-sync-status--revoked { color: var(--status-warning-fg, var(--text-tertiary)); }
+.cal-sync-actions { display: flex; gap: var(--space-2); flex-shrink: 0; }
+.cal-sync-connect { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.cal-sync-msg { font-size: var(--text-xs); color: var(--text-secondary); margin: 0; }
+
 @media (max-width: 639px) {
   .cal-grid { grid-auto-rows: minmax(72px, 1fr); }
   .cal-timegrid--7 { grid-template-columns: 44px repeat(7, minmax(90px, 1fr)); overflow-x: auto; }

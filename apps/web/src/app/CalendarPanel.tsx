@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api, type CalendarItem } from '../api/client'
+import { api, type CalendarConnection, type CalendarItem } from '../api/client'
 import {
   DAY_HOURS, MONTH_NAMES, WEEKDAY_NAMES, addDaysIso, addMonths, daySpan, dayKeyOf,
   isSameDay, isoDay, minutesIntoDay, monthMatrix, timeLabel, weekDays,
@@ -69,6 +69,7 @@ export default function CalendarPanel({ projectId, onOpenPlanning }: {
   const [dragItem, setDragItem] = useState<CalendarItem | null>(null)
   const [overKey, setOverKey] = useState<string | null>(null)
   const [filters, setFilters] = useState<Filters>(ALL_ON)
+  const [showSync, setShowSync] = useState(false)
 
   const anchorDate = new Date(anchor.year, anchor.month, anchor.day)
 
@@ -225,6 +226,7 @@ export default function CalendarPanel({ projectId, onOpenPlanning }: {
             ))}
           </div>
           <a className="btn btn-outline btn-sm" href={api.calendar.icsHref(projectId, range)} download title="Export the visible range as an .ics file">Export .ics</a>
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowSync(true)} title="Connect Google/Microsoft calendars">Sync</button>
           <button type="button" className="btn btn-solid btn-sm" onClick={() => openCreate(isoDay(anchorDate))}>+ New event</button>
         </div>
       </div>
@@ -244,7 +246,110 @@ export default function CalendarPanel({ projectId, onOpenPlanning }: {
         <EventDialog projectId={projectId} draft={draft}
           onClose={() => setDraft(null)} onSaved={() => { setDraft(null); void load() }} />
       )}
+      {showSync && <CalendarSyncDialog projectId={projectId} onClose={() => setShowSync(false)} />}
     </div>
+  )
+}
+
+// ── External sync (Google / Microsoft) ────────────────────────────────────
+function CalendarSyncDialog({ projectId, onClose }: { projectId: string; onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null)
+  const [providers, setProviders] = useState<string[]>([])
+  const [connections, setConnections] = useState<CalendarConnection[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  useEffect(() => { ref.current?.showModal?.() }, [])
+  const close = () => ref.current?.close()
+
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [p, c] = await Promise.all([
+        api.calendarSync.providers(), api.calendarSync.connections(projectId),
+      ])
+      setProviders(p.providers); setConnections(c)
+    } catch { setMsg('Could not load sync status.') } finally { setLoading(false) }
+  }, [projectId])
+
+  useEffect(() => { void refresh() }, [refresh])
+
+  function connect(provider: string) {
+    setMsg(null)
+    api.calendarSync.connect(provider, projectId, api.calendarSync.callbackUrl(provider))
+      .then(({ authorize_url }) => {
+        const popup = window.open(authorize_url, 'calendar-oauth', 'width=520,height=680')
+        // No postMessage channel — refresh once the OAuth popup closes.
+        const timer = window.setInterval(() => {
+          if (!popup || popup.closed) { window.clearInterval(timer); void refresh() }
+        }, 1500)
+      })
+      .catch(e => setMsg(e instanceof Error ? e.message : String(e)))
+  }
+
+  async function runSync(id: string) {
+    setBusy(id); setMsg(null)
+    try {
+      const r = await api.calendarSync.sync(id)
+      setMsg(`Synced — pushed ${r.pushed}, pulled ${r.pulled}.`)
+      await refresh()
+    } catch (e) { setMsg(e instanceof Error ? e.message : String(e)) } finally { setBusy(null) }
+  }
+
+  async function disconnect(id: string) {
+    setBusy(id); setMsg(null)
+    try { await api.calendarSync.disconnect(id); await refresh() }
+    catch (e) { setMsg(e instanceof Error ? e.message : String(e)) } finally { setBusy(null) }
+  }
+
+  return (
+    <dialog ref={ref} className="cal-dialog" onClose={onClose} onClick={e => { if (e.target === ref.current) close() }}>
+      <div className="cal-dialog-form">
+        <div className="cal-dialog-head">
+          <span className="cal-dialog-title">Calendar sync</span>
+          <button type="button" className="btn btn-outline btn-sm" onClick={close} aria-label="Close">✕</button>
+        </div>
+        {loading ? <p className="cal-state">Loading…</p> : (
+          <>
+            {connections.length > 0 && (
+              <div className="cal-sync-list">
+                {connections.map(c => (
+                  <div key={c.id} className="cal-sync-row">
+                    <div style={{ minWidth: 0 }}>
+                      <div className="cal-sync-acct">{c.provider} · {c.account_email}</div>
+                      <div className="cal-sync-meta">
+                        <span className={`cal-sync-status cal-sync-status--${c.status}`}>{c.status}</span>
+                        {c.last_synced_at && <> · last synced {new Date(c.last_synced_at).toLocaleString()}</>}
+                      </div>
+                    </div>
+                    <div className="cal-sync-actions">
+                      <button type="button" className="btn btn-outline btn-xs" disabled={busy === c.id} onClick={() => runSync(c.id)}>Sync now</button>
+                      <button type="button" className="btn btn-ghost btn-xs cal-del" disabled={busy === c.id} onClick={() => disconnect(c.id)}>Disconnect</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {providers.length > 0 ? (
+              <div className="cal-sync-connect">
+                {providers.map(p => (
+                  <button key={p} type="button" className="btn btn-solid btn-sm" onClick={() => connect(p)}>
+                    Connect {p[0].toUpperCase() + p.slice(1)}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="cal-state">
+                External calendar sync isn’t configured on this server. It activates once a
+                provider client ID and an encryption key are set in the environment.
+              </p>
+            )}
+            {msg && <p className="cal-sync-msg" role="status">{msg}</p>}
+          </>
+        )}
+      </div>
+    </dialog>
   )
 }
 

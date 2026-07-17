@@ -178,6 +178,24 @@ export interface ProjectCalendar {
   items: CalendarItem[]
 }
 
+/** An external calendar link (Google/Microsoft). Never carries tokens. */
+export interface CalendarConnection {
+  id: string
+  project_id: string
+  provider: string
+  account_email: string
+  status: string
+  last_synced_at: string | null
+  created_at: string
+}
+
+export interface SyncResult {
+  connection_id: string
+  pushed: number
+  pulled: number
+  status: string
+}
+
 export interface ChecklistItem {
   id: string
   task_id: string
@@ -823,6 +841,19 @@ export const api = {
       const qs = q.toString()
       return `${BASE}/projects/${projectId}/calendar.ics${qs ? `?${qs}` : ''}`
     },
+  },
+  calendarSync: {
+    providers: () => request<{ providers: string[] }>(`/calendar-sync/providers`),
+    connections: (projectId: string) =>
+      request<CalendarConnection[]>(`/projects/${projectId}/calendar-connections`),
+    connect: (provider: string, projectId: string, redirectUri: string) =>
+      request<{ authorize_url: string }>(
+        `/calendar-sync/${provider}/connect?project_id=${encodeURIComponent(projectId)}&redirect_uri=${encodeURIComponent(redirectUri)}`,
+      ),
+    disconnect: (id: string) => request<void>(`/calendar-connections/${id}`, { method: 'DELETE' }),
+    sync: (id: string) => request<SyncResult>(`/calendar-connections/${id}/sync`, { method: 'POST' }),
+    /** The OAuth callback URL to register with the provider (same-origin, proxied). */
+    callbackUrl: (provider: string) => `${window.location.origin}${BASE}/calendar-sync/${provider}/callback`,
   },
   checklistItems: {
     list: (taskId: string) => request<ChecklistItem[]>(`/tasks/${taskId}/checklist-items`),
