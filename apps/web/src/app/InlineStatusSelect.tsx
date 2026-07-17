@@ -7,7 +7,7 @@ import { StatusBadge, type ToneKind } from './StatusBadge'
  * Keyboard: Enter/Space opens, Escape closes, arrows move, Enter selects.
  */
 export function InlineStatusSelect({
-  kind, value, options, onChange, disabled = false, label = 'Change status',
+  kind, value, options, onChange, disabled = false, label = 'Change status', onAddNew,
 }: {
   kind: ToneKind
   value: string
@@ -15,6 +15,7 @@ export function InlineStatusSelect({
   onChange: (next: string) => void
   disabled?: boolean
   label?: string
+  onAddNew?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLSpanElement>(null)
@@ -60,6 +61,15 @@ export function InlineStatusSelect({
               <StatusBadge kind={kind} value={opt} />
             </button>
           ))}
+          {onAddNew && (
+            <button
+              type="button"
+              className="pp-inline-status-item pp-inline-status-add"
+              onClick={e => { e.stopPropagation(); setOpen(false); onAddNew() }}
+            >
+              + Add status…
+            </button>
+          )}
         </div>
       )}
     </span>

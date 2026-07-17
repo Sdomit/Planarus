@@ -78,6 +78,15 @@ export interface Stage {
   updated_at: string
 }
 
+export interface StatusOption {
+  id: string | null       // null for built-in canonical statuses
+  key: string
+  label: string
+  color: string | null
+  sort_order: number
+  builtin: boolean
+}
+
 export interface Task {
   id: string
   project_id: string
@@ -764,6 +773,13 @@ export const api = {
     remove: (id: string) => request<void>(`/tasks/${id}`, { method: 'DELETE' }),
     reorder: (projectId: string, ids: string[]) =>
       request<Task[]>(`/projects/${projectId}/tasks/reorder`, { method: 'POST', body: JSON.stringify({ ids }) }),
+  },
+  statusOptions: {
+    list: (projectId: string, entityType = 'task') =>
+      request<StatusOption[]>(`/projects/${projectId}/status-options?entity_type=${entityType}`),
+    create: (projectId: string, data: { entity_type: string; label: string; color?: string }) =>
+      request<StatusOption>(`/projects/${projectId}/status-options`, { method: 'POST', body: JSON.stringify(data) }),
+    remove: (id: string) => request<void>(`/status-options/${id}`, { method: 'DELETE' }),
   },
   decisions: {
     list: (projectId: string) => request<Decision[]>(`/projects/${projectId}/decisions`),

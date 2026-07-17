@@ -15,6 +15,15 @@ from app.core.utils import new_id, now_utc
 from app.models.decision import Decision
 from app.models.doc import Doc
 from app.models.task import Task
+from app.services import status_option_service
+
+
+def _check_task_status(session: Session, project_id: str, status: str) -> None:
+    """Phase 15.5: an applied task status must be a built-in or one of the
+    project's custom statuses (the policy layer couldn't check this — it has no
+    project scope)."""
+    if status not in status_option_service.allowed_status_keys(session, project_id, "task"):
+        raise ValueError(f"status '{status}' is not defined for this project")
 
 _TASK_FIELDS = (
     "title",
@@ -37,6 +46,7 @@ def _next_sort_order(session: Session, project_id: str) -> int:
 
 
 def _apply_task_create(session: Session, project_id: str, patch: dict) -> tuple[str, str]:
+    _check_task_status(session, project_id, patch.get("status", "backlog"))
     now = now_utc()
     task = Task(
         id=new_id("tsk"),
@@ -61,6 +71,8 @@ def _apply_task_update(session: Session, target_id: str, patch: dict) -> tuple[s
     task = session.get(Task, target_id)
     if task is None:
         raise LookupError(f"task '{target_id}' not found")
+    if patch.get("status") is not None:
+        _check_task_status(session, task.project_id, patch["status"])
     for field in _TASK_FIELDS:
         if field in patch:
             setattr(task, field, patch[field])
