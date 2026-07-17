@@ -6,8 +6,14 @@ from app.core.utils import new_id, now_utc
 from app.models.decision import Decision
 from app.models.project import Project
 from app.schemas.decision import DecisionCreate, DecisionUpdate
+from app.services import status_option_service
 from app.services.audit_service import create_audit_event
 from app.services.planning_reorder import apply_reorder
+
+
+def _validate_status(session: Session, project_id: str, status: str) -> None:
+    if status not in status_option_service.allowed_status_keys(session, project_id, "decision"):
+        raise ValueError(f"status '{status}' is not defined for this project")
 
 
 def list_decisions(session: Session, project_id: str) -> list[Decision]:
@@ -30,6 +36,7 @@ def create_decision(
 ) -> Decision:
     if session.get(Project, project_id) is None:
         raise ValueError(f"project '{project_id}' not found")
+    _validate_status(session, project_id, data.status)
 
     now = now_utc()
     decision = Decision(
@@ -65,6 +72,8 @@ def update_decision(
         return None
 
     update_data = data.model_dump(exclude_unset=True)
+    if update_data.get("status") is not None:
+        _validate_status(session, decision.project_id, update_data["status"])
     now = now_utc()
     for key, value in update_data.items():
         setattr(decision, key, value)
