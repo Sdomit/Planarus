@@ -906,6 +906,7 @@ export const api = {
       request<ChecklistItem>(`/tasks/${taskId}/checklist-items`, { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, data: Partial<Pick<ChecklistItem, 'label' | 'done'>>) =>
       request<ChecklistItem>(`/checklist-items/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    remove: (id: string) => request<void>(`/checklist-items/${id}`, { method: 'DELETE' }),
   },
   comments: {
     list: (projectId: string, params?: { entity_type?: string; entity_id?: string }) => {

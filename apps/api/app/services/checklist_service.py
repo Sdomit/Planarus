@@ -1,5 +1,6 @@
 from typing import Optional
 
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.core.utils import new_id, now_utc
@@ -25,8 +26,14 @@ def create_checklist_item(
     if task is None:
         raise ValueError(f"task '{task_id}' not found")
 
-    # Append to the end: next sort_order is the current count.
-    next_sort = len(list_checklist_items(session, task_id))
+    # Append to the end: one past the current max sort_order. Using max()+1
+    # (rather than the item count) keeps ordering stable when items are deleted.
+    max_sort = session.exec(
+        select(func.max(ChecklistItem.sort_order)).where(
+            ChecklistItem.task_id == task_id
+        )
+    ).one()
+    next_sort = 0 if max_sort is None else max_sort + 1
     now = now_utc()
     item = ChecklistItem(
         id=new_id("cli"),
@@ -50,6 +57,27 @@ def create_checklist_item(
     session.commit()
     session.refresh(item)
     return item
+
+
+def delete_checklist_item(session: Session, item_id: str) -> bool:
+    """Remove a checklist item. Returns True if an item was deleted, False if
+    no item with that id exists."""
+    item = session.get(ChecklistItem, item_id)
+    if item is None:
+        return False
+
+    task = session.get(Task, item.task_id)
+    session.delete(item)
+    create_audit_event(
+        session,
+        event_type="delete",
+        actor_type="human",
+        entity_type="checklist_item",
+        entity_id=item_id,
+        project_id=task.project_id if task is not None else None,
+    )
+    session.commit()
+    return True
 
 
 def update_checklist_item(
