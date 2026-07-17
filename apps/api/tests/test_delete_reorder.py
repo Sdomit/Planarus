@@ -135,6 +135,26 @@ def test_reorder_rejects_incomplete_set(client: TestClient) -> None:
     ).status_code == 422
 
 
+def test_reorder_decisions(client: TestClient) -> None:
+    pid = _seed(client)
+    ids = [client.post(f"/api/v1/projects/{pid}/decisions", json={"title": t, "decision": "x"}).json()["id"]
+           for t in ("A", "B", "C")]
+    res = client.post(f"/api/v1/projects/{pid}/decisions/reorder", json={"ids": list(reversed(ids))})
+    assert res.status_code == 200
+    assert [d["id"] for d in res.json()] == list(reversed(ids))
+    assert [d["sort_order"] for d in res.json()] == [0, 1, 2]
+
+
+def test_reorder_risks(client: TestClient) -> None:
+    pid = _seed(client)
+    ids = [client.post(f"/api/v1/projects/{pid}/risks", json={"title": t, "severity": "high"}).json()["id"]
+           for t in ("A", "B", "C")]
+    res = client.post(f"/api/v1/projects/{pid}/risks/reorder", json={"ids": [ids[1], ids[2], ids[0]]})
+    assert res.status_code == 200
+    # Manual order overrides the default severity ordering.
+    assert [r["id"] for r in res.json()] == [ids[1], ids[2], ids[0]]
+
+
 def test_reorder_project_not_found(client: TestClient) -> None:
     assert client.post("/api/v1/projects/proj_nope/phases/reorder", json={"ids": ["ph_x"]}).status_code == 404
 

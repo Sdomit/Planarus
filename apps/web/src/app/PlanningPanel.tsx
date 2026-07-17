@@ -3,7 +3,14 @@ import {
   api, Blocker, ChecklistItem, Comment, Decision, Link, Milestone, Phase, Project, Risk, Stage, Task,
 } from '../api/client'
 import { StatusBadge } from './StatusBadge'
+import { InlineStatusSelect } from './InlineStatusSelect'
+import { RowActions } from './RowActions'
+import { useListReorder } from './useListReorder'
+import { EntityBoard, nextStatusForColumn as nextStatusForCol } from './EntityBoard'
 import './planning-panel.css'
+
+// Re-exported for tests + existing callers; the implementation now lives in EntityBoard.
+export const nextStatusForColumn = nextStatusForCol
 
 type TabKey = 'phases' | 'tasks' | 'milestones' | 'decisions' | 'risks' | 'comments' | 'links'
 
@@ -46,10 +53,29 @@ const STATUS_COLS: BoardCol[] = TASK_STATUSES.map(s => ({
   key: s, label: s.replace(/_/g, ' '), statuses: [s], dot: STATUS_DOT[s] ?? 'var(--text-tertiary)',
 }))
 
-/** Status a task takes when dropped on `col`; null when it already fits there (no change / no write). */
-export function nextStatusForColumn(taskStatus: string, col: Pick<BoardCol, 'statuses'>): string | null {
-  return col.statuses.includes(taskStatus) ? null : col.statuses[0]
+// One-column-per-status board configs for the non-task entities.
+const PHASE_DOT: Record<string, string> = {
+  planned: 'var(--text-tertiary)', active: 'var(--status-info-fg)', blocked: 'var(--status-danger-fg)',
+  done: 'var(--status-success-fg)', canceled: 'var(--text-tertiary)',
 }
+const MILESTONE_DOT: Record<string, string> = {
+  planned: 'var(--text-tertiary)', active: 'var(--status-info-fg)', achieved: 'var(--status-success-fg)',
+  missed: 'var(--status-danger-fg)', canceled: 'var(--text-tertiary)',
+}
+const DECISION_DOT: Record<string, string> = {
+  proposed: 'var(--status-info-fg)', accepted: 'var(--status-success-fg)',
+  superseded: 'var(--text-tertiary)', reversed: 'var(--status-danger-fg)',
+}
+const RISK_STATUS_DOT: Record<string, string> = {
+  open: 'var(--status-danger-fg)', monitoring: 'var(--status-warning-fg)', mitigated: 'var(--status-success-fg)',
+  accepted: 'var(--status-info-fg)', closed: 'var(--text-tertiary)',
+}
+const statusCols = (statuses: string[], dots: Record<string, string>): BoardCol[] =>
+  statuses.map(s => ({ key: s, label: s.replace(/_/g, ' '), statuses: [s], dot: dots[s] ?? 'var(--text-tertiary)' }))
+const PHASE_COLS = statusCols(PHASE_STATUSES, PHASE_DOT)
+const MILESTONE_COLS = statusCols(MILESTONE_STATUSES, MILESTONE_DOT)
+const DECISION_COLS = statusCols(DECISION_STATUSES, DECISION_DOT)
+const RISK_COLS = statusCols(RISK_STATUSES, RISK_STATUS_DOT)
 
 export default function PlanningPanel({
   projectId,
@@ -340,9 +366,7 @@ export default function PlanningPanel({
         )}
 
         {tab === 'phases' && (
-          <PhasesList phases={phases} onPhaseUpdated={updated =>
-            setPhases(prev => prev.map(p => p.id === updated.id ? updated : p))
-          } />
+          <PhasesSection phases={phases} projectId={project.id} setPhases={setPhases} />
         )}
         {tab === 'tasks' && (
           <TasksList tasks={tasks} phases={phases} stages={stages} projectId={project.id} onTaskUpdated={updated =>
@@ -350,20 +374,17 @@ export default function PlanningPanel({
           } />
         )}
         {tab === 'milestones' && (
-          <MilestonesList milestones={milestones} onMilestoneUpdated={updated =>
-            setMilestones(prev => prev.map(m => m.id === updated.id ? updated : m))
-          } />
+          <MilestonesSection milestones={milestones} projectId={project.id} setMilestones={setMilestones} />
         )}
         {tab === 'decisions' && (
-          <DecisionsList decisions={decisions} onDecisionUpdated={updated =>
-            setDecisions(prev => prev.map(d => d.id === updated.id ? updated : d))
-          } />
+          <DecisionsSection decisions={decisions} projectId={project.id} setDecisions={setDecisions} />
         )}
         {tab === 'risks' && (
-          <RisksList
+          <RisksSection
             risks={risks}
             blockers={openBlockers}
-            onRiskUpdated={updated => setRisks(prev => prev.map(r => r.id === updated.id ? updated : r))}
+            projectId={project.id}
+            setRisks={setRisks}
             onBlockerUpdated={updated => setBlockers(prev => prev.map(b => b.id === updated.id ? updated : b))}
           />
         )}
@@ -415,39 +436,98 @@ function useRowUpdate<T>(updateFn: (patch: Partial<T>) => Promise<T>, onUpdated:
   return { saving, error, update }
 }
 
-function PhasesList({ phases, onPhaseUpdated }: { phases: Phase[]; onPhaseUpdated: (p: Phase) => void }) {
-  if (phases.length === 0) return <p style={EMPTY}>No phases yet.</p>
+/** View toggle shared by the entity sections. */
+function ViewToggle({ view, setView }: { view: 'list' | 'board'; setView: (v: 'list' | 'board') => void }) {
   return (
-    <ul className="pp-rows">
-      {phases.map(ph => (
-        <PhaseRow key={ph.id} phase={ph} onUpdated={onPhaseUpdated} />
-      ))}
-    </ul>
+    <div className="ab-seg" role="group" aria-label="View">
+      <button type="button" aria-pressed={view === 'list'} className={view === 'list' ? 'active' : ''} onClick={() => setView('list')}>List</button>
+      <button type="button" aria-pressed={view === 'board'} className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>Board</button>
+    </div>
   )
 }
 
-function PhaseRow({ phase, onUpdated }: { phase: Phase; onUpdated: (p: Phase) => void }) {
-  const { saving, error, update } = useRowUpdate(patch => api.phases.update(phase.id, patch), onUpdated)
+/** Inline title editor: the pencil (RowActions) calls `start`; Enter/blur saves. */
+function useEditable(value: string, onSave: (next: string) => void) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+  const start = () => { setDraft(value); setEditing(true) }
+  const node = editing ? (
+    <input
+      className="input input-sm pp-title-edit" autoFocus value={draft}
+      onClick={e => e.stopPropagation()}
+      onChange={e => setDraft(e.target.value)}
+      onBlur={() => { setEditing(false); const t = draft.trim(); if (t && t !== value) onSave(t) }}
+      onKeyDown={e => {
+        if (e.key === 'Enter') { e.preventDefault(); setEditing(false); const t = draft.trim(); if (t && t !== value) onSave(t) }
+        else if (e.key === 'Escape') { setEditing(false) }
+      }}
+    />
+  ) : null
+  return { editing, start, node }
+}
+
+function PhasesSection({ phases, projectId, setPhases }: {
+  phases: Phase[]; projectId: string; setPhases: React.Dispatch<React.SetStateAction<Phase[]>>
+}) {
+  const [view, setView] = useState<'list' | 'board'>('list')
+  const onUpdated = (u: Phase) => setPhases(prev => prev.map(p => (p.id === u.id ? u : p)))
+  const onDeleted = (id: string) => setPhases(prev => prev.filter(p => p.id !== id))
+  const update = (id: string, patch: Parameters<typeof api.phases.update>[1]) => void api.phases.update(id, patch).then(onUpdated)
+  const remove = (id: string) => void api.phases.remove(id).then(() => onDeleted(id))
+  const { itemProps } = useListReorder(phases, next => setPhases(next), ids => api.phases.reorder(projectId, ids))
+
+  if (phases.length === 0) return <p style={EMPTY}>No phases yet.</p>
+
   return (
-    <ExpandableRow
-      id={phase.id}
-      header={<>
-        <span className="pp-row-title">{phase.title}</span>
-        <StatusBadge kind="phase" value={phase.status} />
-      </>}
-    >
-      {phase.description && <p className="pp-row-desc">{phase.description}</p>}
-      <div className="pp-task-controls" role="group" aria-label={`Edit ${phase.title}`}>
-        <label>
-          <span>Status</span>
-          <select className="input select input-sm" value={phase.status} disabled={saving}
-            onChange={e => void update({ status: e.target.value })}>
-            {PHASE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </label>
+    <>
+      <div className="pp-toolbar"><ViewToggle view={view} setView={setView} /></div>
+      {view === 'board' ? (
+        <EntityBoard
+          items={phases} columns={PHASE_COLS} statusOf={p => p.status}
+          onRestatus={(p, status) => update(p.id, { status })}
+          renderCard={p => (
+            <div className="ab-task-foot" style={{ justifyContent: 'space-between' }}>
+              <span className="ab-task-title">{p.title}</span>
+              <RowActions title={p.title} onDelete={() => remove(p.id)} />
+            </div>
+          )}
+        />
+      ) : (
+        <ul className="pp-rows">
+          {phases.map(ph => (
+            <PhaseListRow key={ph.id} phase={ph} update={update} remove={remove} dragProps={itemProps(ph.id)} />
+          ))}
+        </ul>
+      )}
+    </>
+  )
+}
+
+function PhaseListRow({ phase, update, remove, dragProps }: {
+  phase: Phase
+  update: (id: string, patch: Parameters<typeof api.phases.update>[1]) => void
+  remove: (id: string) => void
+  dragProps: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
+}) {
+  const [open, setOpen] = useState(false)
+  const editable = useEditable(phase.title, t => update(phase.id, { title: t }))
+  return (
+    <li className="pp-row pp-row-expandable pp-row-managed" {...dragProps}>
+      <div className="pp-row-main-wrap">
+        <button type="button" className="pp-row-main" onClick={() => setOpen(v => !v)} aria-expanded={open}>
+          <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+          {editable.node ?? <span className="pp-row-title">{phase.title}</span>}
+        </button>
+        <InlineStatusSelect kind="phase" value={phase.status} options={PHASE_STATUSES}
+          onChange={s => update(phase.id, { status: s })} label={`Change status of ${phase.title}`} />
+        <RowActions title={phase.title} onEdit={editable.start} onDelete={() => remove(phase.id)} dragHandle />
       </div>
-      {error && <p className="form-error" role="alert">{error}</p>}
-    </ExpandableRow>
+      {open && (
+        <div className="pp-task-details">
+          {phase.description && <p className="pp-row-desc">{phase.description}</p>}
+        </div>
+      )}
+    </li>
   )
 }
 
@@ -776,102 +856,180 @@ function TaskRow({ task, phases, stages, projectId, onTaskUpdated }: {
   )
 }
 
-function MilestonesList({ milestones, onMilestoneUpdated }: { milestones: Milestone[]; onMilestoneUpdated: (m: Milestone) => void }) {
+function MilestonesSection({ milestones, projectId, setMilestones }: {
+  milestones: Milestone[]; projectId: string; setMilestones: React.Dispatch<React.SetStateAction<Milestone[]>>
+}) {
+  const [view, setView] = useState<'list' | 'board'>('list')
+  const onUpdated = (u: Milestone) => setMilestones(prev => prev.map(m => (m.id === u.id ? u : m)))
+  const update = (id: string, patch: Parameters<typeof api.milestones.update>[1]) => void api.milestones.update(id, patch).then(onUpdated)
+  const remove = (id: string) => void api.milestones.remove(id).then(() => setMilestones(prev => prev.filter(m => m.id !== id)))
+  const { itemProps } = useListReorder(milestones, next => setMilestones(next), ids => api.milestones.reorder(projectId, ids))
+
   if (milestones.length === 0) return <p style={EMPTY}>No milestones yet.</p>
-  const sorted = [...milestones].sort((a, b) =>
-    (a.target_date || '9999-99-99').localeCompare(b.target_date || '9999-99-99') || a.sort_order - b.sort_order)
-  return (
-    <ul className="pp-rows">
-      {sorted.map(m => (
-        <MilestoneRow key={m.id} milestone={m} onUpdated={onMilestoneUpdated} />
-      ))}
-    </ul>
-  )
-}
 
-function MilestoneRow({ milestone, onUpdated }: { milestone: Milestone; onUpdated: (m: Milestone) => void }) {
-  const { saving, error, update } = useRowUpdate(patch => api.milestones.update(milestone.id, patch), onUpdated)
-  return (
-    <ExpandableRow
-      id={milestone.id}
-      header={<>
-        <span className="pp-row-title">{milestone.title}</span>
-        {milestone.target_date && <span className="pp-meta">{milestone.target_date}</span>}
-        <StatusBadge kind="milestone" value={milestone.status} />
-      </>}
-    >
-      {milestone.description && <p className="pp-row-desc">{milestone.description}</p>}
-      <div className="pp-task-controls" role="group" aria-label={`Edit ${milestone.title}`}>
-        <label>
-          <span>Status</span>
-          <select className="input select input-sm" value={milestone.status} disabled={saving}
-            onChange={e => void update({ status: e.target.value })}>
-            {MILESTONE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </label>
-        <label>
-          <span>Target date</span>
-          <input type="date" className="input input-sm" value={milestone.target_date ?? ''} disabled={saving}
-            onChange={e => void update({ target_date: e.target.value || null })} />
-        </label>
-      </div>
-      {error && <p className="form-error" role="alert">{error}</p>}
-    </ExpandableRow>
-  )
-}
-
-function DecisionsList({ decisions, onDecisionUpdated }: { decisions: Decision[]; onDecisionUpdated: (d: Decision) => void }) {
-  if (decisions.length === 0) return <p style={EMPTY}>No decisions yet.</p>
-  return (
-    <ul className="pp-rows">
-      {decisions.map(d => (
-        <DecisionRow key={d.id} decision={d} onUpdated={onDecisionUpdated} />
-      ))}
-    </ul>
-  )
-}
-
-function DecisionRow({ decision, onUpdated }: { decision: Decision; onUpdated: (d: Decision) => void }) {
-  const { saving, error, update } = useRowUpdate(patch => api.decisions.update(decision.id, patch), onUpdated)
-  return (
-    <ExpandableRow
-      id={decision.id}
-      header={<>
-        <span className="pp-row-title">{decision.title}</span>
-        <StatusBadge kind="decision" value={decision.status} />
-      </>}
-    >
-      <p className="pp-row-desc">{decision.decision}</p>
-      {decision.context && <p className="pp-row-desc">{decision.context}</p>}
-      <div className="pp-task-controls" role="group" aria-label={`Edit ${decision.title}`}>
-        <label>
-          <span>Status</span>
-          <select className="input select input-sm" value={decision.status} disabled={saving}
-            onChange={e => void update({ status: e.target.value })}>
-            {DECISION_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </label>
-      </div>
-      {error && <p className="form-error" role="alert">{error}</p>}
-    </ExpandableRow>
-  )
-}
-
-function RisksList({
-  risks, blockers, onRiskUpdated, onBlockerUpdated,
-}: { risks: Risk[]; blockers: Blocker[]; onRiskUpdated: (r: Risk) => void; onBlockerUpdated: (b: Blocker) => void }) {
-  const open = risks.filter(r => !['mitigated', 'accepted', 'closed'].includes(r.status))
-  if (open.length === 0 && blockers.length === 0)
-    return <p style={EMPTY}>No open risks or blockers.</p>
   return (
     <>
-      {open.length > 0 && (
+      <div className="pp-toolbar"><ViewToggle view={view} setView={setView} /></div>
+      {view === 'board' ? (
+        <EntityBoard
+          items={milestones} columns={MILESTONE_COLS} statusOf={m => m.status}
+          onRestatus={(m, status) => update(m.id, { status })}
+          renderCard={m => (
+            <div className="ab-task-foot" style={{ justifyContent: 'space-between' }}>
+              <span className="ab-task-title">{m.title}</span>
+              <RowActions title={m.title} onDelete={() => remove(m.id)} />
+            </div>
+          )}
+        />
+      ) : (
         <ul className="pp-rows">
-          {open.map(r => (
-            <RiskRow key={r.id} risk={r} onUpdated={onRiskUpdated} />
+          {milestones.map(m => (
+            <MilestoneListRow key={m.id} milestone={m} update={update} remove={remove} dragProps={itemProps(m.id)} />
           ))}
         </ul>
       )}
+    </>
+  )
+}
+
+function MilestoneListRow({ milestone, update, remove, dragProps }: {
+  milestone: Milestone
+  update: (id: string, patch: Parameters<typeof api.milestones.update>[1]) => void
+  remove: (id: string) => void
+  dragProps: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
+}) {
+  const [open, setOpen] = useState(false)
+  const editable = useEditable(milestone.title, t => update(milestone.id, { title: t }))
+  return (
+    <li className="pp-row pp-row-expandable pp-row-managed" {...dragProps}>
+      <div className="pp-row-main-wrap">
+        <button type="button" className="pp-row-main" onClick={() => setOpen(v => !v)} aria-expanded={open}>
+          <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+          {editable.node ?? <span className="pp-row-title">{milestone.title}</span>}
+          {milestone.target_date && <span className="pp-meta">{milestone.target_date}</span>}
+        </button>
+        <InlineStatusSelect kind="milestone" value={milestone.status} options={MILESTONE_STATUSES}
+          onChange={s => update(milestone.id, { status: s })} label={`Change status of ${milestone.title}`} />
+        <RowActions title={milestone.title} onEdit={editable.start} onDelete={() => remove(milestone.id)} dragHandle />
+      </div>
+      {open && (
+        <div className="pp-task-details">
+          {milestone.description && <p className="pp-row-desc">{milestone.description}</p>}
+          <div className="pp-task-controls" role="group" aria-label={`Edit ${milestone.title}`}>
+            <label>
+              <span>Target date</span>
+              <input type="date" className="input input-sm" value={milestone.target_date ?? ''}
+                onChange={e => update(milestone.id, { target_date: e.target.value || null })} />
+            </label>
+          </div>
+        </div>
+      )}
+    </li>
+  )
+}
+
+function DecisionsSection({ decisions, projectId, setDecisions }: {
+  decisions: Decision[]; projectId: string; setDecisions: React.Dispatch<React.SetStateAction<Decision[]>>
+}) {
+  const [view, setView] = useState<'list' | 'board'>('list')
+  const onUpdated = (u: Decision) => setDecisions(prev => prev.map(d => (d.id === u.id ? u : d)))
+  const update = (id: string, patch: Parameters<typeof api.decisions.update>[1]) => void api.decisions.update(id, patch).then(onUpdated)
+  const remove = (id: string) => void api.decisions.remove(id).then(() => setDecisions(prev => prev.filter(d => d.id !== id)))
+  const { itemProps } = useListReorder(decisions, next => setDecisions(next), ids => api.decisions.reorder(projectId, ids))
+
+  if (decisions.length === 0) return <p style={EMPTY}>No decisions yet.</p>
+
+  return (
+    <>
+      <div className="pp-toolbar"><ViewToggle view={view} setView={setView} /></div>
+      {view === 'board' ? (
+        <EntityBoard
+          items={decisions} columns={DECISION_COLS} statusOf={d => d.status}
+          onRestatus={(d, status) => update(d.id, { status })}
+          renderCard={d => (
+            <div className="ab-task-foot" style={{ justifyContent: 'space-between' }}>
+              <span className="ab-task-title">{d.title}</span>
+              <RowActions title={d.title} onDelete={() => remove(d.id)} />
+            </div>
+          )}
+        />
+      ) : (
+        <ul className="pp-rows">
+          {decisions.map(d => (
+            <DecisionListRow key={d.id} decision={d} update={update} remove={remove} dragProps={itemProps(d.id)} />
+          ))}
+        </ul>
+      )}
+    </>
+  )
+}
+
+function DecisionListRow({ decision, update, remove, dragProps }: {
+  decision: Decision
+  update: (id: string, patch: Parameters<typeof api.decisions.update>[1]) => void
+  remove: (id: string) => void
+  dragProps: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
+}) {
+  const [open, setOpen] = useState(false)
+  const editable = useEditable(decision.title, t => update(decision.id, { title: t }))
+  return (
+    <li className="pp-row pp-row-expandable pp-row-managed" {...dragProps}>
+      <div className="pp-row-main-wrap">
+        <button type="button" className="pp-row-main" onClick={() => setOpen(v => !v)} aria-expanded={open}>
+          <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+          {editable.node ?? <span className="pp-row-title">{decision.title}</span>}
+        </button>
+        <InlineStatusSelect kind="decision" value={decision.status} options={DECISION_STATUSES}
+          onChange={s => update(decision.id, { status: s })} label={`Change status of ${decision.title}`} />
+        <RowActions title={decision.title} onEdit={editable.start} onDelete={() => remove(decision.id)} dragHandle />
+      </div>
+      {open && (
+        <div className="pp-task-details">
+          <p className="pp-row-desc">{decision.decision}</p>
+          {decision.context && <p className="pp-row-desc">{decision.context}</p>}
+        </div>
+      )}
+    </li>
+  )
+}
+
+function RisksSection({
+  risks, blockers, projectId, setRisks, onBlockerUpdated,
+}: {
+  risks: Risk[]; blockers: Blocker[]; projectId: string
+  setRisks: React.Dispatch<React.SetStateAction<Risk[]>>; onBlockerUpdated: (b: Blocker) => void
+}) {
+  const [view, setView] = useState<'list' | 'board'>('list')
+  const onUpdated = (u: Risk) => setRisks(prev => prev.map(r => (r.id === u.id ? u : r)))
+  const update = (id: string, patch: Parameters<typeof api.risks.update>[1]) => void api.risks.update(id, patch).then(onUpdated)
+  const remove = (id: string) => void api.risks.remove(id).then(() => setRisks(prev => prev.filter(r => r.id !== id)))
+  const { itemProps } = useListReorder(risks, next => setRisks(next), ids => api.risks.reorder(projectId, ids))
+
+  if (risks.length === 0 && blockers.length === 0)
+    return <p style={EMPTY}>No risks or blockers.</p>
+
+  return (
+    <>
+      {risks.length > 0 && <div className="pp-toolbar"><ViewToggle view={view} setView={setView} /></div>}
+      {risks.length > 0 && (view === 'board' ? (
+        <EntityBoard
+          items={risks} columns={RISK_COLS} statusOf={r => r.status}
+          onRestatus={(r, status) => update(r.id, { status })}
+          renderCard={r => (
+            <div className="ab-task-foot" style={{ justifyContent: 'space-between' }}>
+              <span className="ab-task-title">{r.title}</span>
+              <StatusBadge kind="severity" value={r.severity} />
+              <RowActions title={r.title} onDelete={() => remove(r.id)} />
+            </div>
+          )}
+        />
+      ) : (
+        <ul className="pp-rows">
+          {risks.map(r => (
+            <RiskListRow key={r.id} risk={r} update={update} remove={remove} dragProps={itemProps(r.id)} />
+          ))}
+        </ul>
+      ))}
       {blockers.length > 0 && (
         <>
           <p className="pp-section-lbl">Blockers</p>
@@ -886,37 +1044,34 @@ function RisksList({
   )
 }
 
-function RiskRow({ risk, onUpdated }: { risk: Risk; onUpdated: (r: Risk) => void }) {
-  const { saving, error, update } = useRowUpdate(patch => api.risks.update(risk.id, patch), onUpdated)
+function RiskListRow({ risk, update, remove, dragProps }: {
+  risk: Risk
+  update: (id: string, patch: Parameters<typeof api.risks.update>[1]) => void
+  remove: (id: string) => void
+  dragProps: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
+}) {
+  const [open, setOpen] = useState(false)
+  const editable = useEditable(risk.title, t => update(risk.id, { title: t }))
   return (
-    <ExpandableRow
-      id={risk.id}
-      header={<>
-        <span className="pp-row-title">{risk.title}</span>
-        <StatusBadge kind="severity" value={risk.severity} />
-        <StatusBadge kind="riskstatus" value={risk.status} />
-      </>}
-    >
-      {risk.description && <p className="pp-row-desc">{risk.description}</p>}
-      {risk.mitigation && <p className="pp-row-desc"><strong>Mitigation:</strong> {risk.mitigation}</p>}
-      <div className="pp-task-controls" role="group" aria-label={`Edit ${risk.title}`}>
-        <label>
-          <span>Severity</span>
-          <select className="input select input-sm" value={risk.severity} disabled={saving}
-            onChange={e => void update({ severity: e.target.value })}>
-            {RISK_SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </label>
-        <label>
-          <span>Status</span>
-          <select className="input select input-sm" value={risk.status} disabled={saving}
-            onChange={e => void update({ status: e.target.value })}>
-            {RISK_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </label>
+    <li className="pp-row pp-row-expandable pp-row-managed" {...dragProps}>
+      <div className="pp-row-main-wrap">
+        <button type="button" className="pp-row-main" onClick={() => setOpen(v => !v)} aria-expanded={open}>
+          <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+          {editable.node ?? <span className="pp-row-title">{risk.title}</span>}
+        </button>
+        <InlineStatusSelect kind="severity" value={risk.severity} options={RISK_SEVERITIES}
+          onChange={s => update(risk.id, { severity: s })} label={`Change severity of ${risk.title}`} />
+        <InlineStatusSelect kind="riskstatus" value={risk.status} options={RISK_STATUSES}
+          onChange={s => update(risk.id, { status: s })} label={`Change status of ${risk.title}`} />
+        <RowActions title={risk.title} onEdit={editable.start} onDelete={() => remove(risk.id)} dragHandle />
       </div>
-      {error && <p className="form-error" role="alert">{error}</p>}
-    </ExpandableRow>
+      {open && (
+        <div className="pp-task-details">
+          {risk.description && <p className="pp-row-desc">{risk.description}</p>}
+          {risk.mitigation && <p className="pp-row-desc"><strong>Mitigation:</strong> {risk.mitigation}</p>}
+        </div>
+      )}
+    </li>
   )
 }
 

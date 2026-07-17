@@ -100,6 +100,7 @@ export interface Decision {
   decision: string
   context: string | null
   status: string
+  sort_order: number
   created_at: string
   updated_at: string
 }
@@ -112,6 +113,7 @@ export interface Risk {
   severity: string
   status: string
   mitigation: string | null
+  sort_order: number
   created_at: string
   updated_at: string
 }
@@ -769,6 +771,8 @@ export const api = {
     update: (id: string, data: Partial<Pick<Decision, 'title' | 'decision' | 'context' | 'status'>>) =>
       request<Decision>(`/decisions/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remove: (id: string) => request<void>(`/decisions/${id}`, { method: 'DELETE' }),
+    reorder: (projectId: string, ids: string[]) =>
+      request<Decision[]>(`/projects/${projectId}/decisions/reorder`, { method: 'POST', body: JSON.stringify({ ids }) }),
   },
   risks: {
     list: (projectId: string) => request<Risk[]>(`/projects/${projectId}/risks`),
@@ -777,6 +781,8 @@ export const api = {
     update: (id: string, data: Partial<Pick<Risk, 'title' | 'description' | 'severity' | 'status' | 'mitigation'>>) =>
       request<Risk>(`/risks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remove: (id: string) => request<void>(`/risks/${id}`, { method: 'DELETE' }),
+    reorder: (projectId: string, ids: string[]) =>
+      request<Risk[]>(`/projects/${projectId}/risks/reorder`, { method: 'POST', body: JSON.stringify({ ids }) }),
   },
   blockers: {
     list: (projectId: string) => request<Blocker[]>(`/projects/${projectId}/blockers`),
