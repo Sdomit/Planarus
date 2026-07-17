@@ -6,6 +6,8 @@ import Subscript from '@tiptap/extension-subscript'
 import Superscript from '@tiptap/extension-superscript'
 import { TaskList, TaskItem } from '@tiptap/extension-list'
 import Image from '@tiptap/extension-image'
+import { TextStyle } from '@tiptap/extension-text-style'
+import Color from '@tiptap/extension-color'
 import { MarkdownSerializer } from 'prosemirror-markdown'
 import { api, type Doc, type DocSummary } from '../api/client'
 import { StatusBadge } from './StatusBadge'
@@ -77,6 +79,12 @@ const _docSerializer = new MarkdownSerializer(
     underline:   { open: '<u>',   close: '</u>',   mixable: true, expelEnclosingWhitespace: true },
     subscript:   { open: '<sub>', close: '</sub>', mixable: true, expelEnclosingWhitespace: true },
     superscript: { open: '<sup>', close: '</sup>', mixable: true, expelEnclosingWhitespace: true },
+    // Font color rides on the textStyle mark → inline <span> (renders in GFM,
+    // round-trips back via TextStyle's parseHTML). Empty when it carries no color.
+    textStyle: {
+      open: (_state, mark) => (mark.attrs.color ? `<span style="color:${mark.attrs.color as string}">` : ''),
+      close: (_state, mark) => (mark.attrs.color ? '</span>' : ''),
+    },
     link: {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       open: (_state, _mark, _parent, _index) => '[',
@@ -243,7 +251,12 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
   }
 
   return (
-    <div className="ab-toolbar" role="toolbar" aria-label="Editor toolbar">
+    // Prevent a toolbar button's mousedown from blurring the editor and
+    // collapsing the selection — otherwise toggleBold/Italic/etc. apply to an
+    // empty cursor instead of the selected text. The color <input> is exempt so
+    // its native picker still opens.
+    <div className="ab-toolbar" role="toolbar" aria-label="Editor toolbar"
+      onMouseDown={(e) => { if ((e.target as HTMLElement).closest('button')) e.preventDefault() }}>
       <button type="button" title="Bold"
         className={`ab-tbtn${editor.isActive('bold') ? ' active' : ''}`}
         onClick={() => editor.chain().focus().toggleBold().run()}>B</button>
@@ -295,6 +308,9 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
       <button type="button" title="Image"
         className="ab-tbtn"
         onClick={addImage}>🖼</button>
+      <input type="color" className="ab-tcolor" title="Font color" aria-label="Font color"
+        value={(editor.getAttributes('textStyle').color as string) || '#000000'}
+        onChange={(e) => editor.chain().focus().setColor(e.target.value).run()} />
     </div>
   )
 }
@@ -337,6 +353,8 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
           HTMLAttributes: { rel: 'noopener noreferrer nofollow', target: '_blank' },
         },
       }),
+      TextStyle,
+      Color,
       Highlight,
       Subscript,
       Superscript,
