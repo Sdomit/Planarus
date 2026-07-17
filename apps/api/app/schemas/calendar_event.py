@@ -2,9 +2,18 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.constants import CALENDAR_EVENT_STATUSES
+from app.core.constants import CALENDAR_EVENT_STATUSES, CALENDAR_RECURRENCE_TYPES
 
 _CALENDAR_EVENT_STATUSES = frozenset(CALENDAR_EVENT_STATUSES)
+_CALENDAR_RECURRENCE_TYPES = frozenset(CALENDAR_RECURRENCE_TYPES)
+
+
+def _check_recurrence(v: Optional[str]) -> Optional[str]:
+    if v is not None and v not in _CALENDAR_RECURRENCE_TYPES:
+        raise ValueError(
+            f"recurrence must be one of: {', '.join(sorted(_CALENDAR_RECURRENCE_TYPES))}"
+        )
+    return v
 
 
 class CalendarEventCreate(BaseModel):
@@ -15,6 +24,8 @@ class CalendarEventCreate(BaseModel):
     start_at: str = Field(min_length=1)
     end_at: Optional[str] = None
     all_day: bool = False
+    recurrence: str = "none"
+    recurrence_until: Optional[str] = None
     phase_id: Optional[str] = None
 
     @field_validator("status")
@@ -26,6 +37,11 @@ class CalendarEventCreate(BaseModel):
             )
         return v
 
+    @field_validator("recurrence")
+    @classmethod
+    def validate_recurrence(cls, v: str) -> str:
+        return _check_recurrence(v)  # type: ignore[return-value]
+
 
 class CalendarEventUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=1, max_length=200)
@@ -35,6 +51,8 @@ class CalendarEventUpdate(BaseModel):
     start_at: Optional[str] = Field(default=None, min_length=1)
     end_at: Optional[str] = None
     all_day: Optional[bool] = None
+    recurrence: Optional[str] = None
+    recurrence_until: Optional[str] = None
     phase_id: Optional[str] = None
 
     @field_validator("status")
@@ -45,6 +63,11 @@ class CalendarEventUpdate(BaseModel):
                 f"status must be one of: {', '.join(sorted(_CALENDAR_EVENT_STATUSES))}"
             )
         return v
+
+    @field_validator("recurrence")
+    @classmethod
+    def validate_recurrence(cls, v: Optional[str]) -> Optional[str]:
+        return _check_recurrence(v)
 
 
 class CalendarEventRead(BaseModel):
@@ -58,6 +81,8 @@ class CalendarEventRead(BaseModel):
     start_at: str
     end_at: Optional[str]
     all_day: bool
+    recurrence: str
+    recurrence_until: Optional[str]
     sort_order: int
     created_at: str
     updated_at: str
@@ -78,6 +103,7 @@ class CalendarItem(BaseModel):
     all_day: bool
     status: Optional[str] = None
     phase_id: Optional[str] = None
+    recurring: bool = False
 
 
 class ProjectCalendar(BaseModel):

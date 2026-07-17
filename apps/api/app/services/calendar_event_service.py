@@ -46,6 +46,8 @@ def create_calendar_event(
         start_at=data.start_at,
         end_at=data.end_at,
         all_day=data.all_day,
+        recurrence=data.recurrence,
+        recurrence_until=data.recurrence_until,
         created_at=now,
         updated_at=now,
     )
