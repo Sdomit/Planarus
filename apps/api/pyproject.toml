@@ -32,6 +32,13 @@ postgres = [
 oauth = [
     "httpx>=0.27.0",
 ]
+# P15.12b: calendar external sync (Google/Microsoft). httpx for the provider
+# calls + cryptography (Fernet) to encrypt stored OAuth tokens at rest. Inert
+# unless AGENTBOARD_CALENDAR_ENC_KEY + a provider client id are configured.
+calendar-sync = [
+    "httpx>=0.27.0",
+    "cryptography>=42.0",
+]
 # P10.3b: AWS SDK for the S3 storage backend. Only needed when
 # AGENTBOARD_STORAGE_BACKEND=s3; local/memory backends never import it.
 s3 = [
