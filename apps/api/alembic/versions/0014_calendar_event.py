@@ -1,20 +1,24 @@
 """CalendarEvent table (Phase 15.12a — calendar surface)
 
-Revision ID: 0013
-Revises: 0012
+Revision ID: 0014
+Revises: 0013
 Create Date: 2026-07-16
 
 Additive only: one new `calendar_event` table with a frozen status CHECK and two
 indexes. No existing table, CHECK, or index changes. `external_uid`/`etag` are
 reserved for external provider sync (15.12c/d) and ship nullable/unused.
+
+Renumbered from 0013 -> 0014 when merging into main: 0013 was independently
+claimed by the canvas-doc-type migration (already merged). Both are additive
+and order-independent; this one now simply chains after that one.
 """
 from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0013"
-down_revision: Union[str, None] = "0012"
+revision: str = "0014"
+down_revision: Union[str, None] = "0013"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
