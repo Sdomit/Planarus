@@ -1,22 +1,25 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { api, type GitBranch, type GitSnapshot } from '../api/client'
+import { api, type GitBranch, type GitFetchResult, type GitSnapshot } from '../api/client'
 import { Icon } from './Icon'
 import { agoLabel, dayLabel } from './date'
 
 // Phase 12a repo cockpit — SHOW, DON'T DO. Read-only view of local Git state;
 // "live" = refetch on view + window focus (debounced to match the backend's
-// short TTL cache), never a background poller.
+// short TTL cache), never a background poller. The one exception is the Phase
+// 12b "Fetch now" button — an explicit, human-clicked, gated outbound action.
 const MIN_REFRESH_MS = 3000
 const BRANCH_ROWS = 8
 
 export default function GitSnapshotPanel({ projectId }: { projectId: string }) {
   const [snap, setSnap] = useState<GitSnapshot | null>(null)
   const [failed, setFailed] = useState(false)
-  const lastFetch = useRef(0)
+  const [fetching, setFetching] = useState(false)
+  const [fetchMsg, setFetchMsg] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null)
+  const lastRefresh = useRef(0)
 
   const load = useCallback(async (force: boolean) => {
-    if (!force && Date.now() - lastFetch.current < MIN_REFRESH_MS) return
-    lastFetch.current = Date.now()
+    if (!force && Date.now() - lastRefresh.current < MIN_REFRESH_MS) return
+    lastRefresh.current = Date.now()
     try {
       setSnap(await api.git.snapshot(projectId))
       setFailed(false)
@@ -32,6 +35,40 @@ export default function GitSnapshotPanel({ projectId }: { projectId: string }) {
     return () => window.removeEventListener('focus', onFocus)
   }, [load])
 
+  const onFetch = useCallback(async () => {
+    setFetching(true)
+    setFetchMsg(null)
+    try {
+      const res: GitFetchResult = await api.git.fetchNow(projectId)
+      if (res.snapshot) setSnap(res.snapshot)  // refresh stamp + refs in one shot
+      if (res.status === 'ok') {
+        setFetchMsg({ tone: 'ok', text: `Fetched from ${res.remote}.` })
+      } else {
+        setFetchMsg({ tone: 'warn', text: res.message ?? 'Fetch did not complete.' })
+      }
+    } catch (e) {
+      // Disabled (409) and any other error surface as a message; the offline
+      // cockpit keeps working regardless.
+      const msg = e instanceof Error ? e.message : 'Fetch failed.'
+      setFetchMsg({ tone: 'warn', text: msg })
+    } finally {
+      setFetching(false)
+    }
+  }, [projectId])
+
+  const fetchButton = snap?.is_repo && (
+    <button
+      type="button"
+      className="btn btn-outline btn-sm"
+      onClick={onFetch}
+      disabled={fetching}
+      title="Fetch remote-tracking refs now (the only outbound Git action)"
+    >
+      {fetching ? <span className="spinner spinner-sm" /> : <Icon name="external" className="ic-14" />}
+      {fetching ? ' Fetching…' : ' Fetch now'}
+    </button>
+  )
+
   const header = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 'var(--space-3)', flexWrap: 'wrap' }}>
       <Icon name="code" className="ic-16" />
@@ -44,13 +81,24 @@ export default function GitSnapshotPanel({ projectId }: { projectId: string }) {
             : 'no fetch recorded — remote state may be stale'}
         </span>
       )}
+      {fetchButton}
     </div>
+  )
+
+  const fetchNote = fetchMsg && (
+    <p style={{
+      margin: '0 0 var(--space-3)', fontSize: 'var(--text-xs)',
+      color: fetchMsg.tone === 'ok' ? 'var(--text-secondary)' : 'var(--warning, var(--text-secondary))',
+    }}>
+      {fetchMsg.text}
+    </p>
   )
 
   if (failed || !snap || !snap.is_repo) {
     return (
       <div className="card" style={{ padding: 'var(--space-5)' }}>
         {header}
+        {fetchNote}
         <p style={{ margin: 0, color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>
           {(!failed && snap?.message) || 'No Git metadata available.'}
         </p>
@@ -61,6 +109,7 @@ export default function GitSnapshotPanel({ projectId }: { projectId: string }) {
   return (
     <div className="card" style={{ padding: 'var(--space-5)' }}>
       {header}
+      {fetchNote}
       <dl style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 'var(--space-2) var(--space-4)', margin: 0 }}>
         <Row k="Branch">
           {snap.detached

@@ -83,3 +83,24 @@ class GitSnapshot(BaseModel):
     needs_merge: list[str] = []
     working_tree: Optional[GitWorkingTree] = None
     last_fetched_at: Optional[str] = None
+
+
+class GitFetchResult(BaseModel):
+    """Outcome of the one gated exception (Phase 12b): a human-clicked fetch of
+    remote-tracking refs. ``status``:
+
+    - ``ok``          — fetch ran; ``snapshot`` is the refreshed post-fetch state
+    - ``no_remote``   — the repo has no remote to fetch from
+    - ``rate_limited``— fetched too recently (min-interval); no network hit
+    - ``failed``      — the fetch was attempted but errored (message explains)
+
+    The working tree and local branches are never touched — refs + FETCH_HEAD
+    only. ``snapshot`` is always the current cockpit state so the UI can refresh
+    the staleness stamp regardless of outcome.
+    """
+
+    project_id: str
+    status: str
+    message: Optional[str] = None
+    remote: Optional[str] = None
+    snapshot: Optional[GitSnapshot] = None
