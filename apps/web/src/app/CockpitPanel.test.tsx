@@ -5,11 +5,20 @@ import { api } from '../api/client'
 
 const project = { id: 'proj_1', title: 'Demo', slug: 'demo', status: 'active', summary: 'A demo' }
 
-const gitRepo = {
-  project_id: 'proj_1', repo_path: '/srv/demo', is_repo: true,
-  current_branch: 'main', detached: false, last_commit_sha: 'abc1234',
-  last_commit_subject: 'initial commit', is_dirty: true, dirty_count: 2,
-  remote_url: 'https://example.com/x.git', message: null, checked_at: 't',
+// Phase 12a repo cockpit snapshot (rendered by GitSnapshotPanel inside the cockpit).
+const gitSnapshot = {
+  project_id: 'proj_1', repo_path: '/srv/demo', is_repo: true, message: null, checked_at: 't',
+  current_branch: 'main', detached: false, default_branch: 'main',
+  last_commit_sha: 'abc1234', last_commit_subject: 'initial commit',
+  remote_url: 'https://example.com/x.git',
+  branches: [
+    { name: 'main', is_current: true, upstream: 'origin/main', ahead: 1, behind: 0, gone: false, committed_at: '2026-07-17T10:00:00Z', ahead_of_default: 0, behind_default: 0 },
+    { name: 'feat/x', is_current: false, upstream: null, ahead: null, behind: null, gone: false, committed_at: '2026-07-16T10:00:00Z', ahead_of_default: 2, behind_default: 1 },
+  ],
+  branches_total: 2,
+  needs_merge: ['feat/x'],
+  working_tree: { staged: 1, unstaged: 1, untracked: 0, conflicted: 0, ahead: 1, behind: 0 },
+  last_fetched_at: null,
 }
 
 vi.mock('../api/client', () => ({
@@ -20,7 +29,7 @@ vi.mock('../api/client', () => ({
     risks: { list: vi.fn(async () => [{ id: 'r_1', status: 'open' }]) },
     milestones: { list: vi.fn(async () => []) },
     decisions: { list: vi.fn(async () => []) },
-    git: { get: vi.fn(async () => gitRepo) },
+    git: { snapshot: vi.fn(async () => gitSnapshot) },
     approvals: { list: vi.fn(async () => []) },
     roadmap: { get: vi.fn(async () => ({ project_id: 'p', generated_at: 't', phases: [], unphased: { total: 0, done: 0, in_progress: 0, blocked: 0 }, totals: { total: 0, done: 0, in_progress: 0, blocked: 0 }, pct_done: 0 })) },
     timeline: { get: vi.fn(async () => ({ project_id: 'p', generated_at: 't', events: [] })) },
@@ -36,26 +45,28 @@ function kpiValue(container: HTMLElement, label: string): string | undefined {
 }
 
 describe('CockpitPanel', () => {
-  it('renders the project header, computed KPIs and the Git summary', async () => {
+  it('renders the project header, computed KPIs and the repo snapshot', async () => {
     const { container } = render(<CockpitPanel projectId="proj_1" onClose={() => {}} />)
     expect(await screen.findByText('Demo')).toBeTruthy()
-    // Git summary surfaces branch, commit, and dirty state.
-    expect(screen.getByText('main')).toBeTruthy()
-    expect(screen.getByText('abc1234')).toBeTruthy()
+    // Repo snapshot surfaces commit, working-tree counts, needs-merge and the
+    // always-visible freshness stamp.
+    expect(await screen.findByText('abc1234')).toBeTruthy()
     expect(screen.getByText('initial commit')).toBeTruthy()
-    expect(screen.getByText('2 uncommitted')).toBeTruthy()
+    expect(screen.getByText('1 staged · 1 unstaged')).toBeTruthy()
+    expect(screen.getAllByText('feat/x').length).toBeGreaterThan(0)
+    expect(screen.getByText('no fetch recorded — remote state may be stale')).toBeTruthy()
     // KPI math: 1 open task of 2 total; 1 open risk.
     expect(kpiValue(container, 'Open tasks')).toBe('1')
     expect(kpiValue(container, 'Open risks')).toBe('1')
   })
 
   it('degrades gracefully when the Git read fails', async () => {
-    vi.mocked(api.git.get).mockRejectedValueOnce(new Error('boom'))
+    vi.mocked(api.git.snapshot).mockRejectedValueOnce(new Error('boom'))
     const { container } = render(<CockpitPanel projectId="proj_1" onClose={() => {}} />)
-    // Header + KPIs still render (the four required calls succeeded)…
+    // Header + KPIs still render (the required calls succeeded)…
     expect(await screen.findByText('Demo')).toBeTruthy()
     await waitFor(() => expect(kpiValue(container, 'Open tasks')).toBe('1'))
     // …and the Git card shows the fallback rather than crashing the panel.
-    expect(screen.getByText('No Git metadata available.')).toBeTruthy()
+    expect(await screen.findByText('No Git metadata available.')).toBeTruthy()
   })
 })

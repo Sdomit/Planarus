@@ -21,10 +21,12 @@ Safety model:
 """
 import os
 import subprocess
+import time
+from datetime import datetime, timezone
 from typing import Optional
 
 from app.core.utils import now_utc
-from app.schemas.git import GitRepoLink
+from app.schemas.git import GitBranch, GitRepoLink, GitSnapshot, GitWorkingTree
 
 _TIMEOUT_S = 5
 
@@ -35,12 +37,23 @@ _READ_ONLY_GIT: dict[str, tuple[str, ...]] = {
     "log": ("log", "-1", "--format=%h%x1f%s"),
     "status": ("status", "--porcelain"),
     "remote": ("remote", "-v"),
+    # Phase 12a repo-cockpit reads — still strictly read-only.
+    "branches": (
+        "for-each-ref",
+        "refs/heads",
+        "--sort=-committerdate",
+        "--format=%(refname:short)%1f%(upstream:short)%1f%(upstream:track)%1f%(committerdate:iso8601-strict)",
+    ),
+    "status_v2": ("status", "--porcelain=v2", "--branch"),
+    "origin_head": ("rev-parse", "--abbrev-ref", "origin/HEAD"),
 }
 
 # The complete set of Git verbs that cannot change repo/index/worktree/refs.
 # A verb outside this set (commit, push, checkout, reset, add, rm, ...) is a
 # mutation and is rejected by _run.
-_READ_ONLY_VERBS = frozenset({"rev-parse", "branch", "log", "status", "remote"})
+_READ_ONLY_VERBS = frozenset(
+    {"rev-parse", "branch", "log", "status", "remote", "for-each-ref", "rev-list"}
+)
 
 for _key, _argv in _READ_ONLY_GIT.items():
     assert _argv[0] in _READ_ONLY_VERBS, f"non-read-only git command in allowlist: {_key}"
@@ -72,15 +85,19 @@ def _run(repo_path: str, argv: tuple[str, ...]) -> tuple[int, str]:
     return proc.returncode, proc.stdout.strip()
 
 
-def _read(repo_path: str, key: str) -> Optional[str]:
-    """Run an allowlisted read; return stripped stdout, or ``None`` if the command
+def _read_argv(repo_path: str, argv: tuple[str, ...]) -> Optional[str]:
+    """Run one read-only argv; return stripped stdout, or ``None`` if the command
     failed (non-zero exit or subprocess error). ``None`` means "unknown" — never a
     definitive negative, so a failed read is not mistaken for clean/no-remote."""
     try:
-        rc, out = _run(repo_path, _READ_ONLY_GIT[key])
+        rc, out = _run(repo_path, argv)
     except (subprocess.TimeoutExpired, OSError):
         return None
     return out if rc == 0 else None
+
+
+def _read(repo_path: str, key: str) -> Optional[str]:
+    return _read_argv(repo_path, _READ_ONLY_GIT[key])
 
 
 def _first_fetch_url(remote_v: str) -> Optional[str]:
@@ -170,3 +187,222 @@ def collect(project_id: str, folder_path: Optional[str]) -> GitRepoLink:
         link.message = "Some Git metadata could not be read."
 
     return link
+
+
+# --- Repo cockpit snapshot (Phase 12a) --------------------------------------
+#
+# SHOW, DON'T DO: everything below is read-only through the same _run gate.
+# Remote-dependent fields (ahead/behind, needs-pull) are only as fresh as the
+# user's own last fetch; ``last_fetched_at`` (.git/FETCH_HEAD mtime, no git
+# call) is the honesty stamp the UI must always show.
+
+_SNAPSHOT_TTL_S = 3.0  # "live" = live-on-view + short TTL, never a daemon
+_BRANCH_CAP = 50
+
+_SEP = "\x1f"  # matches the %1f in the "branches" format
+
+
+def _no_merged_argv(default_branch: str) -> tuple[str, ...]:
+    # default_branch comes from git's own output (origin_head / for-each-ref),
+    # never from user input, and a ref name cannot start with "-".
+    return ("branch", "--no-merged", default_branch, "--format=%(refname:short)")
+
+
+def _divergence_argv(default_branch: str, branch: str) -> tuple[str, ...]:
+    return ("rev-list", "--left-right", "--count", f"{default_branch}...{branch}")
+
+
+def _parse_track(track: str) -> tuple[Optional[int], Optional[int], bool]:
+    """``[ahead 1, behind 2]`` / ``[gone]`` / ``""`` → (ahead, behind, gone)."""
+    if track == "[gone]":
+        return None, None, True
+    ahead = behind = 0
+    for part in track.strip("[]").split(","):
+        part = part.strip()
+        try:
+            if part.startswith("ahead "):
+                ahead = int(part[6:])
+            elif part.startswith("behind "):
+                behind = int(part[7:])
+        except ValueError:
+            pass
+    return ahead, behind, False
+
+
+def _parse_branches(out: str, current: Optional[str]) -> list[GitBranch]:
+    branches: list[GitBranch] = []
+    for line in out.splitlines():
+        parts = line.split(_SEP)
+        if len(parts) != 4:
+            continue
+        name, upstream, track, committed_at = parts
+        branch = GitBranch(
+            name=name, is_current=name == current, committed_at=committed_at or None
+        )
+        if upstream:
+            branch.upstream = upstream
+            branch.ahead, branch.behind, branch.gone = _parse_track(track)
+        branches.append(branch)
+    return branches
+
+
+def _parse_status_v2(out: str) -> tuple[GitWorkingTree, Optional[str], bool]:
+    """``status --porcelain=v2 --branch`` → (counts, branch head, detached)."""
+    tree = GitWorkingTree()
+    head: Optional[str] = None
+    detached = False
+    for line in out.splitlines():
+        if line.startswith("# branch.head "):
+            value = line[len("# branch.head "):]
+            if value == "(detached)":
+                detached = True
+            else:
+                head = value
+        elif line.startswith("# branch.ab "):
+            for token in line[len("# branch.ab "):].split():
+                try:
+                    if token.startswith("+"):
+                        tree.ahead = int(token[1:])
+                    elif token.startswith("-"):
+                        tree.behind = int(token[1:])
+                except ValueError:
+                    pass
+        elif line.startswith(("1 ", "2 ")):
+            xy = line.split(" ", 2)[1]
+            if xy[:1] != ".":
+                tree.staged += 1
+            if xy[1:2] != ".":
+                tree.unstaged += 1
+        elif line.startswith("u "):
+            tree.conflicted += 1
+        elif line.startswith("? "):
+            tree.untracked += 1
+    return tree, head, detached
+
+
+def _default_branch(repo_path: str, local_names: list[str]) -> Optional[str]:
+    head = _read(repo_path, "origin_head")  # e.g. "origin/main"
+    if head and "/" in head:
+        name = head.split("/", 1)[1]
+        if name and name != "HEAD":
+            return name
+    for name in ("main", "master"):
+        if name in local_names:
+            return name
+    return None
+
+
+def _last_fetched_at(toplevel: str) -> Optional[str]:
+    # ponytail: plain .git/FETCH_HEAD mtime; a worktree/submodule (.git is a
+    # file) degrades to None rather than spending a git call resolving gitdir.
+    try:
+        st = os.stat(os.path.join(toplevel, ".git", "FETCH_HEAD"))
+    except OSError:
+        return None
+    return datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat()
+
+
+def _build_snapshot(project_id: str, folder_path: Optional[str]) -> GitSnapshot:
+    """Like ``collect``: never raises for expected cases; every section degrades
+    independently, leaving fields unset and flagging ``message`` instead."""
+    snap = GitSnapshot(project_id=project_id, repo_path=folder_path, checked_at=now_utc())
+
+    if not folder_path:
+        snap.message = "Project has no folder path set."
+        return snap
+    if not os.path.isdir(folder_path):
+        snap.message = "Project folder does not exist on disk."
+        return snap
+
+    try:
+        rc, top = _run(folder_path, _READ_ONLY_GIT["toplevel"])
+    except FileNotFoundError:
+        snap.message = "Git is not installed or not on PATH."
+        return snap
+    except subprocess.TimeoutExpired:
+        snap.message = "Git command timed out."
+        return snap
+    if rc != 0:
+        snap.message = "Folder is not a Git repository."
+        return snap
+
+    snap.is_repo = True
+    snap.repo_path = top or folder_path
+    unread = False
+
+    status = _read(folder_path, "status_v2")
+    if status is None:
+        unread = True
+    else:
+        snap.working_tree, snap.current_branch, snap.detached = _parse_status_v2(status)
+
+    branches_out = _read(folder_path, "branches")
+    all_branches: list[GitBranch] = []
+    if branches_out is None:
+        unread = True
+    else:
+        all_branches = _parse_branches(branches_out, snap.current_branch)
+        snap.branches_total = len(all_branches)
+        snap.branches = all_branches[:_BRANCH_CAP]
+
+    snap.default_branch = _default_branch(folder_path, [b.name for b in all_branches])
+
+    if snap.default_branch:
+        merged_out = _read_argv(folder_path, _no_merged_argv(snap.default_branch))
+        if merged_out is None:
+            unread = True
+        else:
+            snap.needs_merge = [ln.strip() for ln in merged_out.splitlines() if ln.strip()]
+
+        # ponytail: one rev-list per capped branch (≤50 short local calls,
+        # behind the TTL cache). Batch via a single rev-list walk if this is
+        # ever slow on a huge repo.
+        for branch in snap.branches:
+            if branch.name == snap.default_branch:
+                branch.ahead_of_default = branch.behind_default = 0
+                continue
+            div = _read_argv(
+                folder_path, _divergence_argv(snap.default_branch, branch.name)
+            )
+            if div is None:
+                continue  # unknown, stays None
+            left, _, right = div.partition("\t")
+            try:
+                branch.behind_default = int(left)
+                branch.ahead_of_default = int(right)
+            except ValueError:
+                pass
+
+    log = _read(folder_path, "log")
+    if log:
+        sha, _, subject = log.partition("\x1f")
+        snap.last_commit_sha = sha or None
+        snap.last_commit_subject = subject or None
+
+    remote = _read(folder_path, "remote")
+    if remote is None:
+        unread = True
+    else:
+        snap.remote_url = _first_fetch_url(remote)
+
+    snap.last_fetched_at = _last_fetched_at(snap.repo_path)
+
+    if unread:
+        snap.message = "Some Git metadata could not be read."
+    return snap
+
+
+# ponytail: module-global TTL dict keyed by project id — right for a local
+# single-process app; revisit if the API ever runs multi-worker.
+_snapshot_cache: dict[str, tuple[float, GitSnapshot]] = {}
+
+
+def snapshot(project_id: str, folder_path: Optional[str]) -> GitSnapshot:
+    """TTL-cached repo cockpit read (see ``_SNAPSHOT_TTL_S``)."""
+    now = time.monotonic()
+    hit = _snapshot_cache.get(project_id)
+    if hit is not None and hit[0] > now:
+        return hit[1]
+    snap = _build_snapshot(project_id, folder_path)
+    _snapshot_cache[project_id] = (now + _SNAPSHOT_TTL_S, snap)
+    return snap
