@@ -402,7 +402,7 @@ export default function Layout() {
               {mainView === 'planning' && (project ? <PlanningPanel projectId={project.id} initialTab={planningTab} /> : placeholder)}
               {mainView === 'roadmap' && (project ? <RoadmapPanel projectId={project.id} onOpenPlanning={() => navigate('planning', { planningTab: 'tasks' })} /> : placeholder)}
               {mainView === 'timeline' && (project ? <TimelinePanel projectId={project.id} /> : placeholder)}
-              {mainView === 'calendar' && (project ? <CalendarPanel projectId={project.id} /> : placeholder)}
+              {mainView === 'calendar' && (project ? <CalendarPanel projectId={project.id} onOpenPlanning={() => navigate('planning', { planningTab: 'tasks' })} /> : placeholder)}
               {mainView === 'docs' && (project ? <DocsPanel projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
               {mainView === 'context-pack' && (project ? <ContextPackBuilder projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
               {mainView === 'context-files' && (project ? <ContextFilesPanel projectId={project.id} /> : placeholder)}

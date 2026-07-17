@@ -31,6 +31,8 @@ class CalendarEvent(SQLModel, table=True):
     start_at: str  # ISO date (all-day) or ISO datetime
     end_at: Optional[str] = None
     all_day: bool = Field(default=False)
+    recurrence: str = Field(default="none")  # none|daily|weekly|monthly
+    recurrence_until: Optional[str] = None  # inclusive YYYY-MM-DD; None = forever
     sort_order: int = Field(default=0)
     external_uid: Optional[str] = Field(default=None, index=True)  # reserved: sync
     etag: Optional[str] = None  # reserved: sync

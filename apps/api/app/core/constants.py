@@ -298,6 +298,12 @@ CALENDAR_EVENT_STATUSES: tuple[str, ...] = ("confirmed", "tentative", "cancelled
 def calendar_event_status_check_sql(column: str = "status") -> str:
     return _check_sql(column, CALENDAR_EVENT_STATUSES)
 
+
+# Recurrence for calendar events. Deliberately small: none / daily / weekly /
+# monthly + an optional inclusive until-date. Full RRULE (intervals, BYDAY,
+# per-occurrence exceptions) is out of scope — see calendar_service._occurrences.
+CALENDAR_RECURRENCE_TYPES: tuple[str, ...] = ("none", "daily", "weekly", "monthly")
+
 # Who authored a comment. Local-app comments are "human"; the field exists so an
 # approval-gated agent comment can be attributed without a schema change later.
 COMMENT_AUTHOR_TYPES: tuple[str, ...] = ("human", "agent", "system")
