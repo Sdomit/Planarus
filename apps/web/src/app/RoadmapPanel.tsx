@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
-import { api, type ProjectRoadmap, type RoadmapTaskRollup } from '../api/client'
+import { api, type ProjectRoadmap, type RoadmapPhase as RoadmapPhaseT, type RoadmapTaskRollup } from '../api/client'
 import { StatusBadge, toneFor } from './StatusBadge'
+import { Menu, MenuItem, MenuLabel } from './Menu'
 import './roadmap-panel.css'
+
+const PHASE_STATUSES = ['planned', 'active', 'blocked', 'done', 'canceled']
 
 const pctOf = (r: RoadmapTaskRollup) => (r.total ? Math.round((100 * r.done) / r.total) : 0)
 
@@ -54,6 +57,55 @@ function Stat({ tone, n, label }: { tone: string; n: number; label: string }) {
   )
 }
 
+/** A roadmap phase card with a ⋮ actions menu (open-in-planning / status /
+ *  rename / delete). Bar + counts + the stage list (children) render inside. */
+function PhaseCard({ phase, reload, onOpenPlanning, children }: {
+  phase: RoadmapPhaseT
+  reload: () => void
+  onOpenPlanning?: () => void
+  children?: React.ReactNode
+}) {
+  const [renaming, setRenaming] = useState(false)
+  const [draft, setDraft] = useState(phase.title)
+
+  const setStatus = (status: string) => void api.phases.update(phase.id, { status }).then(reload)
+  const del = () => void api.phases.remove(phase.id).then(reload)
+  const rename = () => {
+    setRenaming(false)
+    const t = draft.trim()
+    if (t && t !== phase.title) void api.phases.update(phase.id, { title: t }).then(reload)
+  }
+
+  return (
+    <div className="card rm-phase" data-tone={toneFor('phase', phase.status)}>
+      <div className="rm-phase-head">
+        <div className="rm-phase-title-wrap">
+          <span className="rm-dot" />
+          {renaming ? (
+            <input className="input input-sm" autoFocus value={draft}
+              onChange={e => setDraft(e.target.value)} onBlur={rename}
+              onKeyDown={e => { if (e.key === 'Enter') rename(); else if (e.key === 'Escape') setRenaming(false) }} />
+          ) : (
+            <strong className="rm-phase-title">{phase.title}</strong>
+          )}
+          <StatusBadge kind="phase" value={phase.status} />
+        </div>
+        <span className="rm-pct">{phase.pct_done}%</span>
+        <Menu label={`Actions for ${phase.title}`}>
+          {onOpenPlanning && <MenuItem onClick={onOpenPlanning}>Open in Planning</MenuItem>}
+          <MenuItem onClick={() => { setDraft(phase.title); setRenaming(true) }}>Rename</MenuItem>
+          <MenuLabel>Set status</MenuLabel>
+          {PHASE_STATUSES.map(s => <MenuItem key={s} onClick={() => setStatus(s)}>{s}</MenuItem>)}
+          <MenuItem danger onClick={del}>Delete phase</MenuItem>
+        </Menu>
+      </div>
+      <Bar pct={phase.pct_done} label={`${phase.title} progress`} />
+      <Counts r={phase.tasks} />
+      {children}
+    </div>
+  )
+}
+
 export default function RoadmapPanel({
   projectId,
   onOpenPlanning,
@@ -63,6 +115,10 @@ export default function RoadmapPanel({
 }) {
   const [roadmap, setRoadmap] = useState<ProjectRoadmap | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  const reload = () => {
+    api.roadmap.get(projectId).then(setRoadmap).catch((e: Error) => setError(e.message))
+  }
 
   useEffect(() => {
     setRoadmap(null)
@@ -111,18 +167,7 @@ export default function RoadmapPanel({
       )}
 
       {roadmap.phases.map((phase) => (
-        <div key={phase.id} className="card rm-phase" data-tone={toneFor('phase', phase.status)}>
-          <div className="rm-phase-head">
-            <div className="rm-phase-title-wrap">
-              <span className="rm-dot" />
-              <strong className="rm-phase-title">{phase.title}</strong>
-              <StatusBadge kind="phase" value={phase.status} />
-            </div>
-            <span className="rm-pct">{phase.pct_done}%</span>
-          </div>
-          <Bar pct={phase.pct_done} label={`${phase.title} progress`} />
-          <Counts r={phase.tasks} />
-
+        <PhaseCard key={phase.id} phase={phase} reload={reload} onOpenPlanning={onOpenPlanning}>
           {phase.stages.length > 0 && (
             <div className="rm-stages">
               {phase.stages.map((stage) => (
@@ -143,7 +188,7 @@ export default function RoadmapPanel({
               ))}
             </div>
           )}
-        </div>
+        </PhaseCard>
       ))}
 
       {roadmap.unphased.total > 0 && (
