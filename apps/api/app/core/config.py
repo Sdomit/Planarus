@@ -122,5 +122,21 @@ class Settings(BaseSettings):
         default="", validation_alias="AGENTBOARD_CALENDAR_MICROSOFT_CLIENT_SECRET"
     )
 
+    # Phase 11.0 (LAN team mode) — ceiling env vars, DISABLED by default. When
+    # off, nothing changes: the app-wide Host allowlist stays loopback (plus any
+    # 7C1 external hosts). When on, the allowlist additionally accepts the
+    # comma-separated LAN hosts below — and create_app() refuses to start unless
+    # auth is ALSO enabled (fail closed, D25): the local control token is not an
+    # identity, so widening the host boundary without per-user auth would expose
+    # the whole DB to the network. The app itself never binds beyond loopback;
+    # the actual socket bind stays the user's explicit uvicorn choice (D26 —
+    # plain HTTP on the LAN is a documented, warned-about tradeoff).
+    lan_mode_enabled: bool = Field(
+        default=False, validation_alias="AGENTBOARD_LAN_MODE_ENABLED"
+    )
+    lan_allowed_hosts: str = Field(
+        default="", validation_alias="AGENTBOARD_LAN_ALLOWED_HOSTS"
+    )
+
 
 settings = Settings()

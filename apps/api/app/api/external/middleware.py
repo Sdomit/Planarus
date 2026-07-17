@@ -47,12 +47,21 @@ def _gen_request_id() -> str:
     return "req_" + secrets.token_hex(12)
 
 
-def _allowed_hosts() -> set[str]:
-    hosts = {h.lower() for h in DEFAULT_ALLOWED_HOSTS}
-    for h in (settings.external_api_allowed_hosts or "").split(","):
+def _add_csv_hosts(hosts: set[str], csv: str) -> None:
+    for h in (csv or "").split(","):
         cleaned = h.strip().lower()
         if cleaned:
             hosts.add(cleaned)
+
+
+def _allowed_hosts() -> set[str]:
+    hosts = {h.lower() for h in DEFAULT_ALLOWED_HOSTS}
+    _add_csv_hosts(hosts, settings.external_api_allowed_hosts)
+    # Phase 11.0: LAN team mode widens the app-wide allowlist to the configured
+    # LAN hosts. Doubly gated: the env ceiling here, and create_app()'s refusal
+    # to start LAN mode without auth enabled (D25).
+    if settings.lan_mode_enabled:
+        _add_csv_hosts(hosts, settings.lan_allowed_hosts)
     return hosts
 
 
