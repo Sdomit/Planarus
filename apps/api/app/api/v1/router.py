@@ -6,6 +6,8 @@ from app.api.v1.endpoints import (
     approvals,
     auth,
     blockers,
+    calendar,
+    calendar_events,
     checklist_items,
     comments,
     context,
@@ -55,6 +57,10 @@ router.include_router(decisions.router, tags=["decisions"], dependencies=_GUARD)
 router.include_router(risks.router, tags=["risks"], dependencies=_GUARD)
 router.include_router(blockers.router, tags=["blockers"], dependencies=_GUARD)
 router.include_router(milestones.router, tags=["milestones"], dependencies=_GUARD)
+router.include_router(
+    calendar_events.router, tags=["calendar-events"], dependencies=_GUARD
+)
+router.include_router(calendar.router, tags=["calendar"], dependencies=_GUARD)
 router.include_router(
     checklist_items.router, tags=["checklist-items"], dependencies=_GUARD
 )

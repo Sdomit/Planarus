@@ -4,12 +4,15 @@ from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.core.utils import new_id, now_utc
+from app.models.blocker import Blocker
+from app.models.checklist_item import ChecklistItem
 from app.models.phase import Phase
 from app.models.project import Project
 from app.models.stage import Stage
 from app.models.task import Task
 from app.schemas.task import TaskCreate, TaskUpdate
 from app.services.audit_service import create_audit_event
+from app.services.planning_reorder import apply_reorder
 
 
 def list_tasks(session: Session, project_id: str) -> list[Task]:
@@ -125,3 +128,46 @@ def update_task(session: Session, task_id: str, data: TaskUpdate) -> Optional[Ta
     session.commit()
     session.refresh(task)
     return task
+
+
+def delete_task(session: Session, task_id: str) -> bool:
+    """Delete a task, its checklist items, and unlink any blockers that pointed
+    at it (blocker.task_id cleared; the blockers themselves survive)."""
+    task = session.get(Task, task_id)
+    if task is None:
+        return False
+    project_id = task.project_id
+    now = now_utc()
+
+    for item in session.exec(
+        select(ChecklistItem).where(ChecklistItem.task_id == task_id)
+    ).all():
+        session.delete(item)
+    for blocker in session.exec(
+        select(Blocker).where(Blocker.task_id == task_id)
+    ).all():
+        blocker.task_id = None
+        blocker.updated_at = now
+        session.add(blocker)
+
+    # Flush child deletes/unlinks before the task's own DELETE (FKs enforced).
+    session.flush()
+    session.delete(task)
+    create_audit_event(
+        session,
+        event_type="delete",
+        actor_type="human",
+        entity_type="task",
+        entity_id=task_id,
+        project_id=project_id,
+    )
+    session.commit()
+    return True
+
+
+def reorder_tasks(session: Session, project_id: str, ids: list[str]) -> list[Task]:
+    if session.get(Project, project_id) is None:
+        raise LookupError(f"project '{project_id}' not found")
+    rows = {t.id: t for t in list_tasks(session, project_id)}
+    apply_reorder(session, project_id=project_id, entity_type="task", rows=rows, ids=ids)
+    return list_tasks(session, project_id)

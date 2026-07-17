@@ -44,3 +44,14 @@ def update_decision(
             status_code=status.HTTP_404_NOT_FOUND, detail="Decision not found"
         )
     return decision
+
+
+@router.delete("/decisions/{decision_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_decision(
+    decision_id: str,
+    session: Session = Depends(get_session),
+) -> None:
+    if not decision_service.delete_decision(session, decision_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Decision not found"
+        )

@@ -4,6 +4,7 @@ import CockpitPanel from './CockpitPanel'
 import PlanningPanel from './PlanningPanel'
 import RoadmapPanel from './RoadmapPanel'
 import TimelinePanel from './TimelinePanel'
+import CalendarPanel from './CalendarPanel'
 import DocsPanel from './DocsPanel'
 import ContextPackBuilder from './ContextPackBuilder'
 import ContextFilesPanel from './ContextFilesPanel'
@@ -19,7 +20,7 @@ import { api, type NotificationItem, type Project } from '../api/client'
 import './layout.css'
 
 type MainView =
-  | 'dashboard' | 'cockpit' | 'planning' | 'roadmap' | 'timeline' | 'docs'
+  | 'dashboard' | 'cockpit' | 'planning' | 'roadmap' | 'timeline' | 'calendar' | 'docs'
   | 'context-pack' | 'context-files' | 'preview' | 'approvals' | 'clients'
   | 'agent-runs' | 'reminders' | 'settings'
 
@@ -36,6 +37,7 @@ const NAV: { group: string; items: { view: MainView; label: string; icon: string
     { view: 'planning', label: 'Planning', icon: 'layers' },
     { view: 'roadmap', label: 'Roadmap', icon: 'columns' },
     { view: 'timeline', label: 'Timeline', icon: 'clock' },
+    { view: 'calendar', label: 'Calendar', icon: 'calendar' },
   ] },
   { group: 'Context', items: [
     { view: 'docs', label: 'Docs', icon: 'file' },
@@ -66,6 +68,7 @@ const TITLES: Record<MainView, { title: string; sub: string }> = {
   planning: { title: 'Planning', sub: 'Phases, tasks, milestones & risks' },
   roadmap: { title: 'Roadmap', sub: 'Progress across phases & stages' },
   timeline: { title: 'Timeline', sub: 'Audited project activity' },
+  calendar: { title: 'Calendar', sub: 'Events, milestones & due dates' },
   docs: { title: 'Docs', sub: 'Project documents' },
   'context-pack': { title: 'Context Pack', sub: 'Build an AI context pack' },
   'context-files': { title: 'Context Files', sub: 'Generated Markdown context' },
@@ -399,6 +402,7 @@ export default function Layout() {
               {mainView === 'planning' && (project ? <PlanningPanel projectId={project.id} initialTab={planningTab} /> : placeholder)}
               {mainView === 'roadmap' && (project ? <RoadmapPanel projectId={project.id} onOpenPlanning={() => navigate('planning', { planningTab: 'tasks' })} /> : placeholder)}
               {mainView === 'timeline' && (project ? <TimelinePanel projectId={project.id} /> : placeholder)}
+              {mainView === 'calendar' && (project ? <CalendarPanel projectId={project.id} /> : placeholder)}
               {mainView === 'docs' && (project ? <DocsPanel projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
               {mainView === 'context-pack' && (project ? <ContextPackBuilder projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
               {mainView === 'context-files' && (project ? <ContextFilesPanel projectId={project.id} /> : placeholder)}

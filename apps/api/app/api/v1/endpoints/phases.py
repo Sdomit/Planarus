@@ -3,6 +3,7 @@ from sqlmodel import Session
 
 from app.db.session import get_session
 from app.schemas.phase import PhaseCreate, PhaseRead, PhaseUpdate
+from app.schemas.reorder import ReorderRequest
 from app.services import phase_service
 
 router = APIRouter()
@@ -42,3 +43,28 @@ def update_phase(
     if phase is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Phase not found")
     return phase
+
+
+@router.post("/projects/{project_id}/phases/reorder", response_model=list[PhaseRead])
+def reorder_phases(
+    project_id: str,
+    data: ReorderRequest,
+    session: Session = Depends(get_session),
+) -> list[PhaseRead]:
+    try:
+        return phase_service.reorder_phases(session, project_id, data.ids)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        )
+
+
+@router.delete("/phases/{phase_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_phase(
+    phase_id: str,
+    session: Session = Depends(get_session),
+) -> None:
+    if not phase_service.delete_phase(session, phase_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Phase not found")
