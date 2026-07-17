@@ -25,8 +25,16 @@ import time
 from datetime import datetime, timezone
 from typing import Optional
 
+from app.core.config import settings
+from app.core.exceptions import ConflictError
 from app.core.utils import now_utc
-from app.schemas.git import GitBranch, GitRepoLink, GitSnapshot, GitWorkingTree
+from app.schemas.git import (
+    GitBranch,
+    GitFetchResult,
+    GitRepoLink,
+    GitSnapshot,
+    GitWorkingTree,
+)
 
 _TIMEOUT_S = 5
 
@@ -406,3 +414,131 @@ def snapshot(project_id: str, folder_path: Optional[str]) -> GitSnapshot:
     snap = _build_snapshot(project_id, folder_path)
     _snapshot_cache[project_id] = (now + _SNAPSHOT_TTL_S, snap)
     return snap
+
+
+# --- Explicit fetch: the ONE gated exception to no-mutation (Phase 12b) ------
+#
+# This is the sole place AgentBoard mutates a repo, and it is deliberately kept
+# OUT of the read-only machinery:
+#   - "fetch" is NOT in _READ_ONLY_VERBS, so `_run` still refuses it (the
+#     read-only gate never learns to fetch — verified in test_git_readonly).
+#   - `_run_fetch` is a separate subprocess call with a fixed argv, longer
+#     network timeout, and no `shell`. It updates remote-tracking refs +
+#     FETCH_HEAD only; the working tree and local branches are never touched.
+#   - AgentBoard never auto-fetches: this runs only from a human click, behind
+#     AGENTBOARD_GIT_FETCH_ENABLED (off by default) and the local control token
+#     (enforced at the endpoint), plus an in-process min-interval rate limit.
+
+_FETCH_TIMEOUT_S = 30  # network op — generous vs the 5s read timeout
+_MIN_FETCH_INTERVAL_S = 10.0  # ponytail: in-process per-project min interval
+
+# The fixed fetch argv. Kept as a module constant so the mutation surface is a
+# single, greppable, reviewable line. --prune drops stale remote-tracking refs;
+# the remote name is git's own (validated below), never free user input.
+_FETCH_VERB = "fetch"
+_FETCH_FLAGS = ("--prune",)
+
+# Per-project monotonic timestamp of the last fetch we ran (rate-limit state).
+_last_fetch_at: dict[str, float] = {}
+
+
+def _pick_remote(repo_path: str) -> Optional[str]:
+    """Choose a remote to fetch, preferring ``origin``. Read via the read-only
+    ``remote`` command, so the name comes from git itself, not user input."""
+    out = _read(repo_path, "remote")
+    if not out:
+        return None
+    names: list[str] = []
+    for line in out.splitlines():
+        name = line.split("\t", 1)[0].strip()
+        # A ref/remote name can never start with '-'; refuse anything odd so it
+        # can't be read as a flag by git.
+        if name and not name.startswith("-") and name not in names:
+            names.append(name)
+    if not names:
+        return None
+    return "origin" if "origin" in names else names[0]
+
+
+def _run_fetch(repo_path: str, remote: str) -> tuple[int, str]:
+    """Run the one blessed mutation: ``git fetch --prune <remote>``. Fixed argv,
+    no shell, bounded by a longer network timeout. Refs + FETCH_HEAD only."""
+    if remote.startswith("-"):
+        raise ValueError(f"refusing suspicious remote name: {remote!r}")
+    proc = subprocess.run(
+        ["git", "-C", repo_path, *_HARDENING, _FETCH_VERB, *_FETCH_FLAGS, remote],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=_FETCH_TIMEOUT_S,
+        env=_ENV,
+        check=False,
+    )
+    # stderr carries fetch progress/errors; stdout is usually empty.
+    return proc.returncode, (proc.stderr or proc.stdout).strip()
+
+
+def fetch(project_id: str, folder_path: Optional[str]) -> GitFetchResult:
+    """Human-triggered fetch of remote-tracking refs. Raises ``ConflictError``
+    when disabled (the env gate); otherwise degrades to a result status and
+    never raises for the expected cases, so a failure never blocks the offline
+    cockpit. The endpoint enforces the control token and writes the audit event.
+    """
+    if not settings.git_fetch_enabled:
+        raise ConflictError(
+            "git fetch is disabled — set AGENTBOARD_GIT_FETCH_ENABLED=true to "
+            "allow the explicit, human-clicked fetch (remote-tracking refs only)"
+        )
+
+    def _result(status: str, message: Optional[str], remote: Optional[str]) -> GitFetchResult:
+        # Always attach the current cockpit state so the UI can refresh its stamp.
+        return GitFetchResult(
+            project_id=project_id,
+            status=status,
+            message=message,
+            remote=remote,
+            snapshot=snapshot(project_id, folder_path),
+        )
+
+    if not folder_path or not os.path.isdir(folder_path):
+        return _result("failed", "Project folder is missing or not on disk.", None)
+
+    try:
+        rc, top = _run(folder_path, _READ_ONLY_GIT["toplevel"])
+    except FileNotFoundError:
+        return _result("failed", "Git is not installed or not on PATH.", None)
+    except subprocess.TimeoutExpired:
+        return _result("failed", "Git command timed out.", None)
+    if rc != 0:
+        return _result("failed", "Folder is not a Git repository.", None)
+
+    remote = _pick_remote(folder_path)
+    if remote is None:
+        return _result("no_remote", "This repository has no remote to fetch from.", None)
+
+    now = time.monotonic()
+    last = _last_fetch_at.get(project_id)
+    if last is not None and now - last < _MIN_FETCH_INTERVAL_S:
+        wait = int(_MIN_FETCH_INTERVAL_S - (now - last)) + 1
+        return _result(
+            "rate_limited",
+            f"Fetched moments ago — try again in ~{wait}s.",
+            remote,
+        )
+
+    try:
+        frc, ferr = _run_fetch(folder_path, remote)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        _last_fetch_at[project_id] = now  # count the attempt toward the interval
+        return _result("failed", f"Fetch failed: {type(exc).__name__}.", remote)
+
+    _last_fetch_at[project_id] = now
+    if frc != 0:
+        # Truncate git's stderr; never surface tokens/paths verbatim beyond this.
+        return _result("failed", (ferr or "git fetch returned non-zero.")[:300], remote)
+
+    # Success: the FETCH_HEAD stamp and remote-tracking refs changed, so the
+    # cached snapshot is stale — drop it and recompute fresh for the response.
+    _snapshot_cache.pop(project_id, None)
+    return _result("ok", None, remote)

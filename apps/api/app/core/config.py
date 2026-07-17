@@ -36,6 +36,14 @@ class Settings(BaseSettings):
         default="agentboard@localhost", validation_alias="AGENTBOARD_EMAIL_FROM"
     )
 
+    # Phase 12b explicit fetch. DISABLED by default. This is the SOLE documented
+    # exception to the "SHOW, DON'T DO" no-mutation rule: a human-clicked fetch
+    # that updates remote-tracking refs + FETCH_HEAD only (working tree untouched).
+    # Never auto-fetches; the endpoint is additionally control-token-gated.
+    git_fetch_enabled: bool = Field(
+        default=False, validation_alias="AGENTBOARD_GIT_FETCH_ENABLED"
+    )
+
     # Phase 10.1 (hosted mode) — identity/auth. DISABLED by default: when off, the
     # /api/v1/auth/* and workspace members routes 404 and the app is the same
     # local single-user tool it has always been. Only a hosted deployment turns
