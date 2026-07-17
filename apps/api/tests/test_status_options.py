@@ -132,6 +132,78 @@ def test_status_options_are_per_entity_type(client: TestClient) -> None:
     assert client.post(f"/api/v1/projects/{pid}/tasks", json={"title": "T", "status": "on_hold"}).status_code == 422
 
 
+def test_rename_custom_status_keeps_key(client: TestClient) -> None:
+    pid = _seed(client)
+    opt = client.post(
+        f"/api/v1/projects/{pid}/status-options",
+        json={"entity_type": "task", "label": "In Review"},
+    ).json()
+    # A task already using the status.
+    client.post(f"/api/v1/projects/{pid}/tasks", json={"title": "T", "status": "in_review"})
+    res = client.patch(f"/api/v1/status-options/{opt['id']}", json={"label": "Under Review"})
+    assert res.status_code == 200
+    body = res.json()
+    # Label changes but the slug key is stable, so existing cards keep working.
+    assert body["label"] == "Under Review" and body["key"] == "in_review"
+
+
+def test_recolor_custom_status(client: TestClient) -> None:
+    pid = _seed(client)
+    opt = client.post(
+        f"/api/v1/projects/{pid}/status-options",
+        json={"entity_type": "task", "label": "In Review"},
+    ).json()
+    res = client.patch(f"/api/v1/status-options/{opt['id']}", json={"color": "#8B5CF6"})
+    assert res.status_code == 200 and res.json()["color"] == "#8b5cf6"
+    # Clearing color is allowed.
+    cleared = client.patch(f"/api/v1/status-options/{opt['id']}", json={"color": ""})
+    assert cleared.status_code == 200 and cleared.json()["color"] is None
+
+
+def test_reject_bad_color(client: TestClient) -> None:
+    pid = _seed(client)
+    res = client.post(
+        f"/api/v1/projects/{pid}/status-options",
+        json={"entity_type": "task", "label": "In Review", "color": "purple"},
+    )
+    assert res.status_code == 422
+
+
+def test_update_missing_status_option_404(client: TestClient) -> None:
+    _seed(client)
+    assert client.patch("/api/v1/status-options/sto_nope", json={"label": "X"}).status_code == 404
+
+
+def test_reorder_custom_statuses(client: TestClient) -> None:
+    pid = _seed(client)
+    a = client.post(f"/api/v1/projects/{pid}/status-options", json={"entity_type": "task", "label": "In Review"}).json()
+    b = client.post(f"/api/v1/projects/{pid}/status-options", json={"entity_type": "task", "label": "On Hold"}).json()
+    c = client.post(f"/api/v1/projects/{pid}/status-options", json={"entity_type": "task", "label": "Verifying"}).json()
+    # Default order is creation order after the built-ins.
+    keys = [o["key"] for o in client.get(f"/api/v1/projects/{pid}/status-options").json() if not o["builtin"]]
+    assert keys == ["in_review", "on_hold", "verifying"]
+    res = client.post(
+        f"/api/v1/projects/{pid}/status-options/reorder?entity_type=task",
+        json={"ids": [c["id"], a["id"], b["id"]]},
+    )
+    assert res.status_code == 200
+    reordered = [o["key"] for o in res.json() if not o["builtin"]]
+    assert reordered == ["verifying", "in_review", "on_hold"]
+    # Built-ins still lead.
+    assert res.json()[0]["key"] == "backlog"
+
+
+def test_reorder_rejects_incomplete_id_set(client: TestClient) -> None:
+    pid = _seed(client)
+    a = client.post(f"/api/v1/projects/{pid}/status-options", json={"entity_type": "task", "label": "In Review"}).json()
+    client.post(f"/api/v1/projects/{pid}/status-options", json={"entity_type": "task", "label": "On Hold"})
+    res = client.post(
+        f"/api/v1/projects/{pid}/status-options/reorder?entity_type=task",
+        json={"ids": [a["id"]]},
+    )
+    assert res.status_code == 422
+
+
 def test_status_option_audit_written(client: TestClient, session) -> None:
     from sqlmodel import select
 
