@@ -27,6 +27,7 @@ from app.api.v1.endpoints import (
     roadmap,
     settings,
     stages,
+    status_options,
     sync,
     tasks,
     timeline,
@@ -53,6 +54,7 @@ router.include_router(projects.router, tags=["projects"])
 router.include_router(context.router, tags=["context"], dependencies=_GUARD)
 router.include_router(phases.router, tags=["phases"], dependencies=_GUARD)
 router.include_router(stages.router, tags=["stages"], dependencies=_GUARD)
+router.include_router(status_options.router, tags=["status-options"], dependencies=_GUARD)
 router.include_router(tasks.router, tags=["tasks"], dependencies=_GUARD)
 router.include_router(decisions.router, tags=["decisions"], dependencies=_GUARD)
 router.include_router(risks.router, tags=["risks"], dependencies=_GUARD)

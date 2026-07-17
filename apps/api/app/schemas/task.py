@@ -1,11 +1,21 @@
+import re
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.constants import TASK_PRIORITIES, TASK_STATUSES
+from app.core.constants import TASK_PRIORITIES
 
-_TASK_STATUSES = frozenset(TASK_STATUSES)
 _TASK_PRIORITIES = frozenset(TASK_PRIORITIES)
+# Phase 15.5: statuses are no longer a fixed enum (custom statuses are allowed),
+# but must be a slug — the concrete set is checked in the service layer against
+# the project's built-in ∪ custom options.
+_STATUS_SLUG = re.compile(r"^[a-z0-9][a-z0-9_]*$")
+
+
+def _validate_status_slug(v: Optional[str]) -> Optional[str]:
+    if v is not None and not _STATUS_SLUG.match(v):
+        raise ValueError("status must be a lowercase slug (letters, digits, underscore)")
+    return v
 
 
 class TaskCreate(BaseModel):
@@ -22,9 +32,7 @@ class TaskCreate(BaseModel):
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str) -> str:
-        if v not in _TASK_STATUSES:
-            raise ValueError(f"status must be one of: {', '.join(sorted(_TASK_STATUSES))}")
-        return v
+        return _validate_status_slug(v) or v
 
     @field_validator("priority")
     @classmethod
@@ -48,9 +56,7 @@ class TaskUpdate(BaseModel):
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and v not in _TASK_STATUSES:
-            raise ValueError(f"status must be one of: {', '.join(sorted(_TASK_STATUSES))}")
-        return v
+        return _validate_status_slug(v)
 
     @field_validator("priority")
     @classmethod
