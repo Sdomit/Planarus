@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
 from app.db.session import get_session
-from app.schemas.comment import CommentCreate, CommentRead
+from app.schemas.comment import CommentCreate, CommentRead, CommentUpdate
 from app.services import comment_service
 
 router = APIRouter()
@@ -36,3 +36,24 @@ def create_comment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+@router.patch("/comments/{comment_id}", response_model=CommentRead)
+def update_comment(
+    comment_id: str,
+    data: CommentUpdate,
+    session: Session = Depends(get_session),
+) -> CommentRead:
+    comment = comment_service.update_comment(session, comment_id, data)
+    if comment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
+    return comment
+
+
+@router.delete("/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_comment(
+    comment_id: str,
+    session: Session = Depends(get_session),
+) -> None:
+    if not comment_service.delete_comment(session, comment_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
