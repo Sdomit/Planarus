@@ -16,7 +16,12 @@ _READ = {
     "get_doc_excerpt",
     "get_approval_status",
 }
-_PROPOSE = {"create_task_proposal", "update_task_proposal", "create_decision_proposal"}
+_PROPOSE = {
+    "create_task_proposal",
+    "update_task_proposal",
+    "create_decision_proposal",
+    "update_canvas_proposal",
+}
 
 
 def test_exact_read_names():
@@ -34,11 +39,11 @@ def test_read_tier_sees_only_read_tools():
     assert names.isdisjoint(_PROPOSE)
 
 
-def test_propose_tier_sees_twelve():
+def test_propose_tier_sees_all_tools():
     cap = Capability(tier="propose", workspace_id="w", project_ids=frozenset({"p"}), label="l")
     names = registry.visible_names(cap)
     assert names == _READ | _PROPOSE
-    assert len(names) == 12
+    assert len(names) == 13  # 9 read + 4 propose
 
 
 def test_default_deny_sees_nothing():

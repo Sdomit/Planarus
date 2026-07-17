@@ -13,6 +13,7 @@ from sqlmodel import Session, select
 
 from app.core.utils import new_id, now_utc
 from app.models.decision import Decision
+from app.models.doc import Doc
 from app.models.task import Task
 
 _TASK_FIELDS = (
@@ -24,6 +25,8 @@ _TASK_FIELDS = (
     "stage_id",
     "due_at",
 )
+
+_DOC_FIELDS = ("content_json", "markdown_cache")
 
 
 def _next_sort_order(session: Session, project_id: str) -> int:
@@ -84,6 +87,22 @@ def _apply_decision_create(session: Session, project_id: str, patch: dict) -> tu
     return "decision", decision.id
 
 
+def _apply_doc_update(session: Session, target_id: str, patch: dict) -> tuple[str, str]:
+    doc = session.get(Doc, target_id)
+    if doc is None:
+        raise LookupError(f"doc '{target_id}' not found")
+    for field in _DOC_FIELDS:
+        if field in patch:
+            setattr(doc, field, patch[field])
+    # Bump version so an open canvas editor's optimistic-concurrency guard fires
+    # (it will 409 on its next autosave and reload the approved scene).
+    doc.version = doc.version + 1
+    doc.updated_at = now_utc()
+    session.add(doc)
+    session.flush()
+    return "doc", doc.id
+
+
 def apply_action(
     session: Session,
     *,
@@ -101,4 +120,8 @@ def apply_action(
         return _apply_task_update(session, target_entity_id, patch)
     if action_type == "decision.create":
         return _apply_decision_create(session, project_id, patch)
+    if action_type == "doc.update":
+        if target_entity_id is None:
+            raise LookupError("doc.update requires a target entity id")
+        return _apply_doc_update(session, target_entity_id, patch)
     raise LookupError(f"no apply handler for action {action_type!r}")

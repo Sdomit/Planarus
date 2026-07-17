@@ -169,15 +169,19 @@ APPROVAL_RISK_LEVELS: tuple[str, ...] = ("low", "medium", "high")
 
 # The narrow, versioned action allowlist surfaced to the DB CHECK. The field-level
 # policy lives in app/policy/allowlist.py and MUST stay in sync with this tuple
-# (app/policy/allowlist.py asserts equality at import time).
+# (app/policy/allowlist.py asserts equality at import time). Widening this tuple
+# requires a paired migration that rewrites ``ck_approval_action_type``
+# (migration 0016 for 'doc.update').
 APPROVAL_ACTION_TYPES: tuple[str, ...] = (
     "task.create",
     "task.update",
     "decision.create",
+    "doc.update",  # Phase 13c: AI-proposed canvas/doc edits (content_json)
 )
 
-# Entity kinds an approval may target.
-APPROVAL_TARGET_ENTITY_TYPES: tuple[str, ...] = ("task", "decision")
+# Entity kinds an approval may target. Widening requires a paired migration that
+# rewrites ``ck_approval_target_entity_type`` (migration 0016 for 'doc').
+APPROVAL_TARGET_ENTITY_TYPES: tuple[str, ...] = ("task", "decision", "doc")
 
 
 def approval_status_check_sql(column: str = "status") -> str:

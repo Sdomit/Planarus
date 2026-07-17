@@ -24,6 +24,7 @@ from app.mcp.errors import (
 )
 from app.mcp.serializers import ToolResult
 from app.mcp.tools import StrictArgs
+from app.models.doc import Doc
 from app.models.task import Task
 from app.prompt import boundary
 from app.services import approval_service
@@ -66,6 +67,13 @@ class CreateDecisionProposalArgs(StrictArgs):
     decision: str
     context: Optional[str] = None
     status: Optional[str] = None
+
+
+class UpdateCanvasProposalArgs(StrictArgs):
+    # NOTE: no project_id — ownership is derived from doc_id server-side.
+    doc_id: str
+    content_json: str  # the full new Excalidraw scene (JSON)
+    markdown_cache: Optional[str] = None
 
 
 # --- helpers -----------------------------------------------------------------
@@ -132,6 +140,7 @@ def _create(
 
 _TASK_FIELDS = ("title", "description", "status", "priority", "phase_id", "stage_id", "due_at")
 _DECISION_FIELDS = ("title", "decision", "context", "status")
+_CANVAS_FIELDS = ("content_json", "markdown_cache")
 
 
 def create_task_proposal(
@@ -164,4 +173,18 @@ def create_decision_proposal(
         raise MCPToolError(CODE_FORBIDDEN, "project not in scope")
     return _create(
         session, cap, "decision.create", args.project_id, None, _patch_from(args, _DECISION_FIELDS)
+    )
+
+
+def update_canvas_proposal(
+    session: Session, cap: Capability, args: UpdateCanvasProposalArgs
+) -> ToolResult:
+    _require_propose(cap)
+    doc = session.get(Doc, args.doc_id)
+    # Generic not_found for missing / out-of-scope / non-canvas — never reveal
+    # existence. Only Excalidraw canvases accept an AI content proposal here.
+    if doc is None or not cap.allows_project(doc.project_id) or doc.editor_format != "excalidraw":
+        raise MCPToolError(CODE_NOT_FOUND, "canvas not found")
+    return _create(
+        session, cap, "doc.update", doc.project_id, doc.id, _patch_from(args, _CANVAS_FIELDS)
     )

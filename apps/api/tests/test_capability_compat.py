@@ -47,7 +47,7 @@ def test_legacy_capability_construction_still_derives_booleans():
 
 def test_registry_sets_are_unchanged():
     assert len(READ_TOOL_NAMES) == 9
-    assert len(PROPOSE_TOOL_NAMES) == 3
+    assert len(PROPOSE_TOOL_NAMES) == 4  # Phase 13c added update_canvas_proposal
     # No approve/apply-style tool exists anywhere.
     forbidden = ("approve", "apply", "reject", "invalidate", "delete")
     for name in set(READ_TOOL_NAMES) | set(PROPOSE_TOOL_NAMES):

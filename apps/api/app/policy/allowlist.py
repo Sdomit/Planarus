@@ -7,6 +7,7 @@ version is invalidated at apply time. Keep ``ACTION_POLICIES`` keys in sync with
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
 from app.core.constants import (
@@ -19,9 +20,13 @@ from app.core.exceptions import PolicyError
 
 POLICY_VERSION: int = 1
 
-# Hard cap on the serialized patch to bound memory/DoS. The Phase 7A allowlist
-# carries no large-content action (doc updates are deferred), so 64 KiB is ample.
+# Default hard cap on the serialized patch to bound memory/DoS. Small string
+# patches (task/decision) never need more than this.
 MAX_PATCH_BYTES: int = 64 * 1024
+# Phase 13c: a canvas is a Doc whose content_json (Excalidraw scene) is capped at
+# 2 MiB server-side; the doc.update patch adds markdown_cache + JSON framing, so
+# allow headroom above that single-field limit.
+DOC_UPDATE_MAX_PATCH_BYTES: int = 3 * 1024 * 1024
 
 # Never accept these from a proposer for ANY action — server/identity owned.
 GLOBAL_FORBIDDEN_FIELDS: frozenset[str] = frozenset(
@@ -54,6 +59,9 @@ class ActionPolicy:
     # an existing, project-owned reference for this exact proposal (never by prefix
     # or entropy). Must be a subset of allowed_fields (asserted at import).
     reference_fields: frozenset[str] = frozenset()
+    # Per-action serialized-patch ceiling. Defaults to the small-string cap; only
+    # doc.update (large canvas scenes) raises it.
+    max_patch_bytes: int = MAX_PATCH_BYTES
 
 
 ACTION_POLICIES: dict[str, ActionPolicy] = {
@@ -84,6 +92,19 @@ ACTION_POLICIES: dict[str, ActionPolicy] = {
         allowed_fields=frozenset({"title", "context", "decision", "status"}),
         required_fields=frozenset({"title", "decision"}),
         reference_fields=frozenset(),
+    ),
+    # Phase 13c: AI-proposed canvas/doc content edits. content_json is the new
+    # scene (secret-scanned like any free text); markdown_cache is optional derived
+    # text. No reference fields; the base-target fingerprint over content_json is
+    # what makes a stale proposal (human edited the canvas meanwhile) fail closed.
+    "doc.update": ActionPolicy(
+        action_type="doc.update",
+        target_entity_type="doc",
+        is_create=False,
+        allowed_fields=frozenset({"content_json", "markdown_cache"}),
+        required_fields=frozenset({"content_json"}),
+        reference_fields=frozenset(),
+        max_patch_bytes=DOC_UPDATE_MAX_PATCH_BYTES,
     ),
 }
 
@@ -159,5 +180,13 @@ def normalize_patch(action_type: str, patch: dict) -> dict:
         value = normalized.get(required)
         if not isinstance(value, str) or not value.strip():
             raise PolicyError(f"field {required!r} must not be blank")
+
+    if action_type == "doc.update":
+        # content_json is the canonical scene; a malformed body would apply an
+        # unopenable canvas. Validate structure (not size — that is the caller's cap).
+        try:
+            json.loads(normalized["content_json"])
+        except (ValueError, TypeError):
+            raise PolicyError("content_json must be valid JSON")
 
     return normalized

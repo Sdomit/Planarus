@@ -8,6 +8,7 @@ from app.mcp.tools import propose
 from app.models.approval_request import ApprovalRequest
 from app.models.audit_event import AuditEvent
 from app.models.decision import Decision
+from app.models.doc import Doc
 from app.models.task import Task
 from app.schemas.task import TaskCreate
 from app.services import approval_service, task_service
@@ -99,6 +100,73 @@ def test_update_rejects_project_id_field():
     spec = PROPOSE_TOOLS["update_task_proposal"]
     with pytest.raises(errors.MCPToolError):
         spec.validate_args({"task_id": "t", "project_id": "p"})
+
+
+# --- Phase 13c: update_canvas_proposal ---------------------------------------
+
+
+def _canvas(client: TestClient, pid: str, editor_format: str = "excalidraw") -> dict:
+    doc_type = "canvas" if editor_format == "excalidraw" else "note"
+    return client.post(
+        f"/api/v1/projects/{pid}/docs",
+        json={"title": "B", "doc_type": doc_type, "editor_format": editor_format},
+    ).json()
+
+
+def test_update_canvas_proposal_pending_only(client: TestClient, session: Session) -> None:
+    ws, pid = seed(client, "cv1")
+    doc = _canvas(client, pid)
+    cap = propose_cap(ws, pid)
+    before = session.get(Doc, doc["id"]).content_json
+    res = propose.update_canvas_proposal(
+        session, cap,
+        propose.UpdateCanvasProposalArgs(
+            doc_id=doc["id"],
+            content_json='{"type":"excalidraw","elements":[{"id":"a","type":"rectangle","version":1}],"appState":{}}',
+        ),
+    )
+    assert res.metadata["action_type"] == "doc.update"
+    ar = _approvals(session, pid)[0]
+    assert ar.target_entity_id == doc["id"] and ar.target_entity_type == "doc"
+    # canonical scene unchanged (pending only)
+    session.expire_all()
+    assert session.get(Doc, doc["id"]).content_json == before
+
+
+def test_update_canvas_rejects_non_canvas_doc(client: TestClient, session: Session) -> None:
+    ws, pid = seed(client, "cv2")
+    doc = _canvas(client, pid, editor_format="tiptap_json")  # a normal rich-text doc
+    cap = propose_cap(ws, pid)
+    with pytest.raises(errors.MCPToolError) as e:
+        propose.update_canvas_proposal(
+            session, cap, propose.UpdateCanvasProposalArgs(doc_id=doc["id"], content_json='{"elements":[]}')
+        )
+    assert e.value.code == errors.CODE_NOT_FOUND
+    assert _approvals(session, pid) == []
+
+
+def test_update_canvas_out_of_scope_not_found(client: TestClient, session: Session) -> None:
+    ws, pid = seed(client, "cv3")
+    _, pid2 = seed(client, "cv4")
+    doc2 = _canvas(client, pid2)
+    cap = propose_cap(ws, pid)  # scoped to pid, not pid2
+    with pytest.raises(errors.MCPToolError) as e:
+        propose.update_canvas_proposal(
+            session, cap, propose.UpdateCanvasProposalArgs(doc_id=doc2["id"], content_json='{"elements":[]}')
+        )
+    assert e.value.code == errors.CODE_NOT_FOUND
+
+
+def test_update_canvas_read_tier_forbidden(client: TestClient, session: Session) -> None:
+    ws, pid = seed(client, "cv5")
+    doc = _canvas(client, pid)
+    cap = read_cap(ws, pid)
+    with pytest.raises(errors.MCPToolError) as e:
+        propose.update_canvas_proposal(
+            session, cap, propose.UpdateCanvasProposalArgs(doc_id=doc["id"], content_json='{"elements":[]}')
+        )
+    assert e.value.code == errors.CODE_FORBIDDEN
+    assert _approvals(session, pid) == []
 
 
 def test_secret_proposal_rejected_no_row_no_audit(client: TestClient, session: Session) -> None:

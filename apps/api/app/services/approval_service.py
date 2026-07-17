@@ -29,6 +29,7 @@ from app.core.utils import new_id, now_utc, now_utc_plus_hours, sha256_hex
 from app.models.approval_request import ApprovalRequest
 from app.models.audit_event import AuditEvent
 from app.models.decision import Decision
+from app.models.doc import Doc
 from app.models.phase import Phase
 from app.models.project import Project
 from app.models.stage import Stage
@@ -41,7 +42,7 @@ from app.services.audit_service import create_audit_event
 # target fingerprint compare-and-swap is the real freshness guard.
 APPROVAL_TTL_HOURS: float = 24.0
 
-_TARGET_MODELS = {"task": Task, "decision": Decision}
+_TARGET_MODELS = {"task": Task, "decision": Decision, "doc": Doc}
 _TERMINAL = ("applied", "rejected", "expired", "invalidated", "failed")
 # A proposal is "active" (still blocks an identical idempotent duplicate) while it
 # can still be applied. "failed" is included because apply() treats it as
@@ -252,7 +253,7 @@ def create_proposal(
     normalized = allowlist.normalize_patch(action_type, patch)
 
     serialized = binding.canonical_json(normalized)
-    if len(serialized.encode("utf-8")) > allowlist.MAX_PATCH_BYTES:
+    if len(serialized.encode("utf-8")) > policy.max_patch_bytes:
         raise PolicyError("proposed patch exceeds size limit")
 
     target_entity_type = policy.target_entity_type
@@ -384,12 +385,41 @@ def get_proposal_audit(session: Session, approval_id: str) -> list[AuditEvent]:
     return list(session.exec(stmt).all())
 
 
+def _scene_counts(raw: Optional[str]) -> tuple[Optional[int], Optional[int]]:
+    """(element count, total text-element chars) for an Excalidraw scene, or
+    (None, None) if unparseable. Used for the compact canvas review preview."""
+    if not raw:
+        return None, None
+    try:
+        scene = json.loads(raw)
+        els = scene.get("elements", []) if isinstance(scene, dict) else []
+        text = sum(len(e.get("text", "")) for e in els if isinstance(e, dict))
+        return len(els), text
+    except (ValueError, TypeError, AttributeError):
+        return None, None
+
+
 def build_diff(session: Session, ar: ApprovalRequest) -> list[dict]:
-    """Field-level before/after for the review UI. Patch is already secret-free."""
+    """Before/after for the review UI. Patch is already secret-free."""
     try:
         patch = json.loads(ar.proposed_patch_json)
     except json.JSONDecodeError:
         return []
+
+    # A canvas doc.update carries a multi-MB scene JSON; never surface it raw.
+    # The decision's review preview is an element-count + extracted-text delta.
+    if ar.target_entity_type == "doc":
+        before_raw = None
+        if ar.target_entity_id:
+            doc = session.get(Doc, ar.target_entity_id)
+            before_raw = doc.content_json if doc is not None else None
+        b_els, b_txt = _scene_counts(before_raw)
+        a_els, a_txt = _scene_counts(patch.get("content_json"))
+        return [
+            {"field": "elements", "before": b_els, "after": a_els},
+            {"field": "text_chars", "before": b_txt, "after": a_txt},
+        ]
+
     before: dict = {}
     if ar.target_entity_id and ar.target_entity_type:
         model = _TARGET_MODELS.get(ar.target_entity_type)
