@@ -31,6 +31,7 @@ from app.api.v1.endpoints import (
     sync,
     tasks,
     timeline,
+    todos,
     workspaces,
 )
 
@@ -60,6 +61,7 @@ router.include_router(decisions.router, tags=["decisions"], dependencies=_GUARD)
 router.include_router(risks.router, tags=["risks"], dependencies=_GUARD)
 router.include_router(blockers.router, tags=["blockers"], dependencies=_GUARD)
 router.include_router(milestones.router, tags=["milestones"], dependencies=_GUARD)
+router.include_router(todos.router, tags=["todos"], dependencies=_GUARD)
 router.include_router(
     calendar_events.router, tags=["calendar-events"], dependencies=_GUARD
 )

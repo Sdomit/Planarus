@@ -15,6 +15,7 @@ import AgentRunsPanel from './AgentRunsPanel'
 import RemindersPanel from './RemindersPanel'
 import SettingsPanel from './SettingsPanel'
 import NotificationsBell from './NotificationsBell'
+import { SidebarTodos } from './SidebarTodos'
 import { Icon } from './Icon'
 import { api, type NotificationItem, type Project } from '../api/client'
 import './layout.css'
@@ -317,6 +318,8 @@ export default function Layout() {
               })}
             </nav>
           ))}
+
+          {project && <SidebarTodos projectId={project.id} />}
         </div>
 
         <div className="ab-side-foot">

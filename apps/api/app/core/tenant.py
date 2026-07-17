@@ -134,6 +134,7 @@ def _build_resolvers() -> dict:
     from app.models.risk import Risk
     from app.models.stage import Stage
     from app.models.task import Task
+    from app.models.todo import Todo
 
     return {
         "project_id": lambda s, v: v if s.get(Project, v) is not None else None,
@@ -149,6 +150,7 @@ def _build_resolvers() -> dict:
         "rule_id": lambda s, v: _project_id_via(s, NotificationRule, v),
         "context_file_id": lambda s, v: _project_id_via(s, ContextFile, v),
         "item_id": _checklist_project_id,
+        "todo_id": lambda s, v: _project_id_via(s, Todo, v),
     }
 
 
