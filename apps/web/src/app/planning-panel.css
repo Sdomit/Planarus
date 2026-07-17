@@ -115,8 +115,16 @@
   color: var(--text-secondary); font-size: var(--text-xs); font-weight: var(--weight-medium);
 }
 .pp-checklist { display: flex; flex-direction: column; gap: var(--space-1-5); padding-left: var(--space-5); }
-.pp-check { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--text-secondary); }
+.pp-check-row { display: flex; align-items: center; gap: var(--space-2); }
+.pp-check { flex: 1; display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--text-secondary); }
 .pp-check-done { text-decoration: line-through; color: var(--text-tertiary); }
+.pp-check-remove {
+  border: none; background: none; cursor: pointer; padding: 0 var(--space-1);
+  font-size: var(--text-base); line-height: 1; color: var(--text-tertiary);
+  opacity: 0; transition: opacity 0.12s ease, color 0.12s ease;
+}
+.pp-check-row:hover .pp-check-remove, .pp-check-remove:focus-visible { opacity: 1; }
+.pp-check-remove:hover { color: var(--status-danger-fg); }
 .pp-check-add { display: flex; gap: var(--space-2); align-items: center; }
 .pp-check-add .input { flex: 1; }
 .pp-card-phase {
