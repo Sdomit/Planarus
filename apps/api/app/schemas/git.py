@@ -85,6 +85,44 @@ class GitSnapshot(BaseModel):
     last_fetched_at: Optional[str] = None
 
 
+# --- Read-only PR layer via the GitHub CLI (Phase 12c) ----------------------
+
+
+class GitPullRequest(BaseModel):
+    """One open pull request, as reported by the local gh CLI (read-only)."""
+
+    number: int
+    title: str
+    state: str
+    is_draft: bool = False
+    head: Optional[str] = None
+    base: Optional[str] = None
+    url: Optional[str] = None
+    author: Optional[str] = None
+    updated_at: Optional[str] = None
+    review_decision: Optional[str] = None
+
+
+class GitPrSummary(BaseModel):
+    """Read-only open-PR summary from the local GitHub CLI. ``status``:
+
+    - ``ok``      — gh ran; ``prs`` is the open-PR list (may be empty)
+    - ``no_gh``   — the gh binary is not installed / not on PATH
+    - ``no_auth`` — gh is installed but not signed in (hint in ``message``)
+    - ``failed``  — gh errored (no GitHub remote, network, parse; see message)
+
+    Zero stored tokens: gh's own keyring holds the credential. Computed only on
+    an explicit human click in the local UI (never polled), behind a short TTL.
+    """
+
+    project_id: str
+    status: str = "failed"
+    authenticated: bool = False
+    message: Optional[str] = None
+    prs: list[GitPullRequest] = []
+    checked_at: str
+
+
 class GitFetchResult(BaseModel):
     """Outcome of the one gated exception (Phase 12b): a human-clicked fetch of
     remote-tracking refs. ``status``:

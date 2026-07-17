@@ -13,12 +13,17 @@ const baseSnap = {
 }
 
 vi.mock('../api/client', () => ({
-  api: { git: { snapshot: vi.fn(), fetchNow: vi.fn() } },
+  api: {
+    git: { snapshot: vi.fn(), fetchNow: vi.fn(), prs: vi.fn() },
+    links: { create: vi.fn() },
+  },
 }))
 
 beforeEach(() => {
   vi.mocked(api.git.snapshot).mockResolvedValue({ ...baseSnap })
   vi.mocked(api.git.fetchNow).mockReset()
+  vi.mocked(api.git.prs).mockReset()
+  vi.mocked(api.links.create).mockReset()
 })
 
 afterEach(cleanup)  // unmount between tests so ambiguous queries stay unambiguous
@@ -56,5 +61,57 @@ describe('GitSnapshotPanel — Phase 12b fetch', () => {
     render(<GitSnapshotPanel projectId="proj_1" />)
     fireEvent.click(await screen.findByRole('button', { name: /fetch now/i }))
     await waitFor(() => expect(screen.getByText(/disabled/i)).toBeTruthy())
+  })
+})
+
+describe('GitSnapshotPanel — Phase 12c pull requests', () => {
+  const pr = {
+    number: 7, title: 'Add PR layer', state: 'OPEN', is_draft: false,
+    head: 'feat/x', base: 'main', url: 'https://github.com/x/y/pull/7',
+    author: 'sdomit', updated_at: '2026-07-17T12:00:00Z', review_decision: null,
+  }
+
+  it('loads PRs only on click and renders the rows', async () => {
+    vi.mocked(api.git.prs).mockResolvedValue({
+      project_id: 'proj_1', status: 'ok', authenticated: true, message: null,
+      prs: [pr], checked_at: 't',
+    })
+    render(<GitSnapshotPanel projectId="proj_1" />)
+    await screen.findByRole('button', { name: /load prs/i })
+    expect(api.git.prs).not.toHaveBeenCalled() // never auto-loaded
+    fireEvent.click(screen.getByRole('button', { name: /load prs/i }))
+    await waitFor(() => expect(screen.getByText('Add PR layer')).toBeTruthy())
+    expect(api.git.prs).toHaveBeenCalledWith('proj_1')
+    expect(screen.getByRole('link', { name: '#7' }).getAttribute('href')).toBe(pr.url)
+  })
+
+  it('saves a PR as a project link via the existing links API', async () => {
+    vi.mocked(api.git.prs).mockResolvedValue({
+      project_id: 'proj_1', status: 'ok', authenticated: true, message: null,
+      prs: [pr], checked_at: 't',
+    })
+    vi.mocked(api.links.create).mockResolvedValue({
+      id: 'lnk_1', project_id: 'proj_1', entity_type: 'project', entity_id: 'proj_1',
+      url: pr.url, title: 'PR #7 — Add PR layer', created_at: 't',
+    })
+    render(<GitSnapshotPanel projectId="proj_1" />)
+    fireEvent.click(await screen.findByRole('button', { name: /load prs/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /add link/i }))
+    await waitFor(() => expect(screen.getByText('linked ✓')).toBeTruthy())
+    expect(api.links.create).toHaveBeenCalledWith('proj_1', {
+      entity_type: 'project', entity_id: 'proj_1', url: pr.url, title: 'PR #7 — Add PR layer',
+    })
+  })
+
+  it('surfaces the signed-out state without breaking the cockpit', async () => {
+    vi.mocked(api.git.prs).mockResolvedValue({
+      project_id: 'proj_1', status: 'no_auth', authenticated: false,
+      message: 'gh is not signed in — run `gh auth login` in a terminal. Approvo never stores the credential.',
+      prs: [], checked_at: 't',
+    })
+    render(<GitSnapshotPanel projectId="proj_1" />)
+    fireEvent.click(await screen.findByRole('button', { name: /load prs/i }))
+    await waitFor(() => expect(screen.getByText(/not signed in/i)).toBeTruthy())
+    expect(screen.getByText('abc1234')).toBeTruthy() // offline cockpit intact
   })
 })
