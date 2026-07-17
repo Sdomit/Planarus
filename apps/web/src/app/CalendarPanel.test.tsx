@@ -9,8 +9,13 @@ const { getCalendar, createEvent } = vi.hoisted(() => ({
 
 vi.mock('../api/client', () => ({
   api: {
-    calendar: { get: getCalendar },
+    calendar: {
+      get: getCalendar,
+      icsHref: (pid: string, p?: { from?: string; to?: string }) =>
+        `/api/v1/projects/${pid}/calendar.ics?from=${p?.from}&to=${p?.to}`,
+    },
     calendarEvents: {
+      list: vi.fn(async () => []),
       create: createEvent,
       update: vi.fn(async () => ({})),
       remove: vi.fn(async () => undefined),
@@ -20,7 +25,10 @@ vi.mock('../api/client', () => ({
   },
 }))
 
-// A fixed "today" so month headings/ranges are deterministic.
+const ITEM = (o: Partial<Record<string, unknown>>) => ({
+  end_at: null, all_day: true, status: null, phase_id: null, recurring: false, ...o,
+})
+
 afterEach(() => { cleanup(); vi.useRealTimers() })
 
 beforeEach(() => {
@@ -32,9 +40,9 @@ beforeEach(() => {
     project_id: 'proj_1',
     generated_at: 't',
     items: [
-      { id: 'event:cal_1', source: 'event', ref_id: 'cal_1', title: 'Kickoff', start_at: '2026-08-12T10:00:00+00:00', end_at: null, all_day: false, status: 'confirmed', phase_id: null },
-      { id: 'milestone:mil_1', source: 'milestone', ref_id: 'mil_1', title: 'Beta', start_at: '2026-08-15', end_at: null, all_day: true, status: 'planned', phase_id: null },
-      { id: 'task:tsk_1', source: 'task', ref_id: 'tsk_1', title: 'Ship docs', start_at: '2026-08-20', end_at: null, all_day: true, status: 'in_progress', phase_id: null },
+      ITEM({ id: 'event:cal_1', source: 'event', ref_id: 'cal_1', title: 'Kickoff', start_at: '2026-08-12T10:00:00+00:00', all_day: false, status: 'confirmed' }),
+      ITEM({ id: 'milestone:mil_1', source: 'milestone', ref_id: 'mil_1', title: 'Beta', start_at: '2026-08-15', status: 'planned' }),
+      ITEM({ id: 'task:tsk_1', source: 'task', ref_id: 'tsk_1', title: 'Ship docs', start_at: '2026-08-20', status: 'in_progress' }),
     ],
   })
 })
@@ -53,22 +61,55 @@ describe('CalendarPanel', () => {
     await screen.findByText('August 2026')
     fireEvent.click(screen.getByLabelText('Next'))
     expect(await screen.findByText('September 2026')).toBeTruthy()
-    // The most recent fetch requested a September-spanning range.
     const calls = getCalendar.mock.calls
     const params = calls[calls.length - 1][1] as { from: string; to: string }
     expect(params.from <= '2026-09-01').toBe(true)
     expect(params.to >= '2026-09-30').toBe(true)
   })
 
-  it('opens the new-event dialog and creates an event', async () => {
+  it('opens the new-event dialog with a recurrence control and creates an event', async () => {
     render(<CalendarPanel projectId="proj_1" />)
     await screen.findByText('August 2026')
     fireEvent.click(screen.getByRole('button', { name: '+ New event' }))
     expect(await screen.findByText('New event')).toBeTruthy()
+    expect(screen.getByText('Repeats')).toBeTruthy() // recurrence field present
     fireEvent.change(screen.getByLabelText('Event title'), { target: { value: 'Design review' } })
     fireEvent.submit(screen.getByText('Save').closest('form')!)
     await waitFor(() => expect(createEvent).toHaveBeenCalled())
-    const payload = createEvent.mock.calls[0][1] as { title: string }
+    const payload = createEvent.mock.calls[0][1] as { title: string; recurrence: string }
     expect(payload.title).toBe('Design review')
+    expect(payload.recurrence).toBe('none')
+  })
+
+  it('filters out a source when its toggle is switched off', async () => {
+    render(<CalendarPanel projectId="proj_1" />)
+    await screen.findByText('Beta')
+    fireEvent.click(screen.getByRole('checkbox', { name: /Milestones/i }))
+    expect(screen.queryByText('Beta')).toBeNull()
+    expect(screen.getByText('Kickoff')).toBeTruthy() // other sources stay
+  })
+
+  it('switches to agenda view and lists upcoming items', async () => {
+    render(<CalendarPanel projectId="proj_1" />)
+    await screen.findByText('August 2026')
+    fireEvent.click(screen.getByRole('button', { name: 'Agenda' }))
+    expect(await screen.findByText(/Upcoming from/)).toBeTruthy()
+    expect(screen.getByText('Kickoff')).toBeTruthy()
+  })
+
+  it('clicking a milestone routes to Planning instead of the event dialog', async () => {
+    const onOpenPlanning = vi.fn()
+    render(<CalendarPanel projectId="proj_1" onOpenPlanning={onOpenPlanning} />)
+    await screen.findByText('Beta')
+    fireEvent.click(screen.getByText('Beta'))
+    expect(onOpenPlanning).toHaveBeenCalledOnce()
+    expect(screen.queryByText('Edit event')).toBeNull() // no dialog for non-events
+  })
+
+  it('exposes an .ics export link for the visible range', async () => {
+    render(<CalendarPanel projectId="proj_1" />)
+    await screen.findByText('August 2026')
+    const link = screen.getByText('Export .ics').closest('a')!
+    expect(link.getAttribute('href')).toContain('/calendar.ics')
   })
 })

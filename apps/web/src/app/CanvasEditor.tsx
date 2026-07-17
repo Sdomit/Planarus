@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Excalidraw, serializeAsJSON, convertToExcalidrawElements } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
-import { api, type Doc } from '../api/client'
+import { api, type Doc, type Comment } from '../api/client'
 import { StatusBadge } from './StatusBadge'
 import {
   CARD_KINDS,
@@ -9,6 +9,7 @@ import {
   KIND_NAME,
   cardLabel,
   readCardRef,
+  readReviewPin,
   taskToRef,
   decisionToRef,
   riskToRef,
@@ -46,6 +47,7 @@ interface CanvasApi {
   }
   getSceneElements: () => readonly unknown[]
   updateScene: (scene: { elements: readonly unknown[] }) => void
+  scrollToContent: (target?: readonly unknown[], opts?: { fitToContent?: boolean }) => void
 }
 
 interface CanvasEditorProps {
@@ -93,6 +95,14 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
   const [selectedCard, setSelectedCard] = useState<EntityCardRef | null>(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const lastSelKey = useRef('')
+
+  // Review comments (Phase 13c). A canvas is a Doc, so comments attach via the
+  // existing polymorphic Comment API (entity_type='doc'). A "review pin" is a
+  // canvas marker element whose customData links it to one of those comments.
+  const [showComments, setShowComments] = useState(false)
+  const [comments, setComments] = useState<Comment[]>([])
+  const commentsLoaded = useRef(false)
+  const [commentBody, setCommentBody] = useState('')
 
   const entityMap = useMemo(() => new Map(entities.map((e) => [e.id, e])), [entities])
   const groups = useMemo(() => {
@@ -246,6 +256,60 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
     setPickerOpen(false)
   }, [])
 
+  const loadComments = useCallback(async () => {
+    if (commentsLoaded.current) return
+    commentsLoaded.current = true
+    try {
+      setComments(await api.comments.list(projectIdRef.current, { entity_type: 'doc', entity_id: docId }))
+    } catch {
+      commentsLoaded.current = false // allow a retry
+    }
+  }, [docId])
+
+  const addComment = useCallback(async (body: string) => {
+    const text = body.trim()
+    if (!text) return
+    const c = await api.comments.create(projectIdRef.current, { entity_type: 'doc', entity_id: docId, body: text })
+    setComments((prev) => [...prev, c])
+    setCommentBody('')
+  }, [docId])
+
+  const addPin = useCallback(async () => {
+    const canvas = apiRef.current
+    if (!canvas) return
+    const note = window.prompt('Review pin note')
+    if (note == null || !note.trim()) return
+    const c = await api.comments.create(projectIdRef.current, { entity_type: 'doc', entity_id: docId, body: note.trim() })
+    setComments((prev) => [...prev, c])
+    const st = canvas.getAppState()
+    const zoom = st.zoom.value || 1
+    const cx = st.width / (2 * zoom) - st.scrollX
+    const cy = st.height / (2 * zoom) - st.scrollY
+    const num = canvas.getSceneElements().filter((el) => readReviewPin((el as { customData?: unknown }).customData)).length + 1
+    const skeleton = {
+      type: 'ellipse',
+      x: cx - 16,
+      y: cy - 16,
+      width: 32,
+      height: 32,
+      backgroundColor: '#ffe066',
+      strokeColor: '#e8590c',
+      fillStyle: 'solid',
+      customData: { reviewPin: { commentId: c.id } },
+      label: { text: String(num), fontSize: 14, strokeColor: '#1e1e1e' },
+    }
+    const created = convertToExcalidrawElements([skeleton] as Parameters<typeof convertToExcalidrawElements>[0])
+    canvas.updateScene({ elements: [...canvas.getSceneElements(), ...created] })
+    setShowComments(true)
+  }, [docId])
+
+  const scrollToPin = useCallback((commentId: string) => {
+    const canvas = apiRef.current
+    if (!canvas) return
+    const marker = canvas.getSceneElements().find((el) => readReviewPin((el as { customData?: unknown }).customData) === commentId)
+    if (marker) canvas.scrollToContent([marker], { fitToContent: false })
+  }, [])
+
   if (loading) return <p className="dp-state">Loading canvas…</p>
   if (loadError) return <p className="dp-state dp-error">{loadError}</p>
   if (!doc || !scene) return <p className="dp-state dp-error">Canvas not found.</p>
@@ -258,6 +322,11 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
     `Error: ${saveError ?? 'unknown'}`
 
   const live = selectedCard ? entityMap.get(selectedCard.id) : undefined
+  const pinIds = new Set(
+    (apiRef.current?.getSceneElements() ?? [])
+      .map((el) => readReviewPin((el as { customData?: unknown }).customData))
+      .filter((id): id is string => !!id),
+  )
   const panelStyle: CSSProperties = {
     position: 'absolute',
     top: 'calc(100% + 4px)',
@@ -280,6 +349,12 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
         <StatusBadge kind="docstatus" value={doc.status} />
         <button className="btn btn-outline btn-sm" onClick={openPicker} title="Insert a card bound to a project entity">
           ＋ Card
+        </button>
+        <button className="btn btn-outline btn-sm" onClick={addPin} title="Drop a review pin on the canvas, bound to a comment">
+          📍 Pin
+        </button>
+        <button className="btn btn-ghost btn-sm" onClick={() => { setShowComments((o) => !o); loadComments() }} title="Review comments">
+          💬 Comments{comments.length ? ` (${comments.length})` : ''}
         </button>
         {selectedCard && (
           <span className="badge badge-neutral badge-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', maxWidth: 360 }}>
@@ -350,12 +425,59 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
           </div>
         )}
       </div>
-      <div style={{ height: '78vh', minHeight: 400 }}>
+      <div style={{ position: 'relative', height: '78vh', minHeight: 400 }}>
         <Excalidraw
           excalidrawAPI={(inst) => { apiRef.current = inst as unknown as CanvasApi }}
           initialData={{ elements: scene.elements, appState: scene.appState, files: scene.files }}
           onChange={onChange}
         />
+        {showComments && (
+          <div
+            style={{
+              position: 'absolute', top: 0, right: 0, width: 300, height: '100%', zIndex: 5,
+              background: 'var(--bg-surface)', borderLeft: '1px solid var(--border-default)',
+              boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-3)', borderBottom: '1px solid var(--border-subtle)' }}>
+              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>Comments</span>
+              <button type="button" className="btn btn-ghost btn-xs" onClick={() => setShowComments(false)}>✕</button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {comments.length === 0 ? (
+                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', padding: 'var(--space-3)' }}>
+                  {commentsLoaded.current ? 'No comments yet. Add one below, or drop a 📍 pin.' : 'Loading…'}
+                </p>
+              ) : (
+                comments.map((c) => {
+                  const pinned = pinIds.has(c.id)
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={pinned ? () => scrollToPin(c.id) : undefined}
+                      title={pinned ? 'Jump to pin on canvas' : undefined}
+                      style={{ padding: 'var(--space-2) var(--space-3)', borderBottom: '1px solid var(--border-subtle)', cursor: pinned ? 'pointer' : 'default' }}
+                    >
+                      <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>
+                        {pinned && '📍 '}{c.body}
+                      </div>
+                      <div style={{ fontSize: 'var(--text-2xs, 10px)', color: 'var(--text-tertiary)', marginTop: 2 }}>
+                        {c.author_type} · {c.created_at.slice(0, 10)}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+            <form
+              onSubmit={(e) => { e.preventDefault(); void addComment(commentBody) }}
+              style={{ display: 'flex', gap: 'var(--space-2)', padding: 'var(--space-2)', borderTop: '1px solid var(--border-subtle)' }}
+            >
+              <input className="input" style={{ flex: 1 }} placeholder="Add a comment…" value={commentBody} onChange={(e) => setCommentBody(e.target.value)} />
+              <button type="submit" className="btn btn-solid btn-sm" disabled={!commentBody.trim()}>Post</button>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   )

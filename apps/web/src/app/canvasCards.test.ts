@@ -6,6 +6,7 @@ import {
   milestoneToRef,
   cardLabel,
   readCardRef,
+  readReviewPin,
 } from './canvasCards'
 import type { Task, Decision, Risk, Milestone } from '../api/client'
 
@@ -35,5 +36,12 @@ describe('canvasCards helpers', () => {
     expect(readCardRef({ foo: 1 })).toBeNull()
     expect(readCardRef({ approvoEntity: { kind: 'bogus', id: 'x' } })).toBeNull()
     expect(readCardRef({ approvoEntity: { kind: 'task' } })).toBeNull() // missing id
+  })
+
+  it('reads a review-pin comment id and rejects non-pins', () => {
+    expect(readReviewPin({ reviewPin: { commentId: 'cmt_1' } })).toBe('cmt_1')
+    expect(readReviewPin({ approvoEntity: { kind: 'task', id: 't1' } })).toBeNull()
+    expect(readReviewPin({ reviewPin: {} })).toBeNull()
+    expect(readReviewPin(undefined)).toBeNull()
   })
 })
