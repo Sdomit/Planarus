@@ -7,7 +7,6 @@ import { InlineStatusSelect } from './InlineStatusSelect'
 import { RowActions } from './RowActions'
 import { useListReorder } from './useListReorder'
 import { EntityBoard, nextStatusForColumn as nextStatusForCol } from './EntityBoard'
-import { RichTextEditor } from './RichTextEditor'
 import { Markdown } from './markdown'
 import './planning-panel.css'
 
@@ -350,8 +349,8 @@ export default function PlanningPanel({
               </>
             )}
             {tab === 'comments' && (
-              <RichTextEditor value={commentForm.body} onChange={body => setCommentForm({ body })}
-                placeholder="Add a comment on this project…" />
+              <textarea className="input" required placeholder="Add a comment on this project… (Markdown supported)" aria-label="Project comment"
+                value={commentForm.body} onChange={e => setCommentForm({ body: e.target.value })} />
             )}
             {tab === 'links' && (
               <>
@@ -1215,7 +1214,8 @@ function CommentItem({ comment, card, update, remove }: {
       </div>
       {editing ? (
         <div className="pp-comment-edit">
-          <RichTextEditor value={draft} onChange={setDraft} />
+          <textarea className="input" autoFocus value={draft} aria-label="Edit comment"
+            onChange={e => setDraft(e.target.value)} />
           <div className="pp-comment-edit-actions">
             <button type="button" className="btn btn-solid btn-sm" onClick={save}>Save</button>
             <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing(false)}>Cancel</button>

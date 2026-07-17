@@ -1,7 +1,7 @@
 """Add sort_order to decision + risk (Phase 15.3 — manual reordering)
 
-Revision ID: 0014
-Revises: 0013
+Revision ID: 0018
+Revises: 0017
 Create Date: 2026-07-16
 
 Additive only: a nullable-with-default `sort_order` integer on `decision` and
@@ -13,8 +13,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0014"
-down_revision: Union[str, None] = "0013"
+revision: str = "0018"
+down_revision: Union[str, None] = "0017"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
