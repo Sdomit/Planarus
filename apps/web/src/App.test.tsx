@@ -1,6 +1,9 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import App from './App'
+
+// CanvasEditor pulls in Excalidraw, which can't evaluate under jsdom (no canvas).
+vi.mock('./app/CanvasEditor', () => ({ CanvasEditor: () => null }))
 
 afterEach(cleanup)
 
