@@ -46,7 +46,7 @@ function kpiValue(container: HTMLElement, label: string): string | undefined {
 
 describe('CockpitPanel', () => {
   it('renders the project header, computed KPIs and the repo snapshot', async () => {
-    const { container } = render(<CockpitPanel projectId="proj_1" onClose={() => {}} />)
+    const { container } = render(<CockpitPanel projectId="proj_1" onClose={() => {}} onOpenCanvas={() => {}} />)
     expect(await screen.findByText('Demo')).toBeTruthy()
     // Repo snapshot surfaces commit, working-tree counts, needs-merge and the
     // always-visible freshness stamp.
@@ -62,7 +62,7 @@ describe('CockpitPanel', () => {
 
   it('degrades gracefully when the Git read fails', async () => {
     vi.mocked(api.git.snapshot).mockRejectedValueOnce(new Error('boom'))
-    const { container } = render(<CockpitPanel projectId="proj_1" onClose={() => {}} />)
+    const { container } = render(<CockpitPanel projectId="proj_1" onClose={() => {}} onOpenCanvas={() => {}} />)
     // Header + KPIs still render (the required calls succeeded)…
     expect(await screen.findByText('Demo')).toBeTruthy()
     await waitFor(() => expect(kpiValue(container, 'Open tasks')).toBe('1'))
