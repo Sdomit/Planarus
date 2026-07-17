@@ -18,8 +18,12 @@ vi.mock('../api/client', () => ({
     phases: { list: vi.fn(async () => [{ id: 'ph_1' }]) },
     tasks: { list: vi.fn(async () => [{ id: 't_1', status: 'in_progress' }, { id: 't_2', status: 'done' }]) },
     risks: { list: vi.fn(async () => [{ id: 'r_1', status: 'open' }]) },
+    milestones: { list: vi.fn(async () => []) },
+    decisions: { list: vi.fn(async () => []) },
     git: { get: vi.fn(async () => gitRepo) },
     approvals: { list: vi.fn(async () => []) },
+    roadmap: { get: vi.fn(async () => ({ project_id: 'p', generated_at: 't', phases: [], unphased: { total: 0, done: 0, in_progress: 0, blocked: 0 }, totals: { total: 0, done: 0, in_progress: 0, blocked: 0 }, pct_done: 0 })) },
+    timeline: { get: vi.fn(async () => ({ project_id: 'p', generated_at: 't', events: [] })) },
   },
 }))
 
