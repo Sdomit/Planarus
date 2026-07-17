@@ -78,3 +78,21 @@ def update_decision(
     session.commit()
     session.refresh(decision)
     return decision
+
+
+def delete_decision(session: Session, decision_id: str) -> bool:
+    decision = session.get(Decision, decision_id)
+    if decision is None:
+        return False
+    project_id = decision.project_id
+    session.delete(decision)
+    create_audit_event(
+        session,
+        event_type="delete",
+        actor_type="human",
+        entity_type="decision",
+        entity_id=decision_id,
+        project_id=project_id,
+    )
+    session.commit()
+    return True

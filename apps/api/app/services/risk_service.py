@@ -77,3 +77,21 @@ def update_risk(session: Session, risk_id: str, data: RiskUpdate) -> Optional[Ri
     session.commit()
     session.refresh(risk)
     return risk
+
+
+def delete_risk(session: Session, risk_id: str) -> bool:
+    risk = session.get(Risk, risk_id)
+    if risk is None:
+        return False
+    project_id = risk.project_id
+    session.delete(risk)
+    create_audit_event(
+        session,
+        event_type="delete",
+        actor_type="human",
+        entity_type="risk",
+        entity_id=risk_id,
+        project_id=project_id,
+    )
+    session.commit()
+    return True
