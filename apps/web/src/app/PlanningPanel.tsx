@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  api, Blocker, ChecklistItem, Comment, Decision, Link, Milestone, Phase, Project, Risk, Stage, Task,
+  api, Blocker, ChecklistItem, Comment, Decision, Link, Milestone, Phase, Project, Risk, Stage, StatusOption, Task,
 } from '../api/client'
 import { StatusBadge } from './StatusBadge'
 import { InlineStatusSelect } from './InlineStatusSelect'
@@ -51,9 +51,6 @@ const STATUS_DOT: Record<string, string> = {
   waiting: 'var(--status-warning-fg)', needs_review: 'var(--status-warning-fg)', blocked: 'var(--status-danger-fg)',
   done: 'var(--status-success-fg)', canceled: 'var(--text-tertiary)',
 }
-const STATUS_COLS: BoardCol[] = TASK_STATUSES.map(s => ({
-  key: s, label: s.replace(/_/g, ' '), statuses: [s], dot: STATUS_DOT[s] ?? 'var(--text-tertiary)',
-}))
 
 // One-column-per-status board configs for the non-task entities.
 const PHASE_DOT: Record<string, string> = {
@@ -94,6 +91,7 @@ export default function PlanningPanel({
   const [phases, setPhases] = useState<Phase[]>([])
   const [stages, setStages] = useState<Stage[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
+  const [taskStatuses, setTaskStatuses] = useState<StatusOption[]>([])
   const [milestones, setMilestones] = useState<Milestone[]>([])
   const [decisions, setDecisions] = useState<Decision[]>([])
   const [risks, setRisks] = useState<Risk[]>([])
@@ -141,7 +139,7 @@ export default function PlanningPanel({
   }
 
   async function loadEntities(projectId: string) {
-    const [ph, stg, tk, mil, dec, rsk, blk, cmt, lnk] = await Promise.all([
+    const [ph, stg, tk, mil, dec, rsk, blk, cmt, lnk, sto] = await Promise.all([
       api.phases.list(projectId),
       api.stages.list(projectId),
       api.tasks.list(projectId),
@@ -151,9 +149,10 @@ export default function PlanningPanel({
       api.blockers.list(projectId),
       api.comments.list(projectId),
       api.links.list(projectId),
+      api.statusOptions.list(projectId).catch(() => []),
     ])
     setPhases(ph); setStages(stg); setTasks(tk); setMilestones(mil); setDecisions(dec)
-    setRisks(rsk); setBlockers(blk); setComments(cmt); setLinks(lnk)
+    setRisks(rsk); setBlockers(blk); setComments(cmt); setLinks(lnk); setTaskStatuses(sto)
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -291,7 +290,7 @@ export default function PlanningPanel({
                   value={taskForm.title} onChange={e => setTaskForm(f => ({ ...f, title: e.target.value }))} />
                 <select className="input select" value={taskForm.status} aria-label="Task status"
                   onChange={e => setTaskForm(f => ({ ...f, status: e.target.value }))}>
-                  {TASK_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                  {statusKeysOf(taskStatuses).map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
                 </select>
                 <select className="input select" value={taskForm.priority} aria-label="Task priority"
                   onChange={e => setTaskForm(f => ({ ...f, priority: e.target.value }))}>
@@ -371,9 +370,15 @@ export default function PlanningPanel({
           <PhasesSection phases={phases} projectId={project.id} setPhases={setPhases} />
         )}
         {tab === 'tasks' && (
-          <TasksList tasks={tasks} phases={phases} stages={stages} projectId={project.id} setTasks={setTasks} onTaskUpdated={updated =>
-            setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))
-          } />
+          <TasksList tasks={tasks} phases={phases} stages={stages} projectId={project.id} setTasks={setTasks}
+            taskStatuses={taskStatuses}
+            addTaskStatus={async label => {
+              await api.statusOptions.create(project.id, { entity_type: 'task', label })
+              setTaskStatuses(await api.statusOptions.list(project.id))
+            }}
+            onTaskUpdated={updated =>
+              setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))
+            } />
         )}
         {tab === 'milestones' && (
           <MilestonesSection milestones={milestones} projectId={project.id} setMilestones={setMilestones} />
@@ -540,12 +545,25 @@ interface TasksListProps {
   projectId: string
   onTaskUpdated: (task: Task) => void
   setTasks?: React.Dispatch<React.SetStateAction<Task[]>>
+  taskStatuses?: StatusOption[]
+  addTaskStatus?: (label: string) => Promise<void>
 }
 
-// List filter: 'open' = not done/canceled (default), 'all' = everything, else an exact status.
-const LIST_FILTERS = ['open', 'all', ...TASK_STATUSES]
+/** The task status keys in effect — the project's options (built-in ∪ custom)
+ *  when loaded, else the canonical fallback. */
+function statusKeysOf(taskStatuses?: StatusOption[]): string[] {
+  return taskStatuses && taskStatuses.length ? taskStatuses.map(o => o.key) : TASK_STATUSES
+}
 
-function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks }: TasksListProps) {
+/** Prompt for a new status name and create it (the server slugifies the key). */
+function promptNewStatus(add: (label: string) => Promise<void>): void {
+  const label = window.prompt('New status name (e.g. "In Review")')?.trim()
+  if (label) void add(label)
+}
+
+function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, taskStatuses, addTaskStatus }: TasksListProps) {
+  const statusKeys = statusKeysOf(taskStatuses)
+  const LIST_FILTERS = ['open', 'all', ...statusKeys]
   const [view, setView] = useState<'list' | 'board'>('list')
   const [filter, setFilter] = useState('open')
   const done = tasks.filter(t => t.status === 'done' || t.status === 'canceled').length
@@ -582,7 +600,8 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks }
       </div>
 
       {view === 'board' ? (
-        <TaskBoard tasks={tasks} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated} setTasks={setTasks} />
+        <TaskBoard tasks={tasks} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated}
+          setTasks={setTasks} taskStatuses={taskStatuses} addTaskStatus={addTaskStatus} />
       ) : shown.length === 0 ? (
         <p style={EMPTY}>No tasks match this filter.</p>
       ) : (() => {
@@ -605,7 +624,8 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks }
               <TaskRow key={t.id} task={t} phases={phases} stages={stages} projectId={projectId}
                 onTaskUpdated={onTaskUpdated} onDelete={setTasks ? () => remove(t.id) : undefined}
                 dragProps={setTasks && !t.parent_task_id ? itemProps(t.id) : undefined}
-                subtasks={childrenOf.get(t.id) ?? []} setTasks={setTasks} />
+                subtasks={childrenOf.get(t.id) ?? []} setTasks={setTasks}
+                statusKeys={statusKeys} addTaskStatus={addTaskStatus} />
             ))}
           </ul>
         )
@@ -615,12 +635,14 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks }
 }
 
 /** Kanban board with two groupings (Flow buckets / per-status), drag-to-restatus, and click-to-open. */
-function TaskBoard({ tasks, phases, stages, projectId, onTaskUpdated, setTasks }: TasksListProps) {
+function TaskBoard({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, taskStatuses, addTaskStatus }: TasksListProps) {
   const [group, setGroup] = useState<'flow' | 'status'>('flow')
   const [openId, setOpenId] = useState<string | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
   const [overCol, setOverCol] = useState<string | null>(null)
-  const cols = group === 'flow' ? BOARD_COLS : STATUS_COLS
+  const statusKeys = statusKeysOf(taskStatuses)
+  // Status grouping: one column per status (built-in + custom). Flow: fixed buckets.
+  const cols = group === 'flow' ? BOARD_COLS : statusCols(statusKeys, STATUS_DOT)
   const phaseTitle = new Map(phases.map(phase => [phase.id, phase.title]))
   const openTask = tasks.find(t => t.id === openId) ?? null
 
@@ -689,10 +711,17 @@ function TaskBoard({ tasks, phases, stages, projectId, onTaskUpdated, setTasks }
               </div>
             )
           })}
+          {group === 'status' && addTaskStatus && (
+            <div className="ab-col ab-col-add">
+              <button type="button" className="ab-col-add-btn" onClick={() => promptNewStatus(addTaskStatus)}>
+                + Add column
+              </button>
+            </div>
+          )}
         </div>
       </div>
       {openTask && (
-        <TaskDialog task={openTask} phases={phases} stages={stages} projectId={projectId}
+        <TaskDialog task={openTask} phases={phases} stages={stages} projectId={projectId} statusKeys={statusKeys}
           onClose={() => setOpenId(null)} onTaskUpdated={onTaskUpdated} />
       )}
     </>
@@ -700,9 +729,9 @@ function TaskBoard({ tasks, phases, stages, projectId, onTaskUpdated, setTasks }
 }
 
 /** Card detail as a native modal dialog (Esc / backdrop / ✕ all close it). */
-function TaskDialog({ task, phases, stages, projectId, onClose, onTaskUpdated }: {
+function TaskDialog({ task, phases, stages, projectId, onClose, onTaskUpdated, statusKeys }: {
   task: Task; phases: Phase[]; stages: Stage[]; projectId: string
-  onClose: () => void; onTaskUpdated: (task: Task) => void
+  onClose: () => void; onTaskUpdated: (task: Task) => void; statusKeys?: string[]
 }) {
   const ref = useRef<HTMLDialogElement>(null)
   useEffect(() => { ref.current?.showModal?.() }, [])
@@ -718,14 +747,15 @@ function TaskDialog({ task, phases, stages, projectId, onClose, onTaskUpdated }:
         <span className="pp-dialog-title">{task.title}</span>
         <button type="button" className="btn btn-outline btn-sm" onClick={close} aria-label="Close">✕</button>
       </div>
-      <TaskDetailBody task={task} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated} />
+      <TaskDetailBody task={task} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated} statusKeys={statusKeys} />
     </dialog>
   )
 }
 
 /** Shared task detail: status/priority/phase/stage controls, checklist, and comments. */
-function TaskDetailBody({ task, phases, stages, projectId, onTaskUpdated }: {
+function TaskDetailBody({ task, phases, stages, projectId, onTaskUpdated, statusKeys = TASK_STATUSES }: {
   task: Task; phases: Phase[]; stages: Stage[]; projectId: string; onTaskUpdated: (task: Task) => void
+  statusKeys?: string[]
 }) {
   const [items, setItems] = useState<ChecklistItem[]>([])
   const [label, setLabel] = useState('')
@@ -766,7 +796,7 @@ function TaskDetailBody({ task, phases, stages, projectId, onTaskUpdated }: {
           <span>Status</span>
           <select className="input select input-sm" value={task.status} disabled={saving}
             onChange={event => void updateTask({ status: event.target.value })}>
-            {TASK_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
+            {statusKeys.map(status => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}
           </select>
         </label>
         <label>
@@ -861,12 +891,14 @@ function TaskComments({ projectId, taskId }: { projectId: string; taskId: string
 
 /** A task row: inline status/title edit + delete/drag in the header, expands to
  *  the shared task detail; renders its sub-tasks nested beneath. */
-function TaskRow({ task, phases, stages, projectId, onTaskUpdated, onDelete, dragProps, subtasks = [], setTasks }: {
+function TaskRow({ task, phases, stages, projectId, onTaskUpdated, onDelete, dragProps, subtasks = [], setTasks, statusKeys = TASK_STATUSES, addTaskStatus }: {
   task: Task; phases: Phase[]; stages: Stage[]; projectId: string; onTaskUpdated: (task: Task) => void
   onDelete?: () => void
   dragProps?: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
   subtasks?: Task[]
   setTasks?: React.Dispatch<React.SetStateAction<Task[]>>
+  statusKeys?: string[]
+  addTaskStatus?: (label: string) => Promise<void>
 }) {
   const [open, setOpen] = useState(false)
   const [addingSub, setAddingSub] = useState(false)
@@ -874,6 +906,7 @@ function TaskRow({ task, phases, stages, projectId, onTaskUpdated, onDelete, dra
   const isSub = Boolean(task.parent_task_id)
   const update = (patch: Parameters<typeof api.tasks.update>[1]) => void api.tasks.update(task.id, patch).then(onTaskUpdated)
   const editable = useEditable(task.title, t => update({ title: t }))
+  const onAddNew = addTaskStatus ? () => promptNewStatus(addTaskStatus) : undefined
 
   async function addSubtask(e: React.FormEvent) {
     e.preventDefault()
@@ -896,17 +929,17 @@ function TaskRow({ task, phases, stages, projectId, onTaskUpdated, onDelete, dra
           {editable.node ?? <span className="pp-row-title">{task.title}</span>}
           {subtasks.length > 0 && <span className="pp-subcount">{subtasks.length}</span>}
         </button>
-        <InlineStatusSelect kind="task" value={task.status} options={TASK_STATUSES}
-          onChange={s => update({ status: s })} label={`Change status of ${task.title}`} />
+        <InlineStatusSelect kind="task" value={task.status} options={statusKeys}
+          onChange={s => update({ status: s })} label={`Change status of ${task.title}`} onAddNew={onAddNew} />
         <RowActions title={task.title} onEdit={editable.start} onDelete={onDelete} dragHandle={Boolean(dragProps)} />
       </div>
-      {open && <TaskDetailBody task={task} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated} />}
+      {open && <TaskDetailBody task={task} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated} statusKeys={statusKeys} />}
       {(subtasks.length > 0 || (setTasks && !isSub)) && (
         <div className="pp-subtasks">
           <ul className="pp-rows">
             {subtasks.map(st => (
               <TaskRow key={st.id} task={st} phases={phases} stages={stages} projectId={projectId}
-                onTaskUpdated={onTaskUpdated}
+                onTaskUpdated={onTaskUpdated} statusKeys={statusKeys} addTaskStatus={addTaskStatus}
                 onDelete={setTasks ? () => void api.tasks.remove(st.id).then(() => setTasks(prev => prev.filter(x => x.id !== st.id))) : undefined} />
             ))}
           </ul>

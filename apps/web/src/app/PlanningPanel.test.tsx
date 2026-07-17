@@ -26,6 +26,7 @@ vi.mock('../api/client', () => ({
     comments: { list: vi.fn(), create: vi.fn() },
     links: { list: vi.fn(), create: vi.fn() },
     checklistItems: { list: vi.fn(), create: vi.fn(), update: vi.fn() },
+    statusOptions: { list: vi.fn(async () => []), create: vi.fn(), remove: vi.fn() },
   },
 }))
 
@@ -44,6 +45,7 @@ const mockApi = api as unknown as {
   comments: { list: Fn; create: Fn }
   links: { list: Fn; create: Fn }
   checklistItems: { list: Fn; create: Fn; update: Fn }
+  statusOptions: { list: Fn; create: Fn; remove: Fn }
 }
 
 const PROJECT = {
@@ -227,6 +229,29 @@ describe('PlanningPanel', () => {
     ])
     render(<PlanningPanel projectId="proj_1" />)
     expect(await screen.findByText('1 blocked')).toBeTruthy()
+  })
+
+  it('shows a custom status as a board column and offers Add column', async () => {
+    setupEmpty()
+    const builtins = ['backlog', 'ready', 'in_progress', 'waiting', 'needs_review', 'blocked', 'done', 'canceled']
+      .map((k, i) => ({ id: null, key: k, label: k, color: null, sort_order: i, builtin: true }))
+    const custom = { id: 'sto_1', key: 'in_review', label: 'In Review', color: null, sort_order: 8, builtin: false }
+    mockApi.statusOptions.list.mockResolvedValue([...builtins, custom])
+    mockApi.tasks.list.mockResolvedValue([{
+      id: 'tsk_1', project_id: 'proj_1', phase_id: null, stage_id: null, parent_task_id: null,
+      title: 'Review PR', description: null, status: 'in_review', priority: null,
+      due_at: null, sort_order: 0, created_at: 'x', updated_at: 'x',
+    }])
+
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Board' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Status' }))
+    // The custom status renders as its own board column, and the add-column affordance is present.
+    const colTitle = await screen.findByText('in review', { selector: '.ab-col-title' })
+    expect(colTitle).toBeTruthy()
+    expect(screen.getByRole('button', { name: '+ Add column' })).toBeTruthy()
   })
 
   it('updates a task phase from the expanded task controls', async () => {
