@@ -16,11 +16,13 @@ log) — all stored locally in real folders you own.
 ## Status
 
 **Working local-first app.** `apps/api` (FastAPI + SQLModel + Alembic) and
-`apps/web` (React + TS + Vite) ship thirteen surfaces: Dashboard, Cockpit,
-Planning (phases/tasks/milestones/decisions/risks/comments/links + task
-checklists), Roadmap, Timeline, Docs, Context Pack, Context Files, Markdown
-Preview, Agent Runs, Approvals, Clients, and Reminders. Test baseline:
-**630 pytest passed / 2 skipped, 73 vitest**. The external API exists but is
+`apps/web` (React + TS + Vite) ship fifteen surfaces: Dashboard, Cockpit,
+Planning (phases/tasks/milestones/decisions/risks/comments/links — with board
+views, custom statuses, sub-tasks, and task checklists), Roadmap, Timeline,
+Calendar (with optional external Google/Microsoft sync), Docs, Context Pack,
+Context Files, Markdown Preview, Approvals, Clients, Agent Runs, Reminders, and
+Settings — plus a project-scoped sidebar todo list. Test baseline:
+**815 pytest passed / 3 skipped, 131 vitest**. The external API exists but is
 **disabled by default** (loopback-bound; enabling it is an explicit user opt-in).
 One-command local run: `run-agentboard.bat`.
 
@@ -77,12 +79,13 @@ agent access, Markdown *context packs*, and token-efficient agent orchestration
 
 ## Next implementation step
 
-Phases 1–9 plus Phase 4b (Milestone/Comment/Link/ChecklistItem — the last
-Must-have MVP data entities) are built. Next: execute the Phase 7C2b opt-in
-ChatGPT exposure (human-gated — see
-[docs/dev/phase-7c2b-go-live-runbook.md](docs/dev/phase-7c2b-go-live-runbook.md))
-or Phase 10 groundwork (gated behind a separate architecture review). Live
-objective: [context/NEXT_STEP.md](context/NEXT_STEP.md).
+Phases 1–10, 13 (local canvas), and the 15.x line (planning boards, custom
+statuses, sub-tasks, calendar + optional external sync) are built and merged.
+The current objective is **OSS launch prep**; the next optional milestones are
+the human-gated Phase 7C2b ChatGPT exposure
+([docs/dev/phase-7c2b-go-live-runbook.md](docs/dev/phase-7c2b-go-live-runbook.md))
+and hosted go-live (code-complete, user setup only). Live objective:
+[context/NEXT_STEP.md](context/NEXT_STEP.md).
 
 ## Contributing & security
 
