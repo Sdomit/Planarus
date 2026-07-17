@@ -92,5 +92,27 @@ class Settings(BaseSettings):
         default="", validation_alias="AGENTBOARD_OAUTH_GITHUB_CLIENT_SECRET"
     )
 
+    # Phase 15.12b — calendar external sync (Google/Microsoft). Fully inert unless
+    # BOTH an encryption key AND a provider client id are set: no key → tokens can't
+    # be stored → sync routes 404; no client id → that provider is unavailable.
+    # Distinct from the login OAuth above (different scopes: offline calendar access).
+    # Secrets/key live only in the environment (a forbidden path) and are never
+    # logged or returned. Requires the optional [calendar-sync] extra at runtime.
+    calendar_enc_key: str = Field(
+        default="", validation_alias="AGENTBOARD_CALENDAR_ENC_KEY"
+    )
+    calendar_google_client_id: str = Field(
+        default="", validation_alias="AGENTBOARD_CALENDAR_GOOGLE_CLIENT_ID"
+    )
+    calendar_google_client_secret: str = Field(
+        default="", validation_alias="AGENTBOARD_CALENDAR_GOOGLE_CLIENT_SECRET"
+    )
+    calendar_microsoft_client_id: str = Field(
+        default="", validation_alias="AGENTBOARD_CALENDAR_MICROSOFT_CLIENT_ID"
+    )
+    calendar_microsoft_client_secret: str = Field(
+        default="", validation_alias="AGENTBOARD_CALENDAR_MICROSOFT_CLIENT_SECRET"
+    )
+
 
 settings = Settings()

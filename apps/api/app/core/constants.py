@@ -308,6 +308,20 @@ def calendar_event_status_check_sql(column: str = "status") -> str:
 # per-occurrence exceptions) is out of scope — see calendar_service._occurrences.
 CALENDAR_RECURRENCE_TYPES: tuple[str, ...] = ("none", "daily", "weekly", "monthly")
 
+
+# --- Phase 15.12b: external calendar sync (Google / Microsoft) -----------------
+CALENDAR_SYNC_PROVIDERS: tuple[str, ...] = ("google", "microsoft")
+# connected: healthy; error: last sync/refresh failed; revoked: token rejected.
+CALENDAR_CONNECTION_STATUSES: tuple[str, ...] = ("connected", "error", "revoked")
+
+
+def calendar_connection_status_check_sql(column: str = "status") -> str:
+    return _check_sql(column, CALENDAR_CONNECTION_STATUSES)
+
+
+def calendar_connection_provider_check_sql(column: str = "provider") -> str:
+    return _check_sql(column, CALENDAR_SYNC_PROVIDERS)
+
 # Who authored a comment. Local-app comments are "human"; the field exists so an
 # approval-gated agent comment can be attributed without a schema change later.
 COMMENT_AUTHOR_TYPES: tuple[str, ...] = ("human", "agent", "system")

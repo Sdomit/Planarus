@@ -22,6 +22,14 @@ vi.mock('../api/client', () => ({
     },
     milestones: { update: vi.fn(async () => ({})) },
     tasks: { update: vi.fn(async () => ({})) },
+    calendarSync: {
+      providers: vi.fn(async () => ({ providers: [] as string[] })),
+      connections: vi.fn(async () => [] as unknown[]),
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      sync: vi.fn(),
+      callbackUrl: (p: string) => `http://x/api/v1/calendar-sync/${p}/callback`,
+    },
   },
 }))
 
@@ -111,5 +119,12 @@ describe('CalendarPanel', () => {
     await screen.findByText('August 2026')
     const link = screen.getByText('Export .ics').closest('a')!
     expect(link.getAttribute('href')).toContain('/calendar.ics')
+  })
+
+  it('Sync dialog shows the not-configured message when no providers are set', async () => {
+    render(<CalendarPanel projectId="proj_1" />)
+    await screen.findByText('August 2026')
+    fireEvent.click(screen.getByRole('button', { name: 'Sync' }))
+    expect(await screen.findByText(/isn.t configured on this server/i)).toBeTruthy()
   })
 })
