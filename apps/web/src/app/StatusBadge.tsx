@@ -39,21 +39,27 @@ export function toneFor(kind: ToneKind, value: string | null | undefined): Tone 
   return TONE[kind]?.[value] ?? 'neutral'
 }
 
-/** A forma status pill: colored dot + label. */
+/** A forma status pill: colored dot + label. When `color` is supplied (a custom
+ *  status), it overrides the tone-derived dot color and tints the pill. */
 export function StatusBadge({
   kind,
   value,
+  color,
   className = '',
 }: {
   kind: ToneKind
   value: string | null | undefined
+  color?: string | null
   className?: string
 }) {
   if (!value) return null
   const tone = toneFor(kind, value)
+  const style = color
+    ? { color, borderColor: color, background: 'transparent' }
+    : undefined
   return (
-    <span className={`sbadge sbadge--${tone} ${className}`.trim()}>
-      <span className="sdot" />
+    <span className={`sbadge sbadge--${tone} ${className}`.trim()} style={style}>
+      <span className="sdot" style={color ? { background: color } : undefined} />
       {value.replace(/_/g, ' ')}
     </span>
   )

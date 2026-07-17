@@ -19,6 +19,7 @@ from app.schemas.status_option import (
     StatusOptionUpdate,
 )
 from app.services.audit_service import create_audit_event
+from app.services.planning_reorder import apply_reorder
 
 # entity_type → (model, status attribute) for "is this status in use?" checks.
 _STATUS_MODELS = {
@@ -154,6 +155,22 @@ def update_status_option(
     session.commit()
     session.refresh(opt)
     return opt
+
+
+def reorder_status_options(
+    session: Session, project_id: str, entity_type: str, ids: list[str]
+) -> list[StatusOptionRead]:
+    """Reorder this project's *custom* options for `entity_type`. `ids` must be
+    exactly that set (built-ins are canonical and always sort first)."""
+    rows = {opt.id: opt for opt in list_custom(session, project_id, entity_type)}
+    apply_reorder(
+        session,
+        project_id=project_id,
+        entity_type="status_option",
+        rows=rows,
+        ids=ids,
+    )
+    return list_status_options(session, project_id, entity_type)
 
 
 def _usage_count(session: Session, opt: StatusOption) -> int:
