@@ -87,3 +87,6 @@
   .rm-summary { gap: var(--space-4); padding: var(--space-4); }
   .rm-phase { padding: var(--space-4); }
 }
+
+/* Phase 15.9: roadmap phase actions menu */
+.rm-phase-head .ab-menu { margin-left: var(--space-2); }
