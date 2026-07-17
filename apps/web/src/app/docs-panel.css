@@ -70,6 +70,11 @@
 
 .ab-prose img { max-width: 100%; height: auto; }
 
+/* Font-color swatch in the toolbar (native input, styled to match ab-tbtn) */
+.ab-tcolor { width: 30px; height: 30px; padding: 3px; border: none; background: none; border-radius: var(--radius-sm); cursor: pointer; }
+.ab-tcolor::-webkit-color-swatch-wrapper { padding: 0; }
+.ab-tcolor::-webkit-color-swatch { border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); }
+
 /* Task list: flatten the <ul>/checkbox markup Tiptap emits into a checkbox row. */
 .ab-prose ul[data-type="taskList"] { list-style: none; padding-left: 0; }
 .ab-prose ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: var(--space-2); }
