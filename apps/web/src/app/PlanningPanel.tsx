@@ -369,7 +369,7 @@ export default function PlanningPanel({
           <PhasesSection phases={phases} projectId={project.id} setPhases={setPhases} />
         )}
         {tab === 'tasks' && (
-          <TasksList tasks={tasks} phases={phases} stages={stages} projectId={project.id} onTaskUpdated={updated =>
+          <TasksList tasks={tasks} phases={phases} stages={stages} projectId={project.id} setTasks={setTasks} onTaskUpdated={updated =>
             setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))
           } />
         )}
@@ -537,15 +537,20 @@ interface TasksListProps {
   stages: Stage[]
   projectId: string
   onTaskUpdated: (task: Task) => void
+  setTasks?: React.Dispatch<React.SetStateAction<Task[]>>
 }
 
 // List filter: 'open' = not done/canceled (default), 'all' = everything, else an exact status.
 const LIST_FILTERS = ['open', 'all', ...TASK_STATUSES]
 
-function TasksList({ tasks, phases, stages, projectId, onTaskUpdated }: TasksListProps) {
+function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks }: TasksListProps) {
   const [view, setView] = useState<'list' | 'board'>('list')
   const [filter, setFilter] = useState('open')
   const done = tasks.filter(t => t.status === 'done' || t.status === 'canceled').length
+  const remove = (id: string) => void api.tasks.remove(id).then(() => setTasks?.(prev => prev.filter(t => t.id !== id)))
+  // Reorder operates on the FULL task list (both drag + target are always in it),
+  // so it stays valid even while a filter narrows the visible rows.
+  const { itemProps } = useListReorder(tasks, next => setTasks?.(next), ids => api.tasks.reorder(projectId, ids))
 
   if (tasks.length === 0) return <p style={EMPTY}>No tasks yet.</p>
 
@@ -575,13 +580,14 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated }: TasksLis
       </div>
 
       {view === 'board' ? (
-        <TaskBoard tasks={tasks} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated} />
+        <TaskBoard tasks={tasks} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated} setTasks={setTasks} />
       ) : shown.length === 0 ? (
         <p style={EMPTY}>No tasks match this filter.</p>
       ) : (
         <ul className="pp-rows">
           {shown.map(t => (
-            <TaskRow key={t.id} task={t} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated} />
+            <TaskRow key={t.id} task={t} phases={phases} stages={stages} projectId={projectId}
+              onTaskUpdated={onTaskUpdated} onDelete={setTasks ? () => remove(t.id) : undefined} dragProps={setTasks ? itemProps(t.id) : undefined} />
           ))}
         </ul>
       )}
@@ -590,7 +596,7 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated }: TasksLis
 }
 
 /** Kanban board with two groupings (Flow buckets / per-status), drag-to-restatus, and click-to-open. */
-function TaskBoard({ tasks, phases, stages, projectId, onTaskUpdated }: TasksListProps) {
+function TaskBoard({ tasks, phases, stages, projectId, onTaskUpdated, setTasks }: TasksListProps) {
   const [group, setGroup] = useState<'flow' | 'status'>('flow')
   const [openId, setOpenId] = useState<string | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
@@ -657,6 +663,7 @@ function TaskBoard({ tasks, phases, stages, projectId, onTaskUpdated }: TasksLis
                     <div className="ab-task-foot">
                       {t.phase_id && <span className="pp-card-phase">{phaseTitle.get(t.phase_id)}</span>}
                       <StatusBadge kind="task" value={t.status} />
+                      {setTasks && <RowActions title={t.title} onDelete={() => void api.tasks.remove(t.id).then(() => setTasks(prev => prev.filter(x => x.id !== t.id)))} />}
                     </div>
                   </div>
                 ))}
@@ -833,24 +840,33 @@ function TaskComments({ projectId, taskId }: { projectId: string; taskId: string
   )
 }
 
-/** A task row that expands to reveal the shared task detail (controls, checklist, comments). */
-function TaskRow({ task, phases, stages, projectId, onTaskUpdated }: {
+/** A task row: inline status/title edit + delete/drag in the header, expands to
+ *  the shared task detail (controls, checklist, comments). */
+function TaskRow({ task, phases, stages, projectId, onTaskUpdated, onDelete, dragProps }: {
   task: Task; phases: Phase[]; stages: Stage[]; projectId: string; onTaskUpdated: (task: Task) => void
+  onDelete?: () => void
+  dragProps?: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
 }) {
   const [open, setOpen] = useState(false)
+  const update = (patch: Parameters<typeof api.tasks.update>[1]) => void api.tasks.update(task.id, patch).then(onTaskUpdated)
+  const editable = useEditable(task.title, t => update({ title: t }))
   return (
-    <li className="pp-row pp-row-expandable">
-      <button
-        type="button"
-        className="pp-row-main"
-        onClick={() => setOpen(v => !v)}
-        aria-expanded={open}
-        aria-controls={`task-details-${task.id}`}
-      >
-        <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
-        <span className="pp-row-title">{task.title}</span>
-        <StatusBadge kind="task" value={task.status} />
-      </button>
+    <li className="pp-row pp-row-expandable pp-row-managed" {...dragProps}>
+      <div className="pp-row-main-wrap">
+        <button
+          type="button"
+          className="pp-row-main"
+          onClick={() => setOpen(v => !v)}
+          aria-expanded={open}
+          aria-controls={`task-details-${task.id}`}
+        >
+          <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+          {editable.node ?? <span className="pp-row-title">{task.title}</span>}
+        </button>
+        <InlineStatusSelect kind="task" value={task.status} options={TASK_STATUSES}
+          onChange={s => update({ status: s })} label={`Change status of ${task.title}`} />
+        <RowActions title={task.title} onEdit={editable.start} onDelete={onDelete} dragHandle={Boolean(dragProps)} />
+      </div>
       {open && <TaskDetailBody task={task} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated} />}
     </li>
   )
