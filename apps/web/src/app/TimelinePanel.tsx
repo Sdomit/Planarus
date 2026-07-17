@@ -41,9 +41,23 @@ export function groupEventsByDay(events: TimelineEvent[]): { key: string; events
   return out
 }
 
+// Groups events by entity_type (each bucket keeps newest-first order). Buckets
+// are ordered by first appearance, so the most-recently-touched entity leads.
+export function groupEventsByEntity(events: TimelineEvent[]): { key: string; events: TimelineEvent[] }[] {
+  const map = new Map<string, TimelineEvent[]>()
+  for (const ev of events) {
+    const arr = map.get(ev.entity_type) ?? []
+    arr.push(ev); map.set(ev.entity_type, arr)
+  }
+  return [...map.entries()].map(([key, evs]) => ({ key, events: evs }))
+}
+
+type TimelineView = 'day' | 'entity'
+
 export default function TimelinePanel({ projectId }: { projectId: string }) {
   const [timeline, setTimeline] = useState<ProjectTimeline | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [view, setView] = useState<TimelineView>('day')
 
   useEffect(() => {
     setTimeline(null)
@@ -75,7 +89,7 @@ export default function TimelinePanel({ projectId }: { projectId: string }) {
   const created = evs.filter((e) => e.event_type === 'create').length
   const updated = evs.filter((e) => e.event_type === 'update').length
   const other = evs.length - created - updated
-  const groups = groupEventsByDay(evs)
+  const groups = view === 'day' ? groupEventsByDay(evs) : groupEventsByEntity(evs)
 
   return (
     <div className="tl">
@@ -93,11 +107,20 @@ export default function TimelinePanel({ projectId }: { projectId: string }) {
             <span className="tl-stat" data-tone="neutral"><span className="tl-stat-dot" />{other} other</span>
           )}
         </span>
+        <span className="tl-summary-spacer" />
+        <div className="ab-seg" role="group" aria-label="Timeline grouping">
+          <button type="button" aria-pressed={view === 'day'} className={view === 'day' ? 'active' : ''} onClick={() => setView('day')}>By day</button>
+          <button type="button" aria-pressed={view === 'entity'} className={view === 'entity' ? 'active' : ''} onClick={() => setView('entity')}>By type</button>
+        </div>
       </div>
 
       {groups.map((group) => (
         <div key={group.key} className="card tl-group">
-          <div className="tl-day">{dayLabel(group.events[0].at)}</div>
+          <div className="tl-day">
+            {view === 'day'
+              ? dayLabel(group.events[0].at)
+              : <span className="tl-group-entity">{group.key.replace(/_/g, ' ')} <span className="tl-group-n">{group.events.length}</span></span>}
+          </div>
           <ol className="tl-list">
             {group.events.map((ev) => (
               <li key={ev.id} className="tl-item" data-tone={eventTone(ev.event_type)}>
@@ -107,7 +130,9 @@ export default function TimelinePanel({ projectId }: { projectId: string }) {
                 <div className="tl-body">
                   <div className="tl-line">
                     <span className="tl-label">{ev.label}</span>
-                    <time className="tl-time" dateTime={ev.at} title={ev.at}>{timeLabel(ev.at)}</time>
+                    <time className="tl-time" dateTime={ev.at} title={ev.at}>
+                      {view === 'day' ? timeLabel(ev.at) : dayLabel(ev.at)}
+                    </time>
                   </div>
                   <div className="tl-meta">
                     <span className="tl-chip">{ev.entity_type.replace(/_/g, ' ')}</span>

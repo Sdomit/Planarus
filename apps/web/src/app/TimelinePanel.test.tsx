@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import TimelinePanel, { groupEventsByDay } from './TimelinePanel'
+import TimelinePanel, { groupEventsByDay, groupEventsByEntity } from './TimelinePanel'
 
-const ev = (id: string, at: string) =>
-  ({ id, at, event_type: 'create', entity_type: 'task', entity_id: null, actor_type: 'human', label: id })
+const ev = (id: string, at: string, entity_type = 'task') =>
+  ({ id, at, event_type: 'create', entity_type, entity_id: null, actor_type: 'human', label: id })
 
 vi.mock('../api/client', () => ({
   api: {
@@ -54,5 +54,16 @@ describe('TimelinePanel', () => {
     expect(groups.length).toBe(2)
     expect(groups[0].events.map((e) => e.id)).toEqual(['a', 'b'])
     expect(groups[1].events.map((e) => e.id)).toEqual(['c'])
+  })
+
+  it('groups events by entity type, ordered by first appearance', () => {
+    const groups = groupEventsByEntity([
+      ev('a', '2026-07-10T14:00:00', 'task'),
+      ev('b', '2026-07-10T09:00:00', 'phase'),
+      ev('c', '2026-07-09T12:00:00', 'task'),
+    ])
+    expect(groups.map((g) => g.key)).toEqual(['task', 'phase'])
+    expect(groups[0].events.map((e) => e.id)).toEqual(['a', 'c'])
+    expect(groups[1].events.map((e) => e.id)).toEqual(['b'])
   })
 })

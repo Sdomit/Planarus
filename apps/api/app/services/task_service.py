@@ -28,9 +28,28 @@ def get_task(session: Session, task_id: str) -> Optional[Task]:
     return session.get(Task, task_id)
 
 
+def _validate_parent_task(
+    session: Session, project_id: str, parent_task_id: Optional[str], self_id: Optional[str] = None
+) -> None:
+    """A parent must exist in the same project, not be the task itself, and be a
+    top-level task (nesting is capped at one level)."""
+    if parent_task_id is None:
+        return
+    if parent_task_id == self_id:
+        raise ValueError("a task cannot be its own parent")
+    parent = session.get(Task, parent_task_id)
+    if parent is None or parent.project_id != project_id:
+        raise LookupError(
+            f"parent task '{parent_task_id}' not found in project '{project_id}'"
+        )
+    if parent.parent_task_id is not None:
+        raise ValueError("sub-tasks cannot be nested more than one level deep")
+
+
 def create_task(session: Session, project_id: str, data: TaskCreate) -> Task:
     if session.get(Project, project_id) is None:
         raise ValueError(f"project '{project_id}' not found")
+    _validate_parent_task(session, project_id, data.parent_task_id)
     if data.phase_id is not None:
         phase = session.get(Phase, data.phase_id)
         if phase is None or phase.project_id != project_id:
@@ -57,6 +76,7 @@ def create_task(session: Session, project_id: str, data: TaskCreate) -> Task:
         project_id=project_id,
         phase_id=data.phase_id,
         stage_id=data.stage_id,
+        parent_task_id=data.parent_task_id,
         title=data.title,
         description=data.description,
         status=data.status,
@@ -87,6 +107,11 @@ def update_task(session: Session, task_id: str, data: TaskUpdate) -> Optional[Ta
         return None
 
     update_data = data.model_dump(exclude_unset=True)
+
+    if "parent_task_id" in update_data:
+        _validate_parent_task(
+            session, task.project_id, update_data["parent_task_id"], self_id=task.id
+        )
 
     if "phase_id" in update_data and update_data["phase_id"] is not None:
         phase = session.get(Phase, update_data["phase_id"])
@@ -149,6 +174,13 @@ def delete_task(session: Session, task_id: str) -> bool:
         blocker.task_id = None
         blocker.updated_at = now
         session.add(blocker)
+    # Sub-tasks are promoted to top-level rather than deleted with the parent.
+    for child in session.exec(
+        select(Task).where(Task.parent_task_id == task_id)
+    ).all():
+        child.parent_task_id = None
+        child.updated_at = now
+        session.add(child)
 
     # Flush child deletes/unlinks before the task's own DELETE (FKs enforced).
     session.flush()

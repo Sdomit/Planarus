@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
 from app.db.session import get_session
+from app.schemas.reorder import ReorderRequest
 from app.schemas.risk import RiskCreate, RiskRead, RiskUpdate
 from app.services import risk_service
 
@@ -42,6 +43,22 @@ def update_risk(
     if risk is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
     return risk
+
+
+@router.post("/projects/{project_id}/risks/reorder", response_model=list[RiskRead])
+def reorder_risks(
+    project_id: str,
+    data: ReorderRequest,
+    session: Session = Depends(get_session),
+) -> list[RiskRead]:
+    try:
+        return risk_service.reorder_risks(session, project_id, data.ids)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        )
 
 
 @router.delete("/risks/{risk_id}", status_code=status.HTTP_204_NO_CONTENT)

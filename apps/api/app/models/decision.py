@@ -20,5 +20,6 @@ class Decision(SQLModel, table=True):
     context: Optional[str] = None
     decision: str
     status: str = Field(default="proposed")
+    sort_order: int = Field(default=0)
     created_at: str
     updated_at: str

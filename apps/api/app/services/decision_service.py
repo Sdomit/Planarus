@@ -7,13 +7,16 @@ from app.models.decision import Decision
 from app.models.project import Project
 from app.schemas.decision import DecisionCreate, DecisionUpdate
 from app.services.audit_service import create_audit_event
+from app.services.planning_reorder import apply_reorder
 
 
 def list_decisions(session: Session, project_id: str) -> list[Decision]:
+    # Manual order (sort_order) is primary; newest-first is the tiebreak so
+    # un-reordered projects keep today's behavior.
     stmt = (
         select(Decision)
         .where(Decision.project_id == project_id)
-        .order_by(Decision.created_at.desc(), Decision.id)
+        .order_by(Decision.sort_order, Decision.created_at.desc(), Decision.id)
     )
     return list(session.exec(stmt).all())
 
@@ -96,3 +99,15 @@ def delete_decision(session: Session, decision_id: str) -> bool:
     )
     session.commit()
     return True
+
+
+def reorder_decisions(
+    session: Session, project_id: str, ids: list[str]
+) -> list[Decision]:
+    if session.get(Project, project_id) is None:
+        raise LookupError(f"project '{project_id}' not found")
+    rows = {d.id: d for d in list_decisions(session, project_id)}
+    apply_reorder(
+        session, project_id=project_id, entity_type="decision", rows=rows, ids=ids
+    )
+    return list_decisions(session, project_id)

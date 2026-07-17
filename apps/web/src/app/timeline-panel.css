@@ -60,3 +60,11 @@
   .tl-summary { padding: var(--space-4); }
   .tl-group { padding: var(--space-4); }
 }
+
+/* Phase 15.10: grouping toggle + by-type headers */
+.tl-summary-spacer { flex: 1; }
+.tl-group-entity { text-transform: capitalize; display: inline-flex; align-items: center; gap: var(--space-2); }
+.tl-group-n {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: var(--radius-full); background: var(--bg-muted); color: var(--text-tertiary); font-size: 11px; font-weight: 600;
+}

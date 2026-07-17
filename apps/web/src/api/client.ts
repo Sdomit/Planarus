@@ -83,6 +83,7 @@ export interface Task {
   project_id: string
   phase_id: string | null
   stage_id: string | null
+  parent_task_id: string | null
   title: string
   description: string | null
   status: string
@@ -100,6 +101,7 @@ export interface Decision {
   decision: string
   context: string | null
   status: string
+  sort_order: number
   created_at: string
   updated_at: string
 }
@@ -112,6 +114,7 @@ export interface Risk {
   severity: string
   status: string
   mitigation: string | null
+  sort_order: number
   created_at: string
   updated_at: string
 }
@@ -213,7 +216,9 @@ export interface Comment {
   entity_id: string
   body: string
   author_type: string
+  status: string
   created_at: string
+  updated_at: string | null
 }
 
 export interface Link {
@@ -747,12 +752,13 @@ export const api = {
         priority?: string
         phase_id?: string
         stage_id?: string
+        parent_task_id?: string
       },
     ) =>
       request<Task>(`/projects/${projectId}/tasks`, { method: 'POST', body: JSON.stringify(data) }),
     update: (
       id: string,
-      data: Partial<Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'phase_id' | 'stage_id' | 'due_at'>>,
+      data: Partial<Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'phase_id' | 'stage_id' | 'due_at' | 'parent_task_id'>>,
     ) =>
       request<Task>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remove: (id: string) => request<void>(`/tasks/${id}`, { method: 'DELETE' }),
@@ -769,6 +775,8 @@ export const api = {
     update: (id: string, data: Partial<Pick<Decision, 'title' | 'decision' | 'context' | 'status'>>) =>
       request<Decision>(`/decisions/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remove: (id: string) => request<void>(`/decisions/${id}`, { method: 'DELETE' }),
+    reorder: (projectId: string, ids: string[]) =>
+      request<Decision[]>(`/projects/${projectId}/decisions/reorder`, { method: 'POST', body: JSON.stringify({ ids }) }),
   },
   risks: {
     list: (projectId: string) => request<Risk[]>(`/projects/${projectId}/risks`),
@@ -777,6 +785,8 @@ export const api = {
     update: (id: string, data: Partial<Pick<Risk, 'title' | 'description' | 'severity' | 'status' | 'mitigation'>>) =>
       request<Risk>(`/risks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remove: (id: string) => request<void>(`/risks/${id}`, { method: 'DELETE' }),
+    reorder: (projectId: string, ids: string[]) =>
+      request<Risk[]>(`/projects/${projectId}/risks/reorder`, { method: 'POST', body: JSON.stringify({ ids }) }),
   },
   blockers: {
     list: (projectId: string) => request<Blocker[]>(`/projects/${projectId}/blockers`),
@@ -872,6 +882,9 @@ export const api = {
     },
     create: (projectId: string, data: { entity_type: string; entity_id: string; body: string }) =>
       request<Comment>(`/projects/${projectId}/comments`, { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Partial<Pick<Comment, 'body' | 'status'>>) =>
+      request<Comment>(`/comments/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    remove: (id: string) => request<void>(`/comments/${id}`, { method: 'DELETE' }),
   },
   links: {
     list: (projectId: string, params?: { entity_type?: string; entity_id?: string }) => {

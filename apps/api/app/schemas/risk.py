@@ -68,6 +68,7 @@ class RiskRead(BaseModel):
     severity: str
     status: str
     mitigation: Optional[str]
+    sort_order: int
     created_at: str
     updated_at: str
 
