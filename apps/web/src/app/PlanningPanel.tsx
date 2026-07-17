@@ -303,10 +303,10 @@ export default function PlanningPanel({
                   <option value="">Unphased</option>
                   {phases.map(phase => <option key={phase.id} value={phase.id}>{phase.title}</option>)}
                 </select>
-                <select className="input select" value={taskForm.stage_id} aria-label="Task stage"
+                <select className="input select" value={taskForm.stage_id} aria-label="Task sub-phase"
                   disabled={!taskForm.phase_id || taskStages.length === 0}
                   onChange={e => setTaskForm(f => ({ ...f, stage_id: e.target.value }))}>
-                  <option value="">No stage</option>
+                  <option value="">No sub-phase</option>
                   {taskStages.map(stage => <option key={stage.id} value={stage.id}>{stage.title}</option>)}
                 </select>
               </>
@@ -586,14 +586,31 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks }
         <TaskBoard tasks={tasks} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated} setTasks={setTasks} />
       ) : shown.length === 0 ? (
         <p style={EMPTY}>No tasks match this filter.</p>
-      ) : (
-        <ul className="pp-rows">
-          {shown.map(t => (
-            <TaskRow key={t.id} task={t} phases={phases} stages={stages} projectId={projectId}
-              onTaskUpdated={onTaskUpdated} onDelete={setTasks ? () => remove(t.id) : undefined} dragProps={setTasks ? itemProps(t.id) : undefined} />
-          ))}
-        </ul>
-      )}
+      ) : (() => {
+        // Group sub-tasks under their parent (one level); orphans (parent filtered
+        // out) render at top level so nothing is hidden.
+        const childrenOf = new Map<string, Task[]>()
+        const shownIds = new Set(shown.map(t => t.id))
+        const top: Task[] = []
+        for (const t of shown) {
+          if (t.parent_task_id && shownIds.has(t.parent_task_id)) {
+            const arr = childrenOf.get(t.parent_task_id) ?? []
+            arr.push(t); childrenOf.set(t.parent_task_id, arr)
+          } else {
+            top.push(t)
+          }
+        }
+        return (
+          <ul className="pp-rows">
+            {top.map(t => (
+              <TaskRow key={t.id} task={t} phases={phases} stages={stages} projectId={projectId}
+                onTaskUpdated={onTaskUpdated} onDelete={setTasks ? () => remove(t.id) : undefined}
+                dragProps={setTasks && !t.parent_task_id ? itemProps(t.id) : undefined}
+                subtasks={childrenOf.get(t.id) ?? []} setTasks={setTasks} />
+            ))}
+          </ul>
+        )
+      })()}
     </>
   )
 }
@@ -773,11 +790,11 @@ function TaskDetailBody({ task, phases, stages, projectId, onTaskUpdated }: {
           </select>
         </label>
         <label>
-          <span>Stage</span>
+          <span>Sub-phase</span>
           <select className="input select input-sm" value={task.stage_id ?? ''}
             disabled={saving || !task.phase_id || taskStages.length === 0}
             onChange={event => void updateTask({ stage_id: event.target.value || null })}>
-            <option value="">No stage</option>
+            <option value="">No sub-phase</option>
             {taskStages.map(stage => <option key={stage.id} value={stage.id}>{stage.title}</option>)}
           </select>
         </label>
@@ -844,17 +861,30 @@ function TaskComments({ projectId, taskId }: { projectId: string; taskId: string
 }
 
 /** A task row: inline status/title edit + delete/drag in the header, expands to
- *  the shared task detail (controls, checklist, comments). */
-function TaskRow({ task, phases, stages, projectId, onTaskUpdated, onDelete, dragProps }: {
+ *  the shared task detail; renders its sub-tasks nested beneath. */
+function TaskRow({ task, phases, stages, projectId, onTaskUpdated, onDelete, dragProps, subtasks = [], setTasks }: {
   task: Task; phases: Phase[]; stages: Stage[]; projectId: string; onTaskUpdated: (task: Task) => void
   onDelete?: () => void
   dragProps?: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
+  subtasks?: Task[]
+  setTasks?: React.Dispatch<React.SetStateAction<Task[]>>
 }) {
   const [open, setOpen] = useState(false)
+  const [addingSub, setAddingSub] = useState(false)
+  const [subTitle, setSubTitle] = useState('')
+  const isSub = Boolean(task.parent_task_id)
   const update = (patch: Parameters<typeof api.tasks.update>[1]) => void api.tasks.update(task.id, patch).then(onTaskUpdated)
   const editable = useEditable(task.title, t => update({ title: t }))
+
+  async function addSubtask(e: React.FormEvent) {
+    e.preventDefault()
+    if (!subTitle.trim() || !setTasks) return
+    const created = await api.tasks.create(projectId, { title: subTitle.trim(), parent_task_id: task.id })
+    setTasks(prev => [...prev, created]); setSubTitle(''); setAddingSub(false)
+  }
+
   return (
-    <li className="pp-row pp-row-expandable pp-row-managed" {...dragProps}>
+    <li className={`pp-row pp-row-expandable pp-row-managed${isSub ? ' pp-row-subtask' : ''}`} {...dragProps}>
       <div className="pp-row-main-wrap">
         <button
           type="button"
@@ -865,12 +895,35 @@ function TaskRow({ task, phases, stages, projectId, onTaskUpdated, onDelete, dra
         >
           <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
           {editable.node ?? <span className="pp-row-title">{task.title}</span>}
+          {subtasks.length > 0 && <span className="pp-subcount">{subtasks.length}</span>}
         </button>
         <InlineStatusSelect kind="task" value={task.status} options={TASK_STATUSES}
           onChange={s => update({ status: s })} label={`Change status of ${task.title}`} />
         <RowActions title={task.title} onEdit={editable.start} onDelete={onDelete} dragHandle={Boolean(dragProps)} />
       </div>
       {open && <TaskDetailBody task={task} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated} />}
+      {(subtasks.length > 0 || (setTasks && !isSub)) && (
+        <div className="pp-subtasks">
+          <ul className="pp-rows">
+            {subtasks.map(st => (
+              <TaskRow key={st.id} task={st} phases={phases} stages={stages} projectId={projectId}
+                onTaskUpdated={onTaskUpdated}
+                onDelete={setTasks ? () => void api.tasks.remove(st.id).then(() => setTasks(prev => prev.filter(x => x.id !== st.id))) : undefined} />
+            ))}
+          </ul>
+          {setTasks && !isSub && (
+            addingSub ? (
+              <form className="pp-check-add" onSubmit={addSubtask}>
+                <input className="input input-sm" autoFocus placeholder="Sub-task title…" aria-label={`Add sub-task to ${task.title}`}
+                  value={subTitle} onChange={e => setSubTitle(e.target.value)} onBlur={() => { if (!subTitle.trim()) setAddingSub(false) }} />
+                <button type="submit" className="btn btn-outline btn-sm">Add</button>
+              </form>
+            ) : (
+              <button type="button" className="pp-row-act pp-add-sub" onClick={() => setAddingSub(true)}>+ Sub-task</button>
+            )
+          )}
+        </div>
+      )}
     </li>
   )
 }

@@ -19,6 +19,8 @@ class Task(SQLModel, table=True):
     project_id: str = Field(foreign_key="project.id", index=True)
     phase_id: Optional[str] = Field(default=None, foreign_key="phase.id", index=True)
     stage_id: Optional[str] = Field(default=None, foreign_key="stage.id", index=True)
+    # Phase 15.8: a task may be a sub-task of another task (one level deep).
+    parent_task_id: Optional[str] = Field(default=None, foreign_key="task.id", index=True)
     title: str = Field(max_length=200)
     description: Optional[str] = None
     status: str = Field(default="backlog")
