@@ -364,6 +364,14 @@ export interface GitSnapshot {
   last_fetched_at: string | null
 }
 
+export interface GitFetchResult {
+  project_id: string
+  status: 'ok' | 'no_remote' | 'rate_limited' | 'failed'
+  message: string | null
+  remote: string | null
+  snapshot: GitSnapshot | null
+}
+
 export interface WorkspaceCreate {
   name: string
   slug: string
@@ -1011,6 +1019,10 @@ export const api = {
   git: {
     get: (projectId: string) => request<GitRepoLink>(`/projects/${projectId}/git`),
     snapshot: (projectId: string) => request<GitSnapshot>(`/projects/${projectId}/git/snapshot`),
+    // Phase 12b: the one outbound action — control-token-gated, so it goes
+    // through controlRequest (attaches X-Approvo-Local-Token).
+    fetchNow: (projectId: string) =>
+      controlRequest<GitFetchResult>(`/projects/${projectId}/git/fetch`, { method: 'POST' }),
   },
   contextPack: {
     profiles: () => request<ContextPackProfilesResponse>('/context-pack/profiles'),
