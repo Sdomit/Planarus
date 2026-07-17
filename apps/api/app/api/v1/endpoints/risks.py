@@ -29,8 +29,10 @@ def create_risk(
 ) -> RiskRead:
     try:
         return risk_service.create_risk(session, project_id, data)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    except ValueError as exc:
+        if "project" in str(exc) and "not found" in str(exc):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 
 
 @router.patch("/risks/{risk_id}", response_model=RiskRead)
@@ -39,7 +41,10 @@ def update_risk(
     data: RiskUpdate,
     session: Session = Depends(get_session),
 ) -> RiskRead:
-    risk = risk_service.update_risk(session, risk_id, data)
+    try:
+        risk = risk_service.update_risk(session, risk_id, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if risk is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
     return risk

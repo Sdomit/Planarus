@@ -81,6 +81,41 @@ def test_cannot_delete_status_in_use(client: TestClient) -> None:
     assert res.status_code == 409
 
 
+def test_custom_phase_status(client: TestClient) -> None:
+    pid = _seed(client)
+    opts = client.get(f"/api/v1/projects/{pid}/status-options?entity_type=phase").json()
+    assert [o["key"] for o in opts] == ["planned", "active", "blocked", "done", "canceled"]
+    made = client.post(
+        f"/api/v1/projects/{pid}/status-options",
+        json={"entity_type": "phase", "label": "On Hold"},
+    ).json()
+    assert made["key"] == "on_hold"
+    ph = client.post(f"/api/v1/projects/{pid}/phases", json={"title": "P", "status": "on_hold"})
+    assert ph.status_code == 201 and ph.json()["status"] == "on_hold"
+    # An undefined phase status is rejected.
+    assert client.post(f"/api/v1/projects/{pid}/phases", json={"title": "Q", "status": "nope"}).status_code == 422
+
+
+def test_custom_risk_status_keeps_severity_strict(client: TestClient) -> None:
+    pid = _seed(client)
+    client.post(f"/api/v1/projects/{pid}/status-options", json={"entity_type": "risk", "label": "Watching"})
+    rk = client.post(f"/api/v1/projects/{pid}/risks", json={"title": "R", "severity": "high", "status": "watching"})
+    assert rk.status_code == 201 and rk.json()["status"] == "watching"
+    # Severity is still a fixed enum.
+    assert client.post(f"/api/v1/projects/{pid}/risks", json={"title": "R2", "severity": "spicy"}).status_code == 422
+    # Undefined risk status rejected.
+    assert client.post(f"/api/v1/projects/{pid}/risks", json={"title": "R3", "severity": "low", "status": "bogus"}).status_code == 422
+
+
+def test_status_options_are_per_entity_type(client: TestClient) -> None:
+    pid = _seed(client)
+    client.post(f"/api/v1/projects/{pid}/status-options", json={"entity_type": "phase", "label": "On Hold"})
+    # The phase custom status is not offered for tasks.
+    task_keys = [o["key"] for o in client.get(f"/api/v1/projects/{pid}/status-options?entity_type=task").json()]
+    assert "on_hold" not in task_keys
+    assert client.post(f"/api/v1/projects/{pid}/tasks", json={"title": "T", "status": "on_hold"}).status_code == 422
+
+
 def test_status_option_audit_written(client: TestClient, session) -> None:
     from sqlmodel import select
 

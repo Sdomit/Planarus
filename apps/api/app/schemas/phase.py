@@ -1,10 +1,17 @@
+import re
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.constants import PHASE_STATUSES
+# Phase 15.5: phase statuses allow custom values — only slug shape is checked
+# here; the concrete per-project set is validated in the service layer.
+_STATUS_SLUG = re.compile(r"^[a-z0-9][a-z0-9_]*$")
 
-_PHASE_STATUSES = frozenset(PHASE_STATUSES)
+
+def _validate_status_slug(v: Optional[str]) -> Optional[str]:
+    if v is not None and not _STATUS_SLUG.match(v):
+        raise ValueError("status must be a lowercase slug (letters, digits, underscore)")
+    return v
 
 
 class PhaseCreate(BaseModel):
@@ -16,9 +23,7 @@ class PhaseCreate(BaseModel):
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str) -> str:
-        if v not in _PHASE_STATUSES:
-            raise ValueError(f"status must be one of: {', '.join(sorted(_PHASE_STATUSES))}")
-        return v
+        return _validate_status_slug(v) or v
 
 
 class PhaseUpdate(BaseModel):
@@ -30,9 +35,7 @@ class PhaseUpdate(BaseModel):
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and v not in _PHASE_STATUSES:
-            raise ValueError(f"status must be one of: {', '.join(sorted(_PHASE_STATUSES))}")
-        return v
+        return _validate_status_slug(v)
 
 
 class PhaseRead(BaseModel):

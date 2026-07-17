@@ -6,7 +6,9 @@ from sqlmodel import Session, select
 
 from app.core.constants import BUILTIN_STATUS_KEYS
 from app.core.utils import new_id, now_utc
+from app.models.phase import Phase
 from app.models.project import Project
+from app.models.risk import Risk
 from app.models.status_option import StatusOption
 from app.models.task import Task
 from app.schemas.status_option import (
@@ -17,7 +19,11 @@ from app.schemas.status_option import (
 from app.services.audit_service import create_audit_event
 
 # entity_type → (model, status attribute) for "is this status in use?" checks.
-_STATUS_MODELS = {"task": (Task, "status")}
+_STATUS_MODELS = {
+    "task": (Task, "status"),
+    "phase": (Phase, "status"),
+    "risk": (Risk, "status"),
+}
 
 
 def _slug(label: str) -> str:

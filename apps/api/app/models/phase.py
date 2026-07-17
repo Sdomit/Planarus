@@ -1,15 +1,14 @@
 from typing import Optional
 
-from sqlalchemy import CheckConstraint, Index
+from sqlalchemy import Index
 from sqlmodel import Field, SQLModel
-
-from app.core.constants import phase_status_check_sql
 
 
 class Phase(SQLModel, table=True):
     __tablename__ = "phase"
+    # Phase 15.5: no `status` CHECK — a phase may take a custom status (validated
+    # in the service layer against built-ins ∪ the project's status_options).
     __table_args__ = (
-        CheckConstraint(phase_status_check_sql(), name="ck_phase_status"),
         Index("ix_phase_project_sort", "project_id", "sort_order"),
         Index("ix_phase_project_status", "project_id", "status"),
     )
