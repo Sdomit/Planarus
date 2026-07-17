@@ -3,6 +3,7 @@ export type ToneKind =
   | 'project' | 'phase' | 'task' | 'priority'
   | 'decision' | 'severity' | 'riskstatus' | 'milestone'
   | 'approval' | 'docstatus' | 'agentrun' | 'emailstatus' | 'notifseverity'
+  | 'commentstatus'
 
 type Tone = 'neutral' | 'info' | 'accent' | 'success' | 'warning' | 'danger' | 'critical'
 
@@ -30,6 +31,7 @@ const TONE: Record<ToneKind, Record<string, Tone>> = {
   agentrun: { started: 'info', succeeded: 'success', failed: 'danger', canceled: 'neutral' },
   emailstatus: { sent: 'success', failed: 'danger', skipped: 'warning' },
   notifseverity: { action: 'danger', warn: 'warning', info: 'neutral' },
+  commentstatus: { active: 'info', done: 'success', attention: 'warning' },
 }
 
 export function toneFor(kind: ToneKind, value: string | null | undefined): Tone {

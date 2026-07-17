@@ -215,7 +215,9 @@ export interface Comment {
   entity_id: string
   body: string
   author_type: string
+  status: string
   created_at: string
+  updated_at: string | null
 }
 
 export interface Link {
@@ -878,6 +880,9 @@ export const api = {
     },
     create: (projectId: string, data: { entity_type: string; entity_id: string; body: string }) =>
       request<Comment>(`/projects/${projectId}/comments`, { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Partial<Pick<Comment, 'body' | 'status'>>) =>
+      request<Comment>(`/comments/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    remove: (id: string) => request<void>(`/comments/${id}`, { method: 'DELETE' }),
   },
   links: {
     list: (projectId: string, params?: { entity_type?: string; entity_id?: string }) => {

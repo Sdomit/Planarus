@@ -7,6 +7,8 @@ import { InlineStatusSelect } from './InlineStatusSelect'
 import { RowActions } from './RowActions'
 import { useListReorder } from './useListReorder'
 import { EntityBoard, nextStatusForColumn as nextStatusForCol } from './EntityBoard'
+import { RichTextEditor } from './RichTextEditor'
+import { Markdown } from './markdown'
 import './planning-panel.css'
 
 // Re-exported for tests + existing callers; the implementation now lives in EntityBoard.
@@ -32,6 +34,7 @@ const DECISION_STATUSES = ['proposed', 'accepted', 'superseded', 'reversed']
 const RISK_SEVERITIES = ['low', 'medium', 'high', 'critical']
 const RISK_STATUSES = ['open', 'monitoring', 'mitigated', 'accepted', 'closed']
 const BLOCKER_STATUSES = ['open', 'resolved', 'canceled']
+const COMMENT_STATUSES = ['active', 'done', 'attention']
 
 type BoardCol = { key: string; label: string; statuses: string[]; dot: string }
 
@@ -347,8 +350,8 @@ export default function PlanningPanel({
               </>
             )}
             {tab === 'comments' && (
-              <textarea className="input" required placeholder="Add a comment on this project…" aria-label="Project comment"
-                value={commentForm.body} onChange={e => setCommentForm({ body: e.target.value })} />
+              <RichTextEditor value={commentForm.body} onChange={body => setCommentForm({ body })}
+                placeholder="Add a comment on this project…" />
             )}
             {tab === 'links' && (
               <>
@@ -388,7 +391,7 @@ export default function PlanningPanel({
             onBlockerUpdated={updated => setBlockers(prev => prev.map(b => b.id === updated.id ? updated : b))}
           />
         )}
-        {tab === 'comments' && <CommentsList comments={comments} />}
+        {tab === 'comments' && <CommentsSection comments={comments} setComments={setComments} />}
         {tab === 'links' && <LinksList links={links} />}
       </div>
     </div>
@@ -1114,17 +1117,62 @@ function BlockerRow({ blocker, onUpdated }: { blocker: Blocker; onUpdated: (b: B
   )
 }
 
-function CommentsList({ comments }: { comments: Comment[] }) {
+function CommentsSection({ comments, setComments }: {
+  comments: Comment[]; setComments: React.Dispatch<React.SetStateAction<Comment[]>>
+}) {
+  const [view, setView] = useState<'list' | 'card'>('list')
+  const onUpdated = (u: Comment) => setComments(prev => prev.map(c => (c.id === u.id ? u : c)))
+  const update = (id: string, patch: Parameters<typeof api.comments.update>[1]) => void api.comments.update(id, patch).then(onUpdated)
+  const remove = (id: string) => void api.comments.remove(id).then(() => setComments(prev => prev.filter(c => c.id !== id)))
+
   if (comments.length === 0) return <p style={EMPTY}>No comments yet.</p>
+
   return (
-    <ul className="pp-rows">
-      {comments.map(c => (
-        <li key={c.id} className="pp-row pp-row-stacked">
-          <span className="pp-row-body">{c.body}</span>
-          <span className="pp-meta">{c.entity_type} · {c.created_at.slice(0, 10)}</span>
-        </li>
-      ))}
-    </ul>
+    <>
+      <div className="pp-toolbar">
+        <div className="ab-seg" role="group" aria-label="Comments view">
+          <button type="button" aria-pressed={view === 'list'} className={view === 'list' ? 'active' : ''} onClick={() => setView('list')}>List</button>
+          <button type="button" aria-pressed={view === 'card'} className={view === 'card' ? 'active' : ''} onClick={() => setView('card')}>Cards</button>
+        </div>
+      </div>
+      <div className={view === 'card' ? 'pp-comment-cards' : 'pp-rows'}>
+        {comments.map(c => (
+          <CommentItem key={c.id} comment={c} card={view === 'card'} update={update} remove={remove} />
+        ))}
+      </div>
+    </>
+  )
+}
+
+function CommentItem({ comment, card, update, remove }: {
+  comment: Comment; card: boolean
+  update: (id: string, patch: Parameters<typeof api.comments.update>[1]) => void
+  remove: (id: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(comment.body)
+  const save = () => { setEditing(false); if (draft.trim() && draft !== comment.body) update(comment.id, { body: draft }) }
+  return (
+    <div className={card ? 'pp-comment-card' : 'pp-row pp-row-stacked'}>
+      <div className="pp-comment-head">
+        <InlineStatusSelect kind="commentstatus" value={comment.status} options={COMMENT_STATUSES}
+          onChange={s => update(comment.id, { status: s })} label="Change comment status" />
+        <span className="pp-comment-head-spacer" />
+        <RowActions title="comment" onEdit={() => { setDraft(comment.body); setEditing(true) }} onDelete={() => remove(comment.id)} />
+      </div>
+      {editing ? (
+        <div className="pp-comment-edit">
+          <RichTextEditor value={draft} onChange={setDraft} />
+          <div className="pp-comment-edit-actions">
+            <button type="button" className="btn btn-solid btn-sm" onClick={save}>Save</button>
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing(false)}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <div className="pp-comment-body ab-prose"><Markdown markdown={comment.body} /></div>
+      )}
+      <span className="pp-meta">{comment.entity_type} · {(comment.updated_at ?? comment.created_at).slice(0, 10)}</span>
+    </div>
   )
 }
 
