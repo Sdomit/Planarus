@@ -134,7 +134,12 @@ export default function CalendarPanel({ projectId, onOpenPlanning }: {
     return map
   }, [visible])
 
-  function openCreate(day: string) { setDraft(emptyDraft(day)) }
+  // hour set (from clicking a time-grid slot) → a timed draft at that hour.
+  function openCreate(day: string, hour?: number) {
+    const d = emptyDraft(day)
+    if (hour !== undefined) { d.all_day = false; d.start_time = `${String(hour).padStart(2, '0')}:00` }
+    setDraft(d)
+  }
 
   const openItem = useCallback(async (it: CalendarItem) => {
     if (it.source !== 'event') { onOpenPlanning?.(); return } // milestones/tasks live in Planning
@@ -400,7 +405,7 @@ function Chip({ it, seg = 'single', style, onOpen, onNudge, setDragItem }: ChipC
       draggable={!it.recurring && Boolean(setDragItem)}
       onDragStart={() => setDragItem?.(it)}
       onDragEnd={() => setDragItem?.(null)}
-      onClick={() => onOpen(it)}
+      onClick={(e) => { e.stopPropagation(); onOpen(it) }}
       onKeyDown={onKeyDown}
       title={`${it.title}${it.status ? ` · ${it.status}` : ''}${it.recurring ? ' · repeats' : ''}${onNudge && !it.recurring ? ' · arrow keys to move' : ''}`}
     >
@@ -416,7 +421,7 @@ function Chip({ it, seg = 'single', style, onOpen, onNudge, setDragItem }: ChipC
 interface GridBase {
   today: Date
   itemsForDay: (d: Date) => CalendarItem[]
-  onCreate: (day: string) => void
+  onCreate: (day: string, hour?: number) => void
   onOpen: (it: CalendarItem) => void
   onNudge: (it: CalendarItem, delta: number) => void
   dragItem: CalendarItem | null
@@ -443,12 +448,14 @@ function MonthGrid({ year, month, monthMap, today, onCreate, onOpen, onNudge, se
             <div
               key={key}
               className={`cal-cell${inMonth ? '' : ' cal-cell--muted'}${isSameDay(d, today) ? ' cal-cell--today' : ''}${overKey === key ? ' cal-cell--over' : ''}`}
+              onClick={() => onCreate(key)}
+              title="Click to add an event"
               onDragOver={e => { if (dragItem) { e.preventDefault(); if (overKey !== key) setOverKey(key) } }}
               onDragLeave={() => setOverKey(overKey === key ? null : overKey)}
               onDrop={() => { if (dragItem) onDropDay(dragItem, key); setOverKey(null) }}
             >
               <div className="cal-cell-head">
-                <button type="button" className="cal-daynum" onClick={() => onCreate(key)} aria-label={`Add event on ${key}`}>
+                <button type="button" className="cal-daynum" onClick={(e) => { e.stopPropagation(); onCreate(key) }} aria-label={`Add event on ${key}`}>
                   {d.getDate()}
                 </button>
               </div>
@@ -501,7 +508,8 @@ function TimeGrid({ days, today, itemsForDay, onCreate, onOpen, onNudge, setDrag
                 {d.getDate()}
               </button>
             </div>
-            <div className="cal-tg-allday"
+            <div className="cal-tg-allday" title="Click to add an all-day event"
+              onClick={() => onCreate(key)}
               onDragOver={e => { if (dragItem) { e.preventDefault(); if (overKey !== key) setOverKey(key) } }}
               onDragLeave={() => setOverKey(overKey === key ? null : overKey)}
               onDrop={() => { if (dragItem) onDropDay(dragItem, key); setOverKey(null) }}>
@@ -509,7 +517,13 @@ function TimeGrid({ days, today, itemsForDay, onCreate, onOpen, onNudge, setDrag
                 ? <span className="cal-tg-allday-empty">—</span>
                 : allDay.map(it => <Chip key={it.id} it={it} onOpen={onOpen} onNudge={onNudge} setDragItem={setDragItem} />)}
             </div>
-            <div className="cal-tg-body" style={{ height: DAY_HOURS.length * HOUR_PX }}>
+            <div className="cal-tg-body" style={{ height: DAY_HOURS.length * HOUR_PX }}
+              title="Click a time slot to add an event"
+              onClick={e => {
+                if (e.target !== e.currentTarget) return // ignore clicks on events
+                const y = e.clientY - e.currentTarget.getBoundingClientRect().top
+                onCreate(key, Math.min(23, Math.max(0, Math.floor(y / HOUR_PX))))
+              }}>
               {DAY_HOURS.map(h => <div key={h} className="cal-tg-line" style={{ top: h * HOUR_PX }} />)}
               {placed.map(({ it, lane, s, e }) => (
                 <button
@@ -526,7 +540,7 @@ function TimeGrid({ days, today, itemsForDay, onCreate, onOpen, onNudge, setDrag
                   draggable={!it.recurring}
                   onDragStart={() => setDragItem(it)}
                   onDragEnd={() => setDragItem(null)}
-                  onClick={() => onOpen(it)}
+                  onClick={(ev) => { ev.stopPropagation(); onOpen(it) }}
                   title={`${it.title} · ${timeLabel(it.start_at)}`}
                 >
                   <span className="cal-tg-event-time">{timeLabel(it.start_at)}</span>
