@@ -7,6 +7,8 @@ import Subscript from '@tiptap/extension-subscript'
 import Superscript from '@tiptap/extension-superscript'
 import { TaskList, TaskItem } from '@tiptap/extension-list'
 import Image from '@tiptap/extension-image'
+import { TextStyle } from '@tiptap/extension-text-style'
+import Color from '@tiptap/extension-color'
 import DocsPanel, { serializeToMarkdown } from './DocsPanel'
 
 // CanvasEditor pulls in Excalidraw, which can't evaluate under jsdom (no canvas).
@@ -210,7 +212,7 @@ describe('serializeToMarkdown', () => {
       element: el,
       extensions: [
         StarterKit.configure({ link: { openOnClick: false } }),
-        Highlight, Subscript, Superscript, TaskList, TaskItem, Image,
+        TextStyle, Color, Highlight, Subscript, Superscript, TaskList, TaskItem, Image,
       ],
     })
   })
@@ -273,6 +275,11 @@ describe('serializeToMarkdown', () => {
     const md = serializeToMarkdown(editor.state.doc)
     expect(md).toContain('H<sub>2</sub>O')
     expect(md).toContain('x<sup>2</sup>')
+  })
+
+  it('serializes font color as an inline HTML span', () => {
+    act(() => { editor.commands.setContent('<p><span style="color: #ff0000">red</span></p>') })
+    expect(serializeToMarkdown(editor.state.doc)).toMatch(/<span style="color:[^"]+">red<\/span>/)
   })
 
   it('serializes image as Markdown', () => {
