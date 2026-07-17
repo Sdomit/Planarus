@@ -100,24 +100,6 @@ RISK_STATUSES: tuple[str, ...] = (
 RISK_SEVERITIES: tuple[str, ...] = ("low", "medium", "high", "critical")
 
 
-# --- Phase 15.5: user-defined statuses / board columns ------------------------
-# Entities that support custom statuses. Their `status` DB CHECK is dropped (the
-# service layer validates against built-ins ∪ this project's custom options).
-STATUS_OPTION_ENTITY_TYPES: tuple[str, ...] = ("task", "phase", "risk")
-
-# The canonical built-in status keys per entity_type. These are always available
-# (surfaced virtually, never stored as status_option rows) and cannot be removed.
-BUILTIN_STATUS_KEYS: dict[str, tuple[str, ...]] = {
-    "task": TASK_STATUSES,
-    "phase": PHASE_STATUSES,
-    "risk": RISK_STATUSES,
-}
-
-
-def status_option_entity_type_check_sql(column: str = "entity_type") -> str:
-    return _check_sql(column, STATUS_OPTION_ENTITY_TYPES)
-
-
 def risk_status_check_sql(column: str = "status") -> str:
     return _check_sql(column, RISK_STATUSES)
 
@@ -293,6 +275,33 @@ MILESTONE_STATUSES: tuple[str, ...] = (
 
 def milestone_status_check_sql(column: str = "status") -> str:
     return _check_sql(column, MILESTONE_STATUSES)
+
+
+# --- Phase 15.5: user-defined statuses / board columns ------------------------
+# (Defined here, after every status tuple it references, so imports resolve.)
+# Entities that support custom statuses. Their `status` DB CHECK is dropped (the
+# service layer validates against built-ins ∪ this project's custom options).
+STATUS_OPTION_ENTITY_TYPES: tuple[str, ...] = (
+    "task",
+    "phase",
+    "risk",
+    "milestone",
+    "decision",
+)
+
+# The canonical built-in status keys per entity_type. These are always available
+# (surfaced virtually, never stored as status_option rows) and cannot be removed.
+BUILTIN_STATUS_KEYS: dict[str, tuple[str, ...]] = {
+    "task": TASK_STATUSES,
+    "phase": PHASE_STATUSES,
+    "risk": RISK_STATUSES,
+    "milestone": MILESTONE_STATUSES,
+    "decision": DECISION_STATUSES,
+}
+
+
+def status_option_entity_type_check_sql(column: str = "entity_type") -> str:
+    return _check_sql(column, STATUS_OPTION_ENTITY_TYPES)
 
 
 # Comment/Link are polymorphic: they attach to any project-scoped entity via

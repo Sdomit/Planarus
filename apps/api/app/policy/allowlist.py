@@ -13,7 +13,6 @@ from dataclasses import dataclass
 
 from app.core.constants import (
     APPROVAL_ACTION_TYPES,
-    DECISION_STATUSES,
     TASK_PRIORITIES,
 )
 from app.core.exceptions import PolicyError
@@ -121,7 +120,6 @@ for _action, _policy in ACTION_POLICIES.items():
     ), f"reference_fields must be a subset of allowed_fields for {_action}"
 
 _TASK_PRIORITIES = frozenset(TASK_PRIORITIES)
-_DECISION_STATUSES = frozenset(DECISION_STATUSES)
 # Task statuses are open-ended (Phase 15.5 custom statuses); only the slug shape
 # is checked here — the project-scoped set is enforced at apply time.
 _STATUS_SLUG = re.compile(r"^[a-z0-9][a-z0-9_]*$")
@@ -137,14 +135,11 @@ def get_policy(action_type: str) -> ActionPolicy:
 def _validate_enums(action_type: str, patch: dict) -> None:
     status = patch.get("status")
     if status is not None:
-        if action_type.startswith("task."):
-            # Phase 15.5: tasks allow custom statuses. The policy layer is
-            # project-agnostic, so it only checks slug shape here; the concrete
-            # per-project set (built-ins ∪ custom) is enforced when the write is
-            # applied via task_service.
-            if not _STATUS_SLUG.match(status):
-                raise PolicyError(f"invalid status value for {action_type}")
-        elif status not in _DECISION_STATUSES:
+        # Phase 15.5: task AND decision statuses allow custom values. The policy
+        # layer is project-agnostic, so it only checks slug shape here; the
+        # concrete per-project set (built-ins ∪ custom) is enforced at apply time
+        # by the entity's apply handler.
+        if not _STATUS_SLUG.match(status):
             raise PolicyError(f"invalid status value for {action_type}")
     priority = patch.get("priority")
     if priority is not None and priority not in _TASK_PRIORITIES:

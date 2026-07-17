@@ -29,8 +29,10 @@ def create_milestone(
 ) -> MilestoneRead:
     try:
         return milestone_service.create_milestone(session, project_id, data)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    except ValueError as exc:
+        if "project" in str(exc) and "not found" in str(exc):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
@@ -45,6 +47,8 @@ def update_milestone(
         milestone = milestone_service.update_milestone(session, milestone_id, data)
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if milestone is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Milestone not found"

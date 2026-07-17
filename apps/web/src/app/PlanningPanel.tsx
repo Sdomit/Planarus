@@ -71,9 +71,7 @@ const RISK_STATUS_DOT: Record<string, string> = {
 }
 const statusCols = (statuses: string[], dots: Record<string, string>): BoardCol[] =>
   statuses.map(s => ({ key: s, label: s.replace(/_/g, ' '), statuses: [s], dot: dots[s] ?? 'var(--text-tertiary)' }))
-const MILESTONE_COLS = statusCols(MILESTONE_STATUSES, MILESTONE_DOT)
-const DECISION_COLS = statusCols(DECISION_STATUSES, DECISION_DOT)
-// Phase/Risk board columns are built dynamically from the project's status
+// All entity board columns are built dynamically from the project's status
 // options (custom statuses); see PhasesSection / RisksSection.
 
 export default function PlanningPanel({
@@ -94,6 +92,8 @@ export default function PlanningPanel({
   const [taskStatuses, setTaskStatuses] = useState<StatusOption[]>([])
   const [phaseStatuses, setPhaseStatuses] = useState<StatusOption[]>([])
   const [riskStatuses, setRiskStatuses] = useState<StatusOption[]>([])
+  const [milestoneStatuses, setMilestoneStatuses] = useState<StatusOption[]>([])
+  const [decisionStatuses, setDecisionStatuses] = useState<StatusOption[]>([])
   const [milestones, setMilestones] = useState<Milestone[]>([])
   const [decisions, setDecisions] = useState<Decision[]>([])
   const [risks, setRisks] = useState<Risk[]>([])
@@ -141,7 +141,7 @@ export default function PlanningPanel({
   }
 
   async function loadEntities(projectId: string) {
-    const [ph, stg, tk, mil, dec, rsk, blk, cmt, lnk, sto, phSto, rkSto] = await Promise.all([
+    const [ph, stg, tk, mil, dec, rsk, blk, cmt, lnk, sto, phSto, rkSto, mlSto, dcSto] = await Promise.all([
       api.phases.list(projectId),
       api.stages.list(projectId),
       api.tasks.list(projectId),
@@ -154,10 +154,12 @@ export default function PlanningPanel({
       api.statusOptions.list(projectId).catch(() => []),
       api.statusOptions.list(projectId, 'phase').catch(() => []),
       api.statusOptions.list(projectId, 'risk').catch(() => []),
+      api.statusOptions.list(projectId, 'milestone').catch(() => []),
+      api.statusOptions.list(projectId, 'decision').catch(() => []),
     ])
     setPhases(ph); setStages(stg); setTasks(tk); setMilestones(mil); setDecisions(dec)
     setRisks(rsk); setBlockers(blk); setComments(cmt); setLinks(lnk); setTaskStatuses(sto)
-    setPhaseStatuses(phSto); setRiskStatuses(rkSto)
+    setPhaseStatuses(phSto); setRiskStatuses(rkSto); setMilestoneStatuses(mlSto); setDecisionStatuses(dcSto)
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -322,7 +324,7 @@ export default function PlanningPanel({
                   value={milestoneForm.target_date} onChange={e => setMilestoneForm(f => ({ ...f, target_date: e.target.value }))} />
                 <select className="input select" value={milestoneForm.status} aria-label="Milestone status"
                   onChange={e => setMilestoneForm(f => ({ ...f, status: e.target.value }))}>
-                  {MILESTONE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                  {(milestoneStatuses.length ? milestoneStatuses.map(o => o.key) : MILESTONE_STATUSES).map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
                 </select>
               </>
             )}
@@ -334,7 +336,7 @@ export default function PlanningPanel({
                   value={decisionForm.decision} onChange={e => setDecisionForm(f => ({ ...f, decision: e.target.value }))} />
                 <select className="input select" value={decisionForm.status} aria-label="Decision status"
                   onChange={e => setDecisionForm(f => ({ ...f, status: e.target.value }))}>
-                  {DECISION_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                  {(decisionStatuses.length ? decisionStatuses.map(o => o.key) : DECISION_STATUSES).map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
                 </select>
               </>
             )}
@@ -391,10 +393,20 @@ export default function PlanningPanel({
             } />
         )}
         {tab === 'milestones' && (
-          <MilestonesSection milestones={milestones} projectId={project.id} setMilestones={setMilestones} />
+          <MilestonesSection milestones={milestones} projectId={project.id} setMilestones={setMilestones}
+            statuses={milestoneStatuses}
+            addStatus={async label => {
+              await api.statusOptions.create(project.id, { entity_type: 'milestone', label })
+              setMilestoneStatuses(await api.statusOptions.list(project.id, 'milestone'))
+            }} />
         )}
         {tab === 'decisions' && (
-          <DecisionsSection decisions={decisions} projectId={project.id} setDecisions={setDecisions} />
+          <DecisionsSection decisions={decisions} projectId={project.id} setDecisions={setDecisions}
+            statuses={decisionStatuses}
+            addStatus={async label => {
+              await api.statusOptions.create(project.id, { entity_type: 'decision', label })
+              setDecisionStatuses(await api.statusOptions.list(project.id, 'decision'))
+            }} />
         )}
         {tab === 'risks' && (
           <RisksSection
@@ -982,10 +994,13 @@ function TaskRow({ task, phases, stages, projectId, onTaskUpdated, onDelete, dra
   )
 }
 
-function MilestonesSection({ milestones, projectId, setMilestones }: {
+function MilestonesSection({ milestones, projectId, setMilestones, statuses, addStatus }: {
   milestones: Milestone[]; projectId: string; setMilestones: React.Dispatch<React.SetStateAction<Milestone[]>>
+  statuses?: StatusOption[]; addStatus?: (label: string) => Promise<void>
 }) {
   const [view, setView] = useState<'list' | 'board'>('list')
+  const statusKeys = statuses && statuses.length ? statuses.map(o => o.key) : MILESTONE_STATUSES
+  const onAddNew = addStatus ? () => promptNewStatus(addStatus) : undefined
   const onUpdated = (u: Milestone) => setMilestones(prev => prev.map(m => (m.id === u.id ? u : m)))
   const update = (id: string, patch: Parameters<typeof api.milestones.update>[1]) => void api.milestones.update(id, patch).then(onUpdated)
   const remove = (id: string) => void api.milestones.remove(id).then(() => setMilestones(prev => prev.filter(m => m.id !== id)))
@@ -998,8 +1013,9 @@ function MilestonesSection({ milestones, projectId, setMilestones }: {
       <div className="pp-toolbar"><ViewToggle view={view} setView={setView} /></div>
       {view === 'board' ? (
         <EntityBoard
-          items={milestones} columns={MILESTONE_COLS} statusOf={m => m.status}
+          items={milestones} columns={statusCols(statusKeys, MILESTONE_DOT)} statusOf={m => m.status}
           onRestatus={(m, status) => update(m.id, { status })}
+          onAddColumn={onAddNew}
           renderCard={m => (
             <div className="ab-task-foot" style={{ justifyContent: 'space-between' }}>
               <span className="ab-task-title">{m.title}</span>
@@ -1010,7 +1026,8 @@ function MilestonesSection({ milestones, projectId, setMilestones }: {
       ) : (
         <ul className="pp-rows">
           {milestones.map(m => (
-            <MilestoneListRow key={m.id} milestone={m} update={update} remove={remove} dragProps={itemProps(m.id)} />
+            <MilestoneListRow key={m.id} milestone={m} update={update} remove={remove} dragProps={itemProps(m.id)}
+              statusKeys={statusKeys} onAddNew={onAddNew} />
           ))}
         </ul>
       )}
@@ -1018,11 +1035,13 @@ function MilestonesSection({ milestones, projectId, setMilestones }: {
   )
 }
 
-function MilestoneListRow({ milestone, update, remove, dragProps }: {
+function MilestoneListRow({ milestone, update, remove, dragProps, statusKeys = MILESTONE_STATUSES, onAddNew }: {
   milestone: Milestone
   update: (id: string, patch: Parameters<typeof api.milestones.update>[1]) => void
   remove: (id: string) => void
   dragProps: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
+  statusKeys?: string[]
+  onAddNew?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const editable = useEditable(milestone.title, t => update(milestone.id, { title: t }))
@@ -1034,8 +1053,8 @@ function MilestoneListRow({ milestone, update, remove, dragProps }: {
           {editable.node ?? <span className="pp-row-title">{milestone.title}</span>}
           {milestone.target_date && <span className="pp-meta">{milestone.target_date}</span>}
         </button>
-        <InlineStatusSelect kind="milestone" value={milestone.status} options={MILESTONE_STATUSES}
-          onChange={s => update(milestone.id, { status: s })} label={`Change status of ${milestone.title}`} />
+        <InlineStatusSelect kind="milestone" value={milestone.status} options={statusKeys}
+          onChange={s => update(milestone.id, { status: s })} label={`Change status of ${milestone.title}`} onAddNew={onAddNew} />
         <RowActions title={milestone.title} onEdit={editable.start} onDelete={() => remove(milestone.id)} dragHandle />
       </div>
       {open && (
@@ -1054,10 +1073,13 @@ function MilestoneListRow({ milestone, update, remove, dragProps }: {
   )
 }
 
-function DecisionsSection({ decisions, projectId, setDecisions }: {
+function DecisionsSection({ decisions, projectId, setDecisions, statuses, addStatus }: {
   decisions: Decision[]; projectId: string; setDecisions: React.Dispatch<React.SetStateAction<Decision[]>>
+  statuses?: StatusOption[]; addStatus?: (label: string) => Promise<void>
 }) {
   const [view, setView] = useState<'list' | 'board'>('list')
+  const statusKeys = statuses && statuses.length ? statuses.map(o => o.key) : DECISION_STATUSES
+  const onAddNew = addStatus ? () => promptNewStatus(addStatus) : undefined
   const onUpdated = (u: Decision) => setDecisions(prev => prev.map(d => (d.id === u.id ? u : d)))
   const update = (id: string, patch: Parameters<typeof api.decisions.update>[1]) => void api.decisions.update(id, patch).then(onUpdated)
   const remove = (id: string) => void api.decisions.remove(id).then(() => setDecisions(prev => prev.filter(d => d.id !== id)))
@@ -1070,8 +1092,9 @@ function DecisionsSection({ decisions, projectId, setDecisions }: {
       <div className="pp-toolbar"><ViewToggle view={view} setView={setView} /></div>
       {view === 'board' ? (
         <EntityBoard
-          items={decisions} columns={DECISION_COLS} statusOf={d => d.status}
+          items={decisions} columns={statusCols(statusKeys, DECISION_DOT)} statusOf={d => d.status}
           onRestatus={(d, status) => update(d.id, { status })}
+          onAddColumn={onAddNew}
           renderCard={d => (
             <div className="ab-task-foot" style={{ justifyContent: 'space-between' }}>
               <span className="ab-task-title">{d.title}</span>
@@ -1082,7 +1105,8 @@ function DecisionsSection({ decisions, projectId, setDecisions }: {
       ) : (
         <ul className="pp-rows">
           {decisions.map(d => (
-            <DecisionListRow key={d.id} decision={d} update={update} remove={remove} dragProps={itemProps(d.id)} />
+            <DecisionListRow key={d.id} decision={d} update={update} remove={remove} dragProps={itemProps(d.id)}
+              statusKeys={statusKeys} onAddNew={onAddNew} />
           ))}
         </ul>
       )}
@@ -1090,11 +1114,13 @@ function DecisionsSection({ decisions, projectId, setDecisions }: {
   )
 }
 
-function DecisionListRow({ decision, update, remove, dragProps }: {
+function DecisionListRow({ decision, update, remove, dragProps, statusKeys = DECISION_STATUSES, onAddNew }: {
   decision: Decision
   update: (id: string, patch: Parameters<typeof api.decisions.update>[1]) => void
   remove: (id: string) => void
   dragProps: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
+  statusKeys?: string[]
+  onAddNew?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const editable = useEditable(decision.title, t => update(decision.id, { title: t }))
@@ -1105,8 +1131,8 @@ function DecisionListRow({ decision, update, remove, dragProps }: {
           <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
           {editable.node ?? <span className="pp-row-title">{decision.title}</span>}
         </button>
-        <InlineStatusSelect kind="decision" value={decision.status} options={DECISION_STATUSES}
-          onChange={s => update(decision.id, { status: s })} label={`Change status of ${decision.title}`} />
+        <InlineStatusSelect kind="decision" value={decision.status} options={statusKeys}
+          onChange={s => update(decision.id, { status: s })} label={`Change status of ${decision.title}`} onAddNew={onAddNew} />
         <RowActions title={decision.title} onEdit={editable.start} onDelete={() => remove(decision.id)} dragHandle />
       </div>
       {open && (
