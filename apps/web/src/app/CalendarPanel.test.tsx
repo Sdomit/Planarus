@@ -121,6 +121,21 @@ describe('CalendarPanel', () => {
     expect(link.getAttribute('href')).toContain('/calendar.ics')
   })
 
+  it('clicking anywhere on a day cell opens the create dialog', async () => {
+    const { container } = render(<CalendarPanel projectId="proj_1" />)
+    await screen.findByText('August 2026')
+    fireEvent.click(container.querySelector('.cal-cell')!)
+    expect(await screen.findByText('New event')).toBeTruthy()
+  })
+
+  it('clicking an event chip opens the edit dialog, not create', async () => {
+    render(<CalendarPanel projectId="proj_1" />)
+    await screen.findByText('Kickoff')
+    fireEvent.click(screen.getByText('Kickoff'))
+    expect(await screen.findByText('Edit event')).toBeTruthy()
+    expect(screen.queryByText('New event')).toBeNull()
+  })
+
   it('Sync dialog shows the not-configured message when no providers are set', async () => {
     render(<CalendarPanel projectId="proj_1" />)
     await screen.findByText('August 2026')

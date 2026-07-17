@@ -32,6 +32,8 @@
   background: var(--bg-surface);
 }
 .cal-cell:nth-child(7n) { border-right: none; }
+.cal-cell { cursor: pointer; }
+.cal-cell:hover:not(.cal-cell--today) { background: var(--bg-subtle); }
 .cal-cell--muted { background: var(--bg-subtle); }
 .cal-cell--muted .cal-daynum { color: var(--text-tertiary); }
 .cal-cell--today { background: var(--accent-muted, var(--bg-muted)); }
@@ -129,7 +131,8 @@
 .cal-tg-day--today .cal-tg-dayhead { background: var(--accent-muted, var(--bg-muted)); }
 .cal-tg-allday { min-height: 24px; display: flex; flex-direction: column; gap: 2px; padding: 2px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface); }
 .cal-tg-allday-empty { font-size: 10px; color: var(--text-tertiary); padding: 0 4px; }
-.cal-tg-body { position: relative; background: var(--bg-surface); }
+.cal-tg-body { position: relative; background: var(--bg-surface); cursor: pointer; }
+.cal-tg-allday { cursor: pointer; }
 .cal-tg-line { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border-subtle); }
 .cal-tg-event {
   position: absolute; overflow: hidden; text-align: left; cursor: pointer;
