@@ -71,10 +71,10 @@ const RISK_STATUS_DOT: Record<string, string> = {
 }
 const statusCols = (statuses: string[], dots: Record<string, string>): BoardCol[] =>
   statuses.map(s => ({ key: s, label: s.replace(/_/g, ' '), statuses: [s], dot: dots[s] ?? 'var(--text-tertiary)' }))
-const PHASE_COLS = statusCols(PHASE_STATUSES, PHASE_DOT)
 const MILESTONE_COLS = statusCols(MILESTONE_STATUSES, MILESTONE_DOT)
 const DECISION_COLS = statusCols(DECISION_STATUSES, DECISION_DOT)
-const RISK_COLS = statusCols(RISK_STATUSES, RISK_STATUS_DOT)
+// Phase/Risk board columns are built dynamically from the project's status
+// options (custom statuses); see PhasesSection / RisksSection.
 
 export default function PlanningPanel({
   projectId,
@@ -92,6 +92,8 @@ export default function PlanningPanel({
   const [stages, setStages] = useState<Stage[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [taskStatuses, setTaskStatuses] = useState<StatusOption[]>([])
+  const [phaseStatuses, setPhaseStatuses] = useState<StatusOption[]>([])
+  const [riskStatuses, setRiskStatuses] = useState<StatusOption[]>([])
   const [milestones, setMilestones] = useState<Milestone[]>([])
   const [decisions, setDecisions] = useState<Decision[]>([])
   const [risks, setRisks] = useState<Risk[]>([])
@@ -139,7 +141,7 @@ export default function PlanningPanel({
   }
 
   async function loadEntities(projectId: string) {
-    const [ph, stg, tk, mil, dec, rsk, blk, cmt, lnk, sto] = await Promise.all([
+    const [ph, stg, tk, mil, dec, rsk, blk, cmt, lnk, sto, phSto, rkSto] = await Promise.all([
       api.phases.list(projectId),
       api.stages.list(projectId),
       api.tasks.list(projectId),
@@ -150,9 +152,12 @@ export default function PlanningPanel({
       api.comments.list(projectId),
       api.links.list(projectId),
       api.statusOptions.list(projectId).catch(() => []),
+      api.statusOptions.list(projectId, 'phase').catch(() => []),
+      api.statusOptions.list(projectId, 'risk').catch(() => []),
     ])
     setPhases(ph); setStages(stg); setTasks(tk); setMilestones(mil); setDecisions(dec)
     setRisks(rsk); setBlockers(blk); setComments(cmt); setLinks(lnk); setTaskStatuses(sto)
+    setPhaseStatuses(phSto); setRiskStatuses(rkSto)
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -280,7 +285,7 @@ export default function PlanningPanel({
                   value={phaseForm.title} onChange={e => setPhaseForm(f => ({ ...f, title: e.target.value }))} />
                 <select className="input select" value={phaseForm.status} aria-label="Phase status"
                   onChange={e => setPhaseForm(f => ({ ...f, status: e.target.value }))}>
-                  {PHASE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                  {(phaseStatuses.length ? phaseStatuses.map(o => o.key) : PHASE_STATUSES).map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
                 </select>
               </>
             )}
@@ -343,7 +348,7 @@ export default function PlanningPanel({
                 </select>
                 <select className="input select" value={riskForm.status} aria-label="Risk status"
                   onChange={e => setRiskForm(f => ({ ...f, status: e.target.value }))}>
-                  {RISK_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                  {(riskStatuses.length ? riskStatuses.map(o => o.key) : RISK_STATUSES).map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
                 </select>
               </>
             )}
@@ -367,7 +372,12 @@ export default function PlanningPanel({
         )}
 
         {tab === 'phases' && (
-          <PhasesSection phases={phases} projectId={project.id} setPhases={setPhases} />
+          <PhasesSection phases={phases} projectId={project.id} setPhases={setPhases}
+            statuses={phaseStatuses}
+            addStatus={async label => {
+              await api.statusOptions.create(project.id, { entity_type: 'phase', label })
+              setPhaseStatuses(await api.statusOptions.list(project.id, 'phase'))
+            }} />
         )}
         {tab === 'tasks' && (
           <TasksList tasks={tasks} phases={phases} stages={stages} projectId={project.id} setTasks={setTasks}
@@ -392,6 +402,11 @@ export default function PlanningPanel({
             blockers={openBlockers}
             projectId={project.id}
             setRisks={setRisks}
+            statuses={riskStatuses}
+            addStatus={async label => {
+              await api.statusOptions.create(project.id, { entity_type: 'risk', label })
+              setRiskStatuses(await api.statusOptions.list(project.id, 'risk'))
+            }}
             onBlockerUpdated={updated => setBlockers(prev => prev.map(b => b.id === updated.id ? updated : b))}
           />
         )}
@@ -473,10 +488,13 @@ function useEditable(value: string, onSave: (next: string) => void) {
   return { editing, start, node }
 }
 
-function PhasesSection({ phases, projectId, setPhases }: {
+function PhasesSection({ phases, projectId, setPhases, statuses, addStatus }: {
   phases: Phase[]; projectId: string; setPhases: React.Dispatch<React.SetStateAction<Phase[]>>
+  statuses?: StatusOption[]; addStatus?: (label: string) => Promise<void>
 }) {
   const [view, setView] = useState<'list' | 'board'>('list')
+  const statusKeys = statuses && statuses.length ? statuses.map(o => o.key) : PHASE_STATUSES
+  const onAddNew = addStatus ? () => promptNewStatus(addStatus) : undefined
   const onUpdated = (u: Phase) => setPhases(prev => prev.map(p => (p.id === u.id ? u : p)))
   const onDeleted = (id: string) => setPhases(prev => prev.filter(p => p.id !== id))
   const update = (id: string, patch: Parameters<typeof api.phases.update>[1]) => void api.phases.update(id, patch).then(onUpdated)
@@ -490,8 +508,9 @@ function PhasesSection({ phases, projectId, setPhases }: {
       <div className="pp-toolbar"><ViewToggle view={view} setView={setView} /></div>
       {view === 'board' ? (
         <EntityBoard
-          items={phases} columns={PHASE_COLS} statusOf={p => p.status}
+          items={phases} columns={statusCols(statusKeys, PHASE_DOT)} statusOf={p => p.status}
           onRestatus={(p, status) => update(p.id, { status })}
+          onAddColumn={onAddNew}
           renderCard={p => (
             <div className="ab-task-foot" style={{ justifyContent: 'space-between' }}>
               <span className="ab-task-title">{p.title}</span>
@@ -502,7 +521,8 @@ function PhasesSection({ phases, projectId, setPhases }: {
       ) : (
         <ul className="pp-rows">
           {phases.map(ph => (
-            <PhaseListRow key={ph.id} phase={ph} update={update} remove={remove} dragProps={itemProps(ph.id)} />
+            <PhaseListRow key={ph.id} phase={ph} update={update} remove={remove} dragProps={itemProps(ph.id)}
+              statusKeys={statusKeys} onAddNew={onAddNew} />
           ))}
         </ul>
       )}
@@ -510,9 +530,11 @@ function PhasesSection({ phases, projectId, setPhases }: {
   )
 }
 
-function PhaseListRow({ phase, update, remove, dragProps }: {
+function PhaseListRow({ phase, update, remove, dragProps, statusKeys = PHASE_STATUSES, onAddNew }: {
   phase: Phase
   update: (id: string, patch: Parameters<typeof api.phases.update>[1]) => void
+  statusKeys?: string[]
+  onAddNew?: () => void
   remove: (id: string) => void
   dragProps: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
 }) {
@@ -525,8 +547,8 @@ function PhaseListRow({ phase, update, remove, dragProps }: {
           <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
           {editable.node ?? <span className="pp-row-title">{phase.title}</span>}
         </button>
-        <InlineStatusSelect kind="phase" value={phase.status} options={PHASE_STATUSES}
-          onChange={s => update(phase.id, { status: s })} label={`Change status of ${phase.title}`} />
+        <InlineStatusSelect kind="phase" value={phase.status} options={statusKeys}
+          onChange={s => update(phase.id, { status: s })} label={`Change status of ${phase.title}`} onAddNew={onAddNew} />
         <RowActions title={phase.title} onEdit={editable.start} onDelete={() => remove(phase.id)} dragHandle />
       </div>
       {open && (
@@ -1098,12 +1120,15 @@ function DecisionListRow({ decision, update, remove, dragProps }: {
 }
 
 function RisksSection({
-  risks, blockers, projectId, setRisks, onBlockerUpdated,
+  risks, blockers, projectId, setRisks, onBlockerUpdated, statuses, addStatus,
 }: {
   risks: Risk[]; blockers: Blocker[]; projectId: string
   setRisks: React.Dispatch<React.SetStateAction<Risk[]>>; onBlockerUpdated: (b: Blocker) => void
+  statuses?: StatusOption[]; addStatus?: (label: string) => Promise<void>
 }) {
   const [view, setView] = useState<'list' | 'board'>('list')
+  const statusKeys = statuses && statuses.length ? statuses.map(o => o.key) : RISK_STATUSES
+  const onAddNew = addStatus ? () => promptNewStatus(addStatus) : undefined
   const onUpdated = (u: Risk) => setRisks(prev => prev.map(r => (r.id === u.id ? u : r)))
   const update = (id: string, patch: Parameters<typeof api.risks.update>[1]) => void api.risks.update(id, patch).then(onUpdated)
   const remove = (id: string) => void api.risks.remove(id).then(() => setRisks(prev => prev.filter(r => r.id !== id)))
@@ -1117,8 +1142,9 @@ function RisksSection({
       {risks.length > 0 && <div className="pp-toolbar"><ViewToggle view={view} setView={setView} /></div>}
       {risks.length > 0 && (view === 'board' ? (
         <EntityBoard
-          items={risks} columns={RISK_COLS} statusOf={r => r.status}
+          items={risks} columns={statusCols(statusKeys, RISK_STATUS_DOT)} statusOf={r => r.status}
           onRestatus={(r, status) => update(r.id, { status })}
+          onAddColumn={onAddNew}
           renderCard={r => (
             <div className="ab-task-foot" style={{ justifyContent: 'space-between' }}>
               <span className="ab-task-title">{r.title}</span>
@@ -1130,7 +1156,8 @@ function RisksSection({
       ) : (
         <ul className="pp-rows">
           {risks.map(r => (
-            <RiskListRow key={r.id} risk={r} update={update} remove={remove} dragProps={itemProps(r.id)} />
+            <RiskListRow key={r.id} risk={r} update={update} remove={remove} dragProps={itemProps(r.id)}
+              statusKeys={statusKeys} onAddNew={onAddNew} />
           ))}
         </ul>
       ))}
@@ -1148,11 +1175,13 @@ function RisksSection({
   )
 }
 
-function RiskListRow({ risk, update, remove, dragProps }: {
+function RiskListRow({ risk, update, remove, dragProps, statusKeys = RISK_STATUSES, onAddNew }: {
   risk: Risk
   update: (id: string, patch: Parameters<typeof api.risks.update>[1]) => void
   remove: (id: string) => void
   dragProps: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
+  statusKeys?: string[]
+  onAddNew?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const editable = useEditable(risk.title, t => update(risk.id, { title: t }))
@@ -1165,8 +1194,8 @@ function RiskListRow({ risk, update, remove, dragProps }: {
         </button>
         <InlineStatusSelect kind="severity" value={risk.severity} options={RISK_SEVERITIES}
           onChange={s => update(risk.id, { severity: s })} label={`Change severity of ${risk.title}`} />
-        <InlineStatusSelect kind="riskstatus" value={risk.status} options={RISK_STATUSES}
-          onChange={s => update(risk.id, { status: s })} label={`Change status of ${risk.title}`} />
+        <InlineStatusSelect kind="riskstatus" value={risk.status} options={statusKeys}
+          onChange={s => update(risk.id, { status: s })} label={`Change status of ${risk.title}`} onAddNew={onAddNew} />
         <RowActions title={risk.title} onEdit={editable.start} onDelete={() => remove(risk.id)} dragHandle />
       </div>
       {open && (

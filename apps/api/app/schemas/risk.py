@@ -1,11 +1,20 @@
+import re
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.constants import RISK_SEVERITIES, RISK_STATUSES
+from app.core.constants import RISK_SEVERITIES
 
-_RISK_STATUSES = frozenset(RISK_STATUSES)
 _RISK_SEVERITIES = frozenset(RISK_SEVERITIES)
+# Phase 15.5: risk statuses allow custom values — slug shape only here; the
+# concrete per-project set is validated in the service layer. Severity stays fixed.
+_STATUS_SLUG = re.compile(r"^[a-z0-9][a-z0-9_]*$")
+
+
+def _validate_status_slug(v: Optional[str]) -> Optional[str]:
+    if v is not None and not _STATUS_SLUG.match(v):
+        raise ValueError("status must be a lowercase slug (letters, digits, underscore)")
+    return v
 
 
 class RiskCreate(BaseModel):
@@ -27,11 +36,7 @@ class RiskCreate(BaseModel):
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str) -> str:
-        if v not in _RISK_STATUSES:
-            raise ValueError(
-                f"status must be one of: {', '.join(sorted(_RISK_STATUSES))}"
-            )
-        return v
+        return _validate_status_slug(v) or v
 
 
 class RiskUpdate(BaseModel):
@@ -53,11 +58,7 @@ class RiskUpdate(BaseModel):
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and v not in _RISK_STATUSES:
-            raise ValueError(
-                f"status must be one of: {', '.join(sorted(_RISK_STATUSES))}"
-            )
-        return v
+        return _validate_status_slug(v)
 
 
 class RiskRead(BaseModel):

@@ -78,6 +78,7 @@ beforeEach(() => {
   mockApi.comments.list.mockResolvedValue([])
   mockApi.links.list.mockResolvedValue([])
   mockApi.checklistItems.list.mockResolvedValue([])
+  mockApi.statusOptions.list.mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -251,6 +252,26 @@ describe('PlanningPanel', () => {
     // The custom status renders as its own board column, and the add-column affordance is present.
     const colTitle = await screen.findByText('in review', { selector: '.ab-col-title' })
     expect(colTitle).toBeTruthy()
+    expect(screen.getByRole('button', { name: '+ Add column' })).toBeTruthy()
+  })
+
+  it('shows a custom phase status as a board column', async () => {
+    setupEmpty()
+    const builtins = ['planned', 'active', 'blocked', 'done', 'canceled']
+      .map((k, i) => ({ id: null, key: k, label: k, color: null, sort_order: i, builtin: true }))
+    const custom = { id: 'sto_p', key: 'on_hold', label: 'On Hold', color: null, sort_order: 5, builtin: false }
+    // Only phase requests get the custom option (task/risk stay default []).
+    mockApi.statusOptions.list.mockImplementation(async (_pid: string, entity = 'task') =>
+      entity === 'phase' ? [...builtins, custom] : [])
+    mockApi.phases.list.mockResolvedValue([{
+      id: 'ph_1', project_id: 'proj_1', title: 'Groundwork', description: null,
+      status: 'on_hold', sort_order: 0, created_at: 'x', updated_at: 'x',
+    }])
+
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    fireEvent.click(screen.getByRole('button', { name: 'Board' }))
+    expect(await screen.findByText('on hold', { selector: '.ab-col-title' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '+ Add column' })).toBeTruthy()
   })
 
