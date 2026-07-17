@@ -1,9 +1,13 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
+from app.core.security import require_local_control
 from app.db.session import get_session
-from app.schemas.git import GitRepoLink, GitSnapshot
+from app.schemas.git import GitFetchResult, GitRepoLink, GitSnapshot
 from app.services import git_service, project_service
+from app.services.audit_service import create_audit_event
 
 router = APIRouter()
 
@@ -33,3 +37,40 @@ def get_project_git_snapshot(
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return git_service.snapshot(project.id, project.folder_path)
+
+
+@router.post(
+    "/projects/{project_id}/git/fetch",
+    response_model=GitFetchResult,
+    # The one outbound action in the cockpit: control-token-gated like the
+    # approvals/reminders side effects. Local UI only — never MCP/external.
+    dependencies=[Depends(require_local_control)],
+)
+def fetch_project_git(
+    project_id: str,
+    session: Session = Depends(get_session),
+) -> GitFetchResult:
+    """Explicit, human-clicked fetch of remote-tracking refs (Phase 12b) — the
+    sole documented exception to "SHOW, DON'T DO". Disabled unless
+    AGENTBOARD_GIT_FETCH_ENABLED=true (raises 409 otherwise). Working tree
+    untouched; every actual outbound attempt is audited."""
+    project = project_service.get_project(session, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    result = git_service.fetch(project.id, project.folder_path)
+
+    # Audit only real outbound attempts (a fetch ran or was tried), not the
+    # rate-limited/no-remote no-ops. This is the record a Local Truth Bar renders.
+    if result.status in ("ok", "failed"):
+        create_audit_event(
+            session,
+            event_type="git_fetch",
+            actor_type="human",
+            entity_type="project",
+            entity_id=project.id,
+            project_id=project.id,
+            payload_json=json.dumps({"status": result.status, "remote": result.remote}),
+        )
+        session.commit()
+    return result
