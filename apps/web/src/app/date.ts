@@ -75,3 +75,27 @@ export function weekDays(d: Date): Date[] {
 export function isSameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }
+
+/** Shift a `YYYY-MM-DD` key by `n` days (local), returning a new `YYYY-MM-DD`. */
+export function addDaysIso(dayIso: string, n: number): string {
+  const [y, m, d] = dayIso.slice(0, 10).split('-').map(Number)
+  return isoDay(new Date(y, m - 1, d + n))
+}
+
+/** Minutes past local midnight for a timed ISO value, or null for date-only/all-day. */
+export function minutesIntoDay(iso: string | null | undefined): number | null {
+  if (!iso || iso.length <= 10) return null
+  const [h, m] = iso.slice(11, 16).split(':').map(Number)
+  return Number.isNaN(h) ? null : h * 60 + (m || 0)
+}
+
+/** 0–23, used to render the hour rows of the week/day time grid. */
+export const DAY_HOURS: number[] = Array.from({ length: 24 }, (_, i) => i)
+
+/** Inclusive count of days a [start, end] date span covers (min 1). */
+export function daySpan(startIso: string, endIso: string | null | undefined): number {
+  if (!endIso) return 1
+  const a = new Date(startIso.slice(0, 10)); const b = new Date(endIso.slice(0, 10))
+  const n = Math.round((b.getTime() - a.getTime()) / 86_400_000)
+  return n > 0 ? n + 1 : 1
+}

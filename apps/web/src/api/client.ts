@@ -151,6 +151,8 @@ export interface CalendarEvent {
   start_at: string
   end_at: string | null
   all_day: boolean
+  recurrence: string
+  recurrence_until: string | null
   sort_order: number
   created_at: string
   updated_at: string
@@ -167,6 +169,7 @@ export interface CalendarItem {
   all_day: boolean
   status: string | null
   phase_id: string | null
+  recurring: boolean
 }
 
 export interface ProjectCalendar {
@@ -791,12 +794,14 @@ export const api = {
         description?: string
         location?: string
         phase_id?: string
+        recurrence?: string
+        recurrence_until?: string | null
       },
     ) =>
       request<CalendarEvent>(`/projects/${projectId}/calendar-events`, { method: 'POST', body: JSON.stringify(data) }),
     update: (
       id: string,
-      data: Partial<Pick<CalendarEvent, 'title' | 'start_at' | 'end_at' | 'all_day' | 'status' | 'description' | 'location' | 'phase_id'>>,
+      data: Partial<Pick<CalendarEvent, 'title' | 'start_at' | 'end_at' | 'all_day' | 'status' | 'description' | 'location' | 'phase_id' | 'recurrence' | 'recurrence_until'>>,
     ) =>
       request<CalendarEvent>(`/calendar-events/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remove: (id: string) =>
@@ -809,6 +814,14 @@ export const api = {
       if (params?.to) q.set('to', params.to)
       const qs = q.toString()
       return request<ProjectCalendar>(`/projects/${projectId}/calendar${qs ? `?${qs}` : ''}`)
+    },
+    /** Direct download URL for the .ics export (goes through the /api proxy). */
+    icsHref: (projectId: string, params?: { from?: string; to?: string }) => {
+      const q = new URLSearchParams()
+      if (params?.from) q.set('from', params.from)
+      if (params?.to) q.set('to', params.to)
+      const qs = q.toString()
+      return `${BASE}/projects/${projectId}/calendar.ics${qs ? `?${qs}` : ''}`
     },
   },
   checklistItems: {

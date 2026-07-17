@@ -1,50 +1,64 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, type CalendarItem } from '../api/client'
 import {
-  MONTH_NAMES, WEEKDAY_NAMES, addMonths, dayKeyOf, isSameDay, isoDay,
-  monthMatrix, timeLabel, weekDays,
+  DAY_HOURS, MONTH_NAMES, WEEKDAY_NAMES, addDaysIso, addMonths, daySpan, dayKeyOf,
+  isSameDay, isoDay, minutesIntoDay, monthMatrix, timeLabel, weekDays,
 } from './date'
 import './calendar-panel.css'
 
-type ViewMode = 'month' | 'week' | 'day'
+type ViewMode = 'month' | 'week' | 'day' | 'agenda'
 const EVENT_STATUSES = ['confirmed', 'tentative', 'cancelled']
+const RECURRENCES = ['none', 'daily', 'weekly', 'monthly']
+const HOUR_PX = 44 // height of one hour row in the week/day time grid
 
-/** Draft used by the create/edit dialog. `id` empty ⇒ creating a new event. */
+type Source = CalendarItem['source']
+interface Filters { event: boolean; milestone: boolean; task: boolean; hideCancelled: boolean }
+const ALL_ON: Filters = { event: true, milestone: true, task: true, hideCancelled: false }
+
+/** Deterministic, stable colour per phase (phases carry no colour of their own). */
+function phaseColor(phaseId: string | null): string | null {
+  if (!phaseId) return null
+  let h = 0
+  for (let i = 0; i < phaseId.length; i++) h = (h * 31 + phaseId.charCodeAt(i)) % 360
+  return `hsl(${h} 55% 45%)`
+}
+
+function durationMin(it: CalendarItem): number {
+  const s = minutesIntoDay(it.start_at)
+  const e = minutesIntoDay(it.end_at)
+  if (s == null) return 60
+  if (e != null && e > s) return e - s
+  return 60
+}
+
 interface EventDraft {
-  id: string
-  title: string
-  all_day: boolean
-  start_date: string
-  start_time: string
-  end_date: string
-  end_time: string
-  status: string
-  location: string
-  description: string
+  id: string; title: string; all_day: boolean
+  start_date: string; start_time: string; end_date: string; end_time: string
+  status: string; location: string; description: string
+  recurrence: string; recurrence_until: string
 }
 
 function emptyDraft(day: string): EventDraft {
   return {
     id: '', title: '', all_day: true, start_date: day, start_time: '09:00',
     end_date: '', end_time: '', status: 'confirmed', location: '', description: '',
+    recurrence: 'none', recurrence_until: '',
   }
 }
 
-/** Split an ISO value into its date + time (HH:MM) parts for the form inputs. */
 function splitIso(iso: string | null): { date: string; time: string } {
   if (!iso) return { date: '', time: '' }
-  const date = iso.slice(0, 10)
-  const t = iso.length > 10 ? iso.slice(11, 16) : ''
-  return { date, time: t }
+  return { date: iso.slice(0, 10), time: iso.length > 10 ? iso.slice(11, 16) : '' }
 }
 
-/** Re-assemble the form's date + time (or just the date, when all-day). */
 function joinIso(date: string, time: string, allDay: boolean): string {
   if (!date) return ''
   return allDay || !time ? date : `${date}T${time}:00`
 }
 
-export default function CalendarPanel({ projectId }: { projectId: string }) {
+export default function CalendarPanel({ projectId, onOpenPlanning }: {
+  projectId: string; onOpenPlanning?: () => void
+}) {
   const today = new Date()
   const [view, setView] = useState<ViewMode>('month')
   const [anchor, setAnchor] = useState({ year: today.getFullYear(), month: today.getMonth(), day: today.getDate() })
@@ -54,10 +68,10 @@ export default function CalendarPanel({ projectId }: { projectId: string }) {
   const [draft, setDraft] = useState<EventDraft | null>(null)
   const [dragItem, setDragItem] = useState<CalendarItem | null>(null)
   const [overKey, setOverKey] = useState<string | null>(null)
+  const [filters, setFilters] = useState<Filters>(ALL_ON)
 
   const anchorDate = new Date(anchor.year, anchor.month, anchor.day)
 
-  // Visible [from, to] range for the current view — drives the fetch.
   const range = (() => {
     if (view === 'month') {
       const grid = monthMatrix(anchor.year, anchor.month)
@@ -66,6 +80,10 @@ export default function CalendarPanel({ projectId }: { projectId: string }) {
     if (view === 'week') {
       const wk = weekDays(anchorDate)
       return { from: isoDay(wk[0]), to: isoDay(wk[6]) }
+    }
+    if (view === 'agenda') {
+      const from = isoDay(anchorDate)
+      return { from, to: addDaysIso(from, 45) }
     }
     const d = isoDay(anchorDate)
     return { from: d, to: d }
@@ -86,35 +104,70 @@ export default function CalendarPanel({ projectId }: { projectId: string }) {
 
   useEffect(() => { void load() }, [load])
 
-  const itemsForDay = (d: Date): CalendarItem[] => {
+  // Source + cancelled filtering applied everywhere the items are consumed.
+  const visible = useMemo(() => items.filter(it =>
+    filters[it.source] && !(filters.hideCancelled && it.status === 'cancelled'),
+  ), [items, filters])
+
+  const itemsForDay = useCallback((d: Date): CalendarItem[] => {
     const key = isoDay(d)
-    return items
+    return visible
       .filter(it => dayKeyOf(it.start_at) === key)
       .sort((a, b) => a.start_at.localeCompare(b.start_at) || a.title.localeCompare(b.title))
-  }
+  }, [visible])
+
+  // Month view: expand multi-day events so they appear on every day they cover.
+  const monthMap = useMemo(() => {
+    const map = new Map<string, { it: CalendarItem; seg: 'single' | 'start' | 'mid' | 'end' }[]>()
+    for (const it of visible) {
+      const span = daySpan(it.start_at, it.all_day ? it.end_at : null) // timed spans stay single-day
+      for (let i = 0; i < span; i++) {
+        const day = addDaysIso(it.start_at, i)
+        const seg = span === 1 ? 'single' : i === 0 ? 'start' : i === span - 1 ? 'end' : 'mid'
+        const list = map.get(day) ?? []
+        list.push({ it, seg })
+        map.set(day, list)
+      }
+    }
+    for (const list of map.values()) list.sort((a, b) => a.it.start_at.localeCompare(b.it.start_at))
+    return map
+  }, [visible])
 
   function openCreate(day: string) { setDraft(emptyDraft(day)) }
 
-  function openEdit(it: CalendarItem) {
-    if (it.source !== 'event') return // milestones/tasks are edited from Planning; here they only reschedule
-    const s = splitIso(it.start_at)
-    const e = splitIso(it.end_at)
+  const openItem = useCallback(async (it: CalendarItem) => {
+    if (it.source !== 'event') { onOpenPlanning?.(); return } // milestones/tasks live in Planning
+    if (it.recurring) {
+      // Load the base event so the dialog edits the true series (not a shifted occurrence).
+      try {
+        const base = (await api.calendarEvents.list(projectId)).find(e => e.id === it.ref_id)
+        if (base) {
+          const s = splitIso(base.start_at); const e = splitIso(base.end_at)
+          setDraft({
+            id: base.id, title: base.title, all_day: base.all_day,
+            start_date: s.date, start_time: s.time || '09:00', end_date: e.date, end_time: e.time,
+            status: base.status, location: base.location ?? '', description: base.description ?? '',
+            recurrence: base.recurrence, recurrence_until: base.recurrence_until ?? '',
+          })
+          return
+        }
+      } catch { /* fall through */ }
+    }
+    const s = splitIso(it.start_at); const e = splitIso(it.end_at)
     setDraft({
       id: it.ref_id, title: it.title, all_day: it.all_day,
-      start_date: s.date, start_time: s.time || '09:00',
-      end_date: e.date, end_time: e.time,
+      start_date: s.date, start_time: s.time || '09:00', end_date: e.date, end_time: e.time,
       status: it.status ?? 'confirmed', location: '', description: '',
+      recurrence: 'none', recurrence_until: '',
     })
-  }
+  }, [projectId, onOpenPlanning])
 
-  async function reschedule(it: CalendarItem, day: string) {
+  const reschedule = useCallback(async (it: CalendarItem, day: string) => {
+    if (it.recurring) { setError('Recurring events are moved from the event dialog.'); return }
     try {
-      if (it.source === 'milestone') {
-        await api.milestones.update(it.ref_id, { target_date: day })
-      } else if (it.source === 'task') {
-        await api.tasks.update(it.ref_id, { due_at: day })
-      } else {
-        // Preserve the time-of-day for timed events; all-day events move by date.
+      if (it.source === 'milestone') await api.milestones.update(it.ref_id, { target_date: day })
+      else if (it.source === 'task') await api.tasks.update(it.ref_id, { due_at: day })
+      else {
         const start = it.all_day ? day : joinIso(day, it.start_at.slice(11, 16), false)
         await api.calendarEvents.update(it.ref_id, { start_at: start })
       }
@@ -122,16 +175,19 @@ export default function CalendarPanel({ projectId }: { projectId: string }) {
     } catch {
       setError('Could not move that item.')
     }
-  }
+  }, [load])
+
+  // Keyboard reschedule for a focused chip: ←/→ = ±1 day, ↑/↓ = ∓1 week.
+  const nudge = useCallback((it: CalendarItem, deltaDays: number) => {
+    if (it.recurring) return
+    void reschedule(it, addDaysIso(dayKeyOf(it.start_at), deltaDays))
+  }, [reschedule])
 
   function shiftView(dir: -1 | 1) {
-    if (view === 'month') {
-      setAnchor(a => ({ ...addMonths(a.year, a.month, dir), day: 1 }))
-    } else {
-      const step = view === 'week' ? 7 : 1
-      const d = new Date(anchor.year, anchor.month, anchor.day + dir * step)
-      setAnchor({ year: d.getFullYear(), month: d.getMonth(), day: d.getDate() })
-    }
+    if (view === 'month') { setAnchor(a => ({ ...addMonths(a.year, a.month, dir), day: 1 })); return }
+    const step = view === 'week' ? 7 : view === 'agenda' ? 45 : 1
+    const d = new Date(anchor.year, anchor.month, anchor.day + dir * step)
+    setAnchor({ year: d.getFullYear(), month: d.getMonth(), day: d.getDate() })
   }
 
   function goToday() {
@@ -143,7 +199,12 @@ export default function CalendarPanel({ projectId }: { projectId: string }) {
     ? `${MONTH_NAMES[anchor.month]} ${anchor.year}`
     : view === 'week'
       ? (() => { const wk = weekDays(anchorDate); return `${MONTH_NAMES[wk[0].getMonth()]} ${wk[0].getDate()} – ${wk[6].getDate()}, ${wk[6].getFullYear()}` })()
-      : anchorDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+      : view === 'agenda'
+        ? `Upcoming from ${anchorDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+        : anchorDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+
+  const gridProps = { itemsForDay, onCreate: openCreate, onOpen: openItem, onNudge: nudge, today,
+    dragItem, setDragItem, overKey, setOverKey, onDropDay: reschedule }
 
   return (
     <div className="cal-panel">
@@ -155,13 +216,15 @@ export default function CalendarPanel({ projectId }: { projectId: string }) {
           <span className="cal-heading">{heading}</span>
         </div>
         <div className="cal-toolbar-right">
+          <FilterBar filters={filters} setFilters={setFilters} />
           <div className="ab-seg" role="group" aria-label="Calendar view">
-            {(['month', 'week', 'day'] as ViewMode[]).map(v => (
+            {(['month', 'week', 'day', 'agenda'] as ViewMode[]).map(v => (
               <button key={v} type="button" aria-pressed={view === v} className={view === v ? 'active' : ''} onClick={() => setView(v)}>
                 {v[0].toUpperCase() + v.slice(1)}
               </button>
             ))}
           </div>
+          <a className="btn btn-outline btn-sm" href={api.calendar.icsHref(projectId, range)} download title="Export the visible range as an .ics file">Export .ics</a>
           <button type="button" className="btn btn-solid btn-sm" onClick={() => openCreate(isoDay(anchorDate))}>+ New event</button>
         </div>
       </div>
@@ -170,37 +233,87 @@ export default function CalendarPanel({ projectId }: { projectId: string }) {
       {loading && items.length === 0 ? (
         <p className="cal-state">Loading…</p>
       ) : view === 'month' ? (
-        <MonthGrid
-          year={anchor.year} month={anchor.month} today={today}
-          itemsForDay={itemsForDay} onCreate={openCreate} onOpen={openEdit}
-          dragItem={dragItem} setDragItem={setDragItem} overKey={overKey} setOverKey={setOverKey}
-          onDropDay={reschedule}
-        />
+        <MonthGrid year={anchor.year} month={anchor.month} monthMap={monthMap} {...gridProps} />
+      ) : view === 'agenda' ? (
+        <AgendaList from={range.from} to={range.to} itemsForDay={itemsForDay} onOpen={openItem} today={today} />
       ) : (
-        <DayColumns
-          days={view === 'week' ? weekDays(anchorDate) : [anchorDate]} today={today}
-          itemsForDay={itemsForDay} onCreate={openCreate} onOpen={openEdit}
-          dragItem={dragItem} setDragItem={setDragItem} overKey={overKey} setOverKey={setOverKey}
-          onDropDay={reschedule}
-        />
+        <TimeGrid days={view === 'week' ? weekDays(anchorDate) : [anchorDate]} {...gridProps} />
       )}
 
       {draft && (
-        <EventDialog
-          projectId={projectId} draft={draft}
-          onClose={() => setDraft(null)}
-          onSaved={() => { setDraft(null); void load() }}
-        />
+        <EventDialog projectId={projectId} draft={draft}
+          onClose={() => setDraft(null)} onSaved={() => { setDraft(null); void load() }} />
       )}
     </div>
   )
 }
 
-interface GridProps {
+// ── Filters ───────────────────────────────────────────────────────────────
+function FilterBar({ filters, setFilters }: { filters: Filters; setFilters: (f: Filters) => void }) {
+  const toggle = (k: keyof Filters) => setFilters({ ...filters, [k]: !filters[k] })
+  const SRC: { key: Source; label: string }[] = [
+    { key: 'event', label: 'Events' }, { key: 'milestone', label: 'Milestones' }, { key: 'task', label: 'Tasks' },
+  ]
+  return (
+    <div className="cal-filters" role="group" aria-label="Filters">
+      {SRC.map(s => (
+        <label key={s.key} className={`cal-filter cal-filter--${s.key}${filters[s.key] ? ' on' : ''}`}>
+          <input type="checkbox" checked={filters[s.key]} onChange={() => toggle(s.key)} />
+          <span>{s.label}</span>
+        </label>
+      ))}
+      <label className={`cal-filter${filters.hideCancelled ? ' on' : ''}`}>
+        <input type="checkbox" checked={filters.hideCancelled} onChange={() => toggle('hideCancelled')} />
+        <span>Hide cancelled</span>
+      </label>
+    </div>
+  )
+}
+
+// ── Chip (shared) ─────────────────────────────────────────────────────────
+interface ChipCbs {
+  onOpen: (it: CalendarItem) => void
+  onNudge?: (it: CalendarItem, delta: number) => void
+  setDragItem?: (it: CalendarItem | null) => void
+}
+function Chip({ it, seg = 'single', style, onOpen, onNudge, setDragItem }: ChipCbs & {
+  it: CalendarItem; seg?: 'single' | 'start' | 'mid' | 'end'; style?: React.CSSProperties
+}) {
+  const timed = !it.all_day && it.start_at.length > 10
+  const showText = seg === 'single' || seg === 'start'
+  const dotColor = phaseColor(it.phase_id)
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!onNudge) return
+    const map: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }
+    if (e.key in map) { e.preventDefault(); onNudge(it, map[e.key]) }
+  }
+  return (
+    <button
+      type="button"
+      className={`cal-chip cal-chip--${it.source} cal-chip--${seg}${it.status === 'cancelled' ? ' cal-chip--cancelled' : ''}`}
+      style={style}
+      draggable={!it.recurring && Boolean(setDragItem)}
+      onDragStart={() => setDragItem?.(it)}
+      onDragEnd={() => setDragItem?.(null)}
+      onClick={() => onOpen(it)}
+      onKeyDown={onKeyDown}
+      title={`${it.title}${it.status ? ` · ${it.status}` : ''}${it.recurring ? ' · repeats' : ''}${onNudge && !it.recurring ? ' · arrow keys to move' : ''}`}
+    >
+      <span className="cal-chip-dot" aria-hidden="true" style={dotColor ? { background: dotColor } : undefined} />
+      {showText && timed && <span className="cal-chip-time">{timeLabel(it.start_at)}</span>}
+      {showText && <span className="cal-chip-title">{it.title}</span>}
+      {showText && it.recurring && <span className="cal-chip-rec" aria-hidden="true">↻</span>}
+    </button>
+  )
+}
+
+// ── Month grid ────────────────────────────────────────────────────────────
+interface GridBase {
   today: Date
   itemsForDay: (d: Date) => CalendarItem[]
   onCreate: (day: string) => void
   onOpen: (it: CalendarItem) => void
+  onNudge: (it: CalendarItem, delta: number) => void
   dragItem: CalendarItem | null
   setDragItem: (it: CalendarItem | null) => void
   overKey: string | null
@@ -208,28 +321,8 @@ interface GridProps {
   onDropDay: (it: CalendarItem, day: string) => void
 }
 
-function Chip({ it, onOpen, setDragItem }: {
-  it: CalendarItem; onOpen: (it: CalendarItem) => void; setDragItem: (it: CalendarItem | null) => void
-}) {
-  const timed = !it.all_day && it.start_at.length > 10
-  return (
-    <button
-      type="button"
-      className={`cal-chip cal-chip--${it.source}${it.status === 'cancelled' ? ' cal-chip--cancelled' : ''}`}
-      draggable
-      onDragStart={() => setDragItem(it)}
-      onDragEnd={() => setDragItem(null)}
-      onClick={() => onOpen(it)}
-      title={`${it.title}${it.status ? ` · ${it.status}` : ''}`}
-    >
-      <span className="cal-chip-dot" aria-hidden="true" />
-      {timed && <span className="cal-chip-time">{timeLabel(it.start_at)}</span>}
-      <span className="cal-chip-title">{it.title}</span>
-    </button>
-  )
-}
-
-function MonthGrid({ year, month, today, itemsForDay, onCreate, onOpen, setDragItem, overKey, setOverKey, onDropDay, dragItem }: GridProps & { year: number; month: number }) {
+function MonthGrid({ year, month, monthMap, today, onCreate, onOpen, onNudge, setDragItem, overKey, setOverKey, onDropDay, dragItem }:
+  GridBase & { year: number; month: number; monthMap: Map<string, { it: CalendarItem; seg: 'single' | 'start' | 'mid' | 'end' }[]> }) {
   const weeks = monthMatrix(year, month)
   return (
     <div className="cal-month">
@@ -239,7 +332,7 @@ function MonthGrid({ year, month, today, itemsForDay, onCreate, onOpen, setDragI
       <div className="cal-grid">
         {weeks.flat().map(d => {
           const key = isoDay(d)
-          const dayItems = itemsForDay(d)
+          const dayItems = monthMap.get(key) ?? []
           const inMonth = d.getMonth() === month
           return (
             <div
@@ -255,7 +348,9 @@ function MonthGrid({ year, month, today, itemsForDay, onCreate, onOpen, setDragI
                 </button>
               </div>
               <div className="cal-cell-items">
-                {dayItems.map(it => <Chip key={it.id} it={it} onOpen={onOpen} setDragItem={setDragItem} />)}
+                {dayItems.map(({ it, seg }) => (
+                  <Chip key={it.id + seg} it={it} seg={seg} onOpen={onOpen} onNudge={onNudge} setDragItem={setDragItem} />
+                ))}
               </div>
             </div>
           )
@@ -265,30 +360,74 @@ function MonthGrid({ year, month, today, itemsForDay, onCreate, onOpen, setDragI
   )
 }
 
-function DayColumns({ days, today, itemsForDay, onCreate, onOpen, setDragItem, overKey, setOverKey, onDropDay, dragItem }: GridProps & { days: Date[] }) {
+// ── Week / day time grid ──────────────────────────────────────────────────
+function TimeGrid({ days, today, itemsForDay, onCreate, onOpen, onNudge, setDragItem, overKey, setOverKey, onDropDay, dragItem }:
+  GridBase & { days: Date[] }) {
   return (
-    <div className={`cal-cols cal-cols--${days.length}`}>
+    <div className={`cal-timegrid cal-timegrid--${days.length}`}>
+      <div className="cal-tg-gutter">
+        <div className="cal-tg-corner" />
+        {DAY_HOURS.map(h => (
+          <div key={h} className="cal-tg-hour" style={{ height: HOUR_PX }}>
+            <span>{h === 0 ? '' : `${h % 12 === 0 ? 12 : h % 12}${h < 12 ? 'am' : 'pm'}`}</span>
+          </div>
+        ))}
+      </div>
       {days.map(d => {
         const key = isoDay(d)
         const dayItems = itemsForDay(d)
+        const allDay = dayItems.filter(it => minutesIntoDay(it.start_at) == null)
+        const timed = dayItems.filter(it => minutesIntoDay(it.start_at) != null)
+        // Lane packing so overlapping events sit side by side.
+        const sorted = [...timed].sort((a, b) => (minutesIntoDay(a.start_at)! - minutesIntoDay(b.start_at)!))
+        const laneEnds: number[] = []
+        const placed = sorted.map(it => {
+          const s = minutesIntoDay(it.start_at)!; const e = s + durationMin(it)
+          let lane = laneEnds.findIndex(end => end <= s)
+          if (lane === -1) { lane = laneEnds.length; laneEnds.push(e) } else laneEnds[lane] = e
+          return { it, lane, s, e }
+        })
+        const lanes = Math.max(1, laneEnds.length)
         return (
-          <div
-            key={key}
-            className={`cal-col${isSameDay(d, today) ? ' cal-col--today' : ''}${overKey === key ? ' cal-col--over' : ''}`}
-            onDragOver={e => { if (dragItem) { e.preventDefault(); if (overKey !== key) setOverKey(key) } }}
-            onDragLeave={() => setOverKey(overKey === key ? null : overKey)}
-            onDrop={() => { if (dragItem) onDropDay(dragItem, key); setOverKey(null) }}
-          >
-            <div className="cal-col-head">
+          <div key={key} className={`cal-tg-day${isSameDay(d, today) ? ' cal-tg-day--today' : ''}${overKey === key ? ' cal-tg-day--over' : ''}`}>
+            <div className="cal-tg-dayhead">
               <span className="cal-col-name">{WEEKDAY_NAMES[d.getDay()]}</span>
               <button type="button" className={`cal-daynum${isSameDay(d, today) ? ' cal-daynum--today' : ''}`} onClick={() => onCreate(key)} aria-label={`Add event on ${key}`}>
                 {d.getDate()}
               </button>
             </div>
-            <div className="cal-col-items">
-              {dayItems.length === 0
-                ? <p className="cal-col-empty">No items</p>
-                : dayItems.map(it => <Chip key={it.id} it={it} onOpen={onOpen} setDragItem={setDragItem} />)}
+            <div className="cal-tg-allday"
+              onDragOver={e => { if (dragItem) { e.preventDefault(); if (overKey !== key) setOverKey(key) } }}
+              onDragLeave={() => setOverKey(overKey === key ? null : overKey)}
+              onDrop={() => { if (dragItem) onDropDay(dragItem, key); setOverKey(null) }}>
+              {allDay.length === 0
+                ? <span className="cal-tg-allday-empty">—</span>
+                : allDay.map(it => <Chip key={it.id} it={it} onOpen={onOpen} onNudge={onNudge} setDragItem={setDragItem} />)}
+            </div>
+            <div className="cal-tg-body" style={{ height: DAY_HOURS.length * HOUR_PX }}>
+              {DAY_HOURS.map(h => <div key={h} className="cal-tg-line" style={{ top: h * HOUR_PX }} />)}
+              {placed.map(({ it, lane, s, e }) => (
+                <button
+                  key={it.id}
+                  type="button"
+                  className={`cal-tg-event cal-chip--${it.source}${it.status === 'cancelled' ? ' cal-chip--cancelled' : ''}`}
+                  style={{
+                    top: (s / 60) * HOUR_PX,
+                    height: Math.max(((e - s) / 60) * HOUR_PX - 2, 16),
+                    left: `calc(${(lane / lanes) * 100}% + 2px)`,
+                    width: `calc(${100 / lanes}% - 4px)`,
+                    borderLeftColor: phaseColor(it.phase_id) ?? undefined,
+                  }}
+                  draggable={!it.recurring}
+                  onDragStart={() => setDragItem(it)}
+                  onDragEnd={() => setDragItem(null)}
+                  onClick={() => onOpen(it)}
+                  title={`${it.title} · ${timeLabel(it.start_at)}`}
+                >
+                  <span className="cal-tg-event-time">{timeLabel(it.start_at)}</span>
+                  <span className="cal-tg-event-title">{it.title}</span>
+                </button>
+              ))}
             </div>
           </div>
         )
@@ -297,6 +436,36 @@ function DayColumns({ days, today, itemsForDay, onCreate, onOpen, setDragItem, o
   )
 }
 
+// ── Agenda list ───────────────────────────────────────────────────────────
+function AgendaList({ from, to, itemsForDay, onOpen, today }: {
+  from: string; to: string; itemsForDay: (d: Date) => CalendarItem[]; onOpen: (it: CalendarItem) => void; today: Date
+}) {
+  const days: Date[] = []
+  for (let cur = from; cur <= to; cur = addDaysIso(cur, 1)) {
+    const [y, m, d] = cur.split('-').map(Number)
+    days.push(new Date(y, m - 1, d))
+  }
+  const rows = days.map(d => ({ d, items: itemsForDay(d) })).filter(r => r.items.length > 0)
+  if (rows.length === 0) return <p className="cal-state">Nothing scheduled in this range.</p>
+  return (
+    <div className="cal-agenda">
+      {rows.map(({ d, items }) => (
+        <div key={isoDay(d)} className="cal-agenda-day">
+          <div className={`cal-agenda-date${isSameDay(d, today) ? ' cal-agenda-date--today' : ''}`}>
+            <span className="cal-agenda-dow">{WEEKDAY_NAMES[d.getDay()]}</span>
+            <span className="cal-agenda-num">{d.getDate()}</span>
+            <span className="cal-agenda-mon">{MONTH_NAMES[d.getMonth()].slice(0, 3)}</span>
+          </div>
+          <div className="cal-agenda-items">
+            {items.map(it => <Chip key={it.id} it={it} onOpen={onOpen} />)}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Event dialog ──────────────────────────────────────────────────────────
 function EventDialog({ projectId, draft, onClose, onSaved }: {
   projectId: string; draft: EventDraft; onClose: () => void; onSaved: () => void
 }) {
@@ -314,18 +483,15 @@ function EventDialog({ projectId, draft, onClose, onSaved }: {
     setSaving(true); setErr(null)
     const start = joinIso(form.start_date, form.start_time, form.all_day)
     const end = form.end_date ? joinIso(form.end_date, form.end_time, form.all_day) : null
+    const payload = {
+      title: form.title, start_at: start, end_at: end, all_day: form.all_day,
+      status: form.status, location: form.location || undefined, description: form.description || undefined,
+      recurrence: form.recurrence,
+      recurrence_until: form.recurrence !== 'none' && form.recurrence_until ? form.recurrence_until : null,
+    }
     try {
-      if (editing) {
-        await api.calendarEvents.update(form.id, {
-          title: form.title, start_at: start, end_at: end, all_day: form.all_day,
-          status: form.status, location: form.location || undefined, description: form.description || undefined,
-        })
-      } else {
-        await api.calendarEvents.create(projectId, {
-          title: form.title, start_at: start, end_at: end, all_day: form.all_day,
-          status: form.status, location: form.location || undefined, description: form.description || undefined,
-        })
-      }
+      if (editing) await api.calendarEvents.update(form.id, payload)
+      else await api.calendarEvents.create(projectId, payload)
       onSaved()
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : String(ex))
@@ -337,14 +503,9 @@ function EventDialog({ projectId, draft, onClose, onSaved }: {
   async function remove() {
     if (!editing) return
     setSaving(true); setErr(null)
-    try {
-      await api.calendarEvents.remove(form.id)
-      onSaved()
-    } catch (ex) {
-      setErr(ex instanceof Error ? ex.message : String(ex))
-    } finally {
-      setSaving(false)
-    }
+    try { await api.calendarEvents.remove(form.id); onSaved() }
+    catch (ex) { setErr(ex instanceof Error ? ex.message : String(ex)) }
+    finally { setSaving(false) }
   }
 
   return (
@@ -385,6 +546,22 @@ function EventDialog({ projectId, draft, onClose, onSaved }: {
               <span>Time</span>
               <input type="time" className="input input-sm" value={form.end_time}
                 onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
+            </label>
+          )}
+        </div>
+        <div className="cal-field-row">
+          <label className="cal-field">
+            <span>Repeats</span>
+            <select className="input select input-sm" value={form.recurrence}
+              onChange={e => setForm(f => ({ ...f, recurrence: e.target.value }))}>
+              {RECURRENCES.map(r => <option key={r} value={r}>{r === 'none' ? 'Does not repeat' : r}</option>)}
+            </select>
+          </label>
+          {form.recurrence !== 'none' && (
+            <label className="cal-field">
+              <span>Until</span>
+              <input type="date" className="input input-sm" value={form.recurrence_until}
+                onChange={e => setForm(f => ({ ...f, recurrence_until: e.target.value }))} />
             </label>
           )}
         </div>
