@@ -29,8 +29,10 @@ def create_phase(
 ) -> PhaseRead:
     try:
         return phase_service.create_phase(session, project_id, data)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    except ValueError as exc:
+        if "project" in str(exc) and "not found" in str(exc):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 
 
 @router.patch("/phases/{phase_id}", response_model=PhaseRead)
@@ -39,7 +41,10 @@ def update_phase(
     data: PhaseUpdate,
     session: Session = Depends(get_session),
 ) -> PhaseRead:
-    phase = phase_service.update_phase(session, phase_id, data)
+    try:
+        phase = phase_service.update_phase(session, phase_id, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if phase is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Phase not found")
     return phase

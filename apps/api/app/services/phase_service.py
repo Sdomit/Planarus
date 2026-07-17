@@ -11,8 +11,14 @@ from app.models.project import Project
 from app.models.stage import Stage
 from app.models.task import Task
 from app.schemas.phase import PhaseCreate, PhaseUpdate
+from app.services import status_option_service
 from app.services.audit_service import create_audit_event
 from app.services.planning_reorder import apply_reorder
+
+
+def _validate_status(session: Session, project_id: str, status: str) -> None:
+    if status not in status_option_service.allowed_status_keys(session, project_id, "phase"):
+        raise ValueError(f"status '{status}' is not defined for this project")
 
 
 def list_phases(session: Session, project_id: str) -> list[Phase]:
@@ -31,6 +37,7 @@ def get_phase(session: Session, phase_id: str) -> Optional[Phase]:
 def create_phase(session: Session, project_id: str, data: PhaseCreate) -> Phase:
     if session.get(Project, project_id) is None:
         raise ValueError(f"project '{project_id}' not found")
+    _validate_status(session, project_id, data.status)
 
     sort_order = data.sort_order
     if sort_order is None:
@@ -73,6 +80,8 @@ def update_phase(
         return None
 
     update_data = data.model_dump(exclude_unset=True)
+    if update_data.get("status") is not None:
+        _validate_status(session, phase.project_id, update_data["status"])
     now = now_utc()
     for key, value in update_data.items():
         setattr(phase, key, value)

@@ -19,7 +19,7 @@ export function nextStatusForColumn(itemStatus: string, col: Pick<BoardCol, 'sta
  * per-card actions are rendered by `renderCard`.
  */
 export function EntityBoard<T extends { id: string }>({
-  items, columns, statusOf, onRestatus, renderCard, hint = 'Drag a card to change its status',
+  items, columns, statusOf, onRestatus, renderCard, hint = 'Drag a card to change its status', onAddColumn,
 }: {
   items: T[]
   columns: BoardCol[]
@@ -27,6 +27,7 @@ export function EntityBoard<T extends { id: string }>({
   onRestatus: (item: T, status: string) => void
   renderCard: (item: T) => ReactNode
   hint?: string
+  onAddColumn?: () => void
 }) {
   const [dragId, setDragId] = useState<string | null>(null)
   const [overCol, setOverCol] = useState<string | null>(null)
@@ -78,6 +79,11 @@ export function EntityBoard<T extends { id: string }>({
               </div>
             )
           })}
+          {onAddColumn && (
+            <div className="ab-col ab-col-add">
+              <button type="button" className="ab-col-add-btn" onClick={onAddColumn}>+ Add column</button>
+            </div>
+          )}
         </div>
       </div>
     </>

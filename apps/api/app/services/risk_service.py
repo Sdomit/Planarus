@@ -6,11 +6,17 @@ from app.core.utils import new_id, now_utc
 from app.models.project import Project
 from app.models.risk import Risk
 from app.schemas.risk import RiskCreate, RiskUpdate
+from app.services import status_option_service
 from app.services.audit_service import create_audit_event
 from app.services.planning_reorder import apply_reorder
 
 _CLOSED_STATUSES = frozenset({"mitigated", "accepted", "closed"})
 _SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+
+
+def _validate_status(session: Session, project_id: str, status: str) -> None:
+    if status not in status_option_service.allowed_status_keys(session, project_id, "risk"):
+        raise ValueError(f"status '{status}' is not defined for this project")
 
 
 def list_risks(session: Session, project_id: str) -> list[Risk]:
@@ -30,6 +36,7 @@ def get_risk(session: Session, risk_id: str) -> Optional[Risk]:
 def create_risk(session: Session, project_id: str, data: RiskCreate) -> Risk:
     if session.get(Project, project_id) is None:
         raise ValueError(f"project '{project_id}' not found")
+    _validate_status(session, project_id, data.status)
 
     now = now_utc()
     risk = Risk(
@@ -64,6 +71,8 @@ def update_risk(session: Session, risk_id: str, data: RiskUpdate) -> Optional[Ri
         return None
 
     update_data = data.model_dump(exclude_unset=True)
+    if update_data.get("status") is not None:
+        _validate_status(session, risk.project_id, update_data["status"])
     now = now_utc()
     for key, value in update_data.items():
         setattr(risk, key, value)
