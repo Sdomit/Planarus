@@ -17,6 +17,7 @@ class TaskCreate(BaseModel):
     due_at: Optional[str] = None
     phase_id: Optional[str] = None
     stage_id: Optional[str] = None
+    parent_task_id: Optional[str] = None
 
     @field_validator("status")
     @classmethod
@@ -42,6 +43,7 @@ class TaskUpdate(BaseModel):
     due_at: Optional[str] = None
     phase_id: Optional[str] = None
     stage_id: Optional[str] = None
+    parent_task_id: Optional[str] = None
 
     @field_validator("status")
     @classmethod
@@ -63,6 +65,7 @@ class TaskRead(BaseModel):
     project_id: str
     phase_id: Optional[str]
     stage_id: Optional[str]
+    parent_task_id: Optional[str]
     title: str
     description: Optional[str]
     status: str

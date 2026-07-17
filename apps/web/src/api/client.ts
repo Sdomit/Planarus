@@ -83,6 +83,7 @@ export interface Task {
   project_id: string
   phase_id: string | null
   stage_id: string | null
+  parent_task_id: string | null
   title: string
   description: string | null
   status: string
@@ -751,12 +752,13 @@ export const api = {
         priority?: string
         phase_id?: string
         stage_id?: string
+        parent_task_id?: string
       },
     ) =>
       request<Task>(`/projects/${projectId}/tasks`, { method: 'POST', body: JSON.stringify(data) }),
     update: (
       id: string,
-      data: Partial<Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'phase_id' | 'stage_id' | 'due_at'>>,
+      data: Partial<Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'phase_id' | 'stage_id' | 'due_at' | 'parent_task_id'>>,
     ) =>
       request<Task>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remove: (id: string) => request<void>(`/tasks/${id}`, { method: 'DELETE' }),

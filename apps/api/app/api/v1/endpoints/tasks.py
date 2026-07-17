@@ -29,8 +29,11 @@ def create_task(
 ) -> TaskRead:
     try:
         return task_service.create_task(session, project_id, data)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    except ValueError as exc:
+        # Project-not-found → 404; a validation error (e.g. illegal nesting) → 422.
+        if "project" in str(exc) and "not found" in str(exc):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
