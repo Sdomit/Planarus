@@ -322,6 +322,48 @@ export interface GitRepoLink {
   checked_at: string
 }
 
+// --- Repo cockpit snapshot (Phase 12a) --------------------------------------
+
+export interface GitBranch {
+  name: string
+  is_current: boolean
+  upstream: string | null
+  ahead: number | null
+  behind: number | null
+  gone: boolean
+  committed_at: string | null
+  ahead_of_default: number | null
+  behind_default: number | null
+}
+
+export interface GitWorkingTree {
+  staged: number
+  unstaged: number
+  untracked: number
+  conflicted: number
+  ahead: number | null
+  behind: number | null
+}
+
+export interface GitSnapshot {
+  project_id: string
+  repo_path: string | null
+  is_repo: boolean
+  message: string | null
+  checked_at: string
+  current_branch: string | null
+  detached: boolean
+  default_branch: string | null
+  last_commit_sha: string | null
+  last_commit_subject: string | null
+  remote_url: string | null
+  branches: GitBranch[]
+  branches_total: number
+  needs_merge: string[]
+  working_tree: GitWorkingTree | null
+  last_fetched_at: string | null
+}
+
 export interface WorkspaceCreate {
   name: string
   slug: string
@@ -968,6 +1010,7 @@ export const api = {
   },
   git: {
     get: (projectId: string) => request<GitRepoLink>(`/projects/${projectId}/git`),
+    snapshot: (projectId: string) => request<GitSnapshot>(`/projects/${projectId}/git/snapshot`),
   },
   contextPack: {
     profiles: () => request<ContextPackProfilesResponse>('/context-pack/profiles'),

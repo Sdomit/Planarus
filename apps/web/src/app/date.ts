@@ -32,6 +32,17 @@ export function timeLabel(iso: string): string {
   return isNaN(d.getTime()) ? iso : d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 }
 
+/** Compact relative age: "just now", "5m ago", "3h ago", "2d ago". */
+export function agoLabel(iso: string, now = new Date()): string {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return iso
+  const s = Math.max(0, Math.floor((now.getTime() - d.getTime()) / 1000))
+  if (s < 60) return 'just now'
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`
+  if (s < 86_400) return `${Math.floor(s / 3600)}h ago`
+  return `${Math.floor(s / 86_400)}d ago`
+}
+
 export const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
