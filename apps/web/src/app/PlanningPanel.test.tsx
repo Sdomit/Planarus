@@ -16,12 +16,12 @@ describe('nextStatusForColumn', () => {
 vi.mock('../api/client', () => ({
   api: {
     projects: { get: vi.fn() },
-    phases: { list: vi.fn(), create: vi.fn(), update: vi.fn() },
+    phases: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(), reorder: vi.fn() },
     stages: { list: vi.fn() },
-    tasks: { list: vi.fn(), create: vi.fn(), update: vi.fn() },
-    milestones: { list: vi.fn(), create: vi.fn() },
-    decisions: { list: vi.fn(), create: vi.fn() },
-    risks: { list: vi.fn(), create: vi.fn() },
+    tasks: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(), reorder: vi.fn() },
+    milestones: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(), reorder: vi.fn() },
+    decisions: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(), reorder: vi.fn() },
+    risks: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(), reorder: vi.fn() },
     blockers: { list: vi.fn(), create: vi.fn() },
     comments: { list: vi.fn(), create: vi.fn() },
     links: { list: vi.fn(), create: vi.fn() },
@@ -249,7 +249,7 @@ describe('PlanningPanel', () => {
     render(<PlanningPanel projectId="proj_1" />)
     await screen.findByText('Test Project')
     fireEvent.click(screen.getByRole('tab', { name: 'Tasks' }))
-    fireEvent.click(screen.getByRole('button', { name: /Connect roadmap/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Connect roadmap' }))
     fireEvent.change(screen.getByLabelText('Phase'), { target: { value: phase.id } })
 
     await waitFor(() => expect(mockApi.tasks.update).toHaveBeenCalledWith('tsk_1', {
@@ -258,10 +258,28 @@ describe('PlanningPanel', () => {
     }))
   })
 
-  it('expands a phase to reveal its description and patches status', async () => {
+  it('expands a phase to reveal its description', async () => {
     setupEmpty()
     const phase = {
       id: 'ph_1', project_id: 'proj_1', title: 'Foundation', description: 'Groundwork and scaffolding',
+      status: 'planned', sort_order: 0,
+      created_at: '2026-07-13T00:00:00+00:00', updated_at: '2026-07-13T00:00:00+00:00',
+    }
+    mockApi.phases.list.mockResolvedValue([phase])
+
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    // description is hidden until the row is expanded
+    expect(screen.queryByText('Groundwork and scaffolding')).toBeNull()
+    // The row's main toggle button is named exactly by its title.
+    fireEvent.click(screen.getByRole('button', { name: 'Foundation' }))
+    expect(screen.getByText('Groundwork and scaffolding')).toBeTruthy()
+  })
+
+  it('changes a phase status inline via the status badge popover', async () => {
+    setupEmpty()
+    const phase = {
+      id: 'ph_1', project_id: 'proj_1', title: 'Foundation', description: null,
       status: 'planned', sort_order: 0,
       created_at: '2026-07-13T00:00:00+00:00', updated_at: '2026-07-13T00:00:00+00:00',
     }
@@ -270,11 +288,8 @@ describe('PlanningPanel', () => {
 
     render(<PlanningPanel projectId="proj_1" />)
     await screen.findByText('Test Project')
-    // description is hidden until the row is expanded
-    expect(screen.queryByText('Groundwork and scaffolding')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /Foundation/ }))
-    expect(screen.getByText('Groundwork and scaffolding')).toBeTruthy()
-    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'active' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Change status of Foundation' }))
+    fireEvent.click(screen.getByRole('option', { name: 'active' }))
     await waitFor(() => expect(mockApi.phases.update).toHaveBeenCalledWith('ph_1', { status: 'active' }))
   })
 })

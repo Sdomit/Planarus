@@ -5,7 +5,7 @@ from sqlmodel import Session, select
 from app.core.utils import new_id, now_utc
 from app.models.comment import Comment
 from app.models.project import Project
-from app.schemas.comment import CommentCreate
+from app.schemas.comment import CommentCreate, CommentUpdate
 from app.services.audit_service import create_audit_event
 from app.services.entity_ref import validate_entity_ref
 
@@ -52,3 +52,45 @@ def create_comment(session: Session, project_id: str, data: CommentCreate) -> Co
     session.commit()
     session.refresh(comment)
     return comment
+
+
+def update_comment(
+    session: Session, comment_id: str, data: CommentUpdate
+) -> Optional[Comment]:
+    comment = session.get(Comment, comment_id)
+    if comment is None:
+        return None
+    update_data = data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(comment, key, value)
+    comment.updated_at = now_utc()
+    session.add(comment)
+    create_audit_event(
+        session,
+        event_type="update",
+        actor_type="human",
+        entity_type="comment",
+        entity_id=comment_id,
+        project_id=comment.project_id,
+    )
+    session.commit()
+    session.refresh(comment)
+    return comment
+
+
+def delete_comment(session: Session, comment_id: str) -> bool:
+    comment = session.get(Comment, comment_id)
+    if comment is None:
+        return False
+    project_id = comment.project_id
+    session.delete(comment)
+    create_audit_event(
+        session,
+        event_type="delete",
+        actor_type="human",
+        entity_type="comment",
+        entity_id=comment_id,
+        project_id=project_id,
+    )
+    session.commit()
+    return True

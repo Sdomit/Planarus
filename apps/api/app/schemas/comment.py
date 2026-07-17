@@ -2,10 +2,11 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.constants import COMMENT_AUTHOR_TYPES, REF_ENTITY_TYPES
+from app.core.constants import COMMENT_AUTHOR_TYPES, COMMENT_STATUSES, REF_ENTITY_TYPES
 
 _ENTITY_TYPES = frozenset(REF_ENTITY_TYPES)
 _AUTHOR_TYPES = frozenset(COMMENT_AUTHOR_TYPES)
+_COMMENT_STATUSES = frozenset(COMMENT_STATUSES)
 
 
 class CommentCreate(BaseModel):
@@ -33,6 +34,20 @@ class CommentCreate(BaseModel):
         return v
 
 
+class CommentUpdate(BaseModel):
+    body: Optional[str] = Field(default=None, min_length=1, max_length=10000)
+    status: Optional[str] = None
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in _COMMENT_STATUSES:
+            raise ValueError(
+                f"status must be one of: {', '.join(sorted(_COMMENT_STATUSES))}"
+            )
+        return v
+
+
 class CommentRead(BaseModel):
     id: str
     project_id: str
@@ -40,6 +55,8 @@ class CommentRead(BaseModel):
     entity_id: str
     body: str
     author_type: str
+    status: str
     created_at: str
+    updated_at: Optional[str]
 
     model_config = {"from_attributes": True}

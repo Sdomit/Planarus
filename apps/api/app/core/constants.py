@@ -326,6 +326,13 @@ def calendar_connection_provider_check_sql(column: str = "provider") -> str:
 # approval-gated agent comment can be attributed without a schema change later.
 COMMENT_AUTHOR_TYPES: tuple[str, ...] = ("human", "agent", "system")
 
+# Phase 15.7: a comment can be triaged active / done / needs-attention.
+COMMENT_STATUSES: tuple[str, ...] = ("active", "done", "attention")
+
+
+def comment_status_check_sql(column: str = "status") -> str:
+    return _check_sql(column, COMMENT_STATUSES)
+
 
 def comment_entity_type_check_sql(column: str = "entity_type") -> str:
     return _check_sql(column, REF_ENTITY_TYPES)

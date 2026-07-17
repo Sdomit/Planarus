@@ -193,3 +193,28 @@ body {
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.1), 0 5px 12px rgba(var(--ab-brand-cool-rgb), 0.08);
 }
 .ab-meter > span { background: linear-gradient(90deg, var(--accent), var(--ab-brand-cool-strong)); }
+
+/* Phase 15.9: reusable kebab actions menu */
+.ab-menu { position: relative; display: inline-flex; }
+.ab-menu-btn2 {
+  display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+  border: none; background: none; cursor: pointer; color: var(--text-tertiary); border-radius: var(--radius-sm);
+}
+.ab-menu-btn2:hover { background: var(--bg-muted); color: var(--text-primary); }
+.ab-menu-pop {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 30; min-width: 160px;
+  display: flex; flex-direction: column; padding: var(--space-1-5);
+  background: var(--bg-surface); border: 1px solid var(--border-default);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+}
+.ab-menu-item {
+  display: flex; align-items: center; padding: var(--space-1-5) var(--space-2); border: none; background: none;
+  cursor: pointer; text-align: left; border-radius: var(--radius-sm); color: var(--text-primary);
+  font-size: var(--text-sm); text-transform: capitalize;
+}
+.ab-menu-item:hover { background: var(--bg-muted); }
+.ab-menu-item.danger { color: var(--status-danger-fg, var(--cd-500)); }
+.ab-menu-label {
+  padding: var(--space-1-5) var(--space-2) var(--space-1); font-size: 11px; font-weight: 600;
+  color: var(--text-tertiary); text-transform: uppercase; letter-spacing: var(--tracking-wide);
+}

@@ -3,6 +3,7 @@ from sqlmodel import Session
 
 from app.db.session import get_session
 from app.schemas.decision import DecisionCreate, DecisionRead, DecisionUpdate
+from app.schemas.reorder import ReorderRequest
 from app.services import decision_service
 
 router = APIRouter()
@@ -44,6 +45,24 @@ def update_decision(
             status_code=status.HTTP_404_NOT_FOUND, detail="Decision not found"
         )
     return decision
+
+
+@router.post(
+    "/projects/{project_id}/decisions/reorder", response_model=list[DecisionRead]
+)
+def reorder_decisions(
+    project_id: str,
+    data: ReorderRequest,
+    session: Session = Depends(get_session),
+) -> list[DecisionRead]:
+    try:
+        return decision_service.reorder_decisions(session, project_id, data.ids)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        )
 
 
 @router.delete("/decisions/{decision_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -3,7 +3,15 @@ import {
   api, Blocker, ChecklistItem, Comment, Decision, Link, Milestone, Phase, Project, Risk, Stage, Task,
 } from '../api/client'
 import { StatusBadge } from './StatusBadge'
+import { InlineStatusSelect } from './InlineStatusSelect'
+import { RowActions } from './RowActions'
+import { useListReorder } from './useListReorder'
+import { EntityBoard, nextStatusForColumn as nextStatusForCol } from './EntityBoard'
+import { Markdown } from './markdown'
 import './planning-panel.css'
+
+// Re-exported for tests + existing callers; the implementation now lives in EntityBoard.
+export const nextStatusForColumn = nextStatusForCol
 
 type TabKey = 'phases' | 'tasks' | 'milestones' | 'decisions' | 'risks' | 'comments' | 'links'
 
@@ -25,6 +33,7 @@ const DECISION_STATUSES = ['proposed', 'accepted', 'superseded', 'reversed']
 const RISK_SEVERITIES = ['low', 'medium', 'high', 'critical']
 const RISK_STATUSES = ['open', 'monitoring', 'mitigated', 'accepted', 'closed']
 const BLOCKER_STATUSES = ['open', 'resolved', 'canceled']
+const COMMENT_STATUSES = ['active', 'done', 'attention']
 
 type BoardCol = { key: string; label: string; statuses: string[]; dot: string }
 
@@ -46,10 +55,29 @@ const STATUS_COLS: BoardCol[] = TASK_STATUSES.map(s => ({
   key: s, label: s.replace(/_/g, ' '), statuses: [s], dot: STATUS_DOT[s] ?? 'var(--text-tertiary)',
 }))
 
-/** Status a task takes when dropped on `col`; null when it already fits there (no change / no write). */
-export function nextStatusForColumn(taskStatus: string, col: Pick<BoardCol, 'statuses'>): string | null {
-  return col.statuses.includes(taskStatus) ? null : col.statuses[0]
+// One-column-per-status board configs for the non-task entities.
+const PHASE_DOT: Record<string, string> = {
+  planned: 'var(--text-tertiary)', active: 'var(--status-info-fg)', blocked: 'var(--status-danger-fg)',
+  done: 'var(--status-success-fg)', canceled: 'var(--text-tertiary)',
 }
+const MILESTONE_DOT: Record<string, string> = {
+  planned: 'var(--text-tertiary)', active: 'var(--status-info-fg)', achieved: 'var(--status-success-fg)',
+  missed: 'var(--status-danger-fg)', canceled: 'var(--text-tertiary)',
+}
+const DECISION_DOT: Record<string, string> = {
+  proposed: 'var(--status-info-fg)', accepted: 'var(--status-success-fg)',
+  superseded: 'var(--text-tertiary)', reversed: 'var(--status-danger-fg)',
+}
+const RISK_STATUS_DOT: Record<string, string> = {
+  open: 'var(--status-danger-fg)', monitoring: 'var(--status-warning-fg)', mitigated: 'var(--status-success-fg)',
+  accepted: 'var(--status-info-fg)', closed: 'var(--text-tertiary)',
+}
+const statusCols = (statuses: string[], dots: Record<string, string>): BoardCol[] =>
+  statuses.map(s => ({ key: s, label: s.replace(/_/g, ' '), statuses: [s], dot: dots[s] ?? 'var(--text-tertiary)' }))
+const PHASE_COLS = statusCols(PHASE_STATUSES, PHASE_DOT)
+const MILESTONE_COLS = statusCols(MILESTONE_STATUSES, MILESTONE_DOT)
+const DECISION_COLS = statusCols(DECISION_STATUSES, DECISION_DOT)
+const RISK_COLS = statusCols(RISK_STATUSES, RISK_STATUS_DOT)
 
 export default function PlanningPanel({
   projectId,
@@ -274,10 +302,10 @@ export default function PlanningPanel({
                   <option value="">Unphased</option>
                   {phases.map(phase => <option key={phase.id} value={phase.id}>{phase.title}</option>)}
                 </select>
-                <select className="input select" value={taskForm.stage_id} aria-label="Task stage"
+                <select className="input select" value={taskForm.stage_id} aria-label="Task sub-phase"
                   disabled={!taskForm.phase_id || taskStages.length === 0}
                   onChange={e => setTaskForm(f => ({ ...f, stage_id: e.target.value }))}>
-                  <option value="">No stage</option>
+                  <option value="">No sub-phase</option>
                   {taskStages.map(stage => <option key={stage.id} value={stage.id}>{stage.title}</option>)}
                 </select>
               </>
@@ -321,7 +349,7 @@ export default function PlanningPanel({
               </>
             )}
             {tab === 'comments' && (
-              <textarea className="input" required placeholder="Add a comment on this project…" aria-label="Project comment"
+              <textarea className="input" required placeholder="Add a comment on this project… (Markdown supported)" aria-label="Project comment"
                 value={commentForm.body} onChange={e => setCommentForm({ body: e.target.value })} />
             )}
             {tab === 'links' && (
@@ -340,34 +368,29 @@ export default function PlanningPanel({
         )}
 
         {tab === 'phases' && (
-          <PhasesList phases={phases} onPhaseUpdated={updated =>
-            setPhases(prev => prev.map(p => p.id === updated.id ? updated : p))
-          } />
+          <PhasesSection phases={phases} projectId={project.id} setPhases={setPhases} />
         )}
         {tab === 'tasks' && (
-          <TasksList tasks={tasks} phases={phases} stages={stages} projectId={project.id} onTaskUpdated={updated =>
+          <TasksList tasks={tasks} phases={phases} stages={stages} projectId={project.id} setTasks={setTasks} onTaskUpdated={updated =>
             setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))
           } />
         )}
         {tab === 'milestones' && (
-          <MilestonesList milestones={milestones} onMilestoneUpdated={updated =>
-            setMilestones(prev => prev.map(m => m.id === updated.id ? updated : m))
-          } />
+          <MilestonesSection milestones={milestones} projectId={project.id} setMilestones={setMilestones} />
         )}
         {tab === 'decisions' && (
-          <DecisionsList decisions={decisions} onDecisionUpdated={updated =>
-            setDecisions(prev => prev.map(d => d.id === updated.id ? updated : d))
-          } />
+          <DecisionsSection decisions={decisions} projectId={project.id} setDecisions={setDecisions} />
         )}
         {tab === 'risks' && (
-          <RisksList
+          <RisksSection
             risks={risks}
             blockers={openBlockers}
-            onRiskUpdated={updated => setRisks(prev => prev.map(r => r.id === updated.id ? updated : r))}
+            projectId={project.id}
+            setRisks={setRisks}
             onBlockerUpdated={updated => setBlockers(prev => prev.map(b => b.id === updated.id ? updated : b))}
           />
         )}
-        {tab === 'comments' && <CommentsList comments={comments} />}
+        {tab === 'comments' && <CommentsSection comments={comments} setComments={setComments} />}
         {tab === 'links' && <LinksList links={links} />}
       </div>
     </div>
@@ -415,39 +438,98 @@ function useRowUpdate<T>(updateFn: (patch: Partial<T>) => Promise<T>, onUpdated:
   return { saving, error, update }
 }
 
-function PhasesList({ phases, onPhaseUpdated }: { phases: Phase[]; onPhaseUpdated: (p: Phase) => void }) {
-  if (phases.length === 0) return <p style={EMPTY}>No phases yet.</p>
+/** View toggle shared by the entity sections. */
+function ViewToggle({ view, setView }: { view: 'list' | 'board'; setView: (v: 'list' | 'board') => void }) {
   return (
-    <ul className="pp-rows">
-      {phases.map(ph => (
-        <PhaseRow key={ph.id} phase={ph} onUpdated={onPhaseUpdated} />
-      ))}
-    </ul>
+    <div className="ab-seg" role="group" aria-label="View">
+      <button type="button" aria-pressed={view === 'list'} className={view === 'list' ? 'active' : ''} onClick={() => setView('list')}>List</button>
+      <button type="button" aria-pressed={view === 'board'} className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>Board</button>
+    </div>
   )
 }
 
-function PhaseRow({ phase, onUpdated }: { phase: Phase; onUpdated: (p: Phase) => void }) {
-  const { saving, error, update } = useRowUpdate(patch => api.phases.update(phase.id, patch), onUpdated)
+/** Inline title editor: the pencil (RowActions) calls `start`; Enter/blur saves. */
+function useEditable(value: string, onSave: (next: string) => void) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+  const start = () => { setDraft(value); setEditing(true) }
+  const node = editing ? (
+    <input
+      className="input input-sm pp-title-edit" autoFocus value={draft}
+      onClick={e => e.stopPropagation()}
+      onChange={e => setDraft(e.target.value)}
+      onBlur={() => { setEditing(false); const t = draft.trim(); if (t && t !== value) onSave(t) }}
+      onKeyDown={e => {
+        if (e.key === 'Enter') { e.preventDefault(); setEditing(false); const t = draft.trim(); if (t && t !== value) onSave(t) }
+        else if (e.key === 'Escape') { setEditing(false) }
+      }}
+    />
+  ) : null
+  return { editing, start, node }
+}
+
+function PhasesSection({ phases, projectId, setPhases }: {
+  phases: Phase[]; projectId: string; setPhases: React.Dispatch<React.SetStateAction<Phase[]>>
+}) {
+  const [view, setView] = useState<'list' | 'board'>('list')
+  const onUpdated = (u: Phase) => setPhases(prev => prev.map(p => (p.id === u.id ? u : p)))
+  const onDeleted = (id: string) => setPhases(prev => prev.filter(p => p.id !== id))
+  const update = (id: string, patch: Parameters<typeof api.phases.update>[1]) => void api.phases.update(id, patch).then(onUpdated)
+  const remove = (id: string) => void api.phases.remove(id).then(() => onDeleted(id))
+  const { itemProps } = useListReorder(phases, next => setPhases(next), ids => api.phases.reorder(projectId, ids))
+
+  if (phases.length === 0) return <p style={EMPTY}>No phases yet.</p>
+
   return (
-    <ExpandableRow
-      id={phase.id}
-      header={<>
-        <span className="pp-row-title">{phase.title}</span>
-        <StatusBadge kind="phase" value={phase.status} />
-      </>}
-    >
-      {phase.description && <p className="pp-row-desc">{phase.description}</p>}
-      <div className="pp-task-controls" role="group" aria-label={`Edit ${phase.title}`}>
-        <label>
-          <span>Status</span>
-          <select className="input select input-sm" value={phase.status} disabled={saving}
-            onChange={e => void update({ status: e.target.value })}>
-            {PHASE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </label>
+    <>
+      <div className="pp-toolbar"><ViewToggle view={view} setView={setView} /></div>
+      {view === 'board' ? (
+        <EntityBoard
+          items={phases} columns={PHASE_COLS} statusOf={p => p.status}
+          onRestatus={(p, status) => update(p.id, { status })}
+          renderCard={p => (
+            <div className="ab-task-foot" style={{ justifyContent: 'space-between' }}>
+              <span className="ab-task-title">{p.title}</span>
+              <RowActions title={p.title} onDelete={() => remove(p.id)} />
+            </div>
+          )}
+        />
+      ) : (
+        <ul className="pp-rows">
+          {phases.map(ph => (
+            <PhaseListRow key={ph.id} phase={ph} update={update} remove={remove} dragProps={itemProps(ph.id)} />
+          ))}
+        </ul>
+      )}
+    </>
+  )
+}
+
+function PhaseListRow({ phase, update, remove, dragProps }: {
+  phase: Phase
+  update: (id: string, patch: Parameters<typeof api.phases.update>[1]) => void
+  remove: (id: string) => void
+  dragProps: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
+}) {
+  const [open, setOpen] = useState(false)
+  const editable = useEditable(phase.title, t => update(phase.id, { title: t }))
+  return (
+    <li className="pp-row pp-row-expandable pp-row-managed" {...dragProps}>
+      <div className="pp-row-main-wrap">
+        <button type="button" className="pp-row-main" onClick={() => setOpen(v => !v)} aria-expanded={open}>
+          <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+          {editable.node ?? <span className="pp-row-title">{phase.title}</span>}
+        </button>
+        <InlineStatusSelect kind="phase" value={phase.status} options={PHASE_STATUSES}
+          onChange={s => update(phase.id, { status: s })} label={`Change status of ${phase.title}`} />
+        <RowActions title={phase.title} onEdit={editable.start} onDelete={() => remove(phase.id)} dragHandle />
       </div>
-      {error && <p className="form-error" role="alert">{error}</p>}
-    </ExpandableRow>
+      {open && (
+        <div className="pp-task-details">
+          {phase.description && <p className="pp-row-desc">{phase.description}</p>}
+        </div>
+      )}
+    </li>
   )
 }
 
@@ -457,15 +539,20 @@ interface TasksListProps {
   stages: Stage[]
   projectId: string
   onTaskUpdated: (task: Task) => void
+  setTasks?: React.Dispatch<React.SetStateAction<Task[]>>
 }
 
 // List filter: 'open' = not done/canceled (default), 'all' = everything, else an exact status.
 const LIST_FILTERS = ['open', 'all', ...TASK_STATUSES]
 
-function TasksList({ tasks, phases, stages, projectId, onTaskUpdated }: TasksListProps) {
+function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks }: TasksListProps) {
   const [view, setView] = useState<'list' | 'board'>('list')
   const [filter, setFilter] = useState('open')
   const done = tasks.filter(t => t.status === 'done' || t.status === 'canceled').length
+  const remove = (id: string) => void api.tasks.remove(id).then(() => setTasks?.(prev => prev.filter(t => t.id !== id)))
+  // Reorder operates on the FULL task list (both drag + target are always in it),
+  // so it stays valid even while a filter narrows the visible rows.
+  const { itemProps } = useListReorder(tasks, next => setTasks?.(next), ids => api.tasks.reorder(projectId, ids))
 
   if (tasks.length === 0) return <p style={EMPTY}>No tasks yet.</p>
 
@@ -495,22 +582,40 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated }: TasksLis
       </div>
 
       {view === 'board' ? (
-        <TaskBoard tasks={tasks} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated} />
+        <TaskBoard tasks={tasks} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated} setTasks={setTasks} />
       ) : shown.length === 0 ? (
         <p style={EMPTY}>No tasks match this filter.</p>
-      ) : (
-        <ul className="pp-rows">
-          {shown.map(t => (
-            <TaskRow key={t.id} task={t} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated} />
-          ))}
-        </ul>
-      )}
+      ) : (() => {
+        // Group sub-tasks under their parent (one level); orphans (parent filtered
+        // out) render at top level so nothing is hidden.
+        const childrenOf = new Map<string, Task[]>()
+        const shownIds = new Set(shown.map(t => t.id))
+        const top: Task[] = []
+        for (const t of shown) {
+          if (t.parent_task_id && shownIds.has(t.parent_task_id)) {
+            const arr = childrenOf.get(t.parent_task_id) ?? []
+            arr.push(t); childrenOf.set(t.parent_task_id, arr)
+          } else {
+            top.push(t)
+          }
+        }
+        return (
+          <ul className="pp-rows">
+            {top.map(t => (
+              <TaskRow key={t.id} task={t} phases={phases} stages={stages} projectId={projectId}
+                onTaskUpdated={onTaskUpdated} onDelete={setTasks ? () => remove(t.id) : undefined}
+                dragProps={setTasks && !t.parent_task_id ? itemProps(t.id) : undefined}
+                subtasks={childrenOf.get(t.id) ?? []} setTasks={setTasks} />
+            ))}
+          </ul>
+        )
+      })()}
     </>
   )
 }
 
 /** Kanban board with two groupings (Flow buckets / per-status), drag-to-restatus, and click-to-open. */
-function TaskBoard({ tasks, phases, stages, projectId, onTaskUpdated }: TasksListProps) {
+function TaskBoard({ tasks, phases, stages, projectId, onTaskUpdated, setTasks }: TasksListProps) {
   const [group, setGroup] = useState<'flow' | 'status'>('flow')
   const [openId, setOpenId] = useState<string | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
@@ -577,6 +682,7 @@ function TaskBoard({ tasks, phases, stages, projectId, onTaskUpdated }: TasksLis
                     <div className="ab-task-foot">
                       {t.phase_id && <span className="pp-card-phase">{phaseTitle.get(t.phase_id)}</span>}
                       <StatusBadge kind="task" value={t.status} />
+                      {setTasks && <RowActions title={t.title} onDelete={() => void api.tasks.remove(t.id).then(() => setTasks(prev => prev.filter(x => x.id !== t.id)))} />}
                     </div>
                   </div>
                 ))}
@@ -683,11 +789,11 @@ function TaskDetailBody({ task, phases, stages, projectId, onTaskUpdated }: {
           </select>
         </label>
         <label>
-          <span>Stage</span>
+          <span>Sub-phase</span>
           <select className="input select input-sm" value={task.stage_id ?? ''}
             disabled={saving || !task.phase_id || taskStages.length === 0}
             onChange={event => void updateTask({ stage_id: event.target.value || null })}>
-            <option value="">No stage</option>
+            <option value="">No sub-phase</option>
             {taskStages.map(stage => <option key={stage.id} value={stage.id}>{stage.title}</option>)}
           </select>
         </label>
@@ -753,125 +859,248 @@ function TaskComments({ projectId, taskId }: { projectId: string; taskId: string
   )
 }
 
-/** A task row that expands to reveal the shared task detail (controls, checklist, comments). */
-function TaskRow({ task, phases, stages, projectId, onTaskUpdated }: {
+/** A task row: inline status/title edit + delete/drag in the header, expands to
+ *  the shared task detail; renders its sub-tasks nested beneath. */
+function TaskRow({ task, phases, stages, projectId, onTaskUpdated, onDelete, dragProps, subtasks = [], setTasks }: {
   task: Task; phases: Phase[]; stages: Stage[]; projectId: string; onTaskUpdated: (task: Task) => void
+  onDelete?: () => void
+  dragProps?: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
+  subtasks?: Task[]
+  setTasks?: React.Dispatch<React.SetStateAction<Task[]>>
 }) {
   const [open, setOpen] = useState(false)
+  const [addingSub, setAddingSub] = useState(false)
+  const [subTitle, setSubTitle] = useState('')
+  const isSub = Boolean(task.parent_task_id)
+  const update = (patch: Parameters<typeof api.tasks.update>[1]) => void api.tasks.update(task.id, patch).then(onTaskUpdated)
+  const editable = useEditable(task.title, t => update({ title: t }))
+
+  async function addSubtask(e: React.FormEvent) {
+    e.preventDefault()
+    if (!subTitle.trim() || !setTasks) return
+    const created = await api.tasks.create(projectId, { title: subTitle.trim(), parent_task_id: task.id })
+    setTasks(prev => [...prev, created]); setSubTitle(''); setAddingSub(false)
+  }
+
   return (
-    <li className="pp-row pp-row-expandable">
-      <button
-        type="button"
-        className="pp-row-main"
-        onClick={() => setOpen(v => !v)}
-        aria-expanded={open}
-        aria-controls={`task-details-${task.id}`}
-      >
-        <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
-        <span className="pp-row-title">{task.title}</span>
-        <StatusBadge kind="task" value={task.status} />
-      </button>
+    <li className={`pp-row pp-row-expandable pp-row-managed${isSub ? ' pp-row-subtask' : ''}`} {...dragProps}>
+      <div className="pp-row-main-wrap">
+        <button
+          type="button"
+          className="pp-row-main"
+          onClick={() => setOpen(v => !v)}
+          aria-expanded={open}
+          aria-controls={`task-details-${task.id}`}
+        >
+          <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+          {editable.node ?? <span className="pp-row-title">{task.title}</span>}
+          {subtasks.length > 0 && <span className="pp-subcount">{subtasks.length}</span>}
+        </button>
+        <InlineStatusSelect kind="task" value={task.status} options={TASK_STATUSES}
+          onChange={s => update({ status: s })} label={`Change status of ${task.title}`} />
+        <RowActions title={task.title} onEdit={editable.start} onDelete={onDelete} dragHandle={Boolean(dragProps)} />
+      </div>
       {open && <TaskDetailBody task={task} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated} />}
+      {(subtasks.length > 0 || (setTasks && !isSub)) && (
+        <div className="pp-subtasks">
+          <ul className="pp-rows">
+            {subtasks.map(st => (
+              <TaskRow key={st.id} task={st} phases={phases} stages={stages} projectId={projectId}
+                onTaskUpdated={onTaskUpdated}
+                onDelete={setTasks ? () => void api.tasks.remove(st.id).then(() => setTasks(prev => prev.filter(x => x.id !== st.id))) : undefined} />
+            ))}
+          </ul>
+          {setTasks && !isSub && (
+            addingSub ? (
+              <form className="pp-check-add" onSubmit={addSubtask}>
+                <input className="input input-sm" autoFocus placeholder="Sub-task title…" aria-label={`Add sub-task to ${task.title}`}
+                  value={subTitle} onChange={e => setSubTitle(e.target.value)} onBlur={() => { if (!subTitle.trim()) setAddingSub(false) }} />
+                <button type="submit" className="btn btn-outline btn-sm">Add</button>
+              </form>
+            ) : (
+              <button type="button" className="pp-row-act pp-add-sub" onClick={() => setAddingSub(true)}>+ Sub-task</button>
+            )
+          )}
+        </div>
+      )}
     </li>
   )
 }
 
-function MilestonesList({ milestones, onMilestoneUpdated }: { milestones: Milestone[]; onMilestoneUpdated: (m: Milestone) => void }) {
+function MilestonesSection({ milestones, projectId, setMilestones }: {
+  milestones: Milestone[]; projectId: string; setMilestones: React.Dispatch<React.SetStateAction<Milestone[]>>
+}) {
+  const [view, setView] = useState<'list' | 'board'>('list')
+  const onUpdated = (u: Milestone) => setMilestones(prev => prev.map(m => (m.id === u.id ? u : m)))
+  const update = (id: string, patch: Parameters<typeof api.milestones.update>[1]) => void api.milestones.update(id, patch).then(onUpdated)
+  const remove = (id: string) => void api.milestones.remove(id).then(() => setMilestones(prev => prev.filter(m => m.id !== id)))
+  const { itemProps } = useListReorder(milestones, next => setMilestones(next), ids => api.milestones.reorder(projectId, ids))
+
   if (milestones.length === 0) return <p style={EMPTY}>No milestones yet.</p>
-  const sorted = [...milestones].sort((a, b) =>
-    (a.target_date || '9999-99-99').localeCompare(b.target_date || '9999-99-99') || a.sort_order - b.sort_order)
-  return (
-    <ul className="pp-rows">
-      {sorted.map(m => (
-        <MilestoneRow key={m.id} milestone={m} onUpdated={onMilestoneUpdated} />
-      ))}
-    </ul>
-  )
-}
 
-function MilestoneRow({ milestone, onUpdated }: { milestone: Milestone; onUpdated: (m: Milestone) => void }) {
-  const { saving, error, update } = useRowUpdate(patch => api.milestones.update(milestone.id, patch), onUpdated)
-  return (
-    <ExpandableRow
-      id={milestone.id}
-      header={<>
-        <span className="pp-row-title">{milestone.title}</span>
-        {milestone.target_date && <span className="pp-meta">{milestone.target_date}</span>}
-        <StatusBadge kind="milestone" value={milestone.status} />
-      </>}
-    >
-      {milestone.description && <p className="pp-row-desc">{milestone.description}</p>}
-      <div className="pp-task-controls" role="group" aria-label={`Edit ${milestone.title}`}>
-        <label>
-          <span>Status</span>
-          <select className="input select input-sm" value={milestone.status} disabled={saving}
-            onChange={e => void update({ status: e.target.value })}>
-            {MILESTONE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </label>
-        <label>
-          <span>Target date</span>
-          <input type="date" className="input input-sm" value={milestone.target_date ?? ''} disabled={saving}
-            onChange={e => void update({ target_date: e.target.value || null })} />
-        </label>
-      </div>
-      {error && <p className="form-error" role="alert">{error}</p>}
-    </ExpandableRow>
-  )
-}
-
-function DecisionsList({ decisions, onDecisionUpdated }: { decisions: Decision[]; onDecisionUpdated: (d: Decision) => void }) {
-  if (decisions.length === 0) return <p style={EMPTY}>No decisions yet.</p>
-  return (
-    <ul className="pp-rows">
-      {decisions.map(d => (
-        <DecisionRow key={d.id} decision={d} onUpdated={onDecisionUpdated} />
-      ))}
-    </ul>
-  )
-}
-
-function DecisionRow({ decision, onUpdated }: { decision: Decision; onUpdated: (d: Decision) => void }) {
-  const { saving, error, update } = useRowUpdate(patch => api.decisions.update(decision.id, patch), onUpdated)
-  return (
-    <ExpandableRow
-      id={decision.id}
-      header={<>
-        <span className="pp-row-title">{decision.title}</span>
-        <StatusBadge kind="decision" value={decision.status} />
-      </>}
-    >
-      <p className="pp-row-desc">{decision.decision}</p>
-      {decision.context && <p className="pp-row-desc">{decision.context}</p>}
-      <div className="pp-task-controls" role="group" aria-label={`Edit ${decision.title}`}>
-        <label>
-          <span>Status</span>
-          <select className="input select input-sm" value={decision.status} disabled={saving}
-            onChange={e => void update({ status: e.target.value })}>
-            {DECISION_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </label>
-      </div>
-      {error && <p className="form-error" role="alert">{error}</p>}
-    </ExpandableRow>
-  )
-}
-
-function RisksList({
-  risks, blockers, onRiskUpdated, onBlockerUpdated,
-}: { risks: Risk[]; blockers: Blocker[]; onRiskUpdated: (r: Risk) => void; onBlockerUpdated: (b: Blocker) => void }) {
-  const open = risks.filter(r => !['mitigated', 'accepted', 'closed'].includes(r.status))
-  if (open.length === 0 && blockers.length === 0)
-    return <p style={EMPTY}>No open risks or blockers.</p>
   return (
     <>
-      {open.length > 0 && (
+      <div className="pp-toolbar"><ViewToggle view={view} setView={setView} /></div>
+      {view === 'board' ? (
+        <EntityBoard
+          items={milestones} columns={MILESTONE_COLS} statusOf={m => m.status}
+          onRestatus={(m, status) => update(m.id, { status })}
+          renderCard={m => (
+            <div className="ab-task-foot" style={{ justifyContent: 'space-between' }}>
+              <span className="ab-task-title">{m.title}</span>
+              <RowActions title={m.title} onDelete={() => remove(m.id)} />
+            </div>
+          )}
+        />
+      ) : (
         <ul className="pp-rows">
-          {open.map(r => (
-            <RiskRow key={r.id} risk={r} onUpdated={onRiskUpdated} />
+          {milestones.map(m => (
+            <MilestoneListRow key={m.id} milestone={m} update={update} remove={remove} dragProps={itemProps(m.id)} />
           ))}
         </ul>
       )}
+    </>
+  )
+}
+
+function MilestoneListRow({ milestone, update, remove, dragProps }: {
+  milestone: Milestone
+  update: (id: string, patch: Parameters<typeof api.milestones.update>[1]) => void
+  remove: (id: string) => void
+  dragProps: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
+}) {
+  const [open, setOpen] = useState(false)
+  const editable = useEditable(milestone.title, t => update(milestone.id, { title: t }))
+  return (
+    <li className="pp-row pp-row-expandable pp-row-managed" {...dragProps}>
+      <div className="pp-row-main-wrap">
+        <button type="button" className="pp-row-main" onClick={() => setOpen(v => !v)} aria-expanded={open}>
+          <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+          {editable.node ?? <span className="pp-row-title">{milestone.title}</span>}
+          {milestone.target_date && <span className="pp-meta">{milestone.target_date}</span>}
+        </button>
+        <InlineStatusSelect kind="milestone" value={milestone.status} options={MILESTONE_STATUSES}
+          onChange={s => update(milestone.id, { status: s })} label={`Change status of ${milestone.title}`} />
+        <RowActions title={milestone.title} onEdit={editable.start} onDelete={() => remove(milestone.id)} dragHandle />
+      </div>
+      {open && (
+        <div className="pp-task-details">
+          {milestone.description && <p className="pp-row-desc">{milestone.description}</p>}
+          <div className="pp-task-controls" role="group" aria-label={`Edit ${milestone.title}`}>
+            <label>
+              <span>Target date</span>
+              <input type="date" className="input input-sm" value={milestone.target_date ?? ''}
+                onChange={e => update(milestone.id, { target_date: e.target.value || null })} />
+            </label>
+          </div>
+        </div>
+      )}
+    </li>
+  )
+}
+
+function DecisionsSection({ decisions, projectId, setDecisions }: {
+  decisions: Decision[]; projectId: string; setDecisions: React.Dispatch<React.SetStateAction<Decision[]>>
+}) {
+  const [view, setView] = useState<'list' | 'board'>('list')
+  const onUpdated = (u: Decision) => setDecisions(prev => prev.map(d => (d.id === u.id ? u : d)))
+  const update = (id: string, patch: Parameters<typeof api.decisions.update>[1]) => void api.decisions.update(id, patch).then(onUpdated)
+  const remove = (id: string) => void api.decisions.remove(id).then(() => setDecisions(prev => prev.filter(d => d.id !== id)))
+  const { itemProps } = useListReorder(decisions, next => setDecisions(next), ids => api.decisions.reorder(projectId, ids))
+
+  if (decisions.length === 0) return <p style={EMPTY}>No decisions yet.</p>
+
+  return (
+    <>
+      <div className="pp-toolbar"><ViewToggle view={view} setView={setView} /></div>
+      {view === 'board' ? (
+        <EntityBoard
+          items={decisions} columns={DECISION_COLS} statusOf={d => d.status}
+          onRestatus={(d, status) => update(d.id, { status })}
+          renderCard={d => (
+            <div className="ab-task-foot" style={{ justifyContent: 'space-between' }}>
+              <span className="ab-task-title">{d.title}</span>
+              <RowActions title={d.title} onDelete={() => remove(d.id)} />
+            </div>
+          )}
+        />
+      ) : (
+        <ul className="pp-rows">
+          {decisions.map(d => (
+            <DecisionListRow key={d.id} decision={d} update={update} remove={remove} dragProps={itemProps(d.id)} />
+          ))}
+        </ul>
+      )}
+    </>
+  )
+}
+
+function DecisionListRow({ decision, update, remove, dragProps }: {
+  decision: Decision
+  update: (id: string, patch: Parameters<typeof api.decisions.update>[1]) => void
+  remove: (id: string) => void
+  dragProps: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
+}) {
+  const [open, setOpen] = useState(false)
+  const editable = useEditable(decision.title, t => update(decision.id, { title: t }))
+  return (
+    <li className="pp-row pp-row-expandable pp-row-managed" {...dragProps}>
+      <div className="pp-row-main-wrap">
+        <button type="button" className="pp-row-main" onClick={() => setOpen(v => !v)} aria-expanded={open}>
+          <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+          {editable.node ?? <span className="pp-row-title">{decision.title}</span>}
+        </button>
+        <InlineStatusSelect kind="decision" value={decision.status} options={DECISION_STATUSES}
+          onChange={s => update(decision.id, { status: s })} label={`Change status of ${decision.title}`} />
+        <RowActions title={decision.title} onEdit={editable.start} onDelete={() => remove(decision.id)} dragHandle />
+      </div>
+      {open && (
+        <div className="pp-task-details">
+          <p className="pp-row-desc">{decision.decision}</p>
+          {decision.context && <p className="pp-row-desc">{decision.context}</p>}
+        </div>
+      )}
+    </li>
+  )
+}
+
+function RisksSection({
+  risks, blockers, projectId, setRisks, onBlockerUpdated,
+}: {
+  risks: Risk[]; blockers: Blocker[]; projectId: string
+  setRisks: React.Dispatch<React.SetStateAction<Risk[]>>; onBlockerUpdated: (b: Blocker) => void
+}) {
+  const [view, setView] = useState<'list' | 'board'>('list')
+  const onUpdated = (u: Risk) => setRisks(prev => prev.map(r => (r.id === u.id ? u : r)))
+  const update = (id: string, patch: Parameters<typeof api.risks.update>[1]) => void api.risks.update(id, patch).then(onUpdated)
+  const remove = (id: string) => void api.risks.remove(id).then(() => setRisks(prev => prev.filter(r => r.id !== id)))
+  const { itemProps } = useListReorder(risks, next => setRisks(next), ids => api.risks.reorder(projectId, ids))
+
+  if (risks.length === 0 && blockers.length === 0)
+    return <p style={EMPTY}>No risks or blockers.</p>
+
+  return (
+    <>
+      {risks.length > 0 && <div className="pp-toolbar"><ViewToggle view={view} setView={setView} /></div>}
+      {risks.length > 0 && (view === 'board' ? (
+        <EntityBoard
+          items={risks} columns={RISK_COLS} statusOf={r => r.status}
+          onRestatus={(r, status) => update(r.id, { status })}
+          renderCard={r => (
+            <div className="ab-task-foot" style={{ justifyContent: 'space-between' }}>
+              <span className="ab-task-title">{r.title}</span>
+              <StatusBadge kind="severity" value={r.severity} />
+              <RowActions title={r.title} onDelete={() => remove(r.id)} />
+            </div>
+          )}
+        />
+      ) : (
+        <ul className="pp-rows">
+          {risks.map(r => (
+            <RiskListRow key={r.id} risk={r} update={update} remove={remove} dragProps={itemProps(r.id)} />
+          ))}
+        </ul>
+      ))}
       {blockers.length > 0 && (
         <>
           <p className="pp-section-lbl">Blockers</p>
@@ -886,37 +1115,34 @@ function RisksList({
   )
 }
 
-function RiskRow({ risk, onUpdated }: { risk: Risk; onUpdated: (r: Risk) => void }) {
-  const { saving, error, update } = useRowUpdate(patch => api.risks.update(risk.id, patch), onUpdated)
+function RiskListRow({ risk, update, remove, dragProps }: {
+  risk: Risk
+  update: (id: string, patch: Parameters<typeof api.risks.update>[1]) => void
+  remove: (id: string) => void
+  dragProps: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
+}) {
+  const [open, setOpen] = useState(false)
+  const editable = useEditable(risk.title, t => update(risk.id, { title: t }))
   return (
-    <ExpandableRow
-      id={risk.id}
-      header={<>
-        <span className="pp-row-title">{risk.title}</span>
-        <StatusBadge kind="severity" value={risk.severity} />
-        <StatusBadge kind="riskstatus" value={risk.status} />
-      </>}
-    >
-      {risk.description && <p className="pp-row-desc">{risk.description}</p>}
-      {risk.mitigation && <p className="pp-row-desc"><strong>Mitigation:</strong> {risk.mitigation}</p>}
-      <div className="pp-task-controls" role="group" aria-label={`Edit ${risk.title}`}>
-        <label>
-          <span>Severity</span>
-          <select className="input select input-sm" value={risk.severity} disabled={saving}
-            onChange={e => void update({ severity: e.target.value })}>
-            {RISK_SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </label>
-        <label>
-          <span>Status</span>
-          <select className="input select input-sm" value={risk.status} disabled={saving}
-            onChange={e => void update({ status: e.target.value })}>
-            {RISK_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </label>
+    <li className="pp-row pp-row-expandable pp-row-managed" {...dragProps}>
+      <div className="pp-row-main-wrap">
+        <button type="button" className="pp-row-main" onClick={() => setOpen(v => !v)} aria-expanded={open}>
+          <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+          {editable.node ?? <span className="pp-row-title">{risk.title}</span>}
+        </button>
+        <InlineStatusSelect kind="severity" value={risk.severity} options={RISK_SEVERITIES}
+          onChange={s => update(risk.id, { severity: s })} label={`Change severity of ${risk.title}`} />
+        <InlineStatusSelect kind="riskstatus" value={risk.status} options={RISK_STATUSES}
+          onChange={s => update(risk.id, { status: s })} label={`Change status of ${risk.title}`} />
+        <RowActions title={risk.title} onEdit={editable.start} onDelete={() => remove(risk.id)} dragHandle />
       </div>
-      {error && <p className="form-error" role="alert">{error}</p>}
-    </ExpandableRow>
+      {open && (
+        <div className="pp-task-details">
+          {risk.description && <p className="pp-row-desc">{risk.description}</p>}
+          {risk.mitigation && <p className="pp-row-desc"><strong>Mitigation:</strong> {risk.mitigation}</p>}
+        </div>
+      )}
+    </li>
   )
 }
 
@@ -943,17 +1169,63 @@ function BlockerRow({ blocker, onUpdated }: { blocker: Blocker; onUpdated: (b: B
   )
 }
 
-function CommentsList({ comments }: { comments: Comment[] }) {
+function CommentsSection({ comments, setComments }: {
+  comments: Comment[]; setComments: React.Dispatch<React.SetStateAction<Comment[]>>
+}) {
+  const [view, setView] = useState<'list' | 'card'>('list')
+  const onUpdated = (u: Comment) => setComments(prev => prev.map(c => (c.id === u.id ? u : c)))
+  const update = (id: string, patch: Parameters<typeof api.comments.update>[1]) => void api.comments.update(id, patch).then(onUpdated)
+  const remove = (id: string) => void api.comments.remove(id).then(() => setComments(prev => prev.filter(c => c.id !== id)))
+
   if (comments.length === 0) return <p style={EMPTY}>No comments yet.</p>
+
   return (
-    <ul className="pp-rows">
-      {comments.map(c => (
-        <li key={c.id} className="pp-row pp-row-stacked">
-          <span className="pp-row-body">{c.body}</span>
-          <span className="pp-meta">{c.entity_type} · {c.created_at.slice(0, 10)}</span>
-        </li>
-      ))}
-    </ul>
+    <>
+      <div className="pp-toolbar">
+        <div className="ab-seg" role="group" aria-label="Comments view">
+          <button type="button" aria-pressed={view === 'list'} className={view === 'list' ? 'active' : ''} onClick={() => setView('list')}>List</button>
+          <button type="button" aria-pressed={view === 'card'} className={view === 'card' ? 'active' : ''} onClick={() => setView('card')}>Cards</button>
+        </div>
+      </div>
+      <div className={view === 'card' ? 'pp-comment-cards' : 'pp-rows'}>
+        {comments.map(c => (
+          <CommentItem key={c.id} comment={c} card={view === 'card'} update={update} remove={remove} />
+        ))}
+      </div>
+    </>
+  )
+}
+
+function CommentItem({ comment, card, update, remove }: {
+  comment: Comment; card: boolean
+  update: (id: string, patch: Parameters<typeof api.comments.update>[1]) => void
+  remove: (id: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(comment.body)
+  const save = () => { setEditing(false); if (draft.trim() && draft !== comment.body) update(comment.id, { body: draft }) }
+  return (
+    <div className={card ? 'pp-comment-card' : 'pp-row pp-row-stacked'}>
+      <div className="pp-comment-head">
+        <InlineStatusSelect kind="commentstatus" value={comment.status} options={COMMENT_STATUSES}
+          onChange={s => update(comment.id, { status: s })} label="Change comment status" />
+        <span className="pp-comment-head-spacer" />
+        <RowActions title="comment" onEdit={() => { setDraft(comment.body); setEditing(true) }} onDelete={() => remove(comment.id)} />
+      </div>
+      {editing ? (
+        <div className="pp-comment-edit">
+          <textarea className="input" autoFocus value={draft} aria-label="Edit comment"
+            onChange={e => setDraft(e.target.value)} />
+          <div className="pp-comment-edit-actions">
+            <button type="button" className="btn btn-solid btn-sm" onClick={save}>Save</button>
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing(false)}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <div className="pp-comment-body ab-prose"><Markdown markdown={comment.body} /></div>
+      )}
+      <span className="pp-meta">{comment.entity_type} · {(comment.updated_at ?? comment.created_at).slice(0, 10)}</span>
+    </div>
   )
 }
 
