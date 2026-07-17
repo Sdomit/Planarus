@@ -3,13 +3,14 @@ from typing import Optional
 from sqlalchemy import CheckConstraint, Index
 from sqlmodel import Field, SQLModel
 
-from app.core.constants import task_priority_check_sql, task_status_check_sql
+from app.core.constants import task_priority_check_sql
 
 
 class Task(SQLModel, table=True):
     __tablename__ = "task"
+    # Phase 15.5: no `status` CHECK — a task may take a custom status. The set is
+    # validated in the service layer (built-ins ∪ the project's status_options).
     __table_args__ = (
-        CheckConstraint(task_status_check_sql(), name="ck_task_status"),
         CheckConstraint(task_priority_check_sql(), name="ck_task_priority"),
         Index("ix_task_project_status", "project_id", "status"),
         Index("ix_task_project_status_sort", "project_id", "status", "sort_order"),

@@ -198,3 +198,10 @@
 }
 .pp-add-sub { color: var(--text-tertiary); font-size: var(--text-xs); margin-left: var(--space-6); }
 .pp-add-sub:hover { color: var(--text-accent, var(--accent)); }
+
+/* ── Phase 15.5 custom statuses: add-column + add-status affordances ────────── */
+.ab-col-add { display: flex; align-items: flex-start; justify-content: center; min-width: 160px; background: transparent; border: 1px dashed var(--border-default); }
+.ab-col-add-btn { width: 100%; padding: var(--space-3); border: none; background: none; cursor: pointer; color: var(--text-tertiary); font-size: var(--text-sm); border-radius: var(--radius-md); }
+.ab-col-add-btn:hover { background: var(--bg-muted); color: var(--text-primary); }
+.pp-inline-status-add { border-top: 1px solid var(--border-subtle); margin-top: 2px; color: var(--text-tertiary); font-size: var(--text-xs); }
+.pp-inline-status-add:hover { color: var(--text-accent, var(--accent)); }

@@ -11,8 +11,15 @@ from app.models.project import Project
 from app.models.stage import Stage
 from app.models.task import Task
 from app.schemas.task import TaskCreate, TaskUpdate
+from app.services import status_option_service
 from app.services.audit_service import create_audit_event
 from app.services.planning_reorder import apply_reorder
+
+
+def _validate_status(session: Session, project_id: str, status: str) -> None:
+    """A task status must be a built-in or one of the project's custom statuses."""
+    if status not in status_option_service.allowed_status_keys(session, project_id, "task"):
+        raise ValueError(f"status '{status}' is not defined for this project")
 
 
 def list_tasks(session: Session, project_id: str) -> list[Task]:
@@ -49,6 +56,7 @@ def _validate_parent_task(
 def create_task(session: Session, project_id: str, data: TaskCreate) -> Task:
     if session.get(Project, project_id) is None:
         raise ValueError(f"project '{project_id}' not found")
+    _validate_status(session, project_id, data.status)
     _validate_parent_task(session, project_id, data.parent_task_id)
     if data.phase_id is not None:
         phase = session.get(Phase, data.phase_id)
@@ -107,6 +115,9 @@ def update_task(session: Session, task_id: str, data: TaskUpdate) -> Optional[Ta
         return None
 
     update_data = data.model_dump(exclude_unset=True)
+
+    if update_data.get("status") is not None:
+        _validate_status(session, task.project_id, update_data["status"])
 
     if "parent_task_id" in update_data:
         _validate_parent_task(
