@@ -1,15 +1,13 @@
 from typing import Optional
 
-from sqlalchemy import CheckConstraint, Index
+from sqlalchemy import Index
 from sqlmodel import Field, SQLModel
-
-from app.core.constants import decision_status_check_sql
 
 
 class Decision(SQLModel, table=True):
     __tablename__ = "decision"
+    # Phase 15.5: no `status` CHECK — custom statuses validated in the service layer.
     __table_args__ = (
-        CheckConstraint(decision_status_check_sql(), name="ck_decision_status"),
         Index("ix_decision_project_status", "project_id", "status"),
         Index("ix_decision_project_created", "project_id", "created_at"),
     )

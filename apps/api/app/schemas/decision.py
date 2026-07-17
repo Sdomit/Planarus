@@ -1,10 +1,17 @@
+import re
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.constants import DECISION_STATUSES
+# Phase 15.5: decision statuses allow custom values — slug shape only here; the
+# concrete per-project set is validated in the service layer.
+_STATUS_SLUG = re.compile(r"^[a-z0-9][a-z0-9_]*$")
 
-_DECISION_STATUSES = frozenset(DECISION_STATUSES)
+
+def _validate_status_slug(v: Optional[str]) -> Optional[str]:
+    if v is not None and not _STATUS_SLUG.match(v):
+        raise ValueError("status must be a lowercase slug (letters, digits, underscore)")
+    return v
 
 
 class DecisionCreate(BaseModel):
@@ -16,11 +23,7 @@ class DecisionCreate(BaseModel):
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str) -> str:
-        if v not in _DECISION_STATUSES:
-            raise ValueError(
-                f"status must be one of: {', '.join(sorted(_DECISION_STATUSES))}"
-            )
-        return v
+        return _validate_status_slug(v) or v
 
 
 class DecisionUpdate(BaseModel):
@@ -32,11 +35,7 @@ class DecisionUpdate(BaseModel):
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and v not in _DECISION_STATUSES:
-            raise ValueError(
-                f"status must be one of: {', '.join(sorted(_DECISION_STATUSES))}"
-            )
-        return v
+        return _validate_status_slug(v)
 
 
 class DecisionRead(BaseModel):

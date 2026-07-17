@@ -107,6 +107,22 @@ def test_custom_risk_status_keeps_severity_strict(client: TestClient) -> None:
     assert client.post(f"/api/v1/projects/{pid}/risks", json={"title": "R3", "severity": "low", "status": "bogus"}).status_code == 422
 
 
+def test_custom_milestone_status(client: TestClient) -> None:
+    pid = _seed(client)
+    client.post(f"/api/v1/projects/{pid}/status-options", json={"entity_type": "milestone", "label": "At Risk"})
+    m = client.post(f"/api/v1/projects/{pid}/milestones", json={"title": "M", "status": "at_risk"})
+    assert m.status_code == 201 and m.json()["status"] == "at_risk"
+    assert client.post(f"/api/v1/projects/{pid}/milestones", json={"title": "M2", "status": "bogus"}).status_code == 422
+
+
+def test_custom_decision_status(client: TestClient) -> None:
+    pid = _seed(client)
+    client.post(f"/api/v1/projects/{pid}/status-options", json={"entity_type": "decision", "label": "Deferred"})
+    d = client.post(f"/api/v1/projects/{pid}/decisions", json={"title": "D", "decision": "x", "status": "deferred"})
+    assert d.status_code == 201 and d.json()["status"] == "deferred"
+    assert client.post(f"/api/v1/projects/{pid}/decisions", json={"title": "D2", "decision": "y", "status": "bogus"}).status_code == 422
+
+
 def test_status_options_are_per_entity_type(client: TestClient) -> None:
     pid = _seed(client)
     client.post(f"/api/v1/projects/{pid}/status-options", json={"entity_type": "phase", "label": "On Hold"})
