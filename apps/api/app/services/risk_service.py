@@ -7,16 +7,19 @@ from app.models.project import Project
 from app.models.risk import Risk
 from app.schemas.risk import RiskCreate, RiskUpdate
 from app.services.audit_service import create_audit_event
+from app.services.planning_reorder import apply_reorder
 
 _CLOSED_STATUSES = frozenset({"mitigated", "accepted", "closed"})
 _SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 
 
 def list_risks(session: Session, project_id: str) -> list[Risk]:
+    # Manual order (sort_order) is primary; severity is the tiebreak so
+    # un-reordered projects keep today's severity-first behavior.
     risks = list(
         session.exec(select(Risk).where(Risk.project_id == project_id)).all()
     )
-    risks.sort(key=lambda r: (_SEVERITY_ORDER.get(r.severity, 99), r.id))
+    risks.sort(key=lambda r: (r.sort_order, _SEVERITY_ORDER.get(r.severity, 99), r.id))
     return risks
 
 
@@ -95,3 +98,11 @@ def delete_risk(session: Session, risk_id: str) -> bool:
     )
     session.commit()
     return True
+
+
+def reorder_risks(session: Session, project_id: str, ids: list[str]) -> list[Risk]:
+    if session.get(Project, project_id) is None:
+        raise LookupError(f"project '{project_id}' not found")
+    rows = {r.id: r for r in list_risks(session, project_id)}
+    apply_reorder(session, project_id=project_id, entity_type="risk", rows=rows, ids=ids)
+    return list_risks(session, project_id)

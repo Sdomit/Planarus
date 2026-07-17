@@ -134,3 +134,37 @@
   .pp-task-controls { grid-template-columns: 1fr 1fr; padding-left: 0; }
   .pp-checklist { padding-left: 0; }
 }
+
+/* ── Phase 15.1 shared primitives: inline status, row actions, reorder ─────── */
+.pp-row-managed { display: flex; flex-direction: column; }
+.pp-row-managed[data-over] { box-shadow: inset 0 2px 0 var(--accent); }
+.pp-row-managed[data-dragging] { opacity: 0.5; }
+.pp-row-main-wrap { display: flex; align-items: center; gap: var(--space-2); }
+.pp-row-main-wrap .pp-row-main { flex: 1; min-width: 0; }
+.pp-title-edit { flex: 1; min-width: 0; }
+
+.pp-inline-status { position: relative; display: inline-flex; }
+.pp-inline-status-btn { border: none; background: none; padding: 0; cursor: pointer; border-radius: var(--radius-full); }
+.pp-inline-status-btn:disabled { cursor: default; opacity: 0.6; }
+.pp-inline-status-menu {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 20;
+  display: flex; flex-direction: column; gap: 2px; padding: var(--space-1-5);
+  background: var(--bg-surface); border: 1px solid var(--border-default);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg); min-width: 140px;
+}
+.pp-inline-status-item {
+  display: flex; align-items: center; padding: var(--space-1) var(--space-2);
+  border: none; background: none; cursor: pointer; border-radius: var(--radius-sm); text-align: left;
+}
+.pp-inline-status-item:hover, .pp-inline-status-item.active { background: var(--bg-muted); }
+
+.pp-row-actions { display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.pp-drag-handle { cursor: grab; color: var(--text-tertiary); padding: 0 2px; user-select: none; font-size: var(--text-sm); }
+.pp-row-act {
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  min-width: 26px; height: 26px; padding: 0 6px; border: none; background: none; cursor: pointer;
+  color: var(--text-secondary); border-radius: var(--radius-sm); font-size: var(--text-xs);
+}
+.pp-row-act:hover { background: var(--bg-muted); color: var(--text-primary); }
+.pp-row-act-danger:hover { color: var(--status-danger-fg, var(--cd-500)); }
+.pp-confirm { display: inline-flex; align-items: center; gap: 2px; }

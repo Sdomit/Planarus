@@ -22,5 +22,6 @@ class Risk(SQLModel, table=True):
     severity: str
     status: str = Field(default="open")
     mitigation: Optional[str] = None
+    sort_order: int = Field(default=0)
     created_at: str
     updated_at: str

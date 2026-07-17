@@ -46,6 +46,7 @@ class DecisionRead(BaseModel):
     context: Optional[str]
     decision: str
     status: str
+    sort_order: int
     created_at: str
     updated_at: str
 
