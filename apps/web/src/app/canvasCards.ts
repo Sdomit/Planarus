@@ -72,3 +72,13 @@ export function readCardRef(customData: unknown): EntityCardRef | null {
   }
   return null
 }
+
+/** Read a review-pin's linked comment id off an element's customData, or null.
+ * A review pin (Phase 13c) is an ordinary Excalidraw marker element whose
+ * customData carries { reviewPin: { commentId } }, tying a canvas spot to a
+ * polymorphic Comment on the canvas Doc. */
+export function readReviewPin(customData: unknown): string | null {
+  const c = customData as { reviewPin?: { commentId?: string } } | undefined
+  const id = c?.reviewPin?.commentId
+  return typeof id === 'string' && id ? id : null
+}
