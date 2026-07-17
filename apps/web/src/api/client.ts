@@ -218,6 +218,17 @@ export interface ChecklistItem {
   updated_at: string
 }
 
+export interface Todo {
+  id: string
+  project_id: string
+  parent_id: string | null
+  label: string
+  done: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
 export interface Comment {
   id: string
   project_id: string
@@ -824,6 +835,14 @@ export const api = {
     remove: (id: string) => request<void>(`/milestones/${id}`, { method: 'DELETE' }),
     reorder: (projectId: string, ids: string[]) =>
       request<Milestone[]>(`/projects/${projectId}/milestones/reorder`, { method: 'POST', body: JSON.stringify({ ids }) }),
+  },
+  todos: {
+    list: (projectId: string) => request<Todo[]>(`/projects/${projectId}/todos`),
+    create: (projectId: string, data: { label: string; parent_id?: string | null }) =>
+      request<Todo>(`/projects/${projectId}/todos`, { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Partial<Pick<Todo, 'label' | 'done' | 'parent_id' | 'sort_order'>>) =>
+      request<Todo>(`/todos/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    remove: (id: string) => request<void>(`/todos/${id}`, { method: 'DELETE' }),
   },
   calendarEvents: {
     list: (projectId: string) => request<CalendarEvent[]>(`/projects/${projectId}/calendar-events`),
