@@ -5,8 +5,8 @@ from sqlmodel import Session
 
 from app.core.security import require_local_control
 from app.db.session import get_session
-from app.schemas.git import GitFetchResult, GitRepoLink, GitSnapshot
-from app.services import git_service, project_service
+from app.schemas.git import GitFetchResult, GitPrSummary, GitRepoLink, GitSnapshot
+from app.services import gh_service, git_service, project_service
 from app.services.audit_service import create_audit_event
 
 router = APIRouter()
@@ -37,6 +37,22 @@ def get_project_git_snapshot(
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return git_service.snapshot(project.id, project.folder_path)
+
+
+@router.get("/projects/{project_id}/git/prs", response_model=GitPrSummary)
+def get_project_git_prs(
+    project_id: str,
+    session: Session = Depends(get_session),
+) -> GitPrSummary:
+    """Read-only open-PR list via the local GitHub CLI (Phase 12c). An outbound
+    READ: it changes nothing (repo, GitHub, gh config) and stores no token —
+    gh's own keyring holds the credential. Click-triggered from the local UI
+    (never auto-polled) behind a 60s TTL. Local UI only — never mounted on MCP
+    or the external API."""
+    project = project_service.get_project(session, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    return gh_service.pr_summary(project.id, project.folder_path)
 
 
 @router.post(
