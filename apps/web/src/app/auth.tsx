@@ -43,6 +43,18 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (state.kind === 'loading') return null
   if (state.kind === 'anon') return <SignIn onSignedIn={(me) => setState({ kind: 'user', me })} />
+  if (state.kind === 'user' && state.me.password_must_change) {
+    // P16.2: an admin-issued temp password only unlocks the auth surface —
+    // force the rotation before the app (the API fences everything else anyway).
+    return (
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg-base)', padding: 'var(--space-4)' }}>
+        <ChangePasswordForm
+          forced
+          onChanged={() => void api.auth.me().then((me) => setState({ kind: 'user', me }))}
+        />
+      </div>
+    )
+  }
   return (
     <AuthContext.Provider value={{ me: state.kind === 'user' ? state.me : null, signOut }}>
       {children}
@@ -51,12 +63,74 @@ export function AuthGate({ children }: { children: ReactNode }) {
 }
 
 function friendly(msg: string): string {
+  if (msg.startsWith('400')) return 'Current password is incorrect.'
   if (msg.startsWith('401')) return 'Invalid email or password.'
   if (msg.startsWith('409')) return 'An account with this email already exists.'
   if (msg.startsWith('429')) return 'Too many attempts — wait a minute and try again.'
   if (msg.startsWith('404')) return 'Password sign-in is not enabled on this server.'
   if (msg.startsWith('422')) return 'Password must be at least 10 characters.'
   return msg
+}
+
+/** P16.2 — rotate the caller's own password. Used forced (temp-password gate,
+ * before the app renders) and voluntarily (Team view). Rotation signs out
+ * every other session for the account. */
+export function ChangePasswordForm({
+  forced = false,
+  onChanged,
+}: {
+  forced?: boolean
+  onChanged: () => void
+}) {
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    setError(null)
+    api.auth
+      .passwordChange(current, next)
+      .then(() => onChanged())
+      .catch((err: Error) => setError(friendly(err.message)))
+      .finally(() => setBusy(false))
+  }
+
+  return (
+    <form className="card" onSubmit={submit} style={{ width: 360, display: 'grid', gap: 'var(--space-4)' }}>
+      <div>
+        <h3 style={{ margin: 0 }}>{forced ? 'Set a new password' : 'Change password'}</h3>
+        <p style={{ margin: '4px 0 0', color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>
+          {forced
+            ? 'Your temporary password must be replaced before you can continue.'
+            : 'Every other session for your account will be signed out.'}
+        </p>
+      </div>
+      <div className="form-field">
+        <label className="form-label" htmlFor="chpw-current">{forced ? 'Temporary password' : 'Current password'}</label>
+        <input
+          id="chpw-current" className="input" type="password" autoComplete="current-password"
+          value={current} onChange={(e) => setCurrent(e.target.value)} required
+        />
+      </div>
+      <div className="form-field">
+        <label className="form-label" htmlFor="chpw-next">New password</label>
+        <input
+          id="chpw-next" className="input" type="password" autoComplete="new-password" minLength={10}
+          value={next} onChange={(e) => setNext(e.target.value)} required
+        />
+        <p style={{ margin: '4px 0 0', color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)' }}>
+          At least 10 characters — a long phrase beats a short scramble.
+        </p>
+      </div>
+      {error && <p className="form-error" role="alert" style={{ margin: 0 }}>{error}</p>}
+      <button type="submit" className="btn btn-solid" disabled={busy}>
+        {busy ? 'Working…' : forced ? 'Set password' : 'Change password'}
+      </button>
+    </form>
+  )
 }
 
 export function SignIn({ onSignedIn }: { onSignedIn: (me: AuthMe) => void }) {
