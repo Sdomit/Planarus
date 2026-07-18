@@ -1087,6 +1087,7 @@ export const api = {
       request<Doc>(`/projects/${projectId}/docs`, { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, data: DocUpdate) =>
       request<Doc>(`/docs/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    remove: (id: string) => request<void>(`/docs/${id}`, { method: 'DELETE' }),
     exportMarkdown: (id: string) =>
       request<DocExportResponse>(`/docs/${id}/export-markdown`, { method: 'POST' }),
     presenceBeat: (id: string, mode: 'viewing' | 'editing') =>
