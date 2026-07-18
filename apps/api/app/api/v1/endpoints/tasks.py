@@ -4,9 +4,19 @@ from sqlmodel import Session
 from app.db.session import get_session
 from app.schemas.reorder import ReorderRequest
 from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
-from app.services import task_service
+from app.services import audit_service, task_service
 
 router = APIRouter()
+
+
+def _read(session: Session, tasks) -> list[TaskRead]:
+    """Coerce Task rows to reads with assignee_display resolved (P16.3, D33).
+    One batch lookup; unassigned/local-mode rows keep display None."""
+    items = [TaskRead.model_validate(t) for t in tasks]
+    names = audit_service.display_names(session, (i.assignee_id for i in items))
+    for i in items:
+        i.assignee_display = names.get(i.assignee_id) if i.assignee_id else None
+    return items
 
 
 @router.get("/projects/{project_id}/tasks", response_model=list[TaskRead])
@@ -14,7 +24,7 @@ def list_tasks(
     project_id: str,
     session: Session = Depends(get_session),
 ) -> list[TaskRead]:
-    return task_service.list_tasks(session, project_id)
+    return _read(session, task_service.list_tasks(session, project_id))
 
 
 @router.post(
@@ -28,7 +38,7 @@ def create_task(
     session: Session = Depends(get_session),
 ) -> TaskRead:
     try:
-        return task_service.create_task(session, project_id, data)
+        return _read(session, [task_service.create_task(session, project_id, data)])[0]
     except ValueError as exc:
         # Project-not-found → 404; a validation error (e.g. illegal nesting) → 422.
         if "project" in str(exc) and "not found" in str(exc):
@@ -54,7 +64,7 @@ def update_task(
         )
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-    return task
+    return _read(session, [task])[0]
 
 
 @router.post("/projects/{project_id}/tasks/reorder", response_model=list[TaskRead])
@@ -64,7 +74,7 @@ def reorder_tasks(
     session: Session = Depends(get_session),
 ) -> list[TaskRead]:
     try:
-        return task_service.reorder_tasks(session, project_id, data.ids)
+        return _read(session, task_service.reorder_tasks(session, project_id, data.ids))
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     except ValueError as exc:

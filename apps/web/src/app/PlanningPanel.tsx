@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import {
-  api, Blocker, ChecklistItem, Comment, Decision, Link, Milestone, Phase, Project, Risk, Stage, StatusOption, Task,
+  api, Blocker, ChecklistItem, Comment, Decision, Link, MemberRead, Milestone, Phase, Project, Risk, Stage, StatusOption, Task,
 } from '../api/client'
 import { StatusBadge, type ToneKind } from './StatusBadge'
 import { InlineStatusSelect } from './InlineStatusSelect'
@@ -9,7 +9,41 @@ import { useListReorder } from './useListReorder'
 import { EntityBoard, nextStatusForColumn as nextStatusForCol } from './EntityBoard'
 import { StatusManager } from './StatusManager'
 import { Markdown } from './markdown'
+import { useAuthInfo } from './auth'
 import './planning-panel.css'
+
+// P16.3 (D33): team members (for the assignee picker) + the signed-in user id
+// (for "assigned to me"). Empty/null in local mode, so the whole assignee UI is
+// dormant — one provider at the panel root, consumers pull what they need
+// without threading props through the recursive TaskRow tree.
+const TeamContext = createContext<{ members: MemberRead[]; myId: string | null }>({
+  members: [], myId: null,
+})
+
+function personInitials(s: string): string {
+  return (
+    s.replace(/[^a-zA-Z0-9 ]/g, '').split(/\s+/).filter(Boolean).slice(0, 2)
+      .map(w => w[0]).join('').toUpperCase() || '?'
+  )
+}
+
+function personHue(id: string): number {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 360
+  return h
+}
+
+/** A compact assignee/author badge: colored initials + name. */
+function PersonChip({ id, name }: { id: string; name: string }) {
+  return (
+    <span className="pp-person" title={name}>
+      <span className="pp-person-dot" style={{ background: `hsl(${personHue(id)} 55% 42%)` }}>
+        {personInitials(name)}
+      </span>
+      <span className="pp-person-name">{name}</span>
+    </span>
+  )
+}
 
 // Re-exported for tests + existing callers; the implementation now lives in EntityBoard.
 export const nextStatusForColumn = nextStatusForCol
@@ -139,6 +173,9 @@ export default function PlanningPanel({
   const [blockers, setBlockers] = useState<Blocker[]>([])
   const [comments, setComments] = useState<Comment[]>([])
   const [links, setLinks] = useState<Link[]>([])
+  // P16.3: assignable people = the project workspace's members (team mode only).
+  const { me } = useAuthInfo()
+  const [members, setMembers] = useState<MemberRead[]>([])
 
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -164,6 +201,18 @@ export default function PlanningPanel({
     setShowCreate(false)
     setCreateError(null)
   }, [initialTab, projectId])
+
+  // Load workspace members once we know the project + that we're in team mode.
+  // 403/404 (not an owner, or auth off) → no picker, silently.
+  useEffect(() => {
+    if (!me || !project) { setMembers([]); return }
+    let live = true
+    api.members.list(project.workspace_id).then(
+      m => { if (live) setMembers(m) },
+      () => { if (live) setMembers([]) },
+    )
+    return () => { live = false }
+  }, [me, project])
 
   async function load() {
     setLoading(true)
@@ -285,6 +334,7 @@ export default function PlanningPanel({
   }
 
   return (
+   <TeamContext.Provider value={{ members, myId: me?.user.id ?? null }}>
     <div className="pp-panel">
       <div className="pp-header">
         <span className="pp-project-name">{project.title}</span>
@@ -464,6 +514,7 @@ export default function PlanningPanel({
         {tab === 'links' && <LinksList links={links} />}
       </div>
     </div>
+   </TeamContext.Provider>
   )
 }
 
@@ -646,6 +697,8 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
   const LIST_FILTERS = ['open', 'all', ...statusKeys]
   const [view, setView] = useState<'list' | 'board'>('list')
   const [filter, setFilter] = useState('open')
+  const [mineOnly, setMineOnly] = useState(false)
+  const { myId } = useContext(TeamContext)  // P16.3: "assigned to me" (team mode)
   const done = tasks.filter(t => t.status === 'done' || t.status === 'canceled').length
   const remove = (id: string) => void api.tasks.remove(id).then(() => setTasks?.(prev => prev.filter(t => t.id !== id)))
   // Reorder operates on the FULL task list (both drag + target are always in it),
@@ -656,6 +709,7 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
     return <><div className="pp-toolbar">{mgr.button}</div><p style={EMPTY}>No tasks yet.</p>{mgr.modal}</>
 
   const shown = tasks.filter(t => {
+    if (mineOnly && t.assignee_id !== myId) return false
     if (filter === 'all') return true
     if (filter === 'open') return t.status !== 'done' && t.status !== 'canceled'
     return t.status === filter
@@ -675,6 +729,12 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
                 <option key={f} value={f}>{f === 'open' ? 'Open' : f === 'all' ? 'All' : f.replace(/_/g, ' ')}</option>
               ))}
             </select>
+          )}
+          {myId && (
+            <label className="pp-mine-filter">
+              <input type="checkbox" checked={mineOnly} onChange={e => setMineOnly(e.target.checked)} />
+              <span>Assigned to me</span>
+            </label>
           )}
           {mgr.button}
         </div>
@@ -845,6 +905,7 @@ function TaskDetailBody({ task, phases, stages, projectId, onTaskUpdated, status
   const [saving, setSaving] = useState(false)
   const [taskError, setTaskError] = useState<string | null>(null)
   const [checklistError, setChecklistError] = useState<string | null>(null)
+  const { members } = useContext(TeamContext)  // P16.3: assignee options (team mode)
   const taskStages = task.phase_id ? stages.filter(stage => stage.phase_id === task.phase_id) : []
 
   useEffect(() => { void api.checklistItems.list(task.id).then(setItems) }, [task.id])
@@ -910,6 +971,17 @@ function TaskDetailBody({ task, phases, stages, projectId, onTaskUpdated, status
             {TASK_PRIORITIES.map(priority => <option key={priority || 'none'} value={priority}>{priority || 'none'}</option>)}
           </select>
         </label>
+        {members.length > 0 && (
+          <label>
+            <span>Assignee</span>
+            <select className="input select input-sm" value={task.assignee_id ?? ''} disabled={saving}
+              aria-label={`Assignee for ${task.title}`}
+              onChange={event => void updateTask({ assignee_id: event.target.value || null })}>
+              <option value="">Unassigned</option>
+              {members.map(m => <option key={m.user_id} value={m.user_id}>{m.display_name}</option>)}
+            </select>
+          </label>
+        )}
         <label>
           <span>Phase</span>
           <select className="input select input-sm" value={task.phase_id ?? ''} disabled={saving}
@@ -984,7 +1056,7 @@ function TaskComments({ projectId, taskId }: { projectId: string; taskId: string
       {comments.map(c => (
         <div key={c.id} className="pp-comment">
           <span className="pp-comment-body">{c.body}</span>
-          <span className="pp-comment-meta">{c.author_type} · {c.created_at.slice(0, 10)}</span>
+          <span className="pp-comment-meta">{c.author_display ?? c.author_type} · {c.created_at.slice(0, 10)}</span>
         </div>
       ))}
       <form className="pp-comment-add" onSubmit={add}>
@@ -1038,6 +1110,9 @@ function TaskRow({ task, phases, stages, projectId, onTaskUpdated, onDelete, dra
           <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
           {editable.node ?? <span className="pp-row-title">{task.title}</span>}
           {subtasks.length > 0 && <span className="pp-subcount">{subtasks.length}</span>}
+          {task.assignee_id && task.assignee_display && (
+            <PersonChip id={task.assignee_id} name={task.assignee_display} />
+          )}
         </button>
         <InlineStatusSelect kind="task" value={task.status} options={statusKeys}
           onChange={s => update({ status: s })} label={`Change status of ${task.title}`} onAddNew={onAddNew} colorOf={colorOf} />
@@ -1402,7 +1477,7 @@ function CommentItem({ comment, card, update, remove }: {
       ) : (
         <div className="pp-comment-body ab-prose"><Markdown markdown={comment.body} /></div>
       )}
-      <span className="pp-meta">{comment.entity_type} · {(comment.updated_at ?? comment.created_at).slice(0, 10)}</span>
+      <span className="pp-meta">{comment.author_display ?? comment.entity_type} · {(comment.updated_at ?? comment.created_at).slice(0, 10)}</span>
     </div>
   )
 }

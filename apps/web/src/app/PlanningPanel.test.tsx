@@ -27,6 +27,7 @@ vi.mock('../api/client', () => ({
     links: { list: vi.fn(), create: vi.fn() },
     checklistItems: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
     statusOptions: { list: vi.fn(async () => []), create: vi.fn(), update: vi.fn(), reorder: vi.fn(), remove: vi.fn() },
+    members: { list: vi.fn(async () => []) },
   },
 }))
 
@@ -113,6 +114,36 @@ describe('PlanningPanel', () => {
     await screen.findByText('Test Project')
     expect(screen.getByRole('tab', { name: 'Tasks' }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByText('No tasks yet.')).toBeTruthy()
+  })
+
+  it('shows the assignee name on an assigned task (P16.3)', async () => {
+    setupEmpty()
+    mockApi.tasks.list.mockResolvedValue([
+      {
+        id: 'tsk_1', project_id: 'proj_1', phase_id: null, stage_id: null, parent_task_id: null,
+        title: 'Wire the API', description: null, status: 'backlog', priority: null,
+        due_at: null, sort_order: 0, assignee_id: 'usr_2', assignee_display: 'Sam Rivera',
+        created_at: '2026-07-19T00:00:00+00:00', updated_at: '2026-07-19T00:00:00+00:00',
+      },
+    ])
+    render(<PlanningPanel projectId="proj_1" initialTab="tasks" />)
+    expect(await screen.findByText('Wire the API')).toBeTruthy()
+    // The row carries the assignee chip (server-resolved display name).
+    expect(screen.getByText('Sam Rivera')).toBeTruthy()
+  })
+
+  it('shows the comment author display when present (P16.3)', async () => {
+    setupEmpty()
+    mockApi.comments.list.mockResolvedValue([
+      {
+        id: 'cmt_1', project_id: 'proj_1', entity_type: 'project', entity_id: 'proj_1',
+        body: 'looks good', author_type: 'human', author_id: 'usr_2', author_display: 'Sam Rivera',
+        status: 'active', created_at: '2026-07-19T00:00:00+00:00', updated_at: null,
+      },
+    ])
+    render(<PlanningPanel projectId="proj_1" initialTab="comments" />)
+    await screen.findByText('Test Project')
+    expect(await screen.findByText(/Sam Rivera/)).toBeTruthy()
   })
 
   it('renders milestones with target date when present', async () => {

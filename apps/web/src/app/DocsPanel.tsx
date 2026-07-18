@@ -456,6 +456,11 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
 
       <div className="dp-statusbar">
         <span className={`dp-save-label ${saveState}`}>{saveLabel}</span>
+        {doc.updated_by_display && (
+          <span className="dp-edited-by" style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)' }}>
+            Last edited by {doc.updated_by_display}
+          </span>
+        )}
         <button type="button" className="btn btn-outline btn-xs"
           onClick={save} disabled={saveState === 'saving' || saveState === 'saved'}>Save</button>
         <button type="button" className="btn btn-ghost btn-xs"
