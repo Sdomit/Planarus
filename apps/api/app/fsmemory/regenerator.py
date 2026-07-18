@@ -5,6 +5,8 @@ the on-disk bytes, then decide.
 
 | condition                                   | action                        |
 |---------------------------------------------|-------------------------------|
+| spec.authored + existing row                | pin row, skip (human-owned)   |
+| spec.authored + no row + file on disk       | adopt on-disk verbatim, pin   |
 | row.pinned                                  | skip (never auto-overwrite)   |
 | on-disk differs from last-written checksum  | drift: skip, mark manual edit |
 | rendered == on-disk                         | unchanged: no write           |
@@ -207,6 +209,14 @@ def regenerate(
             on_disk = atomic_io.read_bytes(root, rel)
             on_disk_sum = _sha256(on_disk) if on_disk is not None else None
 
+            authored = spec.authored
+            # Authored files are human-maintained: ensure the row is pinned so
+            # regeneration never overwrites hand-written content. Migrates legacy
+            # unpinned rows created before the `authored` flag existed, in place.
+            if authored and row is not None and not row.pinned:
+                row.pinned = True
+                session.add(row)
+
             pinned = bool(row.pinned) if row is not None else False
             drifted = (
                 row is not None
@@ -236,18 +246,28 @@ def regenerate(
                 continue
 
             # New row, changed content, or a missing file: write and upsert.
-            atomic_io.write_text(root, rel, rendered)
-            token_estimate = max(1, len(rendered) // 4)
             if row is None:
+                if authored and on_disk is not None:
+                    # Fresh checkout: a hand-written authored file is already on
+                    # disk with no row yet. Adopt it verbatim and pin it — never
+                    # overwrite it with the starter scaffold.
+                    checksum, status, content = on_disk_sum, STATUS_PINNED, on_disk
+                else:
+                    # Data-driven file, or an authored file with no scaffold yet:
+                    # write the rendered content once.
+                    atomic_io.write_text(root, rel, rendered)
+                    checksum, status = rendered_sum, STATUS_CREATED
+                    content = rendered.encode("utf-8")
+                token_estimate = max(1, len(content) // 4)
                 session.add(
                     ContextFile(
                         id=new_id("ctx"),
                         project_id=project.id,
                         kind=spec.kind,
                         relative_path=rel,
-                        checksum=rendered_sum,
+                        checksum=checksum,
                         generated_at=now,
-                        pinned=False,
+                        pinned=authored,
                         last_manual_edit_at=None,
                         token_estimate=token_estimate,
                         created_at=now,
@@ -255,9 +275,11 @@ def regenerate(
                     )
                 )
                 report.outcomes.append(
-                    FileOutcome(rel, spec.kind, STATUS_CREATED, False, False)
+                    FileOutcome(rel, spec.kind, status, authored, False)
                 )
             else:
+                atomic_io.write_text(root, rel, rendered)
+                token_estimate = max(1, len(rendered) // 4)
                 row.checksum = rendered_sum
                 row.generated_at = now
                 row.token_estimate = token_estimate
