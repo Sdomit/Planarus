@@ -57,6 +57,9 @@ async def tenant_user(
     user = auth_service.resolve_user(session, raw_token)
     if user is None:
         raise HTTPException(status_code=401, detail="authentication required")
+    # P16.1 (D29): a temp-password session must rotate before touching domain data.
+    if auth_service.password_must_change(session, user.id):
+        raise HTTPException(status_code=403, detail="password change required")
     actor.set_current_actor_id(user.id)
     return user
 

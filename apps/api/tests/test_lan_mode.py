@@ -109,10 +109,22 @@ def test_lan_switch_cannot_widen_past_ceiling(client, session, monkeypatch):
 def test_put_settings_lan_switch_takes_effect_immediately(client, session, monkeypatch):
     from tests.external_util import local_hdr
 
+    from app.services.auth_service import SESSION_COOKIE
+
     _lan_on(monkeypatch)
+    # P16.1 (D35): with auth on, flipping switches requires a server admin —
+    # the first account on the server bootstraps to admin (D29).
+    monkeypatch.setattr(settings, "auth_dev_login_enabled", True)
+    client.post("/api/v1/auth/dev-login", json={"email": "host@lan.local"})
+    admin_cookie = {SESSION_COOKIE: client.cookies.get(SESSION_COOKIE)}
+    client.cookies.clear()
+
     assert client.get("/health", headers={"Host": LAN_HOST}).status_code == 200
     res = client.put(
-        "/api/v1/settings", headers=local_hdr(client), json={"lan_mode_active": False}
+        "/api/v1/settings",
+        headers=local_hdr(client),
+        cookies=admin_cookie,
+        json={"lan_mode_active": False},
     )
     assert res.status_code == 200, res.text
     assert res.json()["lan_mode_active"] is False
