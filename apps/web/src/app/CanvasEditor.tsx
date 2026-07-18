@@ -3,6 +3,7 @@ import { Excalidraw, serializeAsJSON, convertToExcalidrawElements } from '@excal
 import '@excalidraw/excalidraw/index.css'
 import { api, type Doc, type Comment } from '../api/client'
 import { StatusBadge } from './StatusBadge'
+import { usePresence } from './usePresence'
 import {
   CARD_KINDS,
   CARD_STYLE,
@@ -103,6 +104,10 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
   const [comments, setComments] = useState<Comment[]>([])
   const commentsLoaded = useRef(false)
   const [commentBody, setCommentBody] = useState('')
+
+  // P11.2 soft-lock: dormant in local mode (the presence surface 404s); in team
+  // mode the first active editor holds the lock and everyone else goes view-only.
+  const { lockedByOther, editorName } = usePresence(docId, true)
 
   const entityMap = useMemo(() => new Map(entities.map((e) => [e.id, e])), [entities])
   const groups = useMemo(() => {
@@ -347,6 +352,14 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
         <button className="btn btn-ghost btn-sm" onClick={onBack} title="Back to list">← Back</button>
         <span className="dp-editor-name">{doc.title}</span>
         <StatusBadge kind="docstatus" value={doc.status} />
+        {lockedByOther && (
+          <span
+            className="badge badge-warning badge-sm"
+            title="Someone else holds the edit lock; your canvas is read-only until they leave"
+          >
+            🔒 {editorName} is editing — read-only
+          </span>
+        )}
         <button className="btn btn-outline btn-sm" onClick={openPicker} title="Insert a card bound to a project entity">
           ＋ Card
         </button>
@@ -430,6 +443,7 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
           excalidrawAPI={(inst) => { apiRef.current = inst as unknown as CanvasApi }}
           initialData={{ elements: scene.elements, appState: scene.appState, files: scene.files }}
           onChange={onChange}
+          viewModeEnabled={lockedByOther}
         />
         {showComments && (
           <div

@@ -771,6 +771,22 @@ async function controlRequest<T>(path: string, init?: RequestInit): Promise<T> {
   })
 }
 
+// P11.2 (D27): doc presence / advisory soft-lock. The surface 404s when hosted
+// auth is off, so these are dormant in local single-user mode.
+export interface PresenceEntry {
+  user_id: string
+  display_name: string
+  mode: string
+  idle_seconds: number
+}
+
+export interface PresenceView {
+  entries: PresenceEntry[]
+  editor_user_id: string | null
+  you: string
+  ttl_seconds: number
+}
+
 export const api = {
   workspaces: {
     list: () => request<Workspace[]>('/workspaces'),
@@ -1005,6 +1021,11 @@ export const api = {
       request<Doc>(`/docs/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     exportMarkdown: (id: string) =>
       request<DocExportResponse>(`/docs/${id}/export-markdown`, { method: 'POST' }),
+    presenceBeat: (id: string, mode: 'viewing' | 'editing') =>
+      request<PresenceView>(`/docs/${id}/presence`, { method: 'PUT', body: JSON.stringify({ mode }) }),
+    presenceGet: (id: string) => request<PresenceView>(`/docs/${id}/presence`),
+    presenceLeave: (id: string) =>
+      request<void>(`/docs/${id}/presence`, { method: 'DELETE' }),
   },
   contextFiles: {
     list: (projectId: string) =>
