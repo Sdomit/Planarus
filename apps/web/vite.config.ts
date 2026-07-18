@@ -5,7 +5,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api': 'http://localhost:8000',
+      // Overridable so a second checkout/worktree can point at its own API port.
+      '/api': process.env.VITE_API_TARGET ?? 'http://localhost:8000',
     },
   },
   test: {

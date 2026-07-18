@@ -58,6 +58,13 @@ class Settings(BaseSettings):
     auth_dev_login_enabled: bool = Field(
         default=False, validation_alias="AGENTBOARD_AUTH_DEV_LOGIN"
     )
+    # P11.1 (D25) — the local email+password provider, the LAN-mode identity
+    # method (OAuth needs a public redirect URI a LAN box doesn't have). Doubly-
+    # gated like dev-login: ignored unless auth_enabled is ALSO true. Off by
+    # default so enabling hosted auth never silently opens a password surface.
+    auth_password_enabled: bool = Field(
+        default=False, validation_alias="AGENTBOARD_AUTH_PASSWORD_ENABLED"
+    )
     # Server-side session lifetime in hours (default 30 days).
     auth_session_ttl_hours: int = Field(
         default=720, validation_alias="AGENTBOARD_AUTH_SESSION_TTL_HOURS"
@@ -120,6 +127,22 @@ class Settings(BaseSettings):
     )
     calendar_microsoft_client_secret: str = Field(
         default="", validation_alias="AGENTBOARD_CALENDAR_MICROSOFT_CLIENT_SECRET"
+    )
+
+    # Phase 11.0 (LAN team mode) — ceiling env vars, DISABLED by default. When
+    # off, nothing changes: the app-wide Host allowlist stays loopback (plus any
+    # 7C1 external hosts). When on, the allowlist additionally accepts the
+    # comma-separated LAN hosts below — and create_app() refuses to start unless
+    # auth is ALSO enabled (fail closed, D25): the local control token is not an
+    # identity, so widening the host boundary without per-user auth would expose
+    # the whole DB to the network. The app itself never binds beyond loopback;
+    # the actual socket bind stays the user's explicit uvicorn choice (D26 —
+    # plain HTTP on the LAN is a documented, warned-about tradeoff).
+    lan_mode_enabled: bool = Field(
+        default=False, validation_alias="AGENTBOARD_LAN_MODE_ENABLED"
+    )
+    lan_allowed_hosts: str = Field(
+        default="", validation_alias="AGENTBOARD_LAN_ALLOWED_HOSTS"
     )
 
 
