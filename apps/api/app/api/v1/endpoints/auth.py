@@ -9,12 +9,17 @@ from sqlmodel import Session, select
 
 from app.core.auth_deps import get_current_user, require_auth_enabled
 from app.core.config import settings
+from app.core.exceptions import ConflictError
+from app.core.rate_limit import RateLimiter
 from app.db.session import get_session
 from app.models.user import User
 from app.models.workspace_member import WorkspaceMember
 from app.schemas.auth import (
     AuthMeRead,
     DevLoginRequest,
+    PasswordChangeRequest,
+    PasswordLoginRequest,
+    PasswordRegisterRequest,
     UserRead,
     WorkspaceMembershipRead,
 )
@@ -22,16 +27,25 @@ from app.services import auth_service, oauth
 
 router = APIRouter(dependencies=[Depends(require_auth_enabled)])
 
+# P11.1: per-email fixed-window throttle on password logins, reusing the 7C1
+# limiter (its read bucket serves as the attempt bucket). In-process by design,
+# like the rest of rate_limit.py; Argon2id already makes each attempt expensive.
+# ponytail: 10 attempts/min/email, resets on restart; failure-only or IP+email
+# keying only if real abuse shows up.
+_pw_limiter = RateLimiter(read_per_min=10)
+
 
 def _set_session_cookie(response: Response, raw_token: str) -> None:
-    # `secure` is relaxed only when the dev-login provider is on (local/tests over
-    # http); a real hosted deployment (dev-login off) always gets Secure cookies.
+    # `secure` is relaxed when the dev-login provider is on (local/tests over
+    # http) or when LAN mode is on — D26 ratified plain HTTP on the LAN, and a
+    # Secure cookie over http:// would be silently dropped by browsers, bricking
+    # login. A real hosted deployment (both off) always gets Secure cookies.
     response.set_cookie(
         key=auth_service.SESSION_COOKIE,
         value=raw_token,
         httponly=True,
         samesite="lax",
-        secure=not settings.auth_dev_login_enabled,
+        secure=not (settings.auth_dev_login_enabled or settings.lan_mode_enabled),
         path="/",
     )
 
@@ -60,6 +74,85 @@ def dev_login(
     user, raw_token = auth_service.dev_login(session, data.email, data.display_name)
     _set_session_cookie(response, raw_token)
     return _me(session, user)
+
+
+# --- P11.1: local email+password provider (D25) --------------------------------
+def _require_password_enabled() -> None:
+    """404 the password surface unless its flag is on (dev-login precedent)."""
+    if not settings.auth_password_enabled:
+        raise HTTPException(status_code=404, detail="not found")
+
+
+@router.post(
+    "/auth/password/register",
+    response_model=AuthMeRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def password_register(
+    data: PasswordRegisterRequest,
+    response: Response,
+    session: Session = Depends(get_session),
+) -> AuthMeRead:
+    """Create a new account (create-only: 409 if the email exists — never links
+    onto an existing account) and open a session. Workspace access still requires
+    membership granted by an owner; a fresh account can see nothing."""
+    _require_password_enabled()
+    try:
+        user, raw_token = auth_service.register_password_user(
+            session, data.email, data.password, data.display_name
+        )
+    except ConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    _set_session_cookie(response, raw_token)
+    return _me(session, user)
+
+
+@router.post("/auth/password/login", response_model=AuthMeRead)
+def password_login(
+    data: PasswordLoginRequest,
+    response: Response,
+    session: Session = Depends(get_session),
+) -> AuthMeRead:
+    _require_password_enabled()
+    retry_after = _pw_limiter.check_read(data.email.strip().lower())
+    if retry_after is not None:
+        raise HTTPException(
+            status_code=429,
+            detail="too many login attempts; try again shortly",
+            headers={"Retry-After": str(int(retry_after))},
+        )
+    result = auth_service.login_with_password(session, data.email, data.password)
+    if result is None:
+        # One generic message for unknown email / wrong password / inactive.
+        raise HTTPException(status_code=401, detail="invalid email or password")
+    user, raw_token = result
+    _set_session_cookie(response, raw_token)
+    return _me(session, user)
+
+
+@router.post("/auth/password/change", status_code=status.HTTP_204_NO_CONTENT)
+def password_change(
+    data: PasswordChangeRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> Response:
+    """Rotate the caller's own password (requires the current one); every other
+    session for the account is revoked, the caller's cookie survives."""
+    _require_password_enabled()
+    try:
+        ok = auth_service.change_password(
+            session,
+            user,
+            data.current_password,
+            data.new_password,
+            keep_raw_token=request.cookies.get(auth_service.SESSION_COOKIE),
+        )
+    except ConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not ok:
+        raise HTTPException(status_code=400, detail="current password is incorrect")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/auth/me", response_model=AuthMeRead)

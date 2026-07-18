@@ -58,6 +58,13 @@ class Settings(BaseSettings):
     auth_dev_login_enabled: bool = Field(
         default=False, validation_alias="AGENTBOARD_AUTH_DEV_LOGIN"
     )
+    # P11.1 (D25) — the local email+password provider, the LAN-mode identity
+    # method (OAuth needs a public redirect URI a LAN box doesn't have). Doubly-
+    # gated like dev-login: ignored unless auth_enabled is ALSO true. Off by
+    # default so enabling hosted auth never silently opens a password surface.
+    auth_password_enabled: bool = Field(
+        default=False, validation_alias="AGENTBOARD_AUTH_PASSWORD_ENABLED"
+    )
     # Server-side session lifetime in hours (default 30 days).
     auth_session_ttl_hours: int = Field(
         default=720, validation_alias="AGENTBOARD_AUTH_SESSION_TTL_HOURS"

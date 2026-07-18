@@ -18,6 +18,7 @@ from app.models.user import User
 from app.models.user_identity import UserIdentity
 from app.models.user_session import UserSession
 from app.models.workspace_member import WorkspaceMember
+from app.services.api_credentials import dummy_verify, hash_secret, verify_secret
 from app.services.audit_service import create_audit_event
 
 SESSION_COOKIE = "approvo_session"
@@ -153,6 +154,140 @@ def dev_login(
     return login_with_identity(
         session, "dev", _normalize_email(email), email, display_name
     )
+
+
+# --- password provider (Phase 11.1, D25) --------------------------------------
+PASSWORD_PROVIDER = "password"
+
+
+def register_password_user(
+    session: Session, email: str, password: str, display_name: Optional[str]
+) -> tuple[User, str]:
+    """Create-only registration for the local email+password provider.
+
+    Deliberately NOT ``login_with_identity``: that helper attaches new identities
+    to an existing user by email match, which for an unauthenticated register
+    would let anyone who can reach the box claim an existing (OAuth/dev) account
+    with their own password. An email that already has a ``User`` raises
+    ``ConflictError`` instead. Only the Argon2id verifier is stored; returns the
+    user plus a fresh raw session token, like the other providers.
+    """
+    norm = _normalize_email(email)
+    if session.exec(select(User).where(User.email == norm)).first() is not None:
+        raise ConflictError("an account with this email already exists")
+    now = now_utc()
+    user = User(
+        id=new_id("usr"),
+        email=norm,
+        display_name=(display_name or norm.split("@")[0]).strip()[:200] or norm,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(user)
+    try:
+        session.flush()
+    except IntegrityError as exc:  # unique(email) race with a concurrent register
+        session.rollback()
+        raise ConflictError("an account with this email already exists") from exc
+    create_audit_event(
+        session,
+        event_type="create",
+        actor_type="human",
+        entity_type="user",
+        entity_id=user.id,
+    )
+    session.add(
+        UserIdentity(
+            id=new_id("uid"),
+            user_id=user.id,
+            provider=PASSWORD_PROVIDER,
+            provider_subject=norm,
+            password_hash=hash_secret(password),
+            created_at=now,
+        )
+    )
+    raw_token = create_session(session, user.id)
+    session.commit()
+    session.refresh(user)
+    return user, raw_token
+
+
+def login_with_password(
+    session: Session, email: str, password: str
+) -> Optional[tuple[User, str]]:
+    """Verify an email+password login; ``None`` on ANY failure.
+
+    Unknown email, no password identity, wrong password, and inactive account
+    are indistinguishable to the caller (one generic 401 at the endpoint).
+    Unknown identities still burn one Argon2id verify (``dummy_verify``) so they
+    cost roughly the same as a known-but-wrong one.
+    """
+    norm = _normalize_email(email)
+    identity = session.exec(
+        select(UserIdentity).where(
+            UserIdentity.provider == PASSWORD_PROVIDER,
+            UserIdentity.provider_subject == norm,
+        )
+    ).first()
+    if identity is None or not identity.password_hash:
+        dummy_verify()
+        return None
+    if not verify_secret(identity.password_hash, password):
+        return None
+    user = session.get(User, identity.user_id)
+    if user is None or not user.is_active:
+        return None
+    raw_token = create_session(session, user.id)
+    session.commit()
+    session.refresh(user)
+    return user, raw_token
+
+
+def change_password(
+    session: Session,
+    user: User,
+    current_password: str,
+    new_password: str,
+    keep_raw_token: Optional[str] = None,
+) -> bool:
+    """Rotate the caller's password; ``False`` if ``current_password`` is wrong.
+
+    ``ConflictError`` if the account has no password identity — setting a FIRST
+    password on an OAuth/dev account is deliberately out of P11.1 scope (it
+    would need its own re-auth story; register stays create-only either way).
+    On success every OTHER live session for the user is revoked;
+    ``keep_raw_token`` (the caller's own cookie) survives.
+    """
+    identity = session.exec(
+        select(UserIdentity).where(
+            UserIdentity.provider == PASSWORD_PROVIDER,
+            UserIdentity.user_id == user.id,
+        )
+    ).first()
+    if identity is None or not identity.password_hash:
+        raise ConflictError("this account has no password login")
+    if not verify_secret(identity.password_hash, current_password):
+        return False
+    identity.password_hash = hash_secret(new_password)
+    session.add(identity)
+    keep_hash = _hash_token(keep_raw_token) if keep_raw_token else None
+    now = now_utc()
+    rows = session.exec(
+        select(UserSession).where(UserSession.user_id == user.id)
+    ).all()
+    for row in rows:
+        if row.revoked_at is None and row.token_hash != keep_hash:
+            row.revoked_at = now
+            session.add(row)
+    create_audit_event(
+        session,
+        event_type="update",
+        actor_type="human",
+        entity_type="user",
+        entity_id=user.id,
+    )
+    session.commit()
+    return True
 
 
 # --- membership ---------------------------------------------------------------
