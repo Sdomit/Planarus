@@ -58,10 +58,14 @@ def test_get_settings_shape_and_no_secret_leak(client):
         # P11.3 LAN section — switch + boolean-only ceiling status
         "lan_mode_active", "lan_permitted_by_env", "lan_hosts_configured",
         "auth_enabled_by_env", "auth_password_enabled_by_env",
+        # P16.1 (D30) — registration switch
+        "registration_open",
     }
     # LAN defaults mirror a local install: ceiling off, switch inert-off.
     assert body["lan_permitted_by_env"] is False
     assert body["lan_mode_active"] is False
+    # D30 default: open — today's self-registration behavior until closed.
+    assert body["registration_open"] is True
     # Ceiling/secret tiers are booleans only — never a raw host, port, or token.
     assert "smtp_host" not in res.text
     assert "smtp_port" not in res.text

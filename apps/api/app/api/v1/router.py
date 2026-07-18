@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    admin,
     agent_runs,
     api_clients,
     approvals,
@@ -49,6 +50,9 @@ _GUARD = [Depends(tenant_guard)]
 router = APIRouter()
 router.include_router(info.router, tags=["info"])
 router.include_router(auth.router, tags=["auth"])
+# P16.1: the admin plane (account lifecycle) — 404s entirely when auth is off,
+# like auth/members; admin-gated + control-token-gated inside.
+router.include_router(admin.router, tags=["admin"])
 router.include_router(members.router, tags=["members"])
 router.include_router(workspaces.router, tags=["workspaces"])
 router.include_router(projects.router, tags=["projects"])

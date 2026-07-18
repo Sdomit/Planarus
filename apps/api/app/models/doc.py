@@ -37,6 +37,8 @@ class Doc(SQLModel, table=True):
     status: str = Field(default="draft")
     sort_order: int = Field(default=0)
     version: int = Field(default=1)
+    # P16.1 (D33): who last saved it, when a signed-in user did; wired in P16.3.
+    updated_by: Optional[str] = Field(default=None, foreign_key="appuser.id")
     created_at: str
     updated_at: str
     archived_at: Optional[str] = None

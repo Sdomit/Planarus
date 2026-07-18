@@ -62,6 +62,7 @@ class UserRead(BaseModel):
     email: str
     display_name: str
     is_active: bool
+    is_admin: bool = False  # P16.1 (D29): server-admin flag, account plane only
     created_at: str
     updated_at: str
 
@@ -80,3 +81,5 @@ class AuthMeRead(BaseModel):
 
     user: UserRead
     memberships: list[WorkspaceMembershipRead]
+    # P16.1 (D29): true while the account runs on an admin-issued temp password.
+    password_must_change: bool = False
