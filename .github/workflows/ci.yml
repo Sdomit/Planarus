@@ -73,3 +73,38 @@ jobs:
           python scripts/assert_pg_schema.py
           alembic downgrade base
           alembic upgrade head
+
+  docker-build:
+    name: Docker (compose build + smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build images
+        run: docker compose build
+      - name: Start stack
+        run: docker compose up -d
+      - name: Wait for the API to become healthy
+        run: |
+          for i in $(seq 1 30); do
+            if docker compose exec -T api python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)" >/dev/null 2>&1; then
+              echo "API is healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API never became healthy within 60s"
+          exit 1
+      - name: Smoke-test the web container and the nginx -> api proxy
+        run: |
+          for i in $(seq 1 15); do
+            curl -sf http://localhost:5173/ >/dev/null && curl -sf http://localhost:5173/api/v1/workspaces >/dev/null && exit 0
+            sleep 2
+          done
+          echo "web/proxy smoke check failed"
+          exit 1
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker compose logs
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
