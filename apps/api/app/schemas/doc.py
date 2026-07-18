@@ -117,6 +117,9 @@ class DocRead(BaseModel):
     status: str
     sort_order: int
     version: int
+    updated_by: Optional[str] = None
+    # P16.3 (D33): who last saved it, resolved at read time; None in local mode.
+    updated_by_display: Optional[str] = None
     created_at: str
     updated_at: str
     archived_at: Optional[str]

@@ -99,6 +99,8 @@ export interface Task {
   priority: string | null
   due_at: string | null
   sort_order: number
+  assignee_id: string | null // P16.3 (D33)
+  assignee_display: string | null
   created_at: string
   updated_at: string
 }
@@ -236,6 +238,8 @@ export interface Comment {
   entity_id: string
   body: string
   author_type: string
+  author_id: string | null // P16.3 (D33)
+  author_display: string | null
   status: string
   created_at: string
   updated_at: string | null
@@ -273,6 +277,8 @@ export interface Doc extends DocSummary {
   export_relative_path: string | null
   export_checksum: string | null
   exported_at: string | null
+  updated_by: string | null // P16.3 (D33)
+  updated_by_display: string | null
   created_at: string
 }
 
@@ -639,6 +645,9 @@ export interface ProjectRoadmap {
   pct_done: number
 }
 
+// (Task/Comment/Doc attribution fields — P16.3 — are declared on their
+// interfaces below.)
+
 export interface TimelineEvent {
   id: string
   at: string
@@ -1001,12 +1010,13 @@ export const api = {
         phase_id?: string
         stage_id?: string
         parent_task_id?: string
+        assignee_id?: string | null
       },
     ) =>
       request<Task>(`/projects/${projectId}/tasks`, { method: 'POST', body: JSON.stringify(data) }),
     update: (
       id: string,
-      data: Partial<Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'phase_id' | 'stage_id' | 'due_at' | 'parent_task_id'>>,
+      data: Partial<Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'phase_id' | 'stage_id' | 'due_at' | 'parent_task_id' | 'assignee_id'>>,
     ) =>
       request<Task>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remove: (id: string) => request<void>(`/tasks/${id}`, { method: 'DELETE' }),

@@ -10,6 +10,7 @@ from app.models.phase import Phase
 from app.models.project import Project
 from app.models.stage import Stage
 from app.models.task import Task
+from app.models.user import User
 from app.schemas.task import TaskCreate, TaskUpdate
 from app.services import status_option_service
 from app.services.audit_service import create_audit_event
@@ -20,6 +21,14 @@ def _validate_status(session: Session, project_id: str, status: str) -> None:
     """A task status must be a built-in or one of the project's custom statuses."""
     if status not in status_option_service.allowed_status_keys(session, project_id, "task"):
         raise ValueError(f"status '{status}' is not defined for this project")
+
+
+def _validate_assignee(session: Session, assignee_id: Optional[str]) -> None:
+    """An assignee must be a real user (P16.3). ponytail: existence only — the
+    picker offers workspace members, and the FK enforces referential integrity;
+    add a membership check here if cross-workspace assignment ever needs blocking."""
+    if assignee_id is not None and session.get(User, assignee_id) is None:
+        raise ValueError(f"assignee '{assignee_id}' is not a known user")
 
 
 def list_tasks(session: Session, project_id: str) -> list[Task]:
@@ -58,6 +67,7 @@ def create_task(session: Session, project_id: str, data: TaskCreate) -> Task:
         raise ValueError(f"project '{project_id}' not found")
     _validate_status(session, project_id, data.status)
     _validate_parent_task(session, project_id, data.parent_task_id)
+    _validate_assignee(session, data.assignee_id)
     if data.phase_id is not None:
         phase = session.get(Phase, data.phase_id)
         if phase is None or phase.project_id != project_id:
@@ -91,6 +101,7 @@ def create_task(session: Session, project_id: str, data: TaskCreate) -> Task:
         priority=data.priority,
         sort_order=sort_order,
         due_at=data.due_at,
+        assignee_id=data.assignee_id,
         created_at=now,
         updated_at=now,
     )
@@ -123,6 +134,9 @@ def update_task(session: Session, task_id: str, data: TaskUpdate) -> Optional[Ta
         _validate_parent_task(
             session, task.project_id, update_data["parent_task_id"], self_id=task.id
         )
+
+    if "assignee_id" in update_data:
+        _validate_assignee(session, update_data["assignee_id"])
 
     if "phase_id" in update_data and update_data["phase_id"] is not None:
         phase = session.get(Phase, update_data["phase_id"])

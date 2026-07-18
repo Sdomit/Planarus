@@ -235,3 +235,9 @@
 .sm-icon:disabled { opacity: 0.4; cursor: default; }
 .sm-icon-danger:hover:not(:disabled) { color: var(--status-danger-fg); border-color: var(--status-danger-fg); }
 .sm-add { display: flex; align-items: center; gap: var(--space-2); border-top: 1px solid var(--border-subtle); padding-top: var(--space-3); }
+
+/* P16.3 — assignee/author chips + "assigned to me" filter */
+.pp-person { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; font-size: var(--text-xs); color: var(--text-secondary); }
+.pp-person-dot { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 999px; color: #fff; font-size: 9px; font-weight: 700; flex-shrink: 0; }
+.pp-person-name { max-width: 12ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-mine-filter { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap; }
