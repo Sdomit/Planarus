@@ -1,6 +1,7 @@
 import sqlite3
 from pathlib import Path
 
+import pytest
 from alembic import command
 from alembic.config import Config
 
@@ -91,6 +92,56 @@ def test_0006_swaps_idempotency_index(tmp_path):
 
     command.upgrade(cfg, "head")
     assert "uq_approval_active_idem" in _indexes(db_path)
+
+
+def test_0025_password_provider_check_and_column(tmp_path):
+    """0025 adds useridentity.password_hash and widens the provider CHECK to
+    'password'; unknown providers still rejected; downgrade refuses while a
+    password identity exists, then restores the narrow CHECK + drops the column."""
+    db_path = tmp_path / "m25.db"
+    cfg = _config(db_path)
+    command.upgrade(cfg, "head")
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            "INSERT INTO appuser (id,email,display_name,is_active,created_at,updated_at) "
+            "VALUES ('usr_1','p@t.lan','Pat',1,'2026','2026')"
+        )
+        con.execute(
+            "INSERT INTO useridentity (id,user_id,provider,provider_subject,password_hash,created_at) "
+            "VALUES ('uid_1','usr_1','password','p@t.lan','$argon2id$fake','2026')"
+        )
+        con.commit()  # password provider + hash column accepted
+        try:
+            con.execute(
+                "INSERT INTO useridentity (id,user_id,provider,provider_subject,created_at) "
+                "VALUES ('uid_2','usr_1','zzz','x','2026')"
+            )
+            con.commit()
+            raise AssertionError("unknown provider should have been rejected")
+        except sqlite3.IntegrityError:
+            con.rollback()
+    finally:
+        con.close()
+
+    with pytest.raises(RuntimeError, match="refusing to downgrade 0025"):
+        command.downgrade(cfg, "0024")
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute("DELETE FROM useridentity WHERE provider = 'password'")
+        con.commit()
+    finally:
+        con.close()
+    command.downgrade(cfg, "0024")
+    con = sqlite3.connect(db_path)
+    try:
+        cols = {row[1] for row in con.execute("PRAGMA table_info(useridentity)")}
+        assert "password_hash" not in cols
+    finally:
+        con.close()
+    command.upgrade(cfg, "head")
 
 
 def test_0006_origin_check_allows_mcp(tmp_path):
