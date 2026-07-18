@@ -15,6 +15,7 @@ import ExternalClientsPanel from './ExternalClientsPanel'
 import AgentRunsPanel from './AgentRunsPanel'
 import RemindersPanel from './RemindersPanel'
 import SettingsPanel from './SettingsPanel'
+import TeamPanel from './TeamPanel'
 import NotificationsBell from './NotificationsBell'
 import { SidebarTodos } from './SidebarTodos'
 import { useAuthInfo } from './auth'
@@ -25,7 +26,7 @@ import './layout.css'
 type MainView =
   | 'dashboard' | 'cockpit' | 'planning' | 'roadmap' | 'timeline' | 'calendar' | 'docs'
   | 'canvas' | 'context-pack' | 'context-files' | 'preview' | 'approvals' | 'clients'
-  | 'agent-runs' | 'reminders' | 'settings'
+  | 'agent-runs' | 'reminders' | 'team' | 'settings'
 
 interface SelectedProject {
   id: string
@@ -55,11 +56,16 @@ const NAV: { group: string; items: { view: MainView; label: string; icon: string
     { view: 'reminders', label: 'Reminders', icon: 'bell' },
   ] },
   { group: 'System', items: [
+    // 'team' is team-mode only — filtered out of nav + quick-nav in local mode.
+    { view: 'team', label: 'Team', icon: 'users' },
     { view: 'settings', label: 'Settings', icon: 'settings' },
   ] },
 ]
 
-const NAV_ITEMS = NAV.flatMap(group => group.items.map(item => ({ ...item, group: group.group })))
+function navGroups(teamMode: boolean) {
+  if (teamMode) return NAV
+  return NAV.map(g => ({ ...g, items: g.items.filter(it => it.view !== 'team') }))
+}
 
 function isMobileViewport(): boolean {
   return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 639px)').matches
@@ -81,6 +87,7 @@ const TITLES: Record<MainView, { title: string; sub: string }> = {
   clients: { title: 'External API Clients', sub: 'Machine keys & scopes' },
   'agent-runs': { title: 'Agent Runs', sub: 'Execution telemetry & analytics' },
   reminders: { title: 'Reminders', sub: 'Email reminders & send history' },
+  team: { title: 'Team', sub: 'People, roles & access' },
   settings: { title: 'Settings', sub: 'Connections & runtime switches' },
 }
 
@@ -212,13 +219,18 @@ export default function Layout() {
   )
 
   const { title, sub } = TITLES[mainView]
+  const groups = useMemo(() => navGroups(Boolean(me)), [me])
+  const searchableItems = useMemo(
+    () => groups.flatMap(g => g.items.map(item => ({ ...item, group: g.group }))),
+    [groups],
+  )
   const searchResults = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
     if (!query) return []
-    return NAV_ITEMS.filter(item =>
+    return searchableItems.filter(item =>
       `${item.label} ${item.group} ${TITLES[item.view].sub}`.toLowerCase().includes(query),
     ).slice(0, 6)
-  }, [searchQuery])
+  }, [searchQuery, searchableItems])
 
   const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Escape') {
@@ -302,7 +314,7 @@ export default function Layout() {
             )}
           </div>
 
-          {NAV.map((grp) => (
+          {groups.map((grp) => (
             <nav className="sidebar-nav" aria-label={grp.group} key={grp.group}>
               <div className="sidebar-nav-label">{grp.group}</div>
               {grp.items.map((it) => {
@@ -438,6 +450,7 @@ export default function Layout() {
               {mainView === 'clients' && <ExternalClientsPanel onClose={() => setMainView('dashboard')} />}
               {mainView === 'agent-runs' && (project ? <AgentRunsPanel projectId={project.id} /> : placeholder)}
               {mainView === 'reminders' && (project ? <RemindersPanel projectId={project.id} /> : placeholder)}
+              {mainView === 'team' && <TeamPanel />}
               {mainView === 'settings' && <SettingsPanel />}
             </div>
           </div>

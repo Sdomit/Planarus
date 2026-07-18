@@ -746,6 +746,7 @@ export interface AppSettings {
   email_from: string
   external_api_active: boolean
   lan_mode_active: boolean
+  registration_open: boolean // P16.1 (D30): accept password self-registration
   // ceiling tier (env-owned, read-only status)
   external_api_permitted_by_env: boolean
   external_api_hosts_configured: boolean
@@ -761,6 +762,7 @@ export interface AppSettingsUpdate {
   email_from?: string
   external_api_active?: boolean
   lan_mode_active?: boolean
+  registration_open?: boolean
 }
 
 // P11.3 (hosted/LAN auth). The auth surface 404s when AGENTBOARD_AUTH_ENABLED
@@ -770,6 +772,7 @@ export interface AuthUser {
   email: string
   display_name: string
   is_active: boolean
+  is_admin?: boolean // P16.1 (D29): server-admin flag, account plane only
   created_at: string
   updated_at: string
 }
@@ -782,6 +785,37 @@ export interface AuthMembership {
 export interface AuthMe {
   user: AuthUser
   memberships: AuthMembership[]
+  // P16.1: true while the account runs on an admin-issued temp password.
+  password_must_change?: boolean
+}
+
+// P16.2 — Team surface: workspace members (P10.1 API, first UI here) and the
+// server-admin account roster (P16.1 admin plane).
+export interface MemberRead {
+  id: string
+  workspace_id: string
+  user_id: string
+  email: string
+  display_name: string
+  role: string
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminUser {
+  id: string
+  email: string
+  display_name: string
+  is_admin: boolean
+  is_active: boolean
+  created_at: string
+  last_seen_at: string | null
+  memberships: AuthMembership[]
+}
+
+export interface AdminUserCreated {
+  user: AdminUser
+  temp_password: string
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -860,6 +894,61 @@ export const api = {
         }),
       }),
     logout: () => request<void>('/auth/logout', { method: 'POST' }),
+    passwordChange: (currentPassword: string, newPassword: string) =>
+      request<void>('/auth/password/change', {
+        method: 'POST',
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword,
+        }),
+      }),
+  },
+  // Workspace member management (owner-gated server-side; 404s when auth off).
+  members: {
+    list: (workspaceId: string) =>
+      request<MemberRead[]>(`/workspaces/${workspaceId}/members`),
+    add: (workspaceId: string, email: string, role: string) =>
+      request<MemberRead>(`/workspaces/${workspaceId}/members`, {
+        method: 'POST',
+        body: JSON.stringify({ email, role }),
+      }),
+    setRole: (workspaceId: string, userId: string, role: string) =>
+      request<MemberRead>(`/workspaces/${workspaceId}/members/${userId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role }),
+      }),
+    remove: (workspaceId: string, userId: string) =>
+      request<void>(`/workspaces/${workspaceId}/members/${userId}`, {
+        method: 'DELETE',
+      }),
+  },
+  // P16.1 admin plane (server admins only; 404s when auth off). Mutations are
+  // control-token-gated like the other management writes; temp passwords are
+  // shown once and never persisted by the client.
+  admin: {
+    users: () => request<AdminUser[]>('/admin/users'),
+    createUser: (email: string, displayName?: string) =>
+      controlRequest<AdminUserCreated>('/admin/users', {
+        method: 'POST',
+        body: JSON.stringify({
+          email,
+          ...(displayName ? { display_name: displayName } : {}),
+        }),
+      }),
+    resetPassword: (userId: string) =>
+      controlRequest<{ temp_password: string }>(
+        `/admin/users/${userId}/reset-password`,
+        { method: 'POST' },
+      ),
+    deactivate: (userId: string) =>
+      controlRequest<AdminUser>(`/admin/users/${userId}/deactivate`, { method: 'POST' }),
+    reactivate: (userId: string) =>
+      controlRequest<AdminUser>(`/admin/users/${userId}/reactivate`, { method: 'POST' }),
+    setAdmin: (userId: string, isAdmin: boolean) =>
+      controlRequest<AdminUser>(`/admin/users/${userId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_admin: isAdmin }),
+      }),
   },
   workspaces: {
     list: () => request<Workspace[]>('/workspaces'),
