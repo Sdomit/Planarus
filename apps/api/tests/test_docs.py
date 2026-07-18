@@ -476,3 +476,53 @@ def test_doc_table_exists(client: TestClient) -> None:
     _, pid = _seed(client)
     res = client.get(f"/api/v1/projects/{pid}/docs")
     assert res.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Hard delete
+# ---------------------------------------------------------------------------
+
+
+def test_delete_doc(client: TestClient) -> None:
+    _, pid = _seed(client)
+    d = client.post(
+        f"/api/v1/projects/{pid}/docs",
+        json={"title": "Gone", "doc_type": "note"},
+    ).json()
+    assert client.delete(f"/api/v1/docs/{d['id']}").status_code == 204
+    assert client.get(f"/api/v1/docs/{d['id']}").status_code == 404
+
+
+def test_delete_doc_not_found(client: TestClient) -> None:
+    assert client.delete("/api/v1/docs/doc_missing").status_code == 404
+
+
+def test_delete_doc_cascades_comments_and_promotes_children(client: TestClient) -> None:
+    """Deleting a doc removes its doc-scoped comments/links and promotes child
+    docs to top-level rather than deleting them."""
+    _, pid = _seed(client)
+    parent = client.post(
+        f"/api/v1/projects/{pid}/docs",
+        json={"title": "Canvas", "doc_type": "canvas", "editor_format": "excalidraw"},
+    ).json()
+    child = client.post(
+        f"/api/v1/projects/{pid}/docs",
+        json={"title": "Child", "doc_type": "note", "parent_doc_id": parent["id"]},
+    ).json()
+    client.post(
+        f"/api/v1/projects/{pid}/comments",
+        json={"entity_type": "doc", "entity_id": parent["id"], "body": "pin note"},
+    )
+
+    assert client.delete(f"/api/v1/docs/{parent['id']}").status_code == 204
+
+    # Comment on the deleted doc is gone…
+    remaining = client.get(
+        f"/api/v1/projects/{pid}/comments",
+        params={"entity_type": "doc", "entity_id": parent["id"]},
+    ).json()
+    assert remaining == []
+    # …and the child survives, promoted to top-level.
+    got = client.get(f"/api/v1/docs/{child['id']}")
+    assert got.status_code == 200
+    assert got.json()["parent_doc_id"] is None
