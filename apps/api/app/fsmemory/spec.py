@@ -16,10 +16,19 @@ AUDIT_LOG_RELPATH = f"{AGENTBOARD_DIR}/audit-log.jsonl"
 
 @dataclass(frozen=True)
 class ContextFileSpec:
-    """One generated Markdown file: its filename and its ContextFile.kind."""
+    """One generated Markdown file: its filename and its ContextFile.kind.
+
+    ``authored=True`` marks a human-maintained file whose renderer only produces
+    a starter scaffold (NEXT_STEP/ARCHITECTURE/TEST_PLAN are content-free stubs).
+    Regeneration writes the scaffold once when absent, then never overwrites it —
+    so hand-written content survives every regen, including the first one after a
+    fresh checkout (before any ContextFile row exists). Data-driven files
+    (ROADMAP/TASKS/DECISIONS/RISKS/STATUS) stay authored=False and regenerate.
+    """
 
     filename: str
     kind: str
+    authored: bool = False
 
     @property
     def relative_path(self) -> str:
@@ -33,17 +42,17 @@ CONTEXT_FILES: tuple[ContextFileSpec, ...] = (
     ContextFileSpec("PROJECT.md", "project_context"),
     ContextFileSpec("CONTEXT.md", "project_context"),
     ContextFileSpec("STATUS.md", "project_context"),
-    ContextFileSpec("NEXT_STEP.md", "next_step"),
+    ContextFileSpec("NEXT_STEP.md", "next_step", authored=True),
     ContextFileSpec("ROADMAP.md", "custom"),
     ContextFileSpec("TASKS.md", "custom"),
     ContextFileSpec("DECISIONS.md", "decisions"),
     ContextFileSpec("RISKS.md", "risks"),
     ContextFileSpec("AGENTS.md", "agent_rules"),
-    ContextFileSpec("AGENT_RULES.md", "agent_rules"),
+    ContextFileSpec("AGENT_RULES.md", "agent_rules", authored=True),
     ContextFileSpec("FILES_ALLOWED.md", "files_allowed"),
     ContextFileSpec("FILES_FORBIDDEN.md", "files_forbidden"),
-    ContextFileSpec("ARCHITECTURE.md", "architecture"),
-    ContextFileSpec("TEST_PLAN.md", "test_plan"),
+    ContextFileSpec("ARCHITECTURE.md", "architecture", authored=True),
+    ContextFileSpec("TEST_PLAN.md", "test_plan", authored=True),
     ContextFileSpec("PROMPTS.md", "custom"),
     ContextFileSpec("CHANGELOG.md", "changelog"),
 )

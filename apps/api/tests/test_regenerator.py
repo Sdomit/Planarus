@@ -145,6 +145,70 @@ def test_missing_file_recreated(session, tmp_path):
     assert outcomes["context/PROJECT.md"].status in {"created", "written"}
 
 
+def test_authored_file_not_clobbered_on_first_regen(session, tmp_path):
+    """Fresh checkout: a hand-written authored file exists on disk with no row yet.
+    The first regen must adopt it verbatim (not overwrite with the stub) and pin it."""
+    proj, ws = _seed(session, tmp_path)
+    (tmp_path / "context").mkdir()
+    hand_written = "---\npinned: true\n---\n\n# Real objective\n\nShip the thing.\n"
+    target = tmp_path / "context" / "NEXT_STEP.md"
+    target.write_text(hand_written, encoding="utf-8", newline="")
+
+    report = regenerate(session, proj, ws, now="t1")
+    session.commit()
+
+    # Content preserved, not replaced by the "_No next-step objective_" stub.
+    assert target.read_text(encoding="utf-8") == hand_written
+    outcomes = {o.relative_path: o for o in report.outcomes}
+    assert outcomes["context/NEXT_STEP.md"].status == "pinned-skip"
+    row = session.exec(
+        select(ContextFile).where(ContextFile.relative_path == "context/NEXT_STEP.md")
+    ).one()
+    assert row.pinned is True  # adopted + pinned so future regens skip it
+
+
+def test_authored_legacy_unpinned_row_migrated(session, tmp_path):
+    """A row created before the `authored` flag (pinned=False) is auto-pinned on
+    the next regen, and hand edits made after are then preserved."""
+    proj, ws = _seed(session, tmp_path)
+    regenerate(session, proj, ws, now="t1")
+    session.commit()
+
+    row = session.exec(
+        select(ContextFile).where(ContextFile.relative_path == "context/NEXT_STEP.md")
+    ).one()
+    row.pinned = False  # simulate a legacy row predating the authored flag
+    session.add(row)
+    session.commit()
+
+    edited = "# My own next step\n"
+    target = tmp_path / "context" / "NEXT_STEP.md"
+    target.write_text(edited, encoding="utf-8", newline="")
+
+    regenerate(session, proj, ws, now="t2")
+    session.commit()
+
+    assert target.read_text(encoding="utf-8") == edited
+    session.refresh(row)
+    assert row.pinned is True
+
+
+def test_data_driven_file_still_regenerates(session, tmp_path):
+    """authored=False files (e.g. STATUS.md) keep regenerating on data change."""
+    proj, ws = _seed(session, tmp_path)
+    regenerate(session, proj, ws, now="t1")
+    session.commit()
+
+    proj.status = "active"
+    proj.updated_at = "2026-06-20T00:00:00+00:00"
+    session.add(proj)
+    session.commit()
+
+    regenerate(session, proj, ws, now="t2")
+    session.commit()
+    assert "active" in (tmp_path / "context" / "STATUS.md").read_text(encoding="utf-8")
+
+
 def test_audit_event_and_log_line(session, tmp_path):
     proj, ws = _seed(session, tmp_path)
     regenerate(session, proj, ws, now="t1")
