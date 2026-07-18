@@ -88,7 +88,8 @@ is your LAN on/off switch at the OS level.
    has an account can never be claimed again with a new password.
 2. Create (or open) your workspace — the creator becomes its **owner**.
 3. **Teammates register themselves**, then can see nothing until you grant
-   membership. There is no members UI yet, so the owner grants roles via the
+   membership. There is no members UI yet (an in-app Team surface is planned —
+   [Phase 16](../plan/14-team-admin.md)), so the owner grants roles via the
    API (from the host machine or any signed-in owner session):
 
    ```bash
