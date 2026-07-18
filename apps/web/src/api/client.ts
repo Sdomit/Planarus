@@ -372,6 +372,29 @@ export interface GitFetchResult {
   snapshot: GitSnapshot | null
 }
 
+// Phase 12c: read-only open-PR list via the local GitHub CLI (zero stored tokens).
+export interface GitPullRequest {
+  number: number
+  title: string
+  state: string
+  is_draft: boolean
+  head: string | null
+  base: string | null
+  url: string | null
+  author: string | null
+  updated_at: string | null
+  review_decision: string | null
+}
+
+export interface GitPrSummary {
+  project_id: string
+  status: 'ok' | 'no_gh' | 'no_auth' | 'failed'
+  authenticated: boolean
+  message: string | null
+  prs: GitPullRequest[]
+  checked_at: string
+}
+
 export interface WorkspaceCreate {
   name: string
   slug: string
@@ -1092,6 +1115,8 @@ export const api = {
   git: {
     get: (projectId: string) => request<GitRepoLink>(`/projects/${projectId}/git`),
     snapshot: (projectId: string) => request<GitSnapshot>(`/projects/${projectId}/git/snapshot`),
+    // Phase 12c: read-only, click-triggered (never polled); gh keyring holds the credential.
+    prs: (projectId: string) => request<GitPrSummary>(`/projects/${projectId}/git/prs`),
     // Phase 12b: the one outbound action — control-token-gated, so it goes
     // through controlRequest (attaches X-Approvo-Local-Token).
     fetchNow: (projectId: string) =>

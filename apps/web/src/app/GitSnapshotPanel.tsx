@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { api, type GitBranch, type GitFetchResult, type GitSnapshot } from '../api/client'
+import { api, type GitBranch, type GitFetchResult, type GitPrSummary, type GitSnapshot } from '../api/client'
 import { Icon } from './Icon'
 import { agoLabel, dayLabel } from './date'
 
@@ -148,6 +148,121 @@ export default function GitSnapshotPanel({ projectId }: { projectId: string }) {
         )}
       </dl>
       <BranchTable snap={snap} />
+      <PrSection projectId={projectId} />
+    </div>
+  )
+}
+
+// Phase 12c: read-only open-PR list via the local gh CLI. Click-to-load only —
+// AgentBoard never auto-polls an outbound surface; the backend adds a 60s TTL.
+function PrSection({ projectId }: { projectId: string }) {
+  const [summary, setSummary] = useState<GitPrSummary | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [linked, setLinked] = useState<Record<number, 'saving' | 'done' | 'failed'>>({})
+
+  const loadPrs = useCallback(async () => {
+    setLoading(true)
+    try {
+      setSummary(await api.git.prs(projectId))
+    } catch (e) {
+      setSummary({
+        project_id: projectId, status: 'failed', authenticated: false,
+        message: e instanceof Error ? e.message : 'Could not load pull requests.',
+        prs: [], checked_at: '',
+      })
+    } finally {
+      setLoading(false)
+    }
+  }, [projectId])
+
+  const attach = useCallback(async (n: number, url: string, title: string) => {
+    setLinked((m) => ({ ...m, [n]: 'saving' }))
+    try {
+      await api.links.create(projectId, {
+        entity_type: 'project', entity_id: projectId, url, title: `PR #${n} — ${title}`,
+      })
+      setLinked((m) => ({ ...m, [n]: 'done' }))
+    } catch {
+      setLinked((m) => ({ ...m, [n]: 'failed' }))
+    }
+  }, [projectId])
+
+  const td = { fontSize: 'var(--text-sm)', color: 'var(--text-primary)', padding: '4px 12px 4px 0' }
+  return (
+    <div style={{ marginTop: 'var(--space-4)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontWeight: 600, fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>
+          Pull requests
+        </span>
+        <button
+          type="button"
+          className="btn btn-outline btn-sm"
+          onClick={loadPrs}
+          disabled={loading}
+          title="Read open PRs via your local GitHub CLI (gh) — read-only, nothing stored"
+        >
+          {loading ? <span className="spinner spinner-sm" /> : <Icon name="external" className="ic-14" />}
+          {loading ? ' Loading…' : summary ? ' Refresh PRs' : ' Load PRs'}
+        </button>
+      </div>
+      {summary && summary.status !== 'ok' && (
+        <p style={{ margin: 'var(--space-2) 0 0', fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
+          {summary.message ?? 'Pull requests unavailable.'}
+        </p>
+      )}
+      {summary?.status === 'ok' && summary.prs.length === 0 && (
+        <p style={{ margin: 'var(--space-2) 0 0', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>
+          No open pull requests.
+        </p>
+      )}
+      {summary?.status === 'ok' && summary.prs.length > 0 && (
+        <div style={{ marginTop: 'var(--space-2)', overflowX: 'auto' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <tbody>
+              {summary.prs.map((pr) => (
+                <tr key={pr.number}>
+                  <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                    {pr.url
+                      ? <a href={pr.url} target="_blank" rel="noreferrer">#{pr.number}</a>
+                      : <span>#{pr.number}</span>}
+                  </td>
+                  <td style={td}>
+                    {pr.title}
+                    {pr.is_draft && (
+                      <span className="sbadge" style={{ marginLeft: 6 }}>draft</span>
+                    )}
+                  </td>
+                  <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                    <code style={{ fontSize: 'var(--text-xs)' }}>{pr.head ?? '?'}</code>
+                    <span style={{ color: 'var(--text-tertiary)' }}> → </span>
+                    <code style={{ fontSize: 'var(--text-xs)' }}>{pr.base ?? '?'}</code>
+                  </td>
+                  <td style={{ ...td, whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
+                    {pr.author ?? '—'}{pr.updated_at ? ` · ${agoLabel(pr.updated_at)}` : ''}
+                  </td>
+                  <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                    {pr.url && (
+                      linked[pr.number] === 'done'
+                        ? <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>linked ✓</span>
+                        : (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            disabled={linked[pr.number] === 'saving'}
+                            onClick={() => void attach(pr.number, pr.url as string, pr.title)}
+                            title="Save this PR as a project link"
+                          >
+                            {linked[pr.number] === 'failed' ? 'Link failed — retry' : 'Add link'}
+                          </button>
+                        )
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }
