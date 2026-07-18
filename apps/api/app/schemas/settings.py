@@ -11,10 +11,16 @@ class SettingsRead(BaseModel):
     email_enabled: bool
     email_from: str
     external_api_active: bool
+    lan_mode_active: bool  # P11.3: pause LAN acceptance within the env ceiling
     # --- ceiling tier (env-owned, read-only status) ---
     external_api_permitted_by_env: bool
     external_api_hosts_configured: bool
     email_smtp_loopback: bool
+    # P11.3 (LAN team mode section) — booleans only, never raw hosts.
+    lan_permitted_by_env: bool
+    lan_hosts_configured: bool
+    auth_enabled_by_env: bool
+    auth_password_enabled_by_env: bool
 
 
 class SettingsUpdate(BaseModel):
@@ -25,6 +31,7 @@ class SettingsUpdate(BaseModel):
     email_enabled: Optional[bool] = None
     email_from: Optional[str] = None
     external_api_active: Optional[bool] = None
+    lan_mode_active: Optional[bool] = None
 
     @field_validator("email_from")
     @classmethod

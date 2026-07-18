@@ -717,16 +717,43 @@ export interface AppSettings {
   email_enabled: boolean
   email_from: string
   external_api_active: boolean
+  lan_mode_active: boolean
   // ceiling tier (env-owned, read-only status)
   external_api_permitted_by_env: boolean
   external_api_hosts_configured: boolean
   email_smtp_loopback: boolean
+  lan_permitted_by_env: boolean
+  lan_hosts_configured: boolean
+  auth_enabled_by_env: boolean
+  auth_password_enabled_by_env: boolean
 }
 
 export interface AppSettingsUpdate {
   email_enabled?: boolean
   email_from?: string
   external_api_active?: boolean
+  lan_mode_active?: boolean
+}
+
+// P11.3 (hosted/LAN auth). The auth surface 404s when AGENTBOARD_AUTH_ENABLED
+// is off — the UI treats that as "local single-user mode" and shows nothing.
+export interface AuthUser {
+  id: string
+  email: string
+  display_name: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface AuthMembership {
+  workspace_id: string
+  role: string
+}
+
+export interface AuthMe {
+  user: AuthUser
+  memberships: AuthMembership[]
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -788,6 +815,24 @@ export interface PresenceView {
 }
 
 export const api = {
+  auth: {
+    me: () => request<AuthMe>('/auth/me'),
+    passwordLogin: (email: string, password: string) =>
+      request<AuthMe>('/auth/password/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      }),
+    passwordRegister: (email: string, password: string, displayName?: string) =>
+      request<AuthMe>('/auth/password/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          email,
+          password,
+          ...(displayName ? { display_name: displayName } : {}),
+        }),
+      }),
+    logout: () => request<void>('/auth/logout', { method: 'POST' }),
+  },
   workspaces: {
     list: () => request<Workspace[]>('/workspaces'),
     create: (data: WorkspaceCreate) =>

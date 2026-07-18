@@ -5,6 +5,13 @@ import App from './App'
 // CanvasEditor pulls in Excalidraw, which can't evaluate under jsdom (no canvas).
 vi.mock('./app/CanvasEditor', () => ({ CanvasEditor: () => null }))
 
+// These tests cover the app shell, not auth: stub the P11.3 gate to local mode
+// (its own behavior is covered in app/auth.test.tsx).
+vi.mock('./app/auth', () => ({
+  AuthGate: ({ children }: { children: unknown }) => children,
+  useAuthInfo: () => ({ me: null, signOut: () => {} }),
+}))
+
 afterEach(cleanup)
 
 describe('App', () => {

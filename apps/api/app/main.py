@@ -96,6 +96,20 @@ def create_app() -> FastAPI:
             "(e.g. --host 0.0.0.0 to actually listen on the LAN).",
             lan_hosts or "(none configured — set AGENTBOARD_LAN_ALLOWED_HOSTS)",
         )
+        # P11.3: prime the middleware's process-local mirror of the LAN DB
+        # switch so a switch left off survives a restart. Best-effort: on a
+        # fresh/unmigrated DB the mirror stays unloaded and the env ceiling is
+        # the (correct) fallback until the first settings write.
+        try:
+            from sqlmodel import Session as _Session
+
+            from app.db.session import engine as _engine
+            from app.services.settings_service import refresh_lan_switch
+
+            with _Session(_engine) as _s:
+                refresh_lan_switch(_s)
+        except Exception:  # noqa: BLE001 — env-ceiling fallback is fail-safe
+            pass
 
     app = FastAPI(
         title="Approvo API",

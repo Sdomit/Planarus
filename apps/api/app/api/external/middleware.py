@@ -55,12 +55,16 @@ def _add_csv_hosts(hosts: set[str], csv: str) -> None:
 
 
 def _allowed_hosts() -> set[str]:
+    from app.services.settings_service import lan_switch_cached
+
     hosts = {h.lower() for h in DEFAULT_ALLOWED_HOSTS}
     _add_csv_hosts(hosts, settings.external_api_allowed_hosts)
     # Phase 11.0: LAN team mode widens the app-wide allowlist to the configured
-    # LAN hosts. Doubly gated: the env ceiling here, and create_app()'s refusal
-    # to start LAN mode without auth enabled (D25).
-    if settings.lan_mode_enabled:
+    # LAN hosts. Triply gated: the env ceiling here, the P11.3 DB switch within
+    # it (a process-local mirror — pause LAN acceptance from the Settings UI
+    # without a restart, no per-request DB read in middleware), and
+    # create_app()'s refusal to start LAN mode without auth enabled (D25).
+    if settings.lan_mode_enabled and lan_switch_cached():
         _add_csv_hosts(hosts, settings.lan_allowed_hosts)
     return hosts
 

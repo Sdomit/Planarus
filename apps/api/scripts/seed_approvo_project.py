@@ -100,7 +100,7 @@ PHASES: list[dict] = [
             {"title": "P11.0 — LAN ceiling + host guard (fail-closed on auth)", "status": "done"},
             {"title": "P11.1 — Local email+password provider (D25)", "status": "done"},
             {"title": "P11.2 — Presence / soft-lock, polling (D27)", "status": "done"},
-            {"title": "P11.3 — Settings UI + LAN setup guide", "status": "planned"},
+            {"title": "P11.3 — Settings UI + LAN setup guide", "status": "done"},
         ],
     },
 ]
