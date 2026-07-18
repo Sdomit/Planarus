@@ -23,6 +23,9 @@ vi.mock('../api/client', () => ({
       create: vi.fn(),
       update: vi.fn(),
       exportMarkdown: vi.fn(),
+      // P11.2 presence: reject like the auth-off backend so the hook goes dormant.
+      presenceBeat: vi.fn().mockRejectedValue(new Error('404: not found')),
+      presenceLeave: vi.fn().mockResolvedValue(undefined),
     },
   },
 }))
@@ -36,6 +39,8 @@ const mockApi = api as unknown as {
     create: ReturnType<typeof vi.fn>
     update: ReturnType<typeof vi.fn>
     exportMarkdown: ReturnType<typeof vi.fn>
+    presenceBeat: ReturnType<typeof vi.fn>
+    presenceLeave: ReturnType<typeof vi.fn>
   }
 }
 

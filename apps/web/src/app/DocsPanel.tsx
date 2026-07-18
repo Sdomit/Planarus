@@ -11,6 +11,7 @@ import Color from '@tiptap/extension-color'
 import { MarkdownSerializer } from 'prosemirror-markdown'
 import { api, type Doc, type DocSummary } from '../api/client'
 import { StatusBadge } from './StatusBadge'
+import { usePresence } from './usePresence'
 import './docs-panel.css'
 
 // Excalidraw is heavy (~1MB) and pulls in browser-only modules that crash under
@@ -342,6 +343,9 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
   const versionRef = useRef<number>(1)
   const docRef = useRef<Doc | null>(null)
 
+  // P11.2 soft-lock (dormant in local mode — the presence surface 404s).
+  const { lockedByOther, editorName } = usePresence(docId, true)
+
   const editor = useEditor({
     extensions: [
       // StarterKit v3 bundles Link + Underline; configure/enable them here
@@ -365,6 +369,10 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
     content: '',
     onUpdate: () => setSaveState('unsaved'),
   })
+
+  useEffect(() => {
+    editor?.setEditable(!lockedByOther)
+  }, [editor, lockedByOther])
 
   useEffect(() => {
     setLoading(true); setLoadError(null)
@@ -427,6 +435,14 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
         <button className="btn btn-ghost btn-sm" onClick={onBack} title="Back to list">← Back</button>
         <span className="dp-editor-name">{doc.title}</span>
         <StatusBadge kind="docstatus" value={doc.status} />
+        {lockedByOther && (
+          <span
+            className="badge badge-warning badge-sm"
+            title="Someone else holds the edit lock; this doc is read-only until they leave"
+          >
+            🔒 {editorName} is editing — read-only
+          </span>
+        )}
       </div>
 
       <EditorToolbar editor={editor} />
