@@ -57,6 +57,31 @@ def external_api_active(session: Session) -> bool:
     return bool(get_setting(session, "external_api_active", env.external_api_enabled))
 
 
+def lan_mode_active(session: Session) -> bool:
+    """The LAN-mode DB switch (P11.3). Same contract as external_api_active:
+    defaults to the env ceiling, so env-only deployments are unchanged, and it
+    can only pause a permitted LAN — never widen past the ceiling (the caller
+    ANDs it with ``env.lan_mode_enabled``)."""
+    return bool(get_setting(session, "lan_mode_active", env.lan_mode_enabled))
+
+
+# P11.3: process-local mirror of the LAN switch for the Host-guard middleware,
+# which runs on every request and has no request session. Loaded at startup
+# (create_app, only when the env ceiling is on) and refreshed by every
+# write_settings; per-process state, like rate_limit and presence. None = never
+# loaded → fall back to the env ceiling, so env-only deployments are unchanged.
+_lan_switch_cache: "bool | None" = None
+
+
+def lan_switch_cached() -> bool:
+    return env.lan_mode_enabled if _lan_switch_cache is None else _lan_switch_cache
+
+
+def refresh_lan_switch(session: Session) -> None:
+    global _lan_switch_cache
+    _lan_switch_cache = lan_mode_active(session)
+
+
 def read_settings(session: Session) -> SettingsRead:
     return SettingsRead(
         email_enabled=bool(get_setting(session, "email_enabled", env.email_enabled)),
@@ -64,9 +89,14 @@ def read_settings(session: Session) -> SettingsRead:
         external_api_active=bool(
             get_setting(session, "external_api_active", env.external_api_enabled)
         ),
+        lan_mode_active=lan_mode_active(session),
         external_api_permitted_by_env=env.external_api_enabled,
         external_api_hosts_configured=bool((env.external_api_allowed_hosts or "").strip()),
         email_smtp_loopback=env.smtp_host.strip().lower() in _LOOPBACK_HOSTS,
+        lan_permitted_by_env=env.lan_mode_enabled,
+        lan_hosts_configured=bool((env.lan_allowed_hosts or "").strip()),
+        auth_enabled_by_env=env.auth_enabled,
+        auth_password_enabled_by_env=env.auth_password_enabled,
     )
 
 
@@ -86,4 +116,5 @@ def write_settings(session: Session, data: SettingsUpdate) -> SettingsRead:
             payload_json=json.dumps({"key": key, "value": value}),
         )
     session.commit()
+    refresh_lan_switch(session)  # keep the middleware mirror live (P11.3)
     return read_settings(session)

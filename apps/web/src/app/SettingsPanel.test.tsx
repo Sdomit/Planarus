@@ -8,9 +8,14 @@ const base = {
   email_enabled: false,
   email_from: 'approvo@localhost',
   external_api_active: true,
+  lan_mode_active: false,
   external_api_permitted_by_env: false,
   external_api_hosts_configured: false,
   email_smtp_loopback: true,
+  lan_permitted_by_env: false,
+  lan_hosts_configured: false,
+  auth_enabled_by_env: false,
+  auth_password_enabled_by_env: false,
 }
 
 const update = vi.fn(async (data: Record<string, unknown>) => ({ ...base, ...data }))
@@ -28,8 +33,18 @@ describe('SettingsPanel', () => {
   it('renders loaded settings and the read-only ceiling status', async () => {
     render(<SettingsPanel />)
     expect(await screen.findByDisplayValue('approvo@localhost')).toBeTruthy()
-    // env ceiling is off → the inert-switch warning is shown
-    expect(screen.getByText(/Inert until/)).toBeTruthy()
+    // both env ceilings are off → each section shows its inert-switch warning
+    expect(screen.getByText('AGENTBOARD_EXTERNAL_API_ENABLED=true')).toBeTruthy()
+    expect(screen.getByText('AGENTBOARD_LAN_MODE_ENABLED=true')).toBeTruthy()
+    expect(screen.getByLabelText('Accept teammates from the LAN')).toBeTruthy()
+  })
+
+  it('saves the LAN switch when toggled', async () => {
+    render(<SettingsPanel />)
+    await screen.findByDisplayValue('approvo@localhost')
+    fireEvent.click(screen.getByLabelText('Accept teammates from the LAN'))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(update).toHaveBeenCalledWith({ lan_mode_active: true }))
   })
 
   it('saves only the changed switch and confirms', async () => {

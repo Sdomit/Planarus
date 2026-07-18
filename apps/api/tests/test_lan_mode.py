@@ -68,6 +68,57 @@ def test_lan_hosts_parse_whitespace_and_case(client, monkeypatch):
         assert res.status_code == 200
 
 
+# --- P11.3: the DB switch within the ceiling (process-local mirror) ------------
+@pytest.fixture(autouse=True)
+def _reset_lan_mirror():
+    from app.services import settings_service
+
+    settings_service._lan_switch_cache = None
+    yield
+    settings_service._lan_switch_cache = None
+
+
+def test_lan_switch_off_pauses_acceptance_live(client, session, monkeypatch):
+    from app.services import settings_service as svc
+
+    _lan_on(monkeypatch)
+    svc.set_setting(session, "lan_mode_active", False)
+    session.commit()
+    svc.refresh_lan_switch(session)
+    assert client.get("/health", headers={"Host": LAN_HOST}).status_code == 403
+    # loopback is never affected by the switch
+    assert client.get("/health", headers={"Host": "127.0.0.1"}).status_code == 200
+    # flipping back restores acceptance without a restart
+    svc.set_setting(session, "lan_mode_active", True)
+    session.commit()
+    svc.refresh_lan_switch(session)
+    assert client.get("/health", headers={"Host": LAN_HOST}).status_code == 200
+
+
+def test_lan_switch_cannot_widen_past_ceiling(client, session, monkeypatch):
+    from app.services import settings_service as svc
+
+    # env ceiling OFF: a stored switch=true row must not open LAN hosts.
+    monkeypatch.setattr(settings, "lan_allowed_hosts", LAN_HOST)
+    svc.set_setting(session, "lan_mode_active", True)
+    session.commit()
+    svc.refresh_lan_switch(session)
+    assert client.get("/health", headers={"Host": LAN_HOST}).status_code == 403
+
+
+def test_put_settings_lan_switch_takes_effect_immediately(client, session, monkeypatch):
+    from tests.external_util import local_hdr
+
+    _lan_on(monkeypatch)
+    assert client.get("/health", headers={"Host": LAN_HOST}).status_code == 200
+    res = client.put(
+        "/api/v1/settings", headers=local_hdr(client), json={"lan_mode_active": False}
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["lan_mode_active"] is False
+    assert client.get("/health", headers={"Host": LAN_HOST}).status_code == 403
+
+
 def test_startup_warning_names_plain_http(monkeypatch):
     # Capture the logger call directly (not via caplog): immune to whatever
     # logging levels/handlers other tests in the suite have left behind.

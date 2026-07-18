@@ -4,10 +4,21 @@ Covers the switch/ceiling/secret tiers: switches flip live, the env ceiling wins
 GET never discloses a secret or raw host, and the external-API DB switch turns the
 external surface off (indistinguishably from disabled) while the ceiling permits it.
 """
+import pytest
+
 from app.models.setting import Setting
 from app.schemas.settings import SettingsUpdate
 from app.services import settings_service as svc
 from tests.external_util import auth, issue_key, local_hdr, seed
+
+
+@pytest.fixture(autouse=True)
+def _reset_lan_mirror():
+    """write_settings refreshes the P11.3 process-local LAN mirror — reset it so
+    settings writes here never leak switch state into other modules."""
+    svc._lan_switch_cache = None
+    yield
+    svc._lan_switch_cache = None
 
 # --- accessor unit tests ------------------------------------------------------
 
@@ -44,7 +55,13 @@ def test_get_settings_shape_and_no_secret_leak(client):
         "email_enabled", "email_from", "external_api_active",
         "external_api_permitted_by_env", "external_api_hosts_configured",
         "email_smtp_loopback",
+        # P11.3 LAN section — switch + boolean-only ceiling status
+        "lan_mode_active", "lan_permitted_by_env", "lan_hosts_configured",
+        "auth_enabled_by_env", "auth_password_enabled_by_env",
     }
+    # LAN defaults mirror a local install: ceiling off, switch inert-off.
+    assert body["lan_permitted_by_env"] is False
+    assert body["lan_mode_active"] is False
     # Ceiling/secret tiers are booleans only — never a raw host, port, or token.
     assert "smtp_host" not in res.text
     assert "smtp_port" not in res.text

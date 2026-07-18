@@ -20,7 +20,11 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
     ports:
-      - "5173:80"
+      # Loopback-only by default (deny-by-default, P11.3): the quickstart URL
+      # stays http://localhost:5173 and nothing is reachable from the LAN.
+      # LAN team mode = change to "5173:80" AND turn auth on first — see
+      # docs/guide/lan-team-mode.md.
+      - "127.0.0.1:5173:80"
     depends_on:
       - api
     restart: unless-stopped
