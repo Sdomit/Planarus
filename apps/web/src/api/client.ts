@@ -540,6 +540,7 @@ export interface ApprovalSummary {
   expires_at: string
   decided_at: string | null
   decided_by: string | null
+  decided_by_display: string | null
   applied_at: string | null
   reason: string | null
   failure_reason: string | null
@@ -563,6 +564,8 @@ export interface ApprovalAuditEntry {
   id: string
   event_type: string
   actor_type: string
+  actor_id: string | null
+  actor_display: string | null
   created_at: string
 }
 
@@ -643,6 +646,8 @@ export interface TimelineEvent {
   entity_type: string
   entity_id: string | null
   actor_type: string
+  actor_id: string | null
+  actor_display: string | null
   label: string
 }
 

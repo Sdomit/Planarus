@@ -15,6 +15,7 @@ from app.models.risk import Risk
 from app.models.stage import Stage
 from app.models.task import Task
 from app.schemas.timeline import ProjectTimeline, TimelineEvent
+from app.services import audit_service
 
 # entity_type (as written by services into AuditEvent) → (model, label attribute)
 _RESOLVERS = {
@@ -57,6 +58,9 @@ def build_timeline(session: Session, project_id: str, limit: int = 50) -> Projec
         for row in session.exec(select(model).where(model.id.in_(ids))).all():  # type: ignore[attr-defined]
             titles[(entity_type, row.id)] = str(getattr(row, attr))
 
+    # P16.0 (D32): one batch lookup turns stamped actor ids into display names.
+    actors = audit_service.display_names(session, (ev.actor_id for ev in events))
+
     items: list[TimelineEvent] = []
     for ev in events:
         title = titles.get((ev.entity_type, ev.entity_id)) if ev.entity_id else None
@@ -71,6 +75,8 @@ def build_timeline(session: Session, project_id: str, limit: int = 50) -> Projec
                 entity_type=ev.entity_type,
                 entity_id=ev.entity_id,
                 actor_type=ev.actor_type,
+                actor_id=ev.actor_id,
+                actor_display=actors.get(ev.actor_id) if ev.actor_id else None,
                 label=label,
             )
         )
