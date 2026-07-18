@@ -77,6 +77,15 @@ def update_doc(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 
 
+@router.delete("/docs/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_doc(
+    doc_id: str,
+    session: Session = Depends(get_session),
+) -> None:
+    if not doc_service.delete_doc(session, doc_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doc not found")
+
+
 # --- P11.2: presence / soft-lock (D27) — polling heartbeat, in-process ---------
 # On the docs router so the registry tenant_guard applies untouched: GET needs a
 # viewer+ role, PUT/DELETE editor+ (a viewer can watch who's editing but never

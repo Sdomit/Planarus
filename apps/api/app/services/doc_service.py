@@ -17,7 +17,9 @@ from sqlmodel import Session, select
 from app.core.utils import new_id, now_utc
 from app.fsmemory import atomic_io
 from app.fsmemory.locks import project_lock
+from app.models.comment import Comment
 from app.models.doc import Doc
+from app.models.link import Link
 from app.models.project import Project
 from app.schemas.doc import DocCreate, DocExportResponse, DocUpdate
 from app.services.audit_service import create_audit_event
@@ -197,6 +199,46 @@ def update_doc(session: Session, doc_id: str, payload: DocUpdate) -> Doc:
     session.commit()
     session.refresh(doc)
     return doc
+
+
+def delete_doc(session: Session, doc_id: str) -> bool:
+    """Hard-delete a doc, its comments/links (attached via entity_type='doc'),
+    and promote any child docs to top-level (parent_doc_id cleared, so the FK
+    doesn't block the delete). Mirrors delete_task's owned-children cleanup."""
+    doc = session.get(Doc, doc_id)
+    if doc is None:
+        return False
+    project_id = doc.project_id
+    now = now_utc()
+
+    for comment in session.exec(
+        select(Comment).where(Comment.entity_type == "doc", Comment.entity_id == doc_id)
+    ).all():
+        session.delete(comment)
+    for link in session.exec(
+        select(Link).where(Link.entity_type == "doc", Link.entity_id == doc_id)
+    ).all():
+        session.delete(link)
+    for child in session.exec(
+        select(Doc).where(Doc.parent_doc_id == doc_id)
+    ).all():
+        child.parent_doc_id = None
+        child.updated_at = now
+        session.add(child)
+
+    # Flush child updates/deletes before the doc's own DELETE (parent_doc_id FK).
+    session.flush()
+    session.delete(doc)
+    create_audit_event(
+        session,
+        event_type="delete",
+        actor_type="human",
+        entity_type="doc",
+        entity_id=doc_id,
+        project_id=project_id,
+    )
+    session.commit()
+    return True
 
 
 # ---------------------------------------------------------------------------
