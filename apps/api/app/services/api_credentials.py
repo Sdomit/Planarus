@@ -11,6 +11,10 @@ Only an **Argon2id** encoded verifier of the secret is persisted (column
 ``ApiClient.secret_hash``). The raw key is returned exactly once at creation and
 is never stored, logged, echoed, or placed in audit records.
 
+The generic helpers here (``hash_secret`` / ``verify_secret`` / ``dummy_verify``)
+are also reused by the P11.1 local email+password provider (``auth_service``) so
+the whole app has exactly one locked Argon2id profile.
+
 Honest scope note: like the Phase 7A local control token, this is a credential
 guard for the local-first surface — it is not a substitute for a network firewall
 or transport security. The external API is loopback-bound and disabled by default.

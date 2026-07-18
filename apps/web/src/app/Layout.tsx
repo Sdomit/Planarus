@@ -17,6 +17,7 @@ import RemindersPanel from './RemindersPanel'
 import SettingsPanel from './SettingsPanel'
 import NotificationsBell from './NotificationsBell'
 import { SidebarTodos } from './SidebarTodos'
+import { useAuthInfo } from './auth'
 import { Icon } from './Icon'
 import { api, type NotificationItem, type Project } from '../api/client'
 import './layout.css'
@@ -91,6 +92,7 @@ function initials(s: string): string {
 }
 
 export default function Layout() {
+  const { me, signOut } = useAuthInfo()
   const [mainView, setMainView] = useState<MainView>('dashboard')
   const [project, setProject] = useState<SelectedProject | null>(null)
   const [theme, setTheme] = useState<string>(
@@ -325,13 +327,32 @@ export default function Layout() {
         </div>
 
         <div className="ab-side-foot">
+          {/* P11.3: signed-in account chip (team mode); local mode keeps the
+              static single-user label. */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 6 }}>
-            <span className="avatar avatar-sm" style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)' }}>AB</span>
+            <span className="avatar avatar-sm" style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)' }}>
+              {me ? initials(me.user.display_name || me.user.email) : 'AB'}
+            </span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>Local workspace</div>
-              <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Single-user</div>
+              <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {me ? me.user.display_name : 'Local workspace'}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {me ? me.user.email : 'Single-user'}
+              </div>
             </div>
-            <span className="live-dot" title="Connected" />
+            {me ? (
+              <button
+                type="button"
+                className="btn btn-ghost btn-xs"
+                onClick={signOut}
+                title="Sign out of this session"
+              >
+                Sign out
+              </button>
+            ) : (
+              <span className="live-dot" title="Connected" />
+            )}
           </div>
         </div>
       </aside>

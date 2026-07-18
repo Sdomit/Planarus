@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, type AppSettings, type AppSettingsUpdate } from '../api/client'
 
-const SWITCH_KEYS = ['email_enabled', 'email_from', 'external_api_active'] as const
+const SWITCH_KEYS = ['email_enabled', 'email_from', 'external_api_active', 'lan_mode_active'] as const
 
 // Phase 9B settings surface. Switch tier is editable; the env ceiling is shown
 // read-only and always wins — a toggle here can never widen exposure.
@@ -94,6 +94,38 @@ export default function SettingsPanel() {
           <p style={{ color: 'var(--status-warning-fg, var(--text-tertiary))', fontSize: 'var(--text-sm)', margin: '6px 0 0' }}>
             Inert until <code>AGENTBOARD_EXTERNAL_API_ENABLED=true</code> is set in the
             environment. This switch can only turn a permitted feature off — never widen exposure.
+          </p>
+        )}
+      </section>
+
+      <section>
+        <h3 style={{ marginTop: 0 }}>LAN team mode</h3>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', margin: '0 0 8px' }}>
+          Permitted by environment: <strong>{yn(s.lan_permitted_by_env)}</strong> · LAN hosts
+          configured: <strong>{yn(s.lan_hosts_configured)}</strong> · Sign-in enabled:{' '}
+          <strong>{yn(s.auth_enabled_by_env)}</strong> · Password provider:{' '}
+          <strong>{yn(s.auth_password_enabled_by_env)}</strong>
+        </p>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            type="checkbox"
+            checked={s.lan_mode_active}
+            onChange={e => patch({ lan_mode_active: e.target.checked })}
+          />
+          <span>Accept teammates from the LAN</span>
+        </label>
+        {s.lan_permitted_by_env ? (
+          <p style={{ color: 'var(--status-warning-fg, var(--text-tertiary))', fontSize: 'var(--text-sm)', margin: '6px 0 0' }}>
+            ⚠ LAN traffic is plain HTTP — <strong>unencrypted on your local network</strong> (an
+            accepted, documented tradeoff). Unchecking pauses LAN access immediately without a
+            restart; it never affects this machine&apos;s own loopback access. Setup:{' '}
+            <code>docs/guide/lan-team-mode.md</code>.
+          </p>
+        ) : (
+          <p style={{ color: 'var(--status-warning-fg, var(--text-tertiary))', fontSize: 'var(--text-sm)', margin: '6px 0 0' }}>
+            Inert until <code>AGENTBOARD_LAN_MODE_ENABLED=true</code> (plus sign-in and LAN hosts)
+            is set in the environment — see <code>docs/guide/lan-team-mode.md</code>. This switch
+            can only pause a permitted LAN — never widen exposure.
           </p>
         )}
       </section>

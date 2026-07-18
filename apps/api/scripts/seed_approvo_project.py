@@ -37,7 +37,7 @@ from app.services import (
 WORKSPACE_SLUG = "approvo"
 PROJECT_SLUG = "approvo"
 
-# (title, status). Phases 1–9 + 4b are done; Phase 10 (hosted/SaaS) is active.
+# (title, status). Phases 1–10 + 4b are done; Phase 11 (LAN team mode) is active.
 PHASES: list[dict] = [
     {"title": "Phase 1 — Foundation", "status": "done"},
     {"title": "Phase 2 — Project CRUD", "status": "done"},
@@ -51,7 +51,7 @@ PHASES: list[dict] = [
     {"title": "Phase 9 — V1 interface + notifications", "status": "done"},
     {
         "title": "Phase 10 — Hosted / SaaS",
-        "status": "active",
+        "status": "done",
         # slices modeled as stages; blocked = gated on local product validation
         "stages": [
             {"title": "P10.0 — Postgres-portability harness", "status": "done"},
@@ -90,6 +90,17 @@ PHASES: list[dict] = [
             {"title": "P10.6 — Sync foundation: manifest + conflict detection", "status": "done"},
             {"title": "P10.6b — Sync apply + baseline persistence", "status": "done"},
             {"title": "P10.6c — Cross-machine sync transport (snapshot/push)", "status": "done"},
+        ],
+    },
+    {
+        "title": "Phase 11 — LAN team mode",
+        "status": "active",
+        # plan: docs/plan/13-lan-team-mode.md; gate decisions D25–D28 ratified
+        "stages": [
+            {"title": "P11.0 — LAN ceiling + host guard (fail-closed on auth)", "status": "done"},
+            {"title": "P11.1 — Local email+password provider (D25)", "status": "done"},
+            {"title": "P11.2 — Presence / soft-lock, polling (D27)", "status": "done"},
+            {"title": "P11.3 — Settings UI + LAN setup guide", "status": "done"},
         ],
     },
 ]
