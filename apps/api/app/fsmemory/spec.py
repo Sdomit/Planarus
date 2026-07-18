@@ -48,7 +48,7 @@ CONTEXT_FILES: tuple[ContextFileSpec, ...] = (
     ContextFileSpec("DECISIONS.md", "decisions"),
     ContextFileSpec("RISKS.md", "risks"),
     ContextFileSpec("AGENTS.md", "agent_rules"),
-    ContextFileSpec("AGENT_RULES.md", "agent_rules", authored=True),
+    ContextFileSpec("AGENT_RULES.md", "agent_rules"),
     ContextFileSpec("FILES_ALLOWED.md", "files_allowed"),
     ContextFileSpec("FILES_FORBIDDEN.md", "files_forbidden"),
     ContextFileSpec("ARCHITECTURE.md", "architecture", authored=True),
