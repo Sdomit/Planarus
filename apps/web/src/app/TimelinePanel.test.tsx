@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import TimelinePanel, { groupEventsByDay, groupEventsByEntity } from './TimelinePanel'
 
 const ev = (id: string, at: string, entity_type = 'task') =>
-  ({ id, at, event_type: 'create', entity_type, entity_id: null, actor_type: 'human', label: id })
+  ({ id, at, event_type: 'create', entity_type, entity_id: null, actor_type: 'human', actor_id: null, actor_display: null, label: id })
 
 vi.mock('../api/client', () => ({
   api: {
@@ -19,6 +19,8 @@ vi.mock('../api/client', () => ({
             entity_type: 'task',
             entity_id: 'tsk_1',
             actor_type: 'human',
+            actor_id: 'usr_1',
+            actor_display: 'Alice Smith',
             label: 'update task — Fix login bug',
           },
           {
@@ -28,6 +30,8 @@ vi.mock('../api/client', () => ({
             entity_type: 'decision',
             entity_id: 'dec_1',
             actor_type: 'human',
+            actor_id: null,
+            actor_display: null,
             label: 'create decision — Use SQLite',
           },
         ],
@@ -41,7 +45,10 @@ describe('TimelinePanel', () => {
     render(<TimelinePanel projectId="proj_1" />)
     expect(await screen.findByText('update task — Fix login bug')).toBeTruthy()
     expect(screen.getByText('create decision — Use SQLite')).toBeTruthy()
-    expect(screen.getAllByText('human').length).toBe(2)
+    // P16.0: a stamped actor renders as their display name; unattributed
+    // events keep rendering the raw actor_type exactly as before.
+    expect(screen.getByText('Alice Smith')).toBeTruthy()
+    expect(screen.getAllByText('human').length).toBe(1)
   })
 
   it('groups events into consecutive same-day buckets, order preserved', () => {

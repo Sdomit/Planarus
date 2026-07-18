@@ -10,6 +10,7 @@ from __future__ import annotations
 from fastapi import Depends, HTTPException, Request
 from sqlmodel import Session
 
+from app.core import actor
 from app.core.config import settings
 from app.db.session import get_session
 from app.models.user import User
@@ -22,15 +23,20 @@ def require_auth_enabled() -> None:
         raise HTTPException(status_code=404, detail="not found")
 
 
-def get_current_user(
+async def get_current_user(
     request: Request,
     session: Session = Depends(get_session),
 ) -> User:
-    """Resolve the caller from the session cookie; 401 if missing/invalid/expired."""
+    """Resolve the caller from the session cookie; 401 if missing/invalid/expired.
+
+    Async so the actor context is set in the event-loop task and reaches the
+    audit writes of sync endpoints (P16.0, D32 — see app/core/actor.py).
+    """
     raw_token = request.cookies.get(auth_service.SESSION_COOKIE)
     user = auth_service.resolve_user(session, raw_token)
     if user is None:
         raise HTTPException(status_code=401, detail="authentication required")
+    actor.set_current_actor_id(user.id)
     return user
 
 

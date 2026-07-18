@@ -21,6 +21,7 @@ from typing import Optional
 from fastapi import Depends, HTTPException, Request
 from sqlmodel import Session, select
 
+from app.core import actor
 from app.core.config import settings
 from app.db.session import get_session
 from app.models.project import Project
@@ -34,7 +35,7 @@ WRITE_ROLES = ("owner", "editor")
 APPROVER_ROLES = ("owner",)
 
 
-def tenant_user(
+async def tenant_user(
     request: Request,
     session: Session = Depends(get_session),
 ) -> Optional[User]:
@@ -44,6 +45,11 @@ def tenant_user(
     authenticated user, or 401 if the session cookie is missing/invalid. Unlike
     ``auth_deps.require_auth_enabled`` this never 404s: domain routes must keep
     working in local mode.
+
+    Async on purpose (P16.0, D32): the actor context must be set in the
+    request's event-loop task so it propagates into the threadpool contexts of
+    sync endpoints and the audit writes they make. The resolve itself is a pair
+    of indexed point lookups — cheap enough to run on the loop.
     """
     if not settings.auth_enabled:
         return None
@@ -51,6 +57,7 @@ def tenant_user(
     user = auth_service.resolve_user(session, raw_token)
     if user is None:
         raise HTTPException(status_code=401, detail="authentication required")
+    actor.set_current_actor_id(user.id)
     return user
 
 
