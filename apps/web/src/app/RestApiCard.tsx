@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import CopyButton from './CopyButton'
 
 // P17.1: REST API connection card for the Integrations tab. Surface-only — it
 // shows the honestly-reachable facts an external tool needs to connect, all
@@ -39,19 +40,6 @@ function snippet(lang: Lang, baseUrl: string): string {
     '})',
     'console.log(await res.json())',
   ].join('\n')
-}
-
-function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) {
-  const [copied, setCopied] = useState(false)
-  return (
-    <button
-      type="button"
-      className="btn btn-outline btn-xs"
-      onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true), () => {})}
-    >
-      {copied ? 'Copied ✓' : label}
-    </button>
-  )
 }
 
 const codeBlock: React.CSSProperties = {

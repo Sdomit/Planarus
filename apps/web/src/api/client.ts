@@ -626,6 +626,12 @@ export interface McpInfo {
   propose_tools: McpToolInfo[]
 }
 
+/** The GPT Actions OpenAPI contract (loosely typed — the card only touches servers). */
+export interface OpenApiContract {
+  servers?: { url: string; description?: string }[]
+  [key: string]: unknown
+}
+
 // --- Phase 9: roadmap / timeline / agent runs / notifications ----------------
 
 export interface RoadmapTaskRollup {
@@ -1297,6 +1303,8 @@ export const api = {
   // P17.2: read-only MCP connection metadata for the Integrations hub.
   integrations: {
     mcp: () => request<McpInfo>('/integrations/mcp'),
+    gptOpenapi: (profile: 'readonly' | 'read_propose' = 'readonly') =>
+      request<OpenApiContract>(`/integrations/gpt-openapi?profile=${profile}`),
   },
   // --- Phase 9 ----------------------------------------------------------------
   roadmap: {

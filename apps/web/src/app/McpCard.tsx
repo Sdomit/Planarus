@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, type McpInfo, type Workspace } from '../api/client'
+import CopyButton from './CopyButton'
 
 // P17.2: MCP config generator + live tool catalog for the Integrations tab.
 // The launch command, real cwd, and tool list come from GET /integrations/mcp
@@ -11,21 +12,6 @@ type Fmt = 'json' | 'cli'
 type Tier = 'read' | 'propose'
 
 const CWD_PLACEHOLDER = '<path to your apps/api directory>'
-
-// ponytail: CopyButton is duplicated from RestApiCard — extract one shared
-// component when the 17.5 ChatGPT card adds a third copy surface.
-function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) {
-  const [copied, setCopied] = useState(false)
-  return (
-    <button
-      type="button"
-      className="btn btn-outline btn-xs"
-      onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true), () => {})}
-    >
-      {copied ? 'Copied ✓' : label}
-    </button>
-  )
-}
 
 const codeBlock: React.CSSProperties = {
   display: 'block',
