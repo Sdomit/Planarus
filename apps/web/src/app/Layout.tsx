@@ -11,7 +11,6 @@ import ContextPackBuilder from './ContextPackBuilder'
 import ContextFilesPanel from './ContextFilesPanel'
 import MarkdownPreviewPanel from './MarkdownPreviewPanel'
 import ApprovalQueuePanel from './ApprovalQueuePanel'
-import ExternalClientsPanel from './ExternalClientsPanel'
 import AgentRunsPanel from './AgentRunsPanel'
 import RemindersPanel from './RemindersPanel'
 import SettingsPanel from './SettingsPanel'
@@ -25,7 +24,7 @@ import './layout.css'
 
 type MainView =
   | 'dashboard' | 'cockpit' | 'planning' | 'roadmap' | 'timeline' | 'calendar' | 'docs'
-  | 'canvas' | 'context-pack' | 'context-files' | 'preview' | 'approvals' | 'clients'
+  | 'canvas' | 'context-pack' | 'context-files' | 'preview' | 'approvals'
   | 'agent-runs' | 'reminders' | 'team' | 'settings'
 
 interface SelectedProject {
@@ -49,9 +48,8 @@ const NAV: { group: string; items: { view: MainView; label: string; icon: string
     { view: 'context-files', label: 'Context Files', icon: 'folder' },
     { view: 'preview', label: 'Markdown Preview', icon: 'code' },
   ] },
-  { group: 'Agents', items: [
+  { group: 'Approvals & Activity', items: [
     { view: 'approvals', label: 'Approvals', icon: 'check' },
-    { view: 'clients', label: 'Clients', icon: 'external' },
     { view: 'agent-runs', label: 'Agent Runs', icon: 'table' },
     { view: 'reminders', label: 'Reminders', icon: 'bell' },
   ] },
@@ -84,7 +82,6 @@ const TITLES: Record<MainView, { title: string; sub: string }> = {
   'context-files': { title: 'Context Files', sub: 'Generated Markdown context' },
   preview: { title: 'Markdown Preview', sub: 'Rendered context files & docs' },
   approvals: { title: 'Approval Queue', sub: 'Pending agent proposals' },
-  clients: { title: 'External API Clients', sub: 'Machine keys & scopes' },
   'agent-runs': { title: 'Agent Runs', sub: 'Execution telemetry & analytics' },
   reminders: { title: 'Reminders', sub: 'Email reminders & send history' },
   team: { title: 'Team', sub: 'People, roles & access' },
@@ -447,7 +444,6 @@ export default function Layout() {
               {mainView === 'context-files' && (project ? <ContextFilesPanel projectId={project.id} /> : placeholder)}
               {mainView === 'preview' && (project ? <MarkdownPreviewPanel projectId={project.id} /> : placeholder)}
               {mainView === 'approvals' && (project ? <ApprovalQueuePanel projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
-              {mainView === 'clients' && <ExternalClientsPanel onClose={() => setMainView('dashboard')} />}
               {mainView === 'agent-runs' && (project ? <AgentRunsPanel projectId={project.id} /> : placeholder)}
               {mainView === 'reminders' && (project ? <RemindersPanel projectId={project.id} /> : placeholder)}
               {mainView === 'team' && <TeamPanel />}
