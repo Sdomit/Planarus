@@ -5,6 +5,7 @@ import RestApiCard from './RestApiCard'
 import McpCard from './McpCard'
 import GptActionsCard from './GptActionsCard'
 import RecipesCard from './RecipesCard'
+import WebhooksCard from './WebhooksCard'
 import ExportCard from './ExportCard'
 
 const SWITCH_KEYS = ['email_enabled', 'email_from', 'external_api_active', 'lan_mode_active', 'registration_open'] as const
@@ -118,6 +119,8 @@ export default function SettingsPanel() {
           />
 
           <RecipesCard />
+
+          <WebhooksCard />
 
           <ExportCard />
 
