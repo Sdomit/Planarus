@@ -117,3 +117,17 @@ def test_remote_mcp_scoped_read_returns_data(client, external_api, engine, monke
     # The project id is a high-entropy string → redacted in reference-only output;
     # assert on the (non-redacted) title, which proves the scoped read returned it.
     assert "title: P" in text
+
+
+def test_remote_mcp_applies_per_key_read_rate_limit(client, external_api, monkeypatch):
+    # Parity with the REST surface: the mount runs _rate_and_concurrency. Forcing
+    # the per-key read limiter to report "throttled" 429s the request — without the
+    # mount's rate-limit wiring this monkeypatch would have no effect.
+    from app.core.rate_limit import limiter
+
+    monkeypatch.setattr(limiter, "check_read", lambda key_id: 5.0)
+    mgr = _fresh_manager(monkeypatch)
+    ws, proj = seed(client, "rmcprate")
+    _meta, key = issue_key(client, ws, [proj], can_read=True)
+    with pytest.raises(Exception):  # the 429 propagates and fails the MCP handshake
+        anyio.run(lambda: _run(mgr, auth(key)))

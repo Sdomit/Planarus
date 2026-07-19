@@ -31,9 +31,10 @@ from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.types import Receive, Scope, Send
 
-from app.api.external.auth import _authenticate
+from app.api.external.auth import _authenticate, _rate_and_concurrency
 from app.api.external.middleware import _send_problem
 from app.api.external.problems import ExternalProblem
+from app.core.rate_limit import limiter
 from app.db.session import get_session
 from app.mcp.capabilities import Capability
 from app.mcp.errors import CODE_FORBIDDEN, CODE_INTERNAL, MCPToolError
@@ -123,7 +124,12 @@ def make_mcp_mount(app: FastAPI):
         session = next(gen)
         try:
             try:
-                _client, cap = _authenticate(None, session, _bearer(scope))
+                client, cap = _authenticate(None, session, _bearer(scope))
+                # Per-key rate + concurrency gate, matching the REST surface
+                # (require_external_read): each MCP POST is gated as a read and holds
+                # a concurrency slot for the request, released below. Propose tools
+                # still route through human approval regardless.
+                _rate_and_concurrency(client, propose=False)
             except ExternalProblem as problem:
                 await _send_problem(
                     send, problem.status, problem.slug, problem.title,
@@ -135,6 +141,10 @@ def make_mcp_mount(app: FastAPI):
                 await _manager.handle_request(scope, receive, send)
             finally:
                 _capability.reset(token)
+                try:
+                    limiter.release(client.key_id)
+                except Exception:  # noqa: BLE001 — release must never raise into the response
+                    pass
         finally:
             gen.close()
 
