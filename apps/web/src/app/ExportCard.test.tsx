@@ -4,15 +4,19 @@ import ExportCard from './ExportCard'
 
 afterEach(cleanup)
 
-const exportFn = vi.fn(async () => ({ approvo_export: 1, project: { title: 'Demo' } }))
-const importFn = vi.fn(async () => ({ id: 'p2', title: 'Imported Demo' }))
+// vi.hoisted so the factory can reference these directly (no spread wrapper —
+// spreading into a vi.fn's inferred signature trips tsc -b's TS2556).
+const { exportFn, importFn } = vi.hoisted(() => ({
+  exportFn: vi.fn(async (_id: string) => ({ approvo_export: 1, project: { title: 'Demo' } })),
+  importFn: vi.fn(async (_ws: string, _data: unknown) => ({ id: 'p2', title: 'Imported Demo' })),
+}))
 
 vi.mock('../api/client', () => ({
   api: {
     projects: {
       list: vi.fn(async () => [{ id: 'p1', title: 'Demo', slug: 'demo' }]),
-      export: (...a: unknown[]) => exportFn(...a),
-      import: (...a: unknown[]) => importFn(...a),
+      export: exportFn,
+      import: importFn,
     },
     workspaces: { list: vi.fn(async () => [{ id: 'w1', name: 'Main' }]) },
   },
