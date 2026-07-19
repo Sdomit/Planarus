@@ -261,6 +261,32 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
     setPickerOpen(false)
   }, [])
 
+  // Sticky note (Miro/FigJam style): a plain freeform Excalidraw rectangle with
+  // a text label, no entity binding — just a preset the toolbar lacks. Recolor,
+  // resize, and edit text with Excalidraw's own controls (double-click to type).
+  const addNote = useCallback(() => {
+    const canvas = apiRef.current
+    if (!canvas) return
+    const st = canvas.getAppState()
+    const zoom = st.zoom.value || 1
+    const cx = st.width / (2 * zoom) - st.scrollX
+    const cy = st.height / (2 * zoom) - st.scrollY
+    const skeleton = {
+      type: 'rectangle',
+      x: cx - 90,
+      y: cy - 90,
+      width: 180,
+      height: 180,
+      backgroundColor: '#ffec99', // sticky yellow
+      strokeColor: '#f08c00',
+      fillStyle: 'solid',
+      roundness: null, // square corners, like a real sticky
+      label: { text: 'New note', fontSize: 20, strokeColor: '#1e1e1e' },
+    }
+    const created = convertToExcalidrawElements([skeleton] as Parameters<typeof convertToExcalidrawElements>[0])
+    canvas.updateScene({ elements: [...canvas.getSceneElements(), ...created] })
+  }, [])
+
   const loadComments = useCallback(async () => {
     if (commentsLoaded.current) return
     commentsLoaded.current = true
@@ -362,6 +388,9 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
         )}
         <button className="btn btn-outline btn-sm" onClick={openPicker} title="Insert a card bound to a project entity">
           ＋ Card
+        </button>
+        <button className="btn btn-outline btn-sm" onClick={addNote} title="Drop a sticky note (recolor & edit with Excalidraw's controls)">
+          🟨 Note
         </button>
         <button className="btn btn-outline btn-sm" onClick={addPin} title="Drop a review pin on the canvas, bound to a comment">
           📍 Pin

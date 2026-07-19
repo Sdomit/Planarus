@@ -99,9 +99,10 @@ export default function GitSnapshotPanel({ projectId }: { projectId: string }) {
       <div className="card" style={{ padding: 'var(--space-5)' }}>
         {header}
         {fetchNote}
-        <p style={{ margin: 0, color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>
+        <p style={{ margin: '0 0 var(--space-3)', color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>
           {(!failed && snap?.message) || 'No Git metadata available.'}
         </p>
+        <FolderField projectId={projectId} current={snap?.repo_path ?? null} onSaved={() => void load(true)} />
       </div>
     )
   }
@@ -131,6 +132,9 @@ export default function GitSnapshotPanel({ projectId }: { projectId: string }) {
           {snap.remote_url
             ? <code style={{ fontSize: 'var(--text-sm)', overflowWrap: 'anywhere' }}>{snap.remote_url}</code>
             : <span style={{ color: 'var(--text-tertiary)' }}>none</span>}
+        </Row>
+        <Row k="Folder">
+          <FolderField projectId={projectId} current={snap.repo_path} onSaved={() => void load(true)} />
         </Row>
         {snap.default_branch && (
           <Row k="Needs merge">
@@ -264,6 +268,66 @@ function PrSection({ projectId }: { projectId: string }) {
         </div>
       )}
     </div>
+  )
+}
+
+// Point the project at a repo folder so the live status can be read. A native
+// folder picker can't hand back an absolute path (browser security), so this is
+// a plain text field — the server validates it must be absolute and existing.
+function FolderField({ projectId, current, onSaved }: {
+  projectId: string; current: string | null; onSaved: () => void
+}) {
+  const [editing, setEditing] = useState(current == null)
+  const [value, setValue] = useState(current ?? '')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const save = async () => {
+    setSaving(true); setErr(null)
+    try {
+      await api.projects.update(projectId, { folder_path: value.trim() || null })
+      setEditing(false)
+      onSaved()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not save the folder path.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!editing) {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <code style={{ fontSize: 'var(--text-sm)', overflowWrap: 'anywhere' }}>{current}</code>
+        <button type="button" className="btn btn-outline btn-sm" onClick={() => { setValue(current ?? ''); setEditing(true) }}>
+          Change
+        </button>
+      </span>
+    )
+  }
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <input
+        className="input input-sm"
+        style={{ minWidth: 260, fontFamily: 'var(--font-mono, monospace)' }}
+        placeholder="Absolute path, e.g. C:\Users\you\repo"
+        value={value}
+        spellCheck={false}
+        autoFocus
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') void save() }}
+      />
+      <button type="button" className="btn btn-solid btn-sm" onClick={() => void save()} disabled={saving}>
+        {saving ? 'Saving…' : 'Save'}
+      </button>
+      {current != null && (
+        <button type="button" className="btn btn-outline btn-sm" onClick={() => { setEditing(false); setErr(null) }} disabled={saving}>
+          Cancel
+        </button>
+      )}
+      {err && <span style={{ width: '100%', fontSize: 'var(--text-xs)', color: 'var(--danger, var(--text-secondary))' }}>{err}</span>}
+    </span>
   )
 }
 

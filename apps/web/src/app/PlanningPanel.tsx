@@ -602,7 +602,7 @@ function PhasesSection({ phases, projectId, setPhases, statuses, addStatus, relo
   const onDeleted = (id: string) => setPhases(prev => prev.filter(p => p.id !== id))
   const update = (id: string, patch: Parameters<typeof api.phases.update>[1]) => void api.phases.update(id, patch).then(onUpdated)
   const remove = (id: string) => void api.phases.remove(id).then(() => onDeleted(id))
-  const { itemProps } = useListReorder(phases, next => setPhases(next), ids => api.phases.reorder(projectId, ids))
+  const { itemProps, reorder } = useListReorder(phases, next => setPhases(next), ids => api.phases.reorder(projectId, ids))
 
   if (phases.length === 0)
     return <><div className="pp-toolbar">{mgr.button}</div><p style={EMPTY}>No phases yet.</p>{mgr.modal}</>
@@ -614,6 +614,7 @@ function PhasesSection({ phases, projectId, setPhases, statuses, addStatus, relo
         <EntityBoard
           items={phases} columns={statusCols(statusKeys, statusDots(PHASE_DOT, statuses))} statusOf={p => p.status}
           onRestatus={(p, status) => update(p.id, { status })}
+          onReorder={reorder}
           onAddColumn={onAddNew}
           renderCard={p => (
             <div className="ab-task-foot" style={{ justifyContent: 'space-between' }}>
@@ -788,6 +789,15 @@ function TaskBoard({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
   const cols = group === 'flow' ? BOARD_COLS : statusCols(statusKeys, statusDots(STATUS_DOT, taskStatuses))
   const phaseTitle = new Map(phases.map(phase => [phase.id, phase.title]))
   const openTask = tasks.find(t => t.id === openId) ?? null
+  const { reorder } = useListReorder(tasks, next => setTasks?.(next), ids => api.tasks.reorder(projectId, ids))
+
+  async function restatus(id: string, status: string) {
+    try {
+      onTaskUpdated(await api.tasks.update(id, { status }))
+    } catch {
+      /* leave the card where it was on failure */
+    }
+  }
 
   async function dropOn(col: BoardCol) {
     setOverCol(null)
@@ -797,12 +807,19 @@ function TaskBoard({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
     const task = tasks.find(t => t.id === id)
     if (!task) return
     const status = nextStatusForColumn(task.status, col)
-    if (!status) return
-    try {
-      onTaskUpdated(await api.tasks.update(id, { status }))
-    } catch {
-      /* leave the card where it was on failure */
-    }
+    if (status) await restatus(id, status)
+  }
+
+  function dropOnCard(targetId: string) {
+    const id = dragId
+    setOverCol(null)
+    setDragId(null)
+    if (!id || id === targetId) return
+    const dragTask = tasks.find(t => t.id === id)
+    const targetTask = tasks.find(t => t.id === targetId)
+    if (!dragTask || !targetTask) return
+    if (dragTask.status === targetTask.status) reorder(id, targetId)
+    else void restatus(id, targetTask.status)
   }
 
   return (
@@ -840,6 +857,8 @@ function TaskBoard({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
                     tabIndex={0}
                     onDragStart={() => setDragId(t.id)}
                     onDragEnd={() => { setDragId(null); setOverCol(null) }}
+                    onDragOver={e => { e.preventDefault(); e.stopPropagation() }}
+                    onDrop={e => { e.preventDefault(); e.stopPropagation(); dropOnCard(t.id) }}
                     onClick={() => setOpenId(t.id)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); setOpenId(t.id) } }}
                   >
@@ -1157,7 +1176,7 @@ function MilestonesSection({ milestones, projectId, setMilestones, statuses, add
   const onUpdated = (u: Milestone) => setMilestones(prev => prev.map(m => (m.id === u.id ? u : m)))
   const update = (id: string, patch: Parameters<typeof api.milestones.update>[1]) => void api.milestones.update(id, patch).then(onUpdated)
   const remove = (id: string) => void api.milestones.remove(id).then(() => setMilestones(prev => prev.filter(m => m.id !== id)))
-  const { itemProps } = useListReorder(milestones, next => setMilestones(next), ids => api.milestones.reorder(projectId, ids))
+  const { itemProps, reorder } = useListReorder(milestones, next => setMilestones(next), ids => api.milestones.reorder(projectId, ids))
 
   if (milestones.length === 0)
     return <><div className="pp-toolbar">{mgr.button}</div><p style={EMPTY}>No milestones yet.</p>{mgr.modal}</>
@@ -1169,6 +1188,7 @@ function MilestonesSection({ milestones, projectId, setMilestones, statuses, add
         <EntityBoard
           items={milestones} columns={statusCols(statusKeys, statusDots(MILESTONE_DOT, statuses))} statusOf={m => m.status}
           onRestatus={(m, status) => update(m.id, { status })}
+          onReorder={reorder}
           onAddColumn={onAddNew}
           renderCard={m => (
             <div className="ab-task-foot" style={{ justifyContent: 'space-between' }}>
@@ -1241,7 +1261,7 @@ function DecisionsSection({ decisions, projectId, setDecisions, statuses, addSta
   const onUpdated = (u: Decision) => setDecisions(prev => prev.map(d => (d.id === u.id ? u : d)))
   const update = (id: string, patch: Parameters<typeof api.decisions.update>[1]) => void api.decisions.update(id, patch).then(onUpdated)
   const remove = (id: string) => void api.decisions.remove(id).then(() => setDecisions(prev => prev.filter(d => d.id !== id)))
-  const { itemProps } = useListReorder(decisions, next => setDecisions(next), ids => api.decisions.reorder(projectId, ids))
+  const { itemProps, reorder } = useListReorder(decisions, next => setDecisions(next), ids => api.decisions.reorder(projectId, ids))
 
   if (decisions.length === 0)
     return <><div className="pp-toolbar">{mgr.button}</div><p style={EMPTY}>No decisions yet.</p>{mgr.modal}</>
@@ -1253,6 +1273,7 @@ function DecisionsSection({ decisions, projectId, setDecisions, statuses, addSta
         <EntityBoard
           items={decisions} columns={statusCols(statusKeys, statusDots(DECISION_DOT, statuses))} statusOf={d => d.status}
           onRestatus={(d, status) => update(d.id, { status })}
+          onReorder={reorder}
           onAddColumn={onAddNew}
           renderCard={d => (
             <div className="ab-task-foot" style={{ justifyContent: 'space-between' }}>
@@ -1321,7 +1342,7 @@ function RisksSection({
   const onUpdated = (u: Risk) => setRisks(prev => prev.map(r => (r.id === u.id ? u : r)))
   const update = (id: string, patch: Parameters<typeof api.risks.update>[1]) => void api.risks.update(id, patch).then(onUpdated)
   const remove = (id: string) => void api.risks.remove(id).then(() => setRisks(prev => prev.filter(r => r.id !== id)))
-  const { itemProps } = useListReorder(risks, next => setRisks(next), ids => api.risks.reorder(projectId, ids))
+  const { itemProps, reorder } = useListReorder(risks, next => setRisks(next), ids => api.risks.reorder(projectId, ids))
 
   if (risks.length === 0 && blockers.length === 0)
     return <><div className="pp-toolbar">{mgr.button}</div><p style={EMPTY}>No risks or blockers.</p>{mgr.modal}</>
@@ -1333,6 +1354,7 @@ function RisksSection({
         <EntityBoard
           items={risks} columns={statusCols(statusKeys, statusDots(RISK_STATUS_DOT, statuses))} statusOf={r => r.status}
           onRestatus={(r, status) => update(r.id, { status })}
+          onReorder={reorder}
           onAddColumn={onAddNew}
           renderCard={r => (
             <div className="ab-task-foot" style={{ justifyContent: 'space-between' }}>

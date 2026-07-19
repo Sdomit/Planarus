@@ -15,11 +15,13 @@ export function nextStatusForColumn(itemStatus: string, col: Pick<BoardCol, 'sta
 
 /**
  * A generic kanban board. Columns are supplied by the caller; dragging a card
- * to another column calls `onRestatus(item, newStatus)`. Card contents and any
- * per-card actions are rendered by `renderCard`.
+ * to another column calls `onRestatus(item, newStatus)`. Dropping a card onto
+ * another card in the same column reorders via `onReorder` (if given); onto a
+ * card in a different column, it restatuses to that card's status. Card
+ * contents and any per-card actions are rendered by `renderCard`.
  */
 export function EntityBoard<T extends { id: string }>({
-  items, columns, statusOf, onRestatus, renderCard, hint = 'Drag a card to change its status', onAddColumn,
+  items, columns, statusOf, onRestatus, renderCard, hint = 'Drag a card to change its status', onAddColumn, onReorder,
 }: {
   items: T[]
   columns: BoardCol[]
@@ -28,11 +30,12 @@ export function EntityBoard<T extends { id: string }>({
   renderCard: (item: T) => ReactNode
   hint?: string
   onAddColumn?: () => void
+  onReorder?: (dragId: string, targetId: string) => void
 }) {
   const [dragId, setDragId] = useState<string | null>(null)
   const [overCol, setOverCol] = useState<string | null>(null)
 
-  function dropOn(col: BoardCol) {
+  function dropOnColumn(col: BoardCol) {
     const id = dragId
     setOverCol(null)
     setDragId(null)
@@ -41,6 +44,19 @@ export function EntityBoard<T extends { id: string }>({
     if (!item) return
     const status = nextStatusForColumn(statusOf(item), col)
     if (status) onRestatus(item, status)
+  }
+
+  function dropOnCard(targetId: string) {
+    const id = dragId
+    setOverCol(null)
+    setDragId(null)
+    if (!id || id === targetId) return
+    const dragItem = items.find(i => i.id === id)
+    const targetItem = items.find(i => i.id === targetId)
+    if (!dragItem || !targetItem) return
+    const targetStatus = statusOf(targetItem)
+    if (statusOf(dragItem) === targetStatus) onReorder?.(id, targetId)
+    else onRestatus(dragItem, targetStatus)
   }
 
   return (
@@ -58,7 +74,7 @@ export function EntityBoard<T extends { id: string }>({
                 className={`ab-col${overCol === col.key ? ' ab-col-over' : ''}`}
                 onDragOver={e => { e.preventDefault(); if (overCol !== col.key) setOverCol(col.key) }}
                 onDragLeave={() => setOverCol(c => (c === col.key ? null : c))}
-                onDrop={() => dropOn(col)}
+                onDrop={() => dropOnColumn(col)}
               >
                 <div className="ab-col-head">
                   <span className="ab-col-dot" style={{ background: col.dot }} />
@@ -72,6 +88,8 @@ export function EntityBoard<T extends { id: string }>({
                     draggable
                     onDragStart={() => setDragId(item.id)}
                     onDragEnd={() => { setDragId(null); setOverCol(null) }}
+                    onDragOver={e => { e.preventDefault(); e.stopPropagation() }}
+                    onDrop={e => { e.preventDefault(); e.stopPropagation(); dropOnCard(item.id) }}
                   >
                     {renderCard(item)}
                   </div>
