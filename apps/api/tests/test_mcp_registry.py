@@ -91,11 +91,14 @@ def test_mcp_source_does_not_import_mutators():
     assert offenders == [], offenders
 
 
-def test_mcp_only_server_imports_sdk():
-    """Only server.py may import the `mcp` SDK; tool logic stays SDK-agnostic."""
+def test_mcp_only_transport_adapters_import_sdk():
+    """Only the transport adapters — server.py (STDIO) and http_transport.py
+    (P17.4, Streamable HTTP) — may import the `mcp` SDK; the tool logic
+    (registry / tools / capabilities) stays SDK-agnostic."""
     mcp_dir = pathlib.Path(app.mcp.__file__).parent
+    transports = {"server.py", "http_transport.py"}
     for path in mcp_dir.rglob("*.py"):
-        if path.name == "server.py":
+        if path.name in transports:
             continue
         src = path.read_text(encoding="utf-8")
         assert "import mcp" not in src and "from mcp" not in src, f"{path.name} imports the SDK"
