@@ -18,8 +18,10 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import json
 import secrets
+import socket
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -30,6 +32,7 @@ from sqlalchemy import event
 from sqlmodel import Session, select
 
 from app.core import actor, webhook_crypto
+from app.core.config import settings
 from app.core.utils import new_id, now_utc
 from app.models.audit_event import AuditEvent
 from app.models.project import Project
@@ -76,6 +79,8 @@ def create_subscription(
     exactly once; only its Fernet ciphertext is stored."""
     if urlparse(target_url).scheme not in ("http", "https"):
         raise ValueError("target_url must be an http(s) URL")
+    if _target_blocked(target_url):
+        raise ValueError("target_url must resolve to a public address")
     if fmt not in ("json", "slack", "discord"):
         raise ValueError("unsupported format")
     raw_secret = secrets.token_urlsafe(32)
@@ -145,12 +150,56 @@ def _sign(secret: str, body: bytes) -> str:
     return hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
 
+# --- SSRF guard --------------------------------------------------------------
+# In multi-user mode (LAN team / hosted) a workspace owner is a tenant, not the
+# infra operator, so a webhook target must not reach the server's own internal
+# network (loopback / private / link-local / metadata). In single-user local
+# mode this is skipped — pointing a webhook at your own localhost receiver (e.g.
+# a local n8n) is a legitimate local-first use. Checked at create AND delivery,
+# so DNS rebinding after creation is still caught.
+
+
+def _host_is_public(host: str) -> bool:
+    """True iff every address ``host`` resolves to is a global/public address."""
+    if not host:
+        return False
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        return False  # unresolvable → treat as unsafe, do not connect
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if (
+            ip.is_private or ip.is_loopback or ip.is_link_local
+            or ip.is_reserved or ip.is_multicast or ip.is_unspecified
+        ):
+            return False
+    return True
+
+
+def _target_blocked(target_url: str) -> bool:
+    if not settings.auth_enabled:
+        return False
+    return not _host_is_public(urlparse(target_url).hostname or "")
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never follow redirects — a webhook receiver returns 2xx directly, and a 3xx
+    to an internal host would otherwise slip past the target check."""
+
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+_opener = urllib.request.build_opener(_NoRedirect)
+
+
 def _http_post(url: str, body: bytes, headers: dict, timeout: int) -> tuple[Optional[int], Optional[str]]:
     """POST the signed body. Returns (status_code, error). Best-effort: any network
     failure returns (None, reason) rather than raising."""
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — http(s) enforced at create
+        with _opener.open(req, timeout=timeout) as resp:  # noqa: S310 — scheme + host guarded
             return resp.status, None
     except urllib.error.HTTPError as exc:  # a real HTTP status (4xx/5xx)
         return exc.code, None
@@ -205,7 +254,10 @@ def _deliver(delivery_id: str, engine) -> None:
             "X-Approvo-Delivery": d.id,
             "X-Approvo-Signature": f"sha256={_sign(secret, body)}",
         }
-        status_code, error = _http_post(sub.target_url, body, headers, _TIMEOUT_SECONDS)
+        if _target_blocked(sub.target_url):
+            status_code, error = None, "blocked_non_public_host"
+        else:
+            status_code, error = _http_post(sub.target_url, body, headers, _TIMEOUT_SECONDS)
         d.status_code = status_code
         d.delivered_at = now_utc()
         if error is None and status_code is not None and 200 <= status_code < 300:
