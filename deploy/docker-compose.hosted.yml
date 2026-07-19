@@ -1,0 +1,47 @@
+# Approvo — hosted single-origin stack: caddy (TLS) -> web (nginx+SPA) -> api.
+# Postgres is EXTERNAL (managed RDS / Azure Flexible Server) via hosted.env.
+#
+#   docker compose -f docker-compose.hosted.yml up -d --build
+#
+# Prereqs on the box: Docker + compose plugin, this file + Caddyfile + hosted.env
+# in the cwd, DNS A record app.yourdomain.com -> box IP, ports 80/443 open.
+# STEP 0 (once): edit apps/api/Dockerfile line 10 to install the driver extras:
+#   RUN pip install --no-cache-dir ".[postgres,oauth]"     # add ,s3 if using S3
+services:
+  api:
+    build:
+      context: ./apps/api
+    env_file: hosted.env            # AGENTBOARD_DATABASE_URL + auth + oauth + origins
+    volumes:
+      - approvo-data:/data          # generated artifacts (STORAGE_BACKEND=local); DB lives in Postgres
+    expose:
+      - "8000"                      # private only — never published to the host
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .                    # repo ROOT (pnpm workspace) per apps/web/Dockerfile
+      dockerfile: apps/web/Dockerfile
+    expose:
+      - "80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - web
+    restart: unless-stopped
+
+volumes:
+  approvo-data:
+  caddy-data:
+  caddy-config:

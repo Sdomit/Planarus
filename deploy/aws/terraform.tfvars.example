@@ -1,0 +1,23 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is git-ignored by convention
+# — never commit real secrets.
+
+aws_region = "us-east-1"
+domain     = "app.yourcompany.com"
+
+# Public repo: plain URL. Private repo: embed a token (repo-scoped, read-only):
+#   https://x-access-token:ghp_xxx@github.com/you/AgentBoard.git
+repo_url    = "https://github.com/you/AgentBoard.git"
+repo_branch = "main"
+
+# GitHub OAuth app (Settings -> Developer settings -> OAuth Apps).
+# Authorization callback URL MUST be:
+#   https://app.yourcompany.com/api/v1/auth/oauth/github/callback
+github_client_id     = "Iv1.xxxxxxxxxxxx"
+github_client_secret = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Optional: create the DNS A record automatically (else point DNS yourself).
+# route53_zone_id = "Z0123456789ABCDEFGHIJ"
+
+# Optional SSH (default off — use SSM Session Manager instead):
+# ssh_key_name = "my-keypair"
+# admin_cidr   = "203.0.113.4/32"

@@ -1,0 +1,24 @@
+# Copy to terraform.tfvars and fill in. Never commit real secrets.
+
+location = "eastus"
+domain   = "app.yourcompany.com"
+
+# Public repo: plain URL. Private repo: embed a repo-scoped read-only token:
+#   https://x-access-token:ghp_xxx@github.com/you/AgentBoard.git
+repo_url    = "https://github.com/you/AgentBoard.git"
+repo_branch = "main"
+
+# VM admin SSH key (Azure requires one even though port 22 stays closed by default).
+admin_ssh_public_key = "ssh-ed25519 AAAA... you@host"
+# admin_cidr = "203.0.113.4/32"   # uncomment to open SSH to just this CIDR
+
+# GitHub OAuth app (Settings -> Developer settings -> OAuth Apps).
+# Authorization callback URL MUST be:
+#   https://app.yourcompany.com/api/v1/auth/oauth/github/callback
+github_client_id     = "Iv1.xxxxxxxxxxxx"
+github_client_secret = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Optional: auto-create the A record in an Azure DNS zone you already host.
+# dns_zone_name           = "yourcompany.com"
+# dns_zone_resource_group = "dns-rg"
+# dns_record_name         = "app"
