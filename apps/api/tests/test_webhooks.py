@@ -117,3 +117,15 @@ def test_redeliver_resends_the_same_body(client, wh):
     assert res.status_code == 202
     assert len(wh) == before + 1
     assert res.json()["attempt"] == 2
+
+
+def test_slack_and_discord_formats_reshape_the_body(client, wh):
+    ws, _ = seed(client, "whfmt")
+    slack = _create_sub(client, ws, format="slack")["subscription"]["id"]
+    client.post(f"/api/v1/webhooks/{slack}/test", headers=local_hdr(client))
+    slack_body = json.loads(wh[-1]["body"])
+    assert "text" in slack_body and "webhook.test" in slack_body["text"]
+
+    discord = _create_sub(client, ws, format="discord")["subscription"]["id"]
+    client.post(f"/api/v1/webhooks/{discord}/test", headers=local_hdr(client))
+    assert "content" in json.loads(wh[-1]["body"])
