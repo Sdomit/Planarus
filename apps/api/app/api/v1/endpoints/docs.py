@@ -9,10 +9,20 @@ from app.db.session import get_session
 from app.models.user import User
 from app.schemas.doc import DocCreate, DocExportResponse, DocRead, DocSummary, DocUpdate
 from app.schemas.presence import PresenceHeartbeat, PresenceView
-from app.services import doc_service
+from app.services import audit_service, doc_service
 from app.services.presence_service import presence
 
 router = APIRouter()
+
+
+def _read(session: Session, doc) -> DocRead:
+    """Resolve updated_by_display for a single doc (P16.3, D33)."""
+    item = DocRead.model_validate(doc)
+    if item.updated_by:
+        item.updated_by_display = audit_service.display_names(
+            session, [item.updated_by]
+        ).get(item.updated_by)
+    return item
 
 
 @router.get("/projects/{project_id}/docs", response_model=list[DocSummary])
@@ -45,7 +55,7 @@ def create_doc(
     session: Session = Depends(get_session),
 ) -> DocRead:
     try:
-        return doc_service.create_doc(session, project_id, data)
+        return _read(session, doc_service.create_doc(session, project_id, data))
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
@@ -58,7 +68,7 @@ def get_doc(
     doc = doc_service.get_doc(session, doc_id)
     if doc is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doc not found")
-    return doc
+    return _read(session, doc)
 
 
 @router.patch("/docs/{doc_id}", response_model=DocRead)
@@ -68,7 +78,7 @@ def update_doc(
     session: Session = Depends(get_session),
 ) -> DocRead:
     try:
-        return doc_service.update_doc(session, doc_id, data)
+        return _read(session, doc_service.update_doc(session, doc_id, data))
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doc not found")
     except LookupError as exc:

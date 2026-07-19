@@ -22,6 +22,8 @@ class Task(SQLModel, table=True):
     stage_id: Optional[str] = Field(default=None, foreign_key="stage.id", index=True)
     # Phase 15.8: a task may be a sub-task of another task (one level deep).
     parent_task_id: Optional[str] = Field(default=None, foreign_key="task.id", index=True)
+    # P16.1 (D33): optional owner of the task; write path + UI land in P16.3.
+    assignee_id: Optional[str] = Field(default=None, foreign_key="appuser.id", index=True)
     title: str = Field(max_length=200)
     description: Optional[str] = None
     status: str = Field(default="backlog")

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, type AppSettings, type AppSettingsUpdate } from '../api/client'
 
-const SWITCH_KEYS = ['email_enabled', 'email_from', 'external_api_active', 'lan_mode_active'] as const
+const SWITCH_KEYS = ['email_enabled', 'email_from', 'external_api_active', 'lan_mode_active', 'registration_open'] as const
 
 // Phase 9B settings surface. Switch tier is editable; the env ceiling is shown
 // read-only and always wins — a toggle here can never widen exposure.
@@ -114,6 +114,18 @@ export default function SettingsPanel() {
           />
           <span>Accept teammates from the LAN</span>
         </label>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 'var(--space-2)' }}>
+          <input
+            type="checkbox"
+            checked={s.registration_open}
+            onChange={e => patch({ registration_open: e.target.checked })}
+          />
+          <span>Accept self-registration on the sign-in screen</span>
+        </label>
+        <p style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)', margin: '6px 0 0' }}>
+          Uncheck after onboarding — admins can still create accounts from the
+          Team view (each new account gets a one-time temporary password).
+        </p>
         {s.lan_permitted_by_env ? (
           <p style={{ color: 'var(--status-warning-fg, var(--text-tertiary))', fontSize: 'var(--text-sm)', margin: '6px 0 0' }}>
             ⚠ LAN traffic is plain HTTP — <strong>unencrypted on your local network</strong> (an

@@ -57,6 +57,14 @@ def external_api_active(session: Session) -> bool:
     return bool(get_setting(session, "external_api_active", env.external_api_enabled))
 
 
+def registration_open(session: Session) -> bool:
+    """P16.1 (D30): whether password self-registration is accepted. Default True
+    (today's open behavior). The provider ceiling (`auth_password_enabled`) is
+    enforced separately at the endpoint — this switch can only close the door
+    on a permitted provider, never open a disabled one."""
+    return bool(get_setting(session, "registration_open", True))
+
+
 def lan_mode_active(session: Session) -> bool:
     """The LAN-mode DB switch (P11.3). Same contract as external_api_active:
     defaults to the env ceiling, so env-only deployments are unchanged, and it
@@ -90,6 +98,7 @@ def read_settings(session: Session) -> SettingsRead:
             get_setting(session, "external_api_active", env.external_api_enabled)
         ),
         lan_mode_active=lan_mode_active(session),
+        registration_open=registration_open(session),
         external_api_permitted_by_env=env.external_api_enabled,
         external_api_hosts_configured=bool((env.external_api_allowed_hosts or "").strip()),
         email_smtp_loopback=env.smtp_host.strip().lower() in _LOOPBACK_HOSTS,

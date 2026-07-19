@@ -70,6 +70,35 @@ def resolve_user(session: Session, raw_token: Optional[str]) -> Optional[User]:
     return user
 
 
+def revoke_all_sessions(session: Session, user_id: str) -> None:
+    """Revoke every live session for a user (admin reset/deactivate). Caller
+    commits."""
+    now = now_utc()
+    rows = session.exec(
+        select(UserSession).where(UserSession.user_id == user_id)
+    ).all()
+    for row in rows:
+        if row.revoked_at is None:
+            row.revoked_at = now
+            session.add(row)
+
+
+def password_must_change(session: Session, user_id: str) -> bool:
+    """Whether the user's password identity carries the admin-issued
+    must-change flag (P16.1, D29). False for accounts without a password login.
+
+    ponytail: one indexed lookup per authenticated request in team mode; stamp
+    it into the session row if it ever shows up in a profile.
+    """
+    identity = session.exec(
+        select(UserIdentity).where(
+            UserIdentity.provider == PASSWORD_PROVIDER,
+            UserIdentity.user_id == user_id,
+        )
+    ).first()
+    return bool(identity is not None and identity.password_must_change)
+
+
 def revoke_session(session: Session, raw_token: Optional[str]) -> None:
     """Idempotently revoke a session by its raw token (no-op if unknown)."""
     if not raw_token:
@@ -86,6 +115,16 @@ def revoke_session(session: Session, raw_token: Optional[str]) -> None:
 # --- users / dev-login --------------------------------------------------------
 def _normalize_email(email: str) -> str:
     return email.strip().lower()
+
+
+def _bootstrap_admin(session: Session) -> bool:
+    """D29: the very first account on a server becomes its admin.
+
+    ponytail: unguarded existence check — two racing first registrations could
+    both win admin; LAN-scale accepted, and the last-active-admin guard keeps
+    the system recoverable either way.
+    """
+    return session.exec(select(User.id).limit(1)).first() is None
 
 
 def login_with_identity(
@@ -110,6 +149,7 @@ def login_with_identity(
             id=new_id("usr"),
             email=norm,
             display_name=(display_name or norm.split("@")[0]).strip()[:200] or norm,
+            is_admin=_bootstrap_admin(session),
             created_at=now,
             updated_at=now,
         )
@@ -180,6 +220,7 @@ def register_password_user(
         id=new_id("usr"),
         email=norm,
         display_name=(display_name or norm.split("@")[0]).strip()[:200] or norm,
+        is_admin=_bootstrap_admin(session),
         created_at=now,
         updated_at=now,
     )
@@ -269,6 +310,7 @@ def change_password(
     if not verify_secret(identity.password_hash, current_password):
         return False
     identity.password_hash = hash_secret(new_password)
+    identity.password_must_change = False  # P16.1: a self-chosen password clears it
     session.add(identity)
     keep_hash = _hash_token(keep_raw_token) if keep_raw_token else None
     now = now_utc()

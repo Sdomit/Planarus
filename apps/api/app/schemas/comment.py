@@ -55,6 +55,9 @@ class CommentRead(BaseModel):
     entity_id: str
     body: str
     author_type: str
+    author_id: Optional[str] = None
+    # P16.3 (D33): who wrote it, resolved at read time; None in local mode.
+    author_display: Optional[str] = None
     status: str
     created_at: str
     updated_at: Optional[str]

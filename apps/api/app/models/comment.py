@@ -29,6 +29,8 @@ class Comment(SQLModel, table=True):
     entity_id: str
     body: str
     author_type: str = Field(default="human")
+    # P16.1 (D33): who wrote it, when a signed-in user did; wired in P16.3.
+    author_id: Optional[str] = Field(default=None, foreign_key="appuser.id")
     status: str = Field(default="active")
     created_at: str
     updated_at: Optional[str] = None

@@ -10,6 +10,7 @@ vi.mock('../api/client', () => ({
       passwordLogin: vi.fn(),
       passwordRegister: vi.fn(),
       logout: vi.fn(),
+      passwordChange: vi.fn(),
     },
   },
 }))
@@ -81,6 +82,25 @@ describe('AuthGate', () => {
     await waitFor(() =>
       expect(api.auth.passwordRegister).toHaveBeenCalledWith('new@team.lan', 'a long enough phrase', 'Newbie'),
     )
+  })
+
+  it('forces the change-password screen on a temp password (P16.2)', async () => {
+    vi.mocked(api.auth.me)
+      .mockResolvedValueOnce({ ...ME, password_must_change: true })
+      .mockResolvedValueOnce(ME) // refetch after the rotation
+    vi.mocked(api.auth.passwordChange).mockResolvedValue(undefined)
+    render(<AuthGate><p>the app</p></AuthGate>)
+
+    // The app is withheld until the temp password is replaced.
+    expect(await screen.findByText('Set a new password')).toBeTruthy()
+    expect(screen.queryByText('the app')).toBeNull()
+
+    fireEvent.change(screen.getByLabelText('Temporary password'), { target: { value: 'temp-pass-123' } })
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'a long enough phrase' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Set password' }))
+
+    expect(await screen.findByText('the app')).toBeTruthy()
+    expect(api.auth.passwordChange).toHaveBeenCalledWith('temp-pass-123', 'a long enough phrase')
   })
 
   it('explains a 409 on register', async () => {

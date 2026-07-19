@@ -88,14 +88,11 @@ is your LAN on/off switch at the OS level.
    has an account can never be claimed again with a new password.
 2. Create (or open) your workspace — the creator becomes its **owner**.
 3. **Teammates register themselves**, then can see nothing until you grant
-   membership. There is no members UI yet, so the owner grants roles via the
-   API (from the host machine or any signed-in owner session):
-
-   ```bash
-   curl -X POST http://localhost:8000/api/v1/workspaces/<ws_id>/members \
-     -H "Content-Type: application/json" -b "approvo_session=<your cookie>" \
-     -d '{"email": "teammate@example.com", "role": "editor"}'
-   ```
+   membership. The in-app **Team** view (sidebar, team mode only) does this:
+   owners add members by email and set roles there, and server admins can
+   create accounts with a one-time temp password instead of waiting for
+   self-registration. Full walkthrough + the scripted-provisioning API:
+   [team-administration.md](team-administration.md).
 
    Roles: `owner` (manages members, approves agent proposals), `editor`
    (creates/edits, proposes), `viewer` (read-only).

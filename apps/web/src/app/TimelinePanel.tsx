@@ -136,7 +136,9 @@ export default function TimelinePanel({ projectId }: { projectId: string }) {
                   </div>
                   <div className="tl-meta">
                     <span className="tl-chip">{ev.entity_type.replace(/_/g, ' ')}</span>
-                    <span className="tl-actor">{ev.actor_type}</span>
+                    <span className="tl-actor" title={ev.actor_display ? ev.actor_type : undefined}>
+                      {ev.actor_display ?? ev.actor_type}
+                    </span>
                   </div>
                 </div>
               </li>

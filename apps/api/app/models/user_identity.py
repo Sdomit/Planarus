@@ -30,4 +30,7 @@ class UserIdentity(SQLModel, table=True):
     provider: str
     provider_subject: str = Field(max_length=320)
     password_hash: str | None = Field(default=None)
+    # P16.1 (D29): set on admin-issued temp passwords; until the user rotates it
+    # (which clears the flag), their sessions may only call the auth surface.
+    password_must_change: bool = Field(default=False)
     created_at: str

@@ -28,6 +28,7 @@ class TaskCreate(BaseModel):
     phase_id: Optional[str] = None
     stage_id: Optional[str] = None
     parent_task_id: Optional[str] = None
+    assignee_id: Optional[str] = None  # P16.3 (D33): a team member; None in local mode
 
     @field_validator("status")
     @classmethod
@@ -52,6 +53,8 @@ class TaskUpdate(BaseModel):
     phase_id: Optional[str] = None
     stage_id: Optional[str] = None
     parent_task_id: Optional[str] = None
+    # P16.3 (D33): send null to unassign. exclude_unset keeps "not sent" ≠ "cleared".
+    assignee_id: Optional[str] = None
 
     @field_validator("status")
     @classmethod
@@ -78,6 +81,9 @@ class TaskRead(BaseModel):
     priority: Optional[str]
     sort_order: int
     due_at: Optional[str]
+    assignee_id: Optional[str] = None
+    # P16.3 (D33): resolved at read time; None in local mode or when unassigned.
+    assignee_display: Optional[str] = None
     created_at: str
     updated_at: str
 
