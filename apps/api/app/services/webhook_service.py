@@ -76,7 +76,7 @@ def create_subscription(
     exactly once; only its Fernet ciphertext is stored."""
     if urlparse(target_url).scheme not in ("http", "https"):
         raise ValueError("target_url must be an http(s) URL")
-    if fmt != "json":  # 17.3a delivers JSON only; slack/discord land in 17.3b.
+    if fmt not in ("json", "slack", "discord"):
         raise ValueError("unsupported format")
     raw_secret = secrets.token_urlsafe(32)
     sub = WebhookSubscription(
@@ -156,6 +156,25 @@ def _http_post(url: str, body: bytes, headers: dict, timeout: int) -> tuple[Opti
         return exc.code, None
     except Exception as exc:  # noqa: BLE001 — connection/timeout/etc. are best-effort
         return None, type(exc).__name__
+
+
+def _render_text(env: dict) -> str:
+    entity = env.get("entity") or {}
+    where = f" · project {env['project_id']}" if env.get("project_id") else ""
+    return (
+        f"[Approvo] {env['kind']} — {entity.get('type', '')} "
+        f"{entity.get('id', '') or ''}{where}"
+    ).strip()
+
+
+def _format_body(fmt: str, env: dict) -> str:
+    """Reshape the envelope for the subscription's format. ``json`` = the raw
+    envelope; ``slack`` / ``discord`` = their incoming-webhook text payload."""
+    if fmt == "slack":
+        return json.dumps({"text": _render_text(env)})
+    if fmt == "discord":
+        return json.dumps({"content": _render_text(env)})
+    return json.dumps(env)
 
 
 def _deliver(delivery_id: str, engine) -> None:
@@ -246,7 +265,8 @@ def send_test(session: Session, subscription_id: str) -> WebhookDelivery:
         "entity": {"type": "webhook", "id": sub.id, "snapshot": {"message": "test delivery"}},
     }
     return _queue_delivery(
-        session, sub.id, kind="webhook.test", event_id=envelope["id"], body=json.dumps(envelope)
+        session, sub.id, kind="webhook.test", event_id=envelope["id"],
+        body=_format_body(sub.format, envelope),
     )
 
 
@@ -299,10 +319,12 @@ def _dispatch(engine, env: dict) -> None:
                 WebhookSubscription.enabled == True,  # noqa: E712 — SQL boolean
             )
         ).all()
-        body = json.dumps(env)
         for sub in subs:
             if _matches(sub, env):
-                _queue_delivery(s, sub.id, kind=env["kind"], event_id=env["id"], body=body)
+                _queue_delivery(
+                    s, sub.id, kind=env["kind"], event_id=env["id"],
+                    body=_format_body(sub.format, env),
+                )
 
 
 @event.listens_for(Session, "before_commit")
