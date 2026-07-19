@@ -35,6 +35,7 @@ from app.api.v1.endpoints import (
     tasks,
     timeline,
     todos,
+    webhooks,
     workspaces,
 )
 
@@ -83,6 +84,9 @@ router.include_router(context_pack.router, tags=["context-pack"], dependencies=_
 router.include_router(git.router, tags=["git"], dependencies=_GUARD)
 router.include_router(approvals.router, tags=["approvals"])
 router.include_router(api_clients.router, tags=["api-clients"])
+# P17.3: outbound webhooks — workspace-owner + control-token gated (own guards),
+# and 404 entirely unless webhook encryption is configured.
+router.include_router(webhooks.router, tags=["webhooks"])
 router.include_router(roadmap.router, tags=["roadmap"], dependencies=_GUARD)
 router.include_router(timeline.router, tags=["timeline"], dependencies=_GUARD)
 router.include_router(agent_runs.router, tags=["agent-runs"], dependencies=_GUARD)

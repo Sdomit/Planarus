@@ -39,6 +39,11 @@ calendar-sync = [
     "httpx>=0.27.0",
     "cryptography>=42.0",
 ]
+# P17.3: outbound webhooks. cryptography (Fernet) encrypts each subscription's
+# HMAC signing secret at rest. Inert unless AGENTBOARD_WEBHOOK_ENC_KEY is set.
+webhooks = [
+    "cryptography>=42.0",
+]
 # P10.3b: AWS SDK for the S3 storage backend. Only needed when
 # AGENTBOARD_STORAGE_BACKEND=s3; local/memory backends never import it.
 s3 = [

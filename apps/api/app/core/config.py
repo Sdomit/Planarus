@@ -116,6 +116,11 @@ class Settings(BaseSettings):
     calendar_enc_key: str = Field(
         default="", validation_alias="AGENTBOARD_CALENDAR_ENC_KEY"
     )
+    # P17.3: separate Fernet key for webhook signing-secret encryption. Webhooks
+    # are inert until this is set (same env-gated model as calendar sync).
+    webhook_enc_key: str = Field(
+        default="", validation_alias="AGENTBOARD_WEBHOOK_ENC_KEY"
+    )
     calendar_google_client_id: str = Field(
         default="", validation_alias="AGENTBOARD_CALENDAR_GOOGLE_CLIENT_ID"
     )
