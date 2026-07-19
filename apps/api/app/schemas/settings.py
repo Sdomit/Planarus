@@ -12,6 +12,7 @@ class SettingsRead(BaseModel):
     email_from: str
     external_api_active: bool
     lan_mode_active: bool  # P11.3: pause LAN acceptance within the env ceiling
+    registration_open: bool  # P16.1 (D30): accept password self-registration
     # --- ceiling tier (env-owned, read-only status) ---
     external_api_permitted_by_env: bool
     external_api_hosts_configured: bool
@@ -32,6 +33,7 @@ class SettingsUpdate(BaseModel):
     email_from: Optional[str] = None
     external_api_active: Optional[bool] = None
     lan_mode_active: Optional[bool] = None
+    registration_open: Optional[bool] = None
 
     @field_validator("email_from")
     @classmethod

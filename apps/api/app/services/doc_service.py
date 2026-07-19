@@ -14,6 +14,7 @@ from typing import Optional
 
 from sqlmodel import Session, select
 
+from app.core import actor
 from app.core.utils import new_id, now_utc
 from app.fsmemory import atomic_io
 from app.fsmemory.locks import project_lock
@@ -98,6 +99,7 @@ def create_doc(session: Session, project_id: str, payload: DocCreate) -> Doc:
         status=payload.status,
         sort_order=payload.sort_order,
         version=1,
+        updated_by=actor.current_actor_id(),  # P16.3: creator = first editor
         created_at=ts,
         updated_at=ts,
     )
@@ -184,6 +186,7 @@ def update_doc(session: Session, doc_id: str, payload: DocUpdate) -> Doc:
     if changed:
         doc.version = doc.version + 1
         doc.updated_at = now_utc()
+        doc.updated_by = actor.current_actor_id()  # P16.3: who last saved it
 
     session.add(doc)
     session.flush()

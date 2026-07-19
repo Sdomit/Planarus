@@ -46,6 +46,7 @@ const PENDING = {
   expires_at: '2026-06-21T10:00:00+00:00',
   decided_at: null,
   decided_by: null,
+  decided_by_display: null,
   applied_at: null,
   reason: null,
   failure_reason: null,
@@ -77,6 +78,34 @@ describe('ApprovalQueuePanel', () => {
     await waitFor(() => screen.getByText('task.create'))
     expect(screen.getByText(/Pending \(1\)/)).toBeTruthy()
     expect(screen.getByText(/History \(0\)/)).toBeTruthy()
+  })
+
+  it('shows who decided and named audit actors (P16.0)', async () => {
+    const decided = {
+      ...PENDING,
+      status: 'approved',
+      decided_at: '2026-06-20T11:00:00+00:00',
+      decided_by: 'usr_1',
+      decided_by_display: 'Alice Smith',
+    }
+    mockApi.approvals.list.mockResolvedValue([decided])
+    mockApi.approvals.get.mockResolvedValue({ ...DETAIL, ...decided })
+    mockApi.approvals.audit.mockResolvedValue([
+      {
+        id: 'aud_1',
+        event_type: 'proposal_approved',
+        actor_type: 'human',
+        actor_id: 'usr_1',
+        actor_display: 'Alice Smith',
+        created_at: '2026-06-20T11:00:00+00:00',
+      },
+    ])
+    render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
+    await waitFor(() => screen.getByText('task.create'))
+    fireEvent.click(screen.getByText('task.create'))
+    await waitFor(() => screen.getByText('Decided by'))
+    // Name appears in the meta row and again in the audit timeline.
+    expect(screen.getAllByText('Alice Smith').length).toBe(2)
   })
 
   it('shows the field-level diff as text and the mandatory warning', async () => {

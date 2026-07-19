@@ -225,7 +225,12 @@ def test_no_hash_material_in_responses(client, pw_on):
         assert "password_hash" not in text
     token = _token(client)
     me = client.get("/api/v1/auth/me", cookies=_auth(token))
-    assert "password" not in me.text
+    # P16.1: the boolean must-change flag is the one sanctioned "password"
+    # occurrence — strip exactly it, then keep the blanket guard at full strength.
+    scrubbed = me.text.replace('"password_must_change":false', "").replace(
+        '"password_must_change":true', ""
+    )
+    assert "password" not in scrubbed
 
 
 def test_cookie_secure_relaxed_for_lan_mode(client, pw_on, monkeypatch):

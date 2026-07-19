@@ -129,6 +129,9 @@ export default function ApprovalQueuePanel({ projectId }: ApprovalQueuePanelProp
                 <div><dt>Project</dt><dd title={selected.project_id}>{selected.project_id.slice(0, 18)}…</dd></div>
                 <div><dt>Target</dt><dd>{targetLabel(selected)}</dd></div>
                 <div><dt>Risk</dt><dd><StatusBadge kind="severity" value={selected.risk_level} /></dd></div>
+                {selected.decided_by && (
+                  <div><dt>Decided by</dt><dd>{selected.decided_by_display ?? selected.decided_by}</dd></div>
+                )}
                 <div><dt>Expires</dt><dd>{selected.expires_at}</dd></div>
                 <div><dt>Checksum</dt><dd className="aqp-checksum">{selected.patch_checksum.slice(0, 16)}</dd></div>
               </dl>
@@ -206,7 +209,9 @@ export default function ApprovalQueuePanel({ projectId }: ApprovalQueuePanelProp
                 {audit.map(e => (
                   <li key={e.id}>
                     <span className="aqp-audit-event">{e.event_type}</span>
-                    <span className="aqp-audit-actor">{e.actor_type}</span>
+                    <span className="aqp-audit-actor" title={e.actor_display ? e.actor_type : undefined}>
+                      {e.actor_display ?? e.actor_type}
+                    </span>
                     <span className="aqp-audit-time">{e.created_at}</span>
                   </li>
                 ))}

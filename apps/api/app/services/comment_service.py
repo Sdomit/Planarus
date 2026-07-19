@@ -2,6 +2,7 @@ from typing import Optional
 
 from sqlmodel import Session, select
 
+from app.core import actor
 from app.core.utils import new_id, now_utc
 from app.models.comment import Comment
 from app.models.project import Project
@@ -37,6 +38,9 @@ def create_comment(session: Session, project_id: str, data: CommentCreate) -> Co
         entity_id=data.entity_id,
         body=data.body,
         author_type=data.author_type,
+        # P16.3 (D33): the signed-in author, from the request actor context.
+        # None in local mode / non-HTTP callers, exactly as before.
+        author_id=actor.current_actor_id(),
         created_at=now_utc(),
     )
     session.add(comment)

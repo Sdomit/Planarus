@@ -23,7 +23,7 @@ from app.schemas.auth import (
     UserRead,
     WorkspaceMembershipRead,
 )
-from app.services import auth_service, oauth
+from app.services import auth_service, oauth, settings_service
 
 router = APIRouter(dependencies=[Depends(require_auth_enabled)])
 
@@ -60,6 +60,8 @@ def _me(session: Session, user: User) -> AuthMeRead:
             WorkspaceMembershipRead(workspace_id=m.workspace_id, role=m.role)
             for m in memberships
         ],
+        # P16.1: lets the web force the change-password screen for temp passwords.
+        password_must_change=auth_service.password_must_change(session, user.id),
     )
 
 
@@ -95,8 +97,14 @@ def password_register(
 ) -> AuthMeRead:
     """Create a new account (create-only: 409 if the email exists — never links
     onto an existing account) and open a session. Workspace access still requires
-    membership granted by an owner; a fresh account can see nothing."""
+    membership granted by an owner; a fresh account can see nothing.
+
+    P16.1 (D30): a closed ``registration_open`` switch answers the same generic
+    404 as a disabled provider — closed registration is indistinguishable from
+    no password surface at all."""
     _require_password_enabled()
+    if not settings_service.registration_open(session):
+        raise HTTPException(status_code=404, detail="not found")
     try:
         user, raw_token = auth_service.register_password_user(
             session, data.email, data.password, data.display_name

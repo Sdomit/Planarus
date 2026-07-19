@@ -29,9 +29,26 @@ from app.schemas.approval import (
     LocalSessionResponse,
     RejectRequest,
 )
-from app.services import approval_service
+from app.services import approval_service, audit_service
 
 router = APIRouter()
+
+
+def _summarize(session: Session, rows) -> list[ApprovalSummary]:
+    """Coerce ApprovalRequest rows to summaries with decided_by resolved to a
+    display name (P16.0, D32). The legacy literal "local" simply misses the
+    lookup and the display stays None."""
+    items = [ApprovalSummary.model_validate(r) for r in rows]
+    names = audit_service.display_names(session, (s.decided_by for s in items))
+    for s in items:
+        s.decided_by_display = names.get(s.decided_by) if s.decided_by else None
+    return items
+
+
+def _decider(user: Optional[User]) -> str:
+    """decided_by value for a human decision: the real user id in team/hosted
+    mode, the historical literal "local" in local single-user mode."""
+    return user.id if user is not None else "local"
 
 
 def _require_approver(
@@ -90,7 +107,8 @@ def list_approvals(
         if project is None:
             raise HTTPException(status_code=404, detail="project not found")
         tenant.require_project_access(session, project, user, *tenant.READ_ROLES)
-    return approval_service.list_approvals(session, project_id=project_id, status=status)
+    rows = approval_service.list_approvals(session, project_id=project_id, status=status)
+    return _summarize(session, rows)
 
 
 @router.get("/approvals/{approval_id}", response_model=ApprovalDetail)
@@ -102,7 +120,7 @@ def get_approval(
     ar = _require_approval_read(session, approval_id, user)
     diff = approval_service.build_diff(session, ar)
     is_expired, stale_reason = approval_service.staleness(session, ar)
-    summary = ApprovalSummary.model_validate(ar).model_dump()
+    summary = _summarize(session, [ar])[0].model_dump()
     return ApprovalDetail(
         **summary,
         patch_checksum=ar.patch_checksum,
@@ -120,7 +138,12 @@ def approval_audit(
     user: Optional[User] = Depends(tenant_user),
 ) -> list[ApprovalAuditEntry]:
     _require_approval_read(session, approval_id, user)
-    return approval_service.get_proposal_audit(session, approval_id)
+    events = approval_service.get_proposal_audit(session, approval_id)
+    names = audit_service.display_names(session, (e.actor_id for e in events))
+    entries = [ApprovalAuditEntry.model_validate(e) for e in events]
+    for entry in entries:
+        entry.actor_display = names.get(entry.actor_id) if entry.actor_id else None
+    return entries
 
 
 @router.post(
@@ -135,9 +158,10 @@ def approve(
 ) -> ApprovalSummary:
     _require_approver(session, approval_id, user)
     try:
-        return approval_service.approve(session, approval_id)
+        ar = approval_service.approve(session, approval_id, decided_by=_decider(user))
     except LookupError:
         raise HTTPException(status_code=404, detail="approval not found")
+    return _summarize(session, [ar])[0]
 
 
 @router.post(
@@ -153,11 +177,15 @@ def reject(
 ) -> ApprovalSummary:
     _require_approver(session, approval_id, user)
     try:
-        return approval_service.reject(
-            session, approval_id, reason=(body.reason if body else None)
+        ar = approval_service.reject(
+            session,
+            approval_id,
+            reason=(body.reason if body else None),
+            decided_by=_decider(user),
         )
     except LookupError:
         raise HTTPException(status_code=404, detail="approval not found")
+    return _summarize(session, [ar])[0]
 
 
 @router.post(
@@ -172,9 +200,10 @@ def apply(
 ) -> ApprovalSummary:
     _require_approver(session, approval_id, user)
     try:
-        return approval_service.apply(session, approval_id)
+        ar = approval_service.apply(session, approval_id)
     except LookupError:
         raise HTTPException(status_code=404, detail="approval not found")
+    return _summarize(session, [ar])[0]
 
 
 @router.post(
@@ -189,6 +218,9 @@ def invalidate(
 ) -> ApprovalSummary:
     _require_approver(session, approval_id, user)
     try:
-        return approval_service.invalidate(session, approval_id)
+        ar = approval_service.invalidate(
+            session, approval_id, decided_by=_decider(user)
+        )
     except LookupError:
         raise HTTPException(status_code=404, detail="approval not found")
+    return _summarize(session, [ar])[0]

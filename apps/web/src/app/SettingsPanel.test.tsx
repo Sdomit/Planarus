@@ -9,6 +9,7 @@ const base = {
   email_from: 'approvo@localhost',
   external_api_active: true,
   lan_mode_active: false,
+  registration_open: true,
   external_api_permitted_by_env: false,
   external_api_hosts_configured: false,
   email_smtp_loopback: true,
@@ -45,6 +46,14 @@ describe('SettingsPanel', () => {
     fireEvent.click(screen.getByLabelText('Accept teammates from the LAN'))
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(update).toHaveBeenCalledWith({ lan_mode_active: true }))
+  })
+
+  it('saves the registration switch when closed (P16.2, D30)', async () => {
+    render(<SettingsPanel />)
+    await screen.findByDisplayValue('approvo@localhost')
+    fireEvent.click(screen.getByLabelText('Accept self-registration on the sign-in screen'))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(update).toHaveBeenCalledWith({ registration_open: false }))
   })
 
   it('saves only the changed switch and confirms', async () => {
