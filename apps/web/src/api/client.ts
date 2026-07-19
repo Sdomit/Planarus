@@ -1004,6 +1004,13 @@ export const api = {
     archive: (id: string) => request<Project>(`/projects/${id}/archive`, { method: 'POST' }),
     unarchive: (id: string) => request<Project>(`/projects/${id}/unarchive`, { method: 'POST' }),
     duplicate: (id: string) => request<Project>(`/projects/${id}/duplicate`, { method: 'POST' }),
+    // P17.6: round-trippable JSON export / import.
+    export: (id: string) => request<Record<string, unknown>>(`/projects/${id}/export`),
+    import: (workspaceId: string, data: Record<string, unknown>) =>
+      request<Project>('/projects/import', {
+        method: 'POST',
+        body: JSON.stringify({ workspace_id: workspaceId, data }),
+      }),
     remove: (id: string) => request<void>(`/projects/${id}`, { method: 'DELETE' }),
   },
   phases: {
