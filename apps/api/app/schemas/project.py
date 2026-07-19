@@ -11,6 +11,13 @@ _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$")
 _PROJECT_STATUSES = frozenset(PROJECT_STATUSES)
 
 
+class ProjectImport(BaseModel):
+    """Body for POST /projects/import — a target workspace + an export payload."""
+
+    workspace_id: str
+    data: dict
+
+
 def _validate_folder_path(v: Optional[str]) -> Optional[str]:
     """A project root, if given, must be a well-formed absolute path.
 
