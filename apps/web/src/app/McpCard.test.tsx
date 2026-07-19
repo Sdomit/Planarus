@@ -49,4 +49,10 @@ describe('McpCard', () => {
     // The generated capability tier flips too.
     expect(screen.getByText(/mcpServers/).textContent).toContain('propose')
   })
+
+  it('surfaces the remote (HTTP) MCP URL (P17.4)', async () => {
+    render(<McpCard />)
+    await waitFor(() => screen.getByText(/mcpServers/))
+    expect(screen.getByText(/\/api\/external\/v1\/mcp$/)).toBeTruthy()
+  })
 })

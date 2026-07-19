@@ -17,6 +17,7 @@ from app.api.external.problems import (
 )
 from app.api.external.router import router as external_router
 from app.api.v1.router import router as api_v1_router
+from app.mcp.http_transport import MOUNT_PATH, make_mcp_mount, mcp_lifespan
 from app.core.errors import (
     approval_conflict_handler,
     conflict_handler,
@@ -115,6 +116,7 @@ def create_app() -> FastAPI:
         title="Approvo API",
         version="0.2.0",
         description="Local-first AI project cockpit — API",
+        lifespan=mcp_lifespan,
     )
 
     # CORS for the local UI ONLY, restricted to the known local origins (shared with
@@ -148,6 +150,10 @@ def create_app() -> FastAPI:
 
     app.include_router(api_v1_router, prefix="/api/v1")
     app.include_router(external_router, prefix="/api/external/v1", tags=["external"])
+    # P17.4: remote MCP over Streamable HTTP, mounted under the external surface so
+    # ExternalApiGuard's ceiling (disabled-by-default, Host allowlist, body cap)
+    # applies; agbk_-authenticated and scope-gated inside (D39).
+    app.mount(MOUNT_PATH, make_mcp_mount(app))
 
     return app
 
