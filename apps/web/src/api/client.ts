@@ -608,6 +608,30 @@ export interface ApiClientCreatedResponse {
   warning: string
 }
 
+// --- P17.2: MCP connection metadata (Integrations hub) ----------------------
+
+export interface McpToolInfo {
+  name: string
+  description: string
+}
+
+export interface McpInfo {
+  server_name: string
+  command: string
+  args: string[]
+  /** Real apps/api path in local mode; null in team mode (no raw-path disclosure). */
+  cwd: string | null
+  capability_env: string
+  read_tools: McpToolInfo[]
+  propose_tools: McpToolInfo[]
+}
+
+/** The GPT Actions OpenAPI contract (loosely typed — the card only touches servers). */
+export interface OpenApiContract {
+  servers?: { url: string; description?: string }[]
+  [key: string]: unknown
+}
+
 // --- Phase 9: roadmap / timeline / agent runs / notifications ----------------
 
 export interface RoadmapTaskRollup {
@@ -1275,6 +1299,12 @@ export const api = {
       }),
     revoke: (id: string) =>
       controlRequest<ApiClientSummary>(`/api-clients/${id}/revoke`, { method: 'POST' }),
+  },
+  // P17.2: read-only MCP connection metadata for the Integrations hub.
+  integrations: {
+    mcp: () => request<McpInfo>('/integrations/mcp'),
+    gptOpenapi: (profile: 'readonly' | 'read_propose' = 'readonly') =>
+      request<OpenApiContract>(`/integrations/gpt-openapi?profile=${profile}`),
   },
   // --- Phase 9 ----------------------------------------------------------------
   roadmap: {

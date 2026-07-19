@@ -27,22 +27,39 @@ vi.mock('../api/client', () => ({
       get: vi.fn(async () => base),
       update: (...args: unknown[]) => update(...(args as [Record<string, unknown>])),
     },
+    // P17.0: the API Keys tab embeds ExternalClientsPanel; P17.2: the MCP card
+    // on the Integrations tab loads workspaces/projects + integrations.mcp.
+    workspaces: { list: vi.fn(async () => []) },
+    projects: { list: vi.fn(async () => []) },
+    apiClients: { list: vi.fn(async () => []), create: vi.fn(), revoke: vi.fn() },
+    integrations: {
+      mcp: vi.fn(async () => ({
+        server_name: 'agentboard', command: 'python', args: ['-m', 'app.mcp.server'],
+        cwd: '/x/apps/api', capability_env: 'AGENTBOARD_MCP_CAPABILITY',
+        read_tools: [], propose_tools: [],
+      })),
+      // P17.5: the GPT Actions card fetches the contract on the Integrations tab.
+      gptOpenapi: vi.fn(async () => ({ openapi: '3.1.0', servers: [{ url: 'https://x/api/external/v1' }], paths: {} })),
+    },
   },
 }))
 
 describe('SettingsPanel', () => {
-  it('renders loaded settings and the read-only ceiling status', async () => {
+  it('renders loaded settings and the read-only ceiling status across tabs', async () => {
     render(<SettingsPanel />)
+    // Integrations tab (default): email + external API ceiling
     expect(await screen.findByDisplayValue('approvo@localhost')).toBeTruthy()
-    // both env ceilings are off → each section shows its inert-switch warning
     expect(screen.getByText('AGENTBOARD_EXTERNAL_API_ENABLED=true')).toBeTruthy()
+    // Team & Access tab: LAN ceiling
+    fireEvent.click(screen.getByRole('tab', { name: 'Team & Access' }))
     expect(screen.getByText('AGENTBOARD_LAN_MODE_ENABLED=true')).toBeTruthy()
     expect(screen.getByLabelText('Accept teammates from the LAN')).toBeTruthy()
   })
 
-  it('saves the LAN switch when toggled', async () => {
+  it('saves the LAN switch when toggled (global Save works from the Team tab)', async () => {
     render(<SettingsPanel />)
     await screen.findByDisplayValue('approvo@localhost')
+    fireEvent.click(screen.getByRole('tab', { name: 'Team & Access' }))
     fireEvent.click(screen.getByLabelText('Accept teammates from the LAN'))
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(update).toHaveBeenCalledWith({ lan_mode_active: true }))
@@ -51,6 +68,7 @@ describe('SettingsPanel', () => {
   it('saves the registration switch when closed (P16.2, D30)', async () => {
     render(<SettingsPanel />)
     await screen.findByDisplayValue('approvo@localhost')
+    fireEvent.click(screen.getByRole('tab', { name: 'Team & Access' }))
     fireEvent.click(screen.getByLabelText('Accept self-registration on the sign-in screen'))
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(update).toHaveBeenCalledWith({ registration_open: false }))
@@ -65,5 +83,16 @@ describe('SettingsPanel', () => {
     // into DB rows (their env defaults stay live).
     await waitFor(() => expect(update).toHaveBeenCalledWith({ email_enabled: true }))
     expect(await screen.findByText('Saved ✓')).toBeTruthy()
+  })
+
+  it('relocates the external API keys panel into the API Keys tab (P17.0, D36)', async () => {
+    render(<SettingsPanel />)
+    await screen.findByDisplayValue('approvo@localhost')
+    fireEvent.click(screen.getByRole('tab', { name: 'API Keys' }))
+    // ExternalClientsPanel's own loopback exposure note proves it is embedded here.
+    await waitFor(() => expect(screen.getByText(/disabled by default/i)).toBeTruthy())
+    expect(screen.getByText(/loopback-bound/i)).toBeTruthy()
+    // The global settings Save is hidden on this tab (no switches to save).
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
   })
 })

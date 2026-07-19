@@ -14,7 +14,9 @@ const DEFAULT_EXPIRY = 90
 const EXPOSURE_WARNING =
   'The external API is disabled by default and should remain loopback-bound (127.0.0.1) unless you deliberately expose it. Keys grant read and/or pending-proposal access only — never approve or apply.'
 
-interface ExternalClientsPanelProps { onClose: () => void }
+// onClose is optional: the panel is self-contained (its own create/revoke
+// actions) and now embeds inside Settings → API Keys with no wrapper chrome.
+interface ExternalClientsPanelProps { onClose?: () => void }
 
 // --- one-time raw-key modal — uses Forma modal classes ------------------
 
@@ -157,7 +159,7 @@ function CreateClientForm({ workspaceId, projects, onCreated, onCancel }: Create
 
 // --- root panel --------------------------------------------------------
 
-export default function ExternalClientsPanel({ onClose: _onClose }: ExternalClientsPanelProps) {
+export default function ExternalClientsPanel(_props: ExternalClientsPanelProps = {}) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [workspaceId, setWorkspaceId] = useState('')
   const [projects, setProjects] = useState<Project[]>([])

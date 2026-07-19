@@ -17,8 +17,10 @@ from app.api.v1.endpoints import (
     decisions,
     docs,
     git,
+    gpt,
     info,
     links,
+    mcp,
     members,
     milestones,
     notifications,
@@ -89,3 +91,9 @@ router.include_router(sync.router, tags=["sync"], dependencies=_GUARD)
 # Settings is a global, control-token-gated surface (no project scope), so it is
 # not under _GUARD — like info/auth/members/workspaces above.
 router.include_router(settings.router, tags=["settings"])
+# P17.2: read-only MCP connection metadata for the Integrations hub — global and
+# ungated like info; discloses no capability value and no raw path in team mode.
+router.include_router(mcp.router, tags=["integrations"])
+# P17.5: serves the curated GPT Actions OpenAPI contract for copy-paste into a
+# private ChatGPT — a pure mirror of app/api/external/openapi.py's builders.
+router.include_router(gpt.router, tags=["integrations"])
