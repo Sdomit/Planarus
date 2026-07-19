@@ -129,3 +129,41 @@ def test_slack_and_discord_formats_reshape_the_body(client, wh):
     discord = _create_sub(client, ws, format="discord")["subscription"]["id"]
     client.post(f"/api/v1/webhooks/{discord}/test", headers=local_hdr(client))
     assert "content" in json.loads(wh[-1]["body"])
+
+
+def test_host_is_public_classifies_addresses():
+    from app.services.webhook_service import _host_is_public
+
+    assert _host_is_public("8.8.8.8") is True
+    assert _host_is_public("1.1.1.1") is True
+    assert _host_is_public("127.0.0.1") is False          # loopback
+    assert _host_is_public("10.0.0.5") is False           # private
+    assert _host_is_public("192.168.1.10") is False       # private
+    assert _host_is_public("169.254.169.254") is False    # cloud metadata (link-local)
+    assert _host_is_public("") is False
+
+
+def test_ssrf_create_blocks_internal_target_when_multi_user(client, session, monkeypatch, wh):
+    from app.core.config import settings
+
+    ws, _ = seed(client, "whssrf")
+    monkeypatch.setattr(settings, "auth_enabled", True)  # LAN/hosted: owner is a tenant
+    with pytest.raises(ValueError):
+        webhook_service.create_subscription(session, workspace_id=ws, target_url="http://127.0.0.1/hook")
+    # a public target is still fine (use an IP literal so the test needs no DNS)
+    sub, _secret = webhook_service.create_subscription(session, workspace_id=ws, target_url="http://8.8.8.8/hook")
+    assert sub.enabled
+
+
+def test_ssrf_delivery_blocks_internal_target_when_multi_user(client, session, monkeypatch, wh):
+    from app.core.config import settings
+
+    ws, _ = seed(client, "whssrf2")
+    # created single-user (localhost allowed), then the deployment becomes multi-user
+    sub, _s = webhook_service.create_subscription(session, workspace_id=ws, target_url="http://127.0.0.1/hook")
+    monkeypatch.setattr(settings, "auth_enabled", True)
+    webhook_service.send_test(session, sub.id)
+    assert len(wh) == 0  # the outbound POST was never made — DNS-rebind/late-block caught
+    deliveries = webhook_service.list_deliveries(session, sub.id)
+    assert deliveries[0].status == "failed"
+    assert "blocked" in (deliveries[0].error or "")
