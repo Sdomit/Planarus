@@ -8,8 +8,8 @@ from app.core.tenant import tenant_user
 from app.db.session import get_session
 from app.models.user import User
 from app.models.workspace import Workspace
-from app.schemas.project import ProjectCreate, ProjectRead, ProjectUpdate
-from app.services import project_service
+from app.schemas.project import ProjectCreate, ProjectImport, ProjectRead, ProjectUpdate
+from app.services import export_service, project_service
 
 router = APIRouter()
 
@@ -125,6 +125,46 @@ def duplicate_project(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     tenant.require_project_access(session, source, user, *tenant.WRITE_ROLES)
     return project_service.duplicate_project(session, project_id)
+
+
+@router.get("/projects/{project_id}/export")
+def export_project(
+    project_id: str,
+    session: Session = Depends(get_session),
+    user: Optional[User] = Depends(tenant_user),
+) -> dict:
+    """Round-trippable JSON of the project's planning graph (read access)."""
+    project = project_service.get_project(session, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    tenant.require_project_access(session, project, user, *tenant.READ_ROLES)
+    exported = export_service.export_project(session, project_id)
+    if exported is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    return exported
+
+
+@router.post(
+    "/projects/import",
+    response_model=ProjectRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def import_project(
+    body: ProjectImport,
+    session: Session = Depends(get_session),
+    user: Optional[User] = Depends(tenant_user),
+) -> ProjectRead:
+    """Create a fresh project from an export payload (workspace write access)."""
+    if session.get(Workspace, body.workspace_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Workspace '{body.workspace_id}' not found",
+        )
+    tenant.require_workspace_access(session, body.workspace_id, user, *tenant.WRITE_ROLES)
+    try:
+        return export_service.import_project(session, body.workspace_id, body.data)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 
 
 @router.delete("/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
