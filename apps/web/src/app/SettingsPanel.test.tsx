@@ -27,11 +27,18 @@ vi.mock('../api/client', () => ({
       get: vi.fn(async () => base),
       update: (...args: unknown[]) => update(...(args as [Record<string, unknown>])),
     },
-    // P17.0: the API Keys tab embeds ExternalClientsPanel, which loads these
-    // only when that tab is opened (tabs 1–4 below never mount it).
+    // P17.0: the API Keys tab embeds ExternalClientsPanel; P17.2: the MCP card
+    // on the Integrations tab loads workspaces/projects + integrations.mcp.
     workspaces: { list: vi.fn(async () => []) },
     projects: { list: vi.fn(async () => []) },
     apiClients: { list: vi.fn(async () => []), create: vi.fn(), revoke: vi.fn() },
+    integrations: {
+      mcp: vi.fn(async () => ({
+        server_name: 'agentboard', command: 'python', args: ['-m', 'app.mcp.server'],
+        cwd: '/x/apps/api', capability_env: 'AGENTBOARD_MCP_CAPABILITY',
+        read_tools: [], propose_tools: [],
+      })),
+    },
   },
 }))
 
