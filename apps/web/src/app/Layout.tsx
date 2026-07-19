@@ -37,6 +37,7 @@ const NAV: { group: string; items: { view: MainView; label: string; icon: string
   { group: 'Workspace', items: [
     { view: 'dashboard', label: 'Dashboard', icon: 'grid' },
     { view: 'cockpit', label: 'Cockpit', icon: 'zap' },
+    { view: 'canvas', label: 'Canvas', icon: 'palette' },
     { view: 'planning', label: 'Planning', icon: 'layers' },
     { view: 'roadmap', label: 'Roadmap', icon: 'columns' },
     { view: 'timeline', label: 'Timeline', icon: 'clock' },

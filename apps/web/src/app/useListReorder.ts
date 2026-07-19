@@ -26,11 +26,9 @@ export function useListReorder<T extends { id: string }>(
   const [dragId, setDragId] = useState<string | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
 
-  async function drop(targetId: string) {
-    const id = dragId
-    setOverId(null)
-    setDragId(null)
-    if (!id || id === targetId) return
+  /** Move `id` to sit at `targetId`'s position and persist the new order. */
+  async function reorder(id: string, targetId: string) {
+    if (id === targetId) return
     const prev = items
     const next = moveBefore(items, id, targetId)
     apply(next)
@@ -40,6 +38,14 @@ export function useListReorder<T extends { id: string }>(
     } catch {
       apply(prev)
     }
+  }
+
+  async function drop(targetId: string) {
+    const id = dragId
+    setOverId(null)
+    setDragId(null)
+    if (!id) return
+    await reorder(id, targetId)
   }
 
   const itemProps = (id: string) => ({
@@ -52,5 +58,5 @@ export function useListReorder<T extends { id: string }>(
     'data-dragging': dragId === id ? '' : undefined,
   })
 
-  return { dragId, overId, itemProps }
+  return { dragId, overId, itemProps, reorder }
 }

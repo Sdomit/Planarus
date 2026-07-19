@@ -15,6 +15,7 @@ const baseSnap = {
 vi.mock('../api/client', () => ({
   api: {
     git: { snapshot: vi.fn(), fetchNow: vi.fn(), prs: vi.fn() },
+    projects: { update: vi.fn() },
     links: { create: vi.fn() },
   },
 }))
@@ -22,6 +23,7 @@ vi.mock('../api/client', () => ({
 beforeEach(() => {
   vi.mocked(api.git.snapshot).mockResolvedValue({ ...baseSnap })
   vi.mocked(api.git.fetchNow).mockReset()
+  vi.mocked(api.projects.update).mockReset().mockResolvedValue({} as never)
   vi.mocked(api.git.prs).mockReset()
   vi.mocked(api.links.create).mockReset()
 })
@@ -61,6 +63,19 @@ describe('GitSnapshotPanel — Phase 12b fetch', () => {
     render(<GitSnapshotPanel projectId="proj_1" />)
     fireEvent.click(await screen.findByRole('button', { name: /fetch now/i }))
     await waitFor(() => expect(screen.getByText(/disabled/i)).toBeTruthy())
+  })
+
+  it('sets the project folder path and reloads the snapshot', async () => {
+    render(<GitSnapshotPanel projectId="proj_1" />)
+    fireEvent.click(await screen.findByRole('button', { name: /change/i }))
+    const input = screen.getByPlaceholderText(/absolute path/i)
+    fireEvent.change(input, { target: { value: '/srv/other' } })
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    await waitFor(() =>
+      expect(api.projects.update).toHaveBeenCalledWith('proj_1', { folder_path: '/srv/other' }),
+    )
+    // onSaved → force reload: snapshot fetched again after the initial mount read.
+    await waitFor(() => expect(vi.mocked(api.git.snapshot).mock.calls.length).toBeGreaterThan(1))
   })
 })
 

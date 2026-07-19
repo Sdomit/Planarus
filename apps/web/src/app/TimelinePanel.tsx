@@ -27,6 +27,11 @@ function timeLabel(iso: string): string {
   return isNaN(d.getTime()) ? iso : d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 }
 
+function fullLabel(iso: string): string {
+  const d = new Date(iso)
+  return isNaN(d.getTime()) ? iso : d.toLocaleString()
+}
+
 // Groups events into consecutive same-day buckets. Input is already newest-first,
 // so consecutive grouping == correct grouping and order is preserved.
 export function groupEventsByDay(events: TimelineEvent[]): { key: string; events: TimelineEvent[] }[] {
@@ -58,10 +63,20 @@ export default function TimelinePanel({ projectId }: { projectId: string }) {
   const [timeline, setTimeline] = useState<ProjectTimeline | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [view, setView] = useState<TimelineView>('day')
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set())
+
+  const toggle = (id: string) =>
+    setOpenIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   useEffect(() => {
     setTimeline(null)
     setError(null)
+    setOpenIds(new Set())
     api.timeline
       .get(projectId)
       .then(setTimeline)
@@ -122,27 +137,50 @@ export default function TimelinePanel({ projectId }: { projectId: string }) {
               : <span className="tl-group-entity">{group.key.replace(/_/g, ' ')} <span className="tl-group-n">{group.events.length}</span></span>}
           </div>
           <ol className="tl-list">
-            {group.events.map((ev) => (
-              <li key={ev.id} className="tl-item" data-tone={eventTone(ev.event_type)}>
-                <div className="tl-rail">
-                  <span className="tl-node" />
-                </div>
-                <div className="tl-body">
-                  <div className="tl-line">
-                    <span className="tl-label">{ev.label}</span>
-                    <time className="tl-time" dateTime={ev.at} title={ev.at}>
-                      {view === 'day' ? timeLabel(ev.at) : dayLabel(ev.at)}
-                    </time>
+            {group.events.map((ev) => {
+              const open = openIds.has(ev.id)
+              return (
+                <li key={ev.id} className="tl-item" data-tone={eventTone(ev.event_type)}>
+                  <div className="tl-rail">
+                    <span className="tl-node" />
                   </div>
-                  <div className="tl-meta">
-                    <span className="tl-chip">{ev.entity_type.replace(/_/g, ' ')}</span>
-                    <span className="tl-actor" title={ev.actor_display ? ev.actor_type : undefined}>
-                      {ev.actor_display ?? ev.actor_type}
-                    </span>
+                  <div className="tl-body">
+                    <div
+                      className="tl-open"
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={open}
+                      onClick={() => toggle(ev.id)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(ev.id) } }}
+                    >
+                      <span className="tl-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+                      <div className="tl-open-main">
+                        <div className="tl-line">
+                          <span className="tl-label">{ev.label}</span>
+                          <time className="tl-time" dateTime={ev.at} title={ev.at}>
+                            {view === 'day' ? timeLabel(ev.at) : dayLabel(ev.at)}
+                          </time>
+                        </div>
+                        <div className="tl-meta">
+                          <span className="tl-chip">{ev.entity_type.replace(/_/g, ' ')}</span>
+                          <span className="tl-actor" title={ev.actor_display ? ev.actor_type : undefined}>
+                            {ev.actor_display ?? ev.actor_type}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    {open && (
+                      <dl className="tl-detail">
+                        <dt>Event</dt><dd>{ev.event_type.replace(/_/g, ' ')}</dd>
+                        <dt>Entity</dt><dd>{ev.entity_type.replace(/_/g, ' ')}{ev.entity_id ? <> · <code>{ev.entity_id}</code></> : null}</dd>
+                        <dt>Actor</dt><dd>{ev.actor_display ?? ev.actor_type}</dd>
+                        <dt>When</dt><dd>{fullLabel(ev.at)}</dd>
+                      </dl>
+                    )}
                   </div>
-                </div>
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ol>
         </div>
       ))}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import TimelinePanel, { groupEventsByDay, groupEventsByEntity } from './TimelinePanel'
 
 const ev = (id: string, at: string, entity_type = 'task') =>
@@ -49,6 +49,18 @@ describe('TimelinePanel', () => {
     // events keep rendering the raw actor_type exactly as before.
     expect(screen.getByText('Alice Smith')).toBeTruthy()
     expect(screen.getAllByText('human').length).toBe(1)
+  })
+
+  it('expands an event on click to reveal its detail, and collapses again', async () => {
+    render(<TimelinePanel projectId="proj_1" />)
+    const row = await screen.findByRole('button', { name: /update task/i })
+    // Collapsed: the entity id lives only in the detail block.
+    expect(screen.queryByText('tsk_1')).toBeNull()
+    fireEvent.click(row)
+    expect(screen.getByText('tsk_1')).toBeTruthy()
+    expect(row.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(row)
+    expect(screen.queryByText('tsk_1')).toBeNull()
   })
 
   it('groups events into consecutive same-day buckets, order preserved', () => {
