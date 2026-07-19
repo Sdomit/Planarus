@@ -38,6 +38,8 @@ vi.mock('../api/client', () => ({
         cwd: '/x/apps/api', capability_env: 'AGENTBOARD_MCP_CAPABILITY',
         read_tools: [], propose_tools: [],
       })),
+      // P17.5: the GPT Actions card fetches the contract on the Integrations tab.
+      gptOpenapi: vi.fn(async () => ({ openapi: '3.1.0', servers: [{ url: 'https://x/api/external/v1' }], paths: {} })),
     },
   },
 }))

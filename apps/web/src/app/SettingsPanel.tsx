@@ -3,6 +3,8 @@ import { api, type AppSettings, type AppSettingsUpdate } from '../api/client'
 import ExternalClientsPanel from './ExternalClientsPanel'
 import RestApiCard from './RestApiCard'
 import McpCard from './McpCard'
+import GptActionsCard from './GptActionsCard'
+import RecipesCard from './RecipesCard'
 
 const SWITCH_KEYS = ['email_enabled', 'email_from', 'external_api_active', 'lan_mode_active', 'registration_open'] as const
 
@@ -107,6 +109,14 @@ export default function SettingsPanel() {
           <RestApiCard active={s.external_api_active} permitted={s.external_api_permitted_by_env} />
 
           <McpCard />
+
+          <GptActionsCard
+            active={s.external_api_active}
+            permitted={s.external_api_permitted_by_env}
+            hostsConfigured={s.external_api_hosts_configured}
+          />
+
+          <RecipesCard />
 
           <section>
             <h3 style={{ marginTop: 0 }}>Email reminders</h3>
