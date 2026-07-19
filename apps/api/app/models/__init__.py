@@ -28,6 +28,8 @@ from app.models.calendar_event import CalendarEvent  # noqa: F401
 from app.models.calendar_connection import CalendarConnection  # noqa: F401
 from app.models.status_option import StatusOption  # noqa: F401
 from app.models.todo import Todo  # noqa: F401
+from app.models.webhook_subscription import WebhookSubscription  # noqa: F401
+from app.models.webhook_delivery import WebhookDelivery  # noqa: F401
 
 __all__ = [
     "Workspace",
@@ -60,4 +62,6 @@ __all__ = [
     "CalendarConnection",
     "StatusOption",
     "Todo",
+    "WebhookSubscription",
+    "WebhookDelivery",
 ]

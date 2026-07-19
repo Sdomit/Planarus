@@ -1,0 +1,106 @@
+#!/bin/bash
+# Approvo app box bootstrap (Ubuntu 22.04). Logs: /var/log/cloud-init-output.log
+set -euxo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+# --- packages: docker, git, jq, swap -----------------------------------------
+apt-get update
+apt-get install -y docker.io git jq curl unzip
+systemctl enable --now docker
+
+# docker compose plugin (not in Ubuntu repos) — pin-free latest release
+mkdir -p /usr/libexec/docker/cli-plugins
+curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
+  -o /usr/libexec/docker/cli-plugins/docker-compose
+chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+
+# 2GB swap so the pnpm/Vite web build doesn't OOM
+if [ ! -f /swapfile ]; then
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+# --- get the code -------------------------------------------------------------
+git clone --depth 1 --branch ${repo_branch} ${repo_url} /opt/approvo
+cd /opt/approvo
+
+# Step 0: build the image WITH the postgres + oauth driver extras
+sed -i 's|pip install --no-cache-dir \.$|pip install --no-cache-dir ".[postgres,oauth]"|' apps/api/Dockerfile
+
+# --- compose + Caddy ----------------------------------------------------------
+cat > /opt/approvo/Caddyfile <<'CADDY'
+${domain} {
+    reverse_proxy web:80
+}
+CADDY
+
+cat > /opt/approvo/docker-compose.hosted.yml <<'COMPOSE'
+services:
+  api:
+    build:
+      context: ./apps/api
+    env_file: hosted.env
+    volumes:
+      - approvo-data:/data
+    expose:
+      - "8000"
+    restart: unless-stopped
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    expose:
+      - "80"
+    depends_on:
+      - api
+    restart: unless-stopped
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - web
+    restart: unless-stopped
+volumes:
+  approvo-data:
+  caddy-data:
+  caddy-config:
+COMPOSE
+
+# --- secrets from Key Vault via the VM's managed identity (IMDS token) ---------
+# Tracing OFF so secrets don't land in /var/log/cloud-init-output.log.
+set +x
+get_secret() {
+  local name="$1"
+  local token
+  token=$(curl -s -H Metadata:true \
+    "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fvault.azure.net&client_id=${uai_client_id}" \
+    | jq -r .access_token)
+  curl -s -H "Authorization: Bearer $token" "${kv_uri}secrets/$name?api-version=7.4" | jq -r .value
+}
+DB_URL=$(get_secret database-url)
+GH_ID=$(get_secret oauth-github-client-id)
+GH_SECRET=$(get_secret oauth-github-client-secret)
+
+cat > /opt/approvo/hosted.env <<ENV
+AGENTBOARD_DATABASE_URL=$DB_URL
+AGENTBOARD_AUTH_ENABLED=true
+AGENTBOARD_WEB_ORIGINS=https://${domain}
+AGENTBOARD_OAUTH_GITHUB_CLIENT_ID=$GH_ID
+AGENTBOARD_OAUTH_GITHUB_CLIENT_SECRET=$GH_SECRET
+AGENTBOARD_STORAGE_BACKEND=local
+AGENTBOARD_EXTERNAL_API_ENABLED=false
+ENV
+chmod 600 /opt/approvo/hosted.env
+set -x
+
+# --- up (builds api+web, runs alembic upgrade head, Caddy gets the cert) ------
+docker compose -f docker-compose.hosted.yml up -d --build

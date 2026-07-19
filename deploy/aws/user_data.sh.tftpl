@@ -1,0 +1,100 @@
+#!/bin/bash
+# Approvo app box bootstrap. Logs: /var/log/cloud-init-output.log
+set -euxo pipefail
+
+# --- packages: docker, git, unzip, swap --------------------------------------
+dnf install -y docker git unzip
+systemctl enable --now docker
+
+# docker compose plugin (AL2023 repos don't ship it) — pin-free latest release
+mkdir -p /usr/libexec/docker/cli-plugins
+curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
+  -o /usr/libexec/docker/cli-plugins/docker-compose
+chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+
+# awscli v2 (to read the SSM secrets)
+curl -s https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscliv2.zip
+unzip -q /tmp/awscliv2.zip -d /tmp && /tmp/aws/install
+
+# 2GB swap so the pnpm/Vite web build doesn't OOM on a small box
+if [ ! -f /swapfile ]; then
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+# --- get the code -------------------------------------------------------------
+git clone --depth 1 --branch ${repo_branch} ${repo_url} /opt/approvo
+cd /opt/approvo
+
+# Step 0: build the image WITH the postgres + oauth driver extras
+sed -i 's|pip install --no-cache-dir \.$|pip install --no-cache-dir ".[postgres,oauth]"|' apps/api/Dockerfile
+
+# --- compose + Caddy + env ----------------------------------------------------
+cat > /opt/approvo/Caddyfile <<'CADDY'
+${domain} {
+    reverse_proxy web:80
+}
+CADDY
+
+cat > /opt/approvo/docker-compose.hosted.yml <<'COMPOSE'
+services:
+  api:
+    build:
+      context: ./apps/api
+    env_file: hosted.env
+    volumes:
+      - approvo-data:/data
+    expose:
+      - "8000"
+    restart: unless-stopped
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    expose:
+      - "80"
+    depends_on:
+      - api
+    restart: unless-stopped
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - web
+    restart: unless-stopped
+volumes:
+  approvo-data:
+  caddy-data:
+  caddy-config:
+COMPOSE
+
+# Pull secrets from SSM (instance role authorizes this) and assemble hosted.env.
+# Tracing OFF so secrets don't land in /var/log/cloud-init-output.log.
+set +x
+DB_URL=$(aws ssm get-parameter --region ${region} --with-decryption --name "${ssm_prefix}/database_url" --query Parameter.Value --output text)
+GH_ID=$(aws ssm get-parameter --region ${region} --with-decryption --name "${ssm_prefix}/oauth_github_client_id" --query Parameter.Value --output text)
+GH_SECRET=$(aws ssm get-parameter --region ${region} --with-decryption --name "${ssm_prefix}/oauth_github_client_secret" --query Parameter.Value --output text)
+
+cat > /opt/approvo/hosted.env <<ENV
+AGENTBOARD_DATABASE_URL=$DB_URL
+AGENTBOARD_AUTH_ENABLED=true
+AGENTBOARD_WEB_ORIGINS=https://${domain}
+AGENTBOARD_OAUTH_GITHUB_CLIENT_ID=$GH_ID
+AGENTBOARD_OAUTH_GITHUB_CLIENT_SECRET=$GH_SECRET
+AGENTBOARD_STORAGE_BACKEND=local
+AGENTBOARD_EXTERNAL_API_ENABLED=false
+ENV
+chmod 600 /opt/approvo/hosted.env
+set -x
+
+# --- up (builds api+web, runs alembic upgrade head, Caddy gets the cert) ------
+docker compose -f docker-compose.hosted.yml up -d --build

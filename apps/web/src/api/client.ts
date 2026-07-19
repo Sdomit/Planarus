@@ -851,6 +851,46 @@ export interface AdminUserCreated {
   temp_password: string
 }
 
+// P17.3: outbound webhooks.
+export interface WebhookSubscription {
+  id: string
+  workspace_id: string
+  target_url: string
+  event_kinds: string[]
+  project_ids: string[]
+  format: string
+  enabled: boolean
+  failure_count: number
+  created_at: string
+  disabled_at: string | null
+}
+
+export interface WebhookCreatePayload {
+  workspace_id: string
+  target_url: string
+  event_kinds?: string[]
+  project_ids?: string[]
+  format?: string
+}
+
+export interface WebhookCreated {
+  subscription: WebhookSubscription
+  secret: string
+}
+
+export interface WebhookDelivery {
+  id: string
+  subscription_id: string
+  event_kind: string
+  event_id: string | null
+  status: string
+  status_code: number | null
+  error: string | null
+  attempt: number
+  created_at: string
+  delivered_at: string | null
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // init is spread FIRST so the headers merge below always wins — a caller-supplied
   // headers object (e.g. controlRequest's token) must add to, not replace, the
@@ -1312,6 +1352,28 @@ export const api = {
     mcp: () => request<McpInfo>('/integrations/mcp'),
     gptOpenapi: (profile: 'readonly' | 'read_propose' = 'readonly') =>
       request<OpenApiContract>(`/integrations/gpt-openapi?profile=${profile}`),
+  },
+  // P17.3: outbound webhook management — control-token-gated (local-human only).
+  webhooks: {
+    list: (workspaceId?: string) =>
+      controlRequest<WebhookSubscription[]>(
+        `/webhooks${workspaceId ? `?workspace_id=${workspaceId}` : ''}`,
+      ),
+    create: (data: WebhookCreatePayload) =>
+      controlRequest<WebhookCreated>('/webhooks', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    remove: (id: string) =>
+      controlRequest<void>(`/webhooks/${id}`, { method: 'DELETE' }),
+    deliveries: (id: string) =>
+      controlRequest<WebhookDelivery[]>(`/webhooks/${id}/deliveries`),
+    test: (id: string) =>
+      controlRequest<WebhookDelivery>(`/webhooks/${id}/test`, { method: 'POST' }),
+    redeliver: (deliveryId: string) =>
+      controlRequest<WebhookDelivery>(`/webhooks/deliveries/${deliveryId}/redeliver`, {
+        method: 'POST',
+      }),
   },
   // --- Phase 9 ----------------------------------------------------------------
   roadmap: {

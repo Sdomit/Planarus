@@ -85,6 +85,7 @@ export default function McpCard() {
   const cap = capabilityJson(tier, workspaceId, projectIds)
   const config = fmt === 'json' ? jsonConfig(info, cap) : cliConfig(info, cap)
   const catalog = tier === 'propose' ? [...info.read_tools, ...info.propose_tools] : info.read_tools
+  const remoteUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/api/external/v1/mcp`
 
   return (
     <section>
@@ -132,6 +133,21 @@ export default function McpCard() {
           <CopyButton text={config} label="Copy config" />
         </div>
         <code style={codeBlock}>{config}</code>
+      </div>
+
+      <div className="form-field" style={{ marginTop: 'var(--space-4)' }}>
+        <label className="form-label">Remote (HTTP) — claude.ai / hosted connectors</label>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', flexWrap: 'wrap' }}>
+          <code style={{ flex: 1, minWidth: 220, wordBreak: 'break-all', background: 'var(--bg-subtle)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', padding: '6px var(--space-3)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
+            {remoteUrl}
+          </code>
+          <CopyButton text={remoteUrl} />
+        </div>
+        <p style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)', margin: 'var(--space-2) 0 0' }}>
+          Authenticate with an <code>agbk_</code> key from the API Keys tab (Bearer). Needs the
+          External API enabled + an HTTPS tunnel (same setup as the ChatGPT card); tools are
+          scope-gated by the key — read &amp; propose only.
+        </p>
       </div>
 
       <details style={{ marginTop: 'var(--space-4)' }}>
