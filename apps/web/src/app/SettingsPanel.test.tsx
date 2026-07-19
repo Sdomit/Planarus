@@ -41,6 +41,8 @@ vi.mock('../api/client', () => ({
       // P17.5: the GPT Actions card fetches the contract on the Integrations tab.
       gptOpenapi: vi.fn(async () => ({ openapi: '3.1.0', servers: [{ url: 'https://x/api/external/v1' }], paths: {} })),
     },
+    // P17.3b: the Webhooks card lists subscriptions once a workspace is selected.
+    webhooks: { list: vi.fn(async () => []) },
   },
 }))
 
