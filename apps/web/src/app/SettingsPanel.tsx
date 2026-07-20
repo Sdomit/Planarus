@@ -7,8 +7,9 @@ import GptActionsCard from './GptActionsCard'
 import RecipesCard from './RecipesCard'
 import WebhooksCard from './WebhooksCard'
 import ExportCard from './ExportCard'
+import BackupsCard from './BackupsCard'
 
-const SWITCH_KEYS = ['email_enabled', 'email_from', 'external_api_active', 'lan_mode_active', 'registration_open'] as const
+const SWITCH_KEYS = ['email_enabled', 'email_from', 'external_api_active', 'lan_mode_active', 'registration_open', 'backup_enabled', 'backup_retention', 'backup_offsite'] as const
 
 // P17.0: Settings is the integration hub's front door. Connectors/wiring live
 // under Integrations + API Keys; team access under its own tab. The switch tier
@@ -123,6 +124,17 @@ export default function SettingsPanel() {
           <WebhooksCard />
 
           <ExportCard />
+
+          <BackupsCard
+            enabled={s.backup_enabled}
+            savedEnabled={initial?.backup_enabled ?? false}
+            retention={s.backup_retention}
+            offsite={s.backup_offsite}
+            supported={s.backup_supported}
+            offsiteSupported={s.backup_offsite_supported}
+            dirConfigured={s.backup_dir_configured}
+            onChange={patch}
+          />
 
           <section>
             <h3 style={{ marginTop: 0 }}>Email reminders</h3>

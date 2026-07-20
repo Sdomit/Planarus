@@ -17,6 +17,13 @@ const base = {
   lan_hosts_configured: false,
   auth_enabled_by_env: false,
   auth_password_enabled_by_env: false,
+  // P18.2/18.4 (D42/D44) — backup switches + capability status
+  backup_enabled: false,
+  backup_retention: 7,
+  backup_offsite: false,
+  backup_supported: true,
+  backup_dir_configured: true,
+  backup_offsite_supported: false,
 }
 
 const update = vi.fn(async (data: Record<string, unknown>) => ({ ...base, ...data }))
@@ -43,6 +50,8 @@ vi.mock('../api/client', () => ({
     },
     // P17.3b: the Webhooks card lists subscriptions once a workspace is selected.
     webhooks: { list: vi.fn(async () => []) },
+    // P18.2: the Backups card lists existing backups on mount.
+    backups: { list: vi.fn(async () => []), create: vi.fn() },
   },
 }))
 
@@ -85,6 +94,14 @@ describe('SettingsPanel', () => {
     // into DB rows (their env defaults stay live).
     await waitFor(() => expect(update).toHaveBeenCalledWith({ email_enabled: true }))
     expect(await screen.findByText('Saved ✓')).toBeTruthy()
+  })
+
+  it('saves the backup switch (P18.2, D44)', async () => {
+    render(<SettingsPanel />)
+    await screen.findByDisplayValue('approvo@localhost')
+    fireEvent.click(screen.getByLabelText('Enable backups'))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(update).toHaveBeenCalledWith({ backup_enabled: true }))
   })
 
   it('relocates the external API keys panel into the API Keys tab (P17.0, D36)', async () => {

@@ -107,20 +107,35 @@ Use export to move work. Use backup to survive a bad day.
 
 ## Turning backups on
 
-1. **Settings → backups**, switch **Enable backups** on (it is off by default —
-   a backup writes files outside the database).
+1. **Settings → Integrations → Backups**, switch **Enable backups** on (it is off
+   by default — a backup writes files outside the database).
 2. Optionally set **Keep last N** (default 7). Older backups beyond N are pruned;
    only files Approvo generated are ever deleted.
-3. Optionally point the destination somewhere off this disk:
+3. Point the destination where you want it:
    ```bash
    AGENTBOARD_BACKUP_DIR=/path/to/somewhere   # default ./agentboard-backups
    ```
 
 > **A backup on the same disk is not a backup strategy.** It protects you from a
-> bad migration or a mistaken delete, not from losing the disk, the laptop, or
-> the machine to ransomware. Point `AGENTBOARD_BACKUP_DIR` at a synced folder
-> (OneDrive, Dropbox, an rclone mount) so a copy lives somewhere else. That is
-> the whole change — no extra setting.
+> bad migration or a mistaken delete — not from losing the disk, the laptop, or
+> the machine to ransomware.
+
+### Getting a copy off this machine
+
+Two ways. Pick whichever you already have:
+
+- **A synced folder — simplest, no extra setting.** Point `AGENTBOARD_BACKUP_DIR`
+  at OneDrive, Dropbox, or an rclone mount. That is the entire change.
+- **Object storage.** Tick **Also copy each backup off-site**. This reuses the
+  storage backend, so it needs `AGENTBOARD_STORAGE_BACKEND=s3` plus the
+  `AGENTBOARD_S3_*` settings and the `[s3]` extra. On the default `local` backend
+  the switch is disabled on purpose: pushing there would write the copy beside
+  the original, which protects nothing.
+
+The push runs **after** the snapshot passes its integrity check, and it is
+best-effort by design. If the upload fails you still have a good, verified local
+backup, and the UI says the off-site copy did not happen and why. A degraded
+backup you know about beats a silent one.
 
 Backups are SQLite-only. On Postgres the button refuses and tells you to use
 `pg_dump` or your platform's managed snapshots + point-in-time recovery, which

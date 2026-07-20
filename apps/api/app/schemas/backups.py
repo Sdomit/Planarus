@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -19,6 +21,12 @@ class BackupResult(BaseModel):
 
     backup: BackupFile
     pruned: int  # older backups removed by the retention setting
+    # P18.4 (D44): where the off-site copy landed, when that switch is on. The
+    # push is best-effort — the verified local file is the deliverable and
+    # already exists — so a failure is *reported here*, never raised. Reporting
+    # the reason is what separates a known-degraded backup from a silent one.
+    offsite: Optional[str] = None
+    offsite_error: Optional[str] = None
 
 
 class RestoreResult(BaseModel):

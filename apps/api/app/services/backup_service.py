@@ -37,7 +37,7 @@ from app.core.config import settings as env
 from app.core.exceptions import ConflictError
 from app.schemas.backups import BackupFile, BackupResult, RestoreResult
 from app.services.audit_service import create_audit_event
-from app.services.settings_service import backup_retention, get_setting
+from app.services.settings_service import backup_offsite, backup_retention, get_setting
 
 # VACUUM INTO landed in SQLite 3.27 (2019). Checked explicitly so an ancient
 # runtime fails with this sentence instead of a bare SQL syntax error.
@@ -128,6 +128,38 @@ def _prune(keep: int) -> int:
     return removed
 
 
+def _push_offsite(session: Session, path: Path) -> tuple[str | None, str | None]:
+    """Best-effort copy of a verified backup to the configured storage backend.
+
+    Returns ``(location, error)`` and **never raises**. The local file is already
+    written and integrity-checked, so it *is* the deliverable; failing the whole
+    backup because an upload timed out would throw away a good copy. But a silent
+    failure is precisely what this phase exists to prevent, so the reason travels
+    back in the result rather than being swallowed.
+    """
+    if not backup_offsite(session):
+        return None, None
+    if env.storage_backend == "local":
+        return None, (
+            "off-site copy skipped: the storage backend is 'local', which would "
+            "write the copy beside the original. Use the s3 backend, or point "
+            "AGENTBOARD_BACKUP_DIR at a synced folder instead."
+        )
+    try:
+        # Local import: the s3 backend pulls boto3, an optional extra — keep it
+        # off the import path of every deployment that never pushes anything.
+        from app.storage import get_storage
+
+        # ponytail: reads the whole file into memory. Fine for a local project DB
+        # (megabytes); switch to a streaming/multipart upload if these grow.
+        location = get_storage().write_bytes(
+            str(path.parent), path.name, path.read_bytes()
+        )
+        return location, None
+    except Exception as exc:  # noqa: BLE001 — a good local backup must survive this
+        return None, f"{type(exc).__name__}: {exc}"[:200]
+
+
 def create_backup(session: Session) -> BackupResult:
     """Write, verify, and retain one backup. Raises ConflictError (HTTP 409) when
     backups are switched off or the database engine cannot be snapshotted."""
@@ -159,6 +191,7 @@ def create_backup(session: Session) -> BackupResult:
         conn.exec_driver_sql(f"VACUUM INTO '{literal}'")
 
     _verify(target)
+    offsite, offsite_error = _push_offsite(session, target)
 
     # One source of truth for the floor/corrupt-value handling (settings_service).
     pruned = _prune(backup_retention(session))
@@ -171,7 +204,12 @@ def create_backup(session: Session) -> BackupResult:
         entity_id=target.name,
     )
     session.commit()
-    return BackupResult(backup=_describe(target), pruned=pruned)
+    return BackupResult(
+        backup=_describe(target),
+        pruned=pruned,
+        offsite=offsite,
+        offsite_error=offsite_error,
+    )
 
 
 # --- restore (D43: CLI only, app stopped — never an HTTP route) ---------------
