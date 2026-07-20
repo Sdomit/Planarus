@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import NotificationsBell from './NotificationsBell'
 
 vi.mock('../api/client', () => ({
@@ -35,6 +35,23 @@ vi.mock('../api/client', () => ({
 }))
 
 describe('NotificationsBell', () => {
+  // No global auto-cleanup in this project's vitest setup, so unmount by hand —
+  // otherwise a second render leaves two bells in the DOM.
+  beforeEach(() => {
+    cleanup()
+    localStorage.clear()
+  })
+
+  it('clears the unread badge once the feed has been opened', async () => {
+    render(<NotificationsBell projectId="proj_1" onOpenItem={vi.fn()} />)
+    const btn = await screen.findByLabelText('Notifications (2)')
+    fireEvent.click(btn)
+    // Same two items are still in the list — they are live state, not dismissed.
+    expect(screen.getByText('Task overdue: Ship it')).toBeTruthy()
+    // ...but they no longer count as unread.
+    expect(screen.getByLabelText('Notifications (0)')).toBeTruthy()
+  })
+
   it('shows a badge count and opens the feed', async () => {
     const onOpenItem = vi.fn()
     render(<NotificationsBell projectId="proj_1" onOpenItem={onOpenItem} />)
