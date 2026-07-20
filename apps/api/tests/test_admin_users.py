@@ -127,6 +127,65 @@ def test_admin_creates_user_with_temp_password_and_forced_change(client, auth_on
     assert me2["password_must_change"] is False
 
 
+def test_admin_created_user_can_be_granted_access_immediately(client, session, auth_on):
+    """The Team UI's one-step "Add user": create the account, then grant it
+    workspace access using the email the create response returns.
+
+    Pins the two things that flow depends on — a brand-new account resolves by
+    email right away (no "sign in once first"), and the grant outlives the
+    forced password rotation, so the access the admin was promised is really
+    there when the person arrives.
+    """
+    from app.schemas.workspace import WorkspaceCreate
+    from app.services import workspace_service
+
+    ws = workspace_service.create_workspace(
+        session, WorkspaceCreate(name="Studio", slug="studio")
+    ).id
+    admin = _login(client, "root@acme.co")
+    claim = client.post(
+        f"/api/v1/workspaces/{ws}/members",
+        json={"email": "root@acme.co", "role": "owner"},
+        cookies=_auth(admin),
+    )
+    assert claim.status_code == 201, claim.text
+
+    created = client.post(
+        "/api/v1/admin/users",
+        json={"email": "Sam@Acme.CO"},
+        headers=_control(client),
+        cookies=_auth(admin),
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    # the UI grants with the RESPONSE's email, not the raw input — so the
+    # server's normalization is part of the contract it relies on.
+    email = body["user"]["email"]
+    assert email == "sam@acme.co"
+
+    granted = client.post(
+        f"/api/v1/workspaces/{ws}/members",
+        json={"email": email, "role": "viewer"},
+        cookies=_auth(admin),
+    )
+    assert granted.status_code == 201, granted.text
+    assert granted.json()["role"] == "viewer"
+
+    code, tok = _pw_login(client, email, body["temp_password"])
+    assert code == 200
+    rotate = client.post(
+        "/api/v1/auth/password/change",
+        json={"current_password": body["temp_password"], "new_password": "a-real-password-1"},
+        cookies=_auth(tok),
+    )
+    assert rotate.status_code == 204, rotate.text
+    me = client.get("/api/v1/auth/me", cookies=_auth(tok)).json()
+    assert (ws, "viewer") in {(m["workspace_id"], m["role"]) for m in me["memberships"]}
+    roster = client.get(f"/api/v1/workspaces/{ws}/members", cookies=_auth(tok))
+    assert roster.status_code == 200
+    assert email in {m["email"] for m in roster.json()}
+
+
 def test_admin_reset_password_revokes_sessions(client, auth_on):
     admin = _login(client, "root@acme.co")
     create = client.post(

@@ -75,8 +75,8 @@ function chip(text: string, tone: 'accent' | 'danger' | 'muted' = 'muted') {
 // One-time temp-password reveal — same contract as the API-key modal: shown
 // once, never persisted by the client.
 function TempPasswordModal({
-  title, password, onClose,
-}: { title: string; password: string; onClose: () => void }) {
+  title, password, note, onClose,
+}: { title: string; password: string; note?: string; onClose: () => void }) {
   const [copied, setCopied] = useState(false)
   const doneRef = useRef<HTMLButtonElement>(null)
 
@@ -114,6 +114,11 @@ function TempPasswordModal({
             fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)',
             margin: 'var(--space-3) 0',
           }}>{password}</code>
+          {note && (
+            <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
+              {note}
+            </p>
+          )}
         </div>
         <div className="modal-footer">
           <button type="button" className="btn btn-outline btn-sm" onClick={copy}>
@@ -127,14 +132,20 @@ function TempPasswordModal({
 }
 
 // --- accounts section (server admins) ----------------------------------------
-function AccountsSection({ selfId }: { selfId: string }) {
+function AccountsSection({
+  selfId, ownedWorkspaces, onGranted,
+}: { selfId: string; ownedWorkspaces: Workspace[]; onGranted: () => void }) {
   const [users, setUsers] = useState<AdminUser[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [creating, setCreating] = useState(false)
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
-  const [reveal, setReveal] = useState<{ title: string; password: string } | null>(null)
+  const [grantWs, setGrantWs] = useState('')
+  const [grantRole, setGrantRole] = useState<string>('editor')
+  const [reveal, setReveal] = useState<
+    { title: string; password: string; note?: string } | null
+  >(null)
 
   const load = useCallback(() => {
     api.admin.users().then(setUsers).catch((e: Error) => setError(e.message))
@@ -150,21 +161,42 @@ function AccountsSection({ selfId }: { selfId: string }) {
       .finally(() => setBusy(false))
   }
 
-  const create = (e: FormEvent) => {
+  const create = async (e: FormEvent) => {
     e.preventDefault()
     setBusy(true)
     setError(null)
-    api.admin
-      .createUser(email.trim(), name.trim() || undefined)
-      .then((res) => {
-        setReveal({ title: `Account created — ${res.user.email}`, password: res.temp_password })
-        setCreating(false)
-        setEmail('')
-        setName('')
-        load()
+    try {
+      const res = await api.admin.createUser(email.trim(), name.trim() || undefined)
+      // The account exists from here on, so the temp password is revealed even if
+      // the optional grant below fails — it is the only copy, and swallowing it
+      // would force a reset. The grant goes through the members API as the acting
+      // admin, so D29 holds: admin authority still never reaches into workspaces.
+      let note: string | undefined
+      if (grantWs) {
+        const wsName = ownedWorkspaces.find((w) => w.id === grantWs)?.name ?? 'the workspace'
+        try {
+          await api.members.add(grantWs, res.user.email, grantRole)
+          note = `Added to ${wsName} as ${grantRole}.`
+          onGranted()
+        } catch (err) {
+          note = `Account created, but the ${wsName} grant failed (${(err as Error).message}). Add them from the workspace section below.`
+        }
+      }
+      setReveal({
+        title: `Account created — ${res.user.email}`,
+        password: res.temp_password,
+        note,
       })
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setBusy(false))
+      setCreating(false)
+      setEmail('')
+      setName('')
+      setGrantWs('')
+      load()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   const resetPw = (u: AdminUser) => {
@@ -203,6 +235,27 @@ function AccountsSection({ selfId }: { selfId: string }) {
             <input id="acct-name" className="input input-sm" type="text" maxLength={200}
               value={name} onChange={(e) => setName(e.target.value)} />
           </div>
+          {ownedWorkspaces.length > 0 && (
+            <div className="form-field" style={{ flex: '1 1 160px', margin: 0 }}>
+              <label className="form-label" htmlFor="acct-ws">Workspace access</label>
+              <select id="acct-ws" className="input input-sm" value={grantWs}
+                onChange={(e) => setGrantWs(e.target.value)}>
+                <option value="">None — add later</option>
+                {ownedWorkspaces.map((ws) => (
+                  <option key={ws.id} value={ws.id}>{ws.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {grantWs && (
+            <div className="form-field" style={{ margin: 0 }}>
+              <label className="form-label" htmlFor="acct-role">Role</label>
+              <select id="acct-role" className="input input-sm" value={grantRole}
+                onChange={(e) => setGrantRole(e.target.value)}>
+                {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+          )}
           <button type="submit" className="btn btn-solid btn-sm" disabled={busy}>Create</button>
         </form>
       )}
@@ -259,7 +312,8 @@ function AccountsSection({ selfId }: { selfId: string }) {
       )}
 
       {reveal && (
-        <TempPasswordModal title={reveal.title} password={reveal.password} onClose={() => setReveal(null)} />
+        <TempPasswordModal title={reveal.title} password={reveal.password} note={reveal.note}
+          onClose={() => setReveal(null)} />
       )}
     </section>
   )
@@ -374,6 +428,10 @@ export default function TeamPanel() {
   const [workspaces, setWorkspaces] = useState<Workspace[] | null>(null)
   const [changingPw, setChangingPw] = useState(false)
   const [pwChanged, setPwChanged] = useState(false)
+  // Bumped when Accounts grants membership, to remount the roster below so the
+  // new member shows immediately. ponytail: remount over per-section refetch
+  // plumbing — a LAN server has a handful of workspaces.
+  const [rosterKey, setRosterKey] = useState(0)
 
   useEffect(() => {
     if (!me) return
@@ -413,13 +471,19 @@ export default function TeamPanel() {
         )}
       </section>
 
-      {me.user.is_admin && <AccountsSection selfId={me.user.id} />}
+      {me.user.is_admin && (
+        <AccountsSection
+          selfId={me.user.id}
+          ownedWorkspaces={(workspaces ?? []).filter((ws) => roleFor(ws.id) === 'owner')}
+          onGranted={() => setRosterKey((n) => n + 1)}
+        />
+      )}
 
       {workspaces === null && <p style={{ color: 'var(--text-tertiary)' }}>Loading workspaces…</p>}
       {workspaces?.map((ws) => {
         const myRole = roleFor(ws.id)
         if (!myRole) return null
-        return <WorkspaceMembers key={ws.id} workspace={ws} myRole={myRole} selfId={me.user.id} />
+        return <WorkspaceMembers key={`${ws.id}:${rosterKey}`} workspace={ws} myRole={myRole} selfId={me.user.id} />
       })}
     </div>
   )
