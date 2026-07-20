@@ -7,14 +7,22 @@ import { usePresence } from './usePresence'
 import {
   CARD_KINDS,
   CARD_STYLE,
+  KIND_ICON,
   KIND_NAME,
   cardLabel,
+  filterEntities,
   readCardRef,
   readReviewPin,
   taskToRef,
   decisionToRef,
   riskToRef,
   milestoneToRef,
+  phaseToRef,
+  stageToRef,
+  blockerToRef,
+  todoToRef,
+  docToRef,
+  eventToRef,
   type EntityCardRef,
   type EntityRef,
 } from './canvasCards'
@@ -109,6 +117,7 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
   const entitiesLoaded = useRef(false)
   const [entities, setEntities] = useState<EntityRef[]>([])
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerQuery, setPickerQuery] = useState('')
   const [selectedCard, setSelectedCard] = useState<EntityCardRef | null>(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const lastSelKey = useRef('')
@@ -126,32 +135,37 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
   const { lockedByOther, editorName } = usePresence(docId, true)
 
   const entityMap = useMemo(() => new Map(entities.map((e) => [e.id, e])), [entities])
-  const groups = useMemo(() => {
-    const g: Record<string, EntityRef[]> = { task: [], decision: [], risk: [], milestone: [] }
-    for (const e of entities) g[e.kind].push(e)
-    return g
-  }, [entities])
+  // Search-filtered, grouped by kind; empty groups drop out so the window stays tidy.
+  const shownGroups = useMemo(() => {
+    const shown = filterEntities(entities, pickerQuery)
+    return CARD_KINDS
+      .map((k) => [k, shown.filter((e) => e.kind === k)] as const)
+      .filter(([, items]) => items.length > 0)
+  }, [entities, pickerQuery])
+  const shownCount = shownGroups.reduce((n, [, items]) => n + items.length, 0)
 
   const loadEntities = useCallback(async () => {
     const pid = projectIdRef.current
     if (!pid || entitiesLoaded.current) return
     entitiesLoaded.current = true
-    try {
-      const [t, d, r, m] = await Promise.all([
-        api.tasks.list(pid),
-        api.decisions.list(pid),
-        api.risks.list(pid),
-        api.milestones.list(pid),
-      ])
-      setEntities([
-        ...t.map(taskToRef),
-        ...d.map(decisionToRef),
-        ...r.map(riskToRef),
-        ...m.map(milestoneToRef),
-      ])
-    } catch {
-      entitiesLoaded.current = false // allow a retry on next open
-    }
+    // allSettled, not all: one unavailable list shouldn't blank the whole picker.
+    const res = await Promise.allSettled([
+      api.tasks.list(pid), api.decisions.list(pid), api.risks.list(pid),
+      api.blockers.list(pid), api.milestones.list(pid), api.phases.list(pid),
+      api.stages.list(pid), api.todos.list(pid), api.docs.list(pid),
+      api.calendarEvents.list(pid),
+    ])
+    const adapters = [
+      taskToRef, decisionToRef, riskToRef, blockerToRef, milestoneToRef,
+      phaseToRef, stageToRef, todoToRef, docToRef, eventToRef,
+    ]
+    const refs = res.flatMap((r, i) =>
+      r.status === 'fulfilled'
+        ? (r.value as unknown[]).map(adapters[i] as (x: unknown) => EntityRef)
+        : [],
+    )
+    setEntities(refs)
+    if (!refs.length) entitiesLoaded.current = false // nothing landed — allow a retry
   }, [])
 
   useEffect(() => {
@@ -245,6 +259,7 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
 
   const openPicker = useCallback(() => {
     loadEntities()
+    setPickerQuery('')
     setPickerOpen((o) => !o)
   }, [loadEntities])
 
@@ -444,38 +459,66 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
         <span className={`dp-save-label ${saveState}`} style={{ marginLeft: 'auto' }}>{saveLabel}</span>
 
         {pickerOpen && (
-          <div style={{ ...panelStyle, left: 'var(--space-4)', width: 300, maxHeight: 380, overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 var(--space-2) var(--space-2)' }}>
-              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>Insert entity card</span>
-              <button type="button" className="btn btn-ghost btn-xs" onClick={() => setPickerOpen(false)}>✕</button>
-            </div>
-            {entities.length === 0 ? (
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', padding: 'var(--space-2)' }}>
-                {entitiesLoaded.current ? 'No tasks, decisions, risks, or milestones in this project yet.' : 'Loading…'}
+          <div className="modal-overlay" onClick={() => setPickerOpen(false)}>
+            <div
+              className="modal modal-xl"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="cv-pick-title"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setPickerOpen(false)
+                if (e.key === 'Enter' && shownGroups.length) insertCard(shownGroups[0][1][0])
+              }}
+            >
+              <div className="modal-header">
+                <span className="modal-title" id="cv-pick-title">Insert from project</span>
+                <button type="button" className="modal-close" onClick={() => setPickerOpen(false)} aria-label="Close">✕</button>
               </div>
-            ) : (
-              CARD_KINDS.map((kind) => (
-                <div key={kind}>
-                  <div style={{ fontSize: 'var(--text-2xs, 10px)', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-tertiary)', padding: 'var(--space-2) var(--space-2) var(--space-1)' }}>
-                    {KIND_NAME[kind]}s
-                  </div>
-                  {groups[kind].length === 0 ? (
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', padding: '0 var(--space-2) var(--space-1)' }}>none</div>
-                  ) : (
-                    groups[kind].map((e) => (
-                      <button
-                        key={e.id}
-                        type="button"
-                        onClick={() => insertCard(e)}
-                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: 'var(--space-1) var(--space-2)', border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 'var(--text-sm)', cursor: 'pointer', borderRadius: 'var(--radius-sm)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                      >
-                        {e.title} <span style={{ color: 'var(--text-tertiary)' }}>· {e.status}</span>
-                      </button>
-                    ))
-                  )}
+              <div className="modal-body cv-pick-body">
+                <input
+                  className="input"
+                  type="search"
+                  autoFocus
+                  placeholder="Search by title, kind or status — Enter inserts the first match"
+                  aria-label="Search project items"
+                  value={pickerQuery}
+                  onChange={(e) => setPickerQuery(e.target.value)}
+                />
+                <div className="cv-pick-count">
+                  {entities.length === 0
+                    ? (entitiesLoaded.current ? 'Nothing in this project yet.' : 'Loading…')
+                    : `${shownCount} of ${entities.length} items`}
                 </div>
-              ))
-            )}
+                <div className="cv-pick-scroll">
+                  {entities.length > 0 && shownCount === 0 && (
+                    <p className="cv-pick-count">No match for “{pickerQuery}”.</p>
+                  )}
+                  {shownGroups.map(([kind, items]) => (
+                    <div key={kind}>
+                      <div className="cv-pick-group">
+                        <span style={{ color: CARD_STYLE[kind].stroke }}>{KIND_ICON[kind]}</span> {KIND_NAME[kind]}s ({items.length})
+                      </div>
+                      <div className="cv-pick-grid">
+                        {items.map((e) => (
+                          <button
+                            key={e.id}
+                            type="button"
+                            className="cv-pick-item"
+                            style={{ borderLeftColor: CARD_STYLE[e.kind].stroke }}
+                            onClick={() => insertCard(e)}
+                            title={e.detail || e.title}
+                          >
+                            <span className="cv-pick-item-title">{e.title}</span>
+                            <span className="cv-pick-item-meta">{e.meta ? `${e.status} · ${e.meta}` : e.status}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
