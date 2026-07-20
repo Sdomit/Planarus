@@ -1,0 +1,14 @@
+# Normalize to LF in the repo; check out LF everywhere.
+# Without this, a Windows clone checks run-approvo.sh out with CRLF and Linux
+# and macOS reject it with "bad interpreter: /usr/bin/env bash^M".
+* text=auto eol=lf
+
+# The Windows launcher is the one file that genuinely wants CRLF.
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Never touch binaries.
+*.woff2 binary
+*.png    binary
+*.jpg    binary
+*.svg    text eol=lf

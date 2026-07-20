@@ -21,7 +21,9 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.35);
-  z-index: 999;
+  /* Use the scale, not a magic 999: at 999 the nav drawer sat above modals
+     (--z-modal 400) and toasts (--z-toast 500) and covered both. */
+  z-index: var(--z-overlay);
 }
 
 .ab-search-wrap { position: relative; flex: 0 0 240px; }
@@ -56,7 +58,8 @@
     left: 0;
     bottom: 0;
     width: 256px;
-    z-index: 1000;
+    /* One above its own backdrop, still below --z-modal (400). */
+    z-index: calc(var(--z-overlay) + 1);
     transform: translateX(-100%);
     transition: transform 0.22s ease;
   }
@@ -179,9 +182,14 @@ body {
 .ab-todo-label.done { color: #67748C; text-decoration: line-through; }
 .ab-todo-act {
   flex: none; width: 18px; height: 18px; line-height: 1; border: 0; border-radius: 4px;
-  background: none; color: #67748C; cursor: pointer; opacity: 0; font-size: 14px;
+  background: none; color: #67748C; cursor: pointer; font-size: 14px;
 }
-.ab-todo-row:hover .ab-todo-act, .ab-todo-row:focus-within .ab-todo-act { opacity: 1; }
+/* Only hide-until-hover where hovering exists. On touch there is no hover, so
+   this control was permanently invisible and the todo could not be deleted. */
+@media (hover: hover) {
+  .ab-todo-act { opacity: 0; }
+  .ab-todo-row:hover .ab-todo-act, .ab-todo-row:focus-within .ab-todo-act { opacity: 1; }
+}
 .ab-todo-act:hover { background: rgba(255, 255, 255, 0.1); color: #F8FAFC; }
 .ab-todos-add { padding: 6px var(--space-3) 2px; }
 .ab-todos-input {
