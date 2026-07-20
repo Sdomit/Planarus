@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import Dashboard from './Dashboard'
 import CockpitPanel from './CockpitPanel'
 import PlanningPanel from './PlanningPanel'
@@ -61,6 +61,9 @@ const NAV: { group: string; items: { view: MainView; label: string; icon: string
   ] },
 ]
 
+// System lives in the account menu, not the sidebar nav — still reachable via Ctrl+K.
+const ACCOUNT_MENU = NAV.find(g => g.group === 'System')!.items
+
 function navGroups(teamMode: boolean) {
   if (teamMode) return NAV
   return NAV.map(g => ({ ...g, items: g.items.filter(it => it.view !== 'team') }))
@@ -89,6 +92,37 @@ const TITLES: Record<MainView, { title: string; sub: string }> = {
   settings: { title: 'Settings', sub: 'Connections & runtime switches' },
 }
 
+/** Close a popover on outside-click or Escape. Shared by the project + account menus. */
+function useDismiss(
+  open: boolean,
+  ref: RefObject<HTMLElement | null>,
+  setOpen: Dispatch<SetStateAction<boolean>>,
+) {
+  useEffect(() => {
+    if (!open) return
+    const onClick = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false) }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open, ref, setOpen])
+}
+
+// Survive a refresh: the open view + selected project are the whole of navigation state.
+const NAV_KEY = 'approvo.nav'
+function loadNav(): { view?: MainView; project?: SelectedProject } {
+  try {
+    const saved = JSON.parse(localStorage.getItem(NAV_KEY) ?? '{}')
+    // A view removed since the state was written would crash TITLES[] — fall back.
+    return saved?.view in TITLES ? saved : { ...saved, view: undefined }
+  } catch {
+    return {}
+  }
+}
+
 function initials(s: string): string {
   return (
     s.replace(/[^a-zA-Z0-9 ]/g, '').split(/\s+/).filter(Boolean).slice(0, 2)
@@ -98,8 +132,8 @@ function initials(s: string): string {
 
 export default function Layout() {
   const { me, signOut } = useAuthInfo()
-  const [mainView, setMainView] = useState<MainView>('dashboard')
-  const [project, setProject] = useState<SelectedProject | null>(null)
+  const [mainView, setMainView] = useState<MainView>(() => loadNav().view ?? 'dashboard')
+  const [project, setProject] = useState<SelectedProject | null>(() => loadNav().project ?? null)
   const [theme, setTheme] = useState<string>(
     () => document.documentElement.getAttribute('data-theme') || 'light-blue',
   )
@@ -109,11 +143,13 @@ export default function Layout() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [planningTab, setPlanningTab] = useState<'phases' | 'tasks'>('phases')
   const [projMenuOpen, setProjMenuOpen] = useState(false)
+  const [acctMenuOpen, setAcctMenuOpen] = useState(false)
   const [projects, setProjects] = useState<Project[] | null>(null)
   const menuBtnRef = useRef<HTMLButtonElement>(null)
   const sidebarRef = useRef<HTMLElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const projMenuRef = useRef<HTMLDivElement>(null)
+  const acctMenuRef = useRef<HTMLDivElement>(null)
 
   const isDark = theme.startsWith('dark')
   const toggleTheme = () => {
@@ -166,17 +202,20 @@ export default function Layout() {
     if (!projMenuOpen) return
     // Refetch each open so newly created/renamed projects show; keep the cached list visible meanwhile.
     api.projects.list().then(setProjects).catch(() => setProjects(prev => prev ?? []))
-    const handleClick = (e: MouseEvent) => {
-      if (!projMenuRef.current?.contains(e.target as Node)) setProjMenuOpen(false)
-    }
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setProjMenuOpen(false) }
-    document.addEventListener('mousedown', handleClick)
-    document.addEventListener('keydown', handleKey)
-    return () => {
-      document.removeEventListener('mousedown', handleClick)
-      document.removeEventListener('keydown', handleKey)
-    }
   }, [projMenuOpen])
+
+  useDismiss(projMenuOpen, projMenuRef, setProjMenuOpen)
+  useDismiss(acctMenuOpen, acctMenuRef, setAcctMenuOpen)
+
+  useEffect(() => {
+    localStorage.setItem(NAV_KEY, JSON.stringify({ view: mainView, project }))
+  }, [mainView, project])
+
+  useEffect(() => {
+    // A restored project that has since been deleted would leave every reload broken.
+    if (project) api.projects.get(project.id).catch(() => setProject(null))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const closeMenu = () => setMobileMenuOpen(false)
 
@@ -189,9 +228,11 @@ export default function Layout() {
     closeMenu()
   }
 
-  const selectProject = (p: SelectedProject) => {
+  // `open` = came from a Dashboard card, where the click means "take me into it".
+  // Switching via the sidebar selector keeps you on whatever view you were reading.
+  const selectProject = (p: SelectedProject, opts?: { open?: boolean }) => {
     setProject(p)
-    setMainView('cockpit')
+    if (opts?.open) setMainView('cockpit')
     if (mobileNavMode) menuBtnRef.current?.focus()
     closeMenu()
   }
@@ -264,13 +305,16 @@ export default function Layout() {
           </div>
         </div>
 
-        <div className="ab-side-scroll">
+        {/* Pinned above the scroll container: the selector stays put as the nav
+            scrolls, and its menu is no longer clipped by that container's overflow. */}
+        <div className="ab-side-pin">
           <div className="ab-projsel-wrap" ref={projMenuRef}>
             <button
               className="ab-projsel"
               type="button"
               aria-haspopup="listbox"
               aria-expanded={projMenuOpen}
+              aria-label="Switch project"
               onClick={() => setProjMenuOpen(v => !v)}
             >
               <span className="pj-mark">{project ? initials(project.title) : 'AB'}</span>
@@ -311,8 +355,10 @@ export default function Layout() {
               </div>
             )}
           </div>
+        </div>
 
-          {groups.map((grp) => (
+        <div className="ab-side-scroll">
+          {groups.filter(g => g.group !== 'System').map((grp) => (
             <nav className="sidebar-nav" aria-label={grp.group} key={grp.group}>
               <div className="sidebar-nav-label">{grp.group}</div>
               {grp.items.map((it) => {
@@ -337,31 +383,55 @@ export default function Layout() {
         </div>
 
         <div className="ab-side-foot">
-          {/* P11.3: signed-in account chip (team mode); local mode keeps the
-              static single-user label. */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 6 }}>
-            <span className="avatar avatar-sm" style={{ background: 'var(--accent-muted)', color: 'var(--text-accent)' }}>
-              {me ? initials(me.user.display_name || me.user.email) : 'AB'}
-            </span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {me ? me.user.display_name : 'Local workspace'}
+          {/* P11.3 account chip → now the trigger for the account menu: workspace-level
+              destinations (Settings, Team) live here instead of a nav group. */}
+          <div className="ab-projsel-wrap" ref={acctMenuRef}>
+            <button
+              className="ab-projsel"
+              type="button"
+              aria-haspopup="true"
+              aria-expanded={acctMenuOpen}
+              aria-label="Account and workspace settings"
+              onClick={() => setAcctMenuOpen(v => !v)}
+            >
+              <span className="pj-mark">{me ? initials(me.user.display_name || me.user.email) : 'AB'}</span>
+              <span className="pj-meta">
+                <span className="pj-name">{me ? me.user.display_name : 'Local workspace'}</span>
+                <span className="pj-sub">{me ? me.user.email : 'Single-user'}</span>
+              </span>
+              <Icon name="chevron-down" className="ic-14" />
+            </button>
+            {acctMenuOpen && (
+              <div className="ab-projsel-menu ab-acct-menu">
+                <div className="ab-projsel-empty">
+                  {me ? (
+                    `Signed in · ${me.memberships[0]?.role ?? 'member'}`
+                  ) : (
+                    <><span className="live-dot" title="Connected" /> Local mode · no sign-in</>
+                  )}
+                </div>
+                {ACCOUNT_MENU.filter(it => it.view !== 'team' || me).map(it => (
+                  <button
+                    key={it.view}
+                    type="button"
+                    className="ab-projsel-item ab-acct-item"
+                    onClick={() => { setAcctMenuOpen(false); navigate(it.view) }}
+                  >
+                    <Icon name={it.icon} className="ic-14" />
+                    <span>{it.label}</span>
+                  </button>
+                ))}
+                {me && (
+                  <button
+                    type="button"
+                    className="ab-projsel-item ab-acct-item"
+                    onClick={() => { setAcctMenuOpen(false); signOut() }}
+                  >
+                    <Icon name="external" className="ic-14" />
+                    <span>Sign out</span>
+                  </button>
+                )}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {me ? me.user.email : 'Single-user'}
-              </div>
-            </div>
-            {me ? (
-              <button
-                type="button"
-                className="btn btn-ghost btn-xs"
-                onClick={signOut}
-                title="Sign out of this session"
-              >
-                Sign out
-              </button>
-            ) : (
-              <span className="live-dot" title="Connected" />
             )}
           </div>
         </div>
@@ -433,7 +503,7 @@ export default function Layout() {
         <main className="ab-content">
           <div className="ab-content-inner">
             <div style={{ minWidth: 0 }}>
-              {mainView === 'dashboard' && <Dashboard onSelectProject={selectProject} />}
+              {mainView === 'dashboard' && <Dashboard onSelectProject={p => selectProject(p, { open: true })} />}
               {mainView === 'cockpit' && (project ? <CockpitPanel projectId={project.id} onClose={() => setMainView('dashboard')} onOpenCanvas={() => setMainView('canvas')} /> : placeholder)}
               {mainView === 'planning' && (project ? <PlanningPanel projectId={project.id} initialTab={planningTab} /> : placeholder)}
               {mainView === 'roadmap' && (project ? <RoadmapPanel projectId={project.id} onOpenPlanning={() => navigate('planning', { planningTab: 'tasks' })} /> : placeholder)}
