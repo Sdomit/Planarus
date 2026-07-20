@@ -5,14 +5,89 @@ updated_at: 2026-07-19
 source_of_truth: Approvo
 ---
 
-# Backups & restore
+# Notifications & backups
 
-How to protect the Approvo database and get it back. Everything here is **off by
-default** and local — no data leaves your machine unless you point it somewhere
-that syncs.
+How to make Approvo chase your deadlines, protect its database, and get that
+database back. Everything here is **off by default** and local — no data leaves
+your machine unless you point it somewhere that syncs.
 
-> **Scheduled email reminders** (the other half of Phase 18) arrive with slice
-> 18.1. This guide covers what is built today: backups and restore.
+Both halves share one idea: **Approvo runs no background scheduler.** It ships a
+command; your operating system decides when to run it. That way a reminder still
+fires when the app is closed, nothing double-fires when the API runs more than
+one worker, and the very same command is what a hosted cron job would call.
+
+## Scheduled reminders
+
+The **in-app feed** (the bell) needs no setup at all — it is computed live from
+your approvals, due tasks, and open blockers every time you look at it.
+
+**Email reminders** are the part that must be scheduled, because a due date
+passing is not an event anything can react to. Nobody edits the task; no webhook
+fires. Something has to go and look.
+
+### 1. Turn email on
+
+Email is off by default and only ever sends to a **loopback SMTP host** — a local
+Mailpit, never a relay. In **Settings**, switch **Email** on and set the From
+address.
+
+### 2. Add a rule to a project
+
+Each rule is one recipient plus a trigger:
+
+| Trigger | Sends |
+|---|---|
+| `due_soon` | overdue tasks, plus anything due inside the threshold (default 48h) |
+| `daily_digest` | open tasks, open blockers, pending proposals, and what is due |
+
+A rule with nothing to report sends nothing. A digest of zeroes is how people
+learn to filter your mail.
+
+### 3. Let the OS run it
+
+```bash
+cd apps/api
+python -m app.jobs reminders
+```
+
+That walks every active project and sends what its rules ask for. Archived
+projects are left alone. It is safe to run as often as you like: nothing due
+means nothing sent, and the per-project daily cap (20) bounds the worst case.
+
+Now put it on a schedule. **cron** (Linux/macOS) — every morning at 08:00:
+
+```cron
+0 8 * * * cd /path/to/approvo/apps/api && /path/to/.venv/bin/python -m app.jobs reminders
+```
+
+Plain cron does **not** catch up a run it missed while the machine was off. If
+that matters, use a **systemd timer** instead and set `Persistent=true`, which
+runs the job on the next boot after a missed window:
+
+```ini
+# ~/.config/systemd/user/approvo-reminders.timer
+[Timer]
+OnCalendar=08:00
+Persistent=true
+```
+
+On **Windows Task Scheduler**, the equivalent is the trigger option *"Run task as
+soon as possible after a scheduled start is missed"*. A laptop that sleeps
+through 08:00 is the normal case, not the edge case — turn this on.
+
+### What the exit codes mean
+
+The command prints one line and returns a code, so a scheduler can tell the
+difference between "quiet" and "broken":
+
+| Code | Meaning |
+|---|---|
+| `0` | ran fine — mail sent, or legitimately nothing was due |
+| `1` | something genuinely failed (SMTP refused, a message was withheld) — **look at this** |
+| `2` | refused on purpose: email is switched off |
+
+A job that exits `1` every morning is a broken pipeline telling you so. That is
+the whole reason it does not just exit `0` and stay quiet.
 
 ## What a backup is here
 
@@ -53,8 +128,12 @@ do the job better than anything shipped here would.
 
 ## Taking a backup
 
-- **Settings → backups → Back up now**, or
-- `POST /api/v1/backups` (local, control-token + server-admin gated).
+- **Settings → backups → Back up now**,
+- `POST /api/v1/backups` (local, control-token + server-admin gated), or
+- `python -m app.jobs backup` — the same CLI as reminders, so it goes on the same
+  scheduler. A nightly backup next to a morning reminder run is a sensible
+  default. Same exit codes: `2` means backups are switched off, `1` means a
+  snapshot was actually attempted and failed.
 
 **Take one before every `alembic upgrade`.** It is the cheapest insurance that
 exists against the worst case.
