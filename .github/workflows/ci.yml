@@ -33,7 +33,7 @@ jobs:
       # pnpm-workspace.yaml's allowBuilds key meaningful. Raising Node to 22
       # would let us move to pnpm 11 — a separate change.
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: pnpm
