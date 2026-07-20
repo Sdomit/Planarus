@@ -34,6 +34,8 @@ html, body { height: 100%; margin: 0; }
   .ab-brand-name { font-weight: 800; font-size: var(--text-md); letter-spacing: -0.02em; color: var(--text-primary); }
   .ab-brand-env { font-family: var(--font-mono); font-size: 10px; color: var(--text-tertiary); letter-spacing: 0.04em; }
 
+  .ab-side-pin { flex-shrink: 0; padding: var(--space-3) var(--space-3) 0; }
+  .ab-side-pin .ab-projsel-wrap { margin-bottom: 0; }
   .ab-side-scroll { flex: 1; overflow-y: auto; padding: var(--space-3) var(--space-3) var(--space-4); }
   .ab-side-foot { flex-shrink: 0; border-top: 1px solid var(--border-subtle); padding: var(--space-3); }
 
@@ -59,9 +61,9 @@ html, body { height: 100%; margin: 0; }
   .ab-projsel-wrap { position: relative; margin-bottom: var(--space-2); }
   .ab-projsel-wrap .ab-projsel { margin-bottom: 0; }
   .ab-projsel-wrap .ic { flex-shrink: 0; color: var(--text-tertiary); }
-  /* ponytail: absolute inside the overflow:auto sidebar, so it clips if the list is long AND the
-     selector sits near the bottom. Fine at a few projects (opens downward from the top, 320px + own
-     scroll). Upgrade path if project counts grow: render via a portal / floating-ui. */
+  /* ponytail: absolute, anchored to a non-scrolling wrap, so it overlays the nav instead of
+     clipping. Still bounded by the sidebar's own overflow:hidden — fine at 320px + own scroll.
+     Upgrade path if a menu ever needs to escape the sidebar: portal / floating-ui. */
   .ab-projsel-menu {
     position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30;
     background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-md);
@@ -76,6 +78,12 @@ html, body { height: 100%; margin: 0; }
   .ab-projsel-item .pj-name { font-size: var(--text-sm); font-weight: 600; }
   .ab-projsel-item .pj-sub { font-size: 11px; color: var(--text-tertiary); }
   .ab-projsel-empty { padding: var(--space-2) var(--space-2-5); font-size: var(--text-sm); color: var(--text-tertiary); }
+
+  /* Account menu reuses the project-selector shell but opens upward — it sits in the sidebar foot. */
+  .ab-acct-menu { top: auto; bottom: calc(100% + 4px); }
+  .ab-side-foot .ab-projsel-wrap { margin-bottom: 0; }
+  .ab-acct-item { flex-direction: row; align-items: center; gap: var(--space-2-5); font-size: var(--text-sm); }
+  .ab-acct-item .ic-14 { flex-shrink: 0; color: var(--text-tertiary); }
 
   /* sidebar nav items are <button>s — reset native chrome and lift contrast on the dark canvas */
   .ab-sidebar .sidebar-nav-item {
