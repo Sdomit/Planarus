@@ -17,6 +17,18 @@ updates:
     groups:
       javascript:
         patterns: ["*"]
+    # Held back on purpose (2026-07): Vite 8 is only supported by Vitest 4, and
+    # Vitest 4 cannot start on Node 24 (our local dev version) — it dies loading
+    # its own '#module-evaluator'. Vitest 3 caps at Vite 7, so the three move as
+    # a set. Keeping them <8 / <4 / <6 lets the rest of the JS group keep landing.
+    # Revisit (drop these) once Vitest ships a Node 24 fix.
+    ignore:
+      - dependency-name: "vite"
+        versions: [">=8.0.0"]
+      - dependency-name: "vitest"
+        versions: [">=4.0.0"]
+      - dependency-name: "@vitejs/plugin-react"
+        versions: [">=6.0.0"]
 
   - package-ecosystem: github-actions
     directory: /
