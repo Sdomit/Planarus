@@ -18,6 +18,7 @@ import {
   type EntityCardRef,
   type EntityRef,
 } from './canvasCards'
+import { CANVAS_SHAPES } from './canvasShapes'
 
 // Self-host fonts so the canvas works fully offline (no CDN fetch). Vite serves
 // apps/web/public/ at '/', so Excalidraw resolves /fonts/<Family>/... locally.
@@ -49,7 +50,22 @@ interface CanvasApi {
   getSceneElements: () => readonly unknown[]
   updateScene: (scene: { elements: readonly unknown[] }) => void
   scrollToContent: (target?: readonly unknown[], opts?: { fitToContent?: boolean }) => void
+  toggleSidebar: (opts: { name: string; tab?: string; force?: boolean }) => boolean
 }
+
+// The shape library, seeded into Excalidraw's own library panel. Built once at
+// module load: the set is static, so there is nothing to recompute per canvas.
+// `created: 0` keeps the order stable (and deterministic) — Excalidraw only uses
+// it for sorting, and a real clock would shuffle the groups on every reload.
+const SHAPE_LIBRARY = CANVAS_SHAPES.map((shape) => ({
+  id: `approvo-${shape.key}`,
+  status: 'published' as const,
+  created: 0,
+  name: `${shape.group} · ${shape.name}`,
+  elements: convertToExcalidrawElements(
+    shape.elements as Parameters<typeof convertToExcalidrawElements>[0],
+  ),
+}))
 
 interface CanvasEditorProps {
   docId: string
@@ -287,6 +303,16 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
     canvas.updateScene({ elements: [...canvas.getSceneElements(), ...created] })
   }, [])
 
+  // The seeded shapes live in Excalidraw's library panel; this just toggles it,
+  // so there is no second shape palette to build or keep in sync with the
+  // toolbar. Note the naming: the *sidebar* is 'default' and 'library' is a tab
+  // inside it (DEFAULT_SIDEBAR in the package's constants). Passing
+  // name:'library' matches no sidebar and is silently ignored — as is writing
+  // openSidebar through updateScene's appState. Both fail without an error.
+  const openShapes = useCallback(() => {
+    apiRef.current?.toggleSidebar({ name: 'default', tab: 'library' })
+  }, [])
+
   const loadComments = useCallback(async () => {
     if (commentsLoaded.current) return
     commentsLoaded.current = true
@@ -392,6 +418,9 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
         <button className="btn btn-outline btn-sm" onClick={addNote} title="Drop a sticky note (recolor & edit with Excalidraw's controls)">
           🟨 Note
         </button>
+        <button className="btn btn-outline btn-sm" onClick={openShapes} title={`Open the shape library — ${CANVAS_SHAPES.length} flowchart, planning and annotation shapes to drag onto the canvas`}>
+          ⬡ Shapes
+        </button>
         <button className="btn btn-outline btn-sm" onClick={addPin} title="Drop a review pin on the canvas, bound to a comment">
           📍 Pin
         </button>
@@ -470,7 +499,7 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
       <div style={{ position: 'relative', height: '78vh', minHeight: 400 }}>
         <Excalidraw
           excalidrawAPI={(inst) => { apiRef.current = inst as unknown as CanvasApi }}
-          initialData={{ elements: scene.elements, appState: scene.appState, files: scene.files }}
+          initialData={{ elements: scene.elements, appState: scene.appState, files: scene.files, libraryItems: SHAPE_LIBRARY }}
           onChange={onChange}
           viewModeEnabled={lockedByOther}
         />
