@@ -60,7 +60,17 @@ def test_get_settings_shape_and_no_secret_leak(client):
         "auth_enabled_by_env", "auth_password_enabled_by_env",
         # P16.1 (D30) — registration switch
         "registration_open",
+        # P18.0 (D42/D44) — backup switches + read-only capability status
+        "backup_enabled", "backup_retention",
+        "backup_supported", "backup_dir_configured",
     }
+    # D44 default: off — a backup writes files outside the DB, so it is opt-in.
+    assert body["backup_enabled"] is False
+    assert body["backup_retention"] == 7
+    # The local install is SQLite, so file-snapshot backup is available.
+    assert body["backup_supported"] is True
+    # Ceiling status is a boolean — never the configured directory path itself.
+    assert "agentboard-backups" not in res.text
     # LAN defaults mirror a local install: ceiling off, switch inert-off.
     assert body["lan_permitted_by_env"] is False
     assert body["lan_mode_active"] is False
