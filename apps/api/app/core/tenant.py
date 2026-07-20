@@ -113,7 +113,9 @@ def require_project_access(
 # ``project_id`` (or None if the entity doesn't exist). Applied uniformly via
 # ``include_router(..., dependencies=[Depends(tenant_guard)])`` in the v1 router,
 # so each domain route is guarded without a per-route edit. A route that carries
-# none of these identifiers (a global/static route) is left untouched.
+# none of these identifiers is left untouched — safe only for genuinely global
+# routes, so ``tests/test_tenant_route_coverage.py`` fails CI on any guarded
+# route whose path params are missing from this registry.
 def _project_id_via(session: Session, model, entity_id: str, attr: str = "project_id"):
     from typing import Any
 
@@ -135,6 +137,9 @@ def _checklist_project_id(session: Session, item_id: str):
 def _build_resolvers() -> dict:
     from app.models.agent_run import AgentRun
     from app.models.blocker import Blocker
+    from app.models.calendar_connection import CalendarConnection
+    from app.models.calendar_event import CalendarEvent
+    from app.models.comment import Comment
     from app.models.context_file import ContextFile
     from app.models.decision import Decision
     from app.models.doc import Doc
@@ -143,6 +148,7 @@ def _build_resolvers() -> dict:
     from app.models.phase import Phase
     from app.models.risk import Risk
     from app.models.stage import Stage
+    from app.models.status_option import StatusOption
     from app.models.task import Task
     from app.models.todo import Todo
 
@@ -161,6 +167,14 @@ def _build_resolvers() -> dict:
         "context_file_id": lambda s, v: _project_id_via(s, ContextFile, v),
         "item_id": _checklist_project_id,
         "todo_id": lambda s, v: _project_id_via(s, Todo, v),
+        # These four flat-item routes shipped after P10.2b and were never added
+        # here, so the guard below matched nothing and returned — no membership
+        # check and no role check. ``test_tenant_route_coverage`` now fails CI on
+        # any future route that repeats the omission.
+        "comment_id": lambda s, v: _project_id_via(s, Comment, v),
+        "event_id": lambda s, v: _project_id_via(s, CalendarEvent, v),
+        "option_id": lambda s, v: _project_id_via(s, StatusOption, v),
+        "connection_id": lambda s, v: _project_id_via(s, CalendarConnection, v),
     }
 
 
