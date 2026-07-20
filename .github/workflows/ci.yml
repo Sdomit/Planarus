@@ -77,6 +77,11 @@ jobs:
           python scripts/assert_pg_schema.py
           alembic downgrade base
           alembic upgrade head
+      # The rest of the suite runs on SQLite, whose single writer masks the
+      # approval apply race entirely. This is the only place that exercises
+      # concurrent writers on the dialect we actually deploy on.
+      - name: Approval concurrency (real Postgres)
+        run: python -m pytest tests/test_approval_concurrency_pg.py -q
 
   docker-build:
     name: Docker (compose build + smoke)
