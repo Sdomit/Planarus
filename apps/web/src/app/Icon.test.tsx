@@ -12,10 +12,15 @@ describe('Icon', () => {
     expect(svg.classList.contains('ic-99')).toBe(true)
   })
 
-  it('defaults to the ic base class and points at the sprite', () => {
+  it('defaults to the ic base class and renders the matching lucide icon', () => {
     const { container } = render(<Icon name="palette" />)
     const svg = container.querySelector('svg')!
     expect(svg.classList.contains('ic')).toBe(true)
-    expect(svg.querySelector('use')!.getAttribute('href')).toBe('#icon-palette')
+    expect(svg.querySelector('path')).not.toBeNull()
+  })
+
+  it('renders nothing for an unknown icon name', () => {
+    const { container } = render(<Icon name="not-a-real-icon" />)
+    expect(container.querySelector('svg')).toBeNull()
   })
 })
