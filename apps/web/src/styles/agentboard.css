@@ -36,6 +36,12 @@ html, body { height: 100%; margin: 0; }
   }
   .ab-brand-name { font-weight: 800; font-size: var(--text-md); letter-spacing: -0.02em; color: var(--text-primary); }
   .ab-brand-env { font-family: var(--font-mono); font-size: 10px; color: var(--text-tertiary); letter-spacing: 0.04em; }
+  .ab-brand-ip {
+    font: inherit; letter-spacing: inherit; color: var(--text-tertiary);
+    background: none; border: 0; padding: 0; cursor: pointer;
+    text-decoration: underline dotted; text-underline-offset: 2px;
+  }
+  .ab-brand-ip:hover { color: var(--accent); }
 
   .ab-side-pin { flex-shrink: 0; padding: var(--space-3) var(--space-3) 0; }
   .ab-side-pin .ab-projsel-wrap { margin-bottom: 0; }

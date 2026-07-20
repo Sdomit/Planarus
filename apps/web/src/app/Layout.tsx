@@ -15,6 +15,7 @@ import AgentRunsPanel from './AgentRunsPanel'
 import RemindersPanel from './RemindersPanel'
 import SettingsPanel from './SettingsPanel'
 import TeamPanel from './TeamPanel'
+import AboutModal from './AboutModal'
 import NotificationsBell from './NotificationsBell'
 import { SidebarTodos } from './SidebarTodos'
 import { useAuthInfo } from './auth'
@@ -132,6 +133,32 @@ function initials(s: string): string {
   )
 }
 
+// The address a teammate types to reach this machine. The port comes from the
+// browser; the IP has to come from the API, since a page served over loopback
+// cannot see which adapter is on the LAN. Hidden when the box has no LAN route.
+function LanAddress() {
+  const [ip, setIp] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    api.info.get().then((i) => setIp(i.lan_ip)).catch(() => {})
+  }, [])
+  if (!ip) return null
+  const url = `http://${ip}:${window.location.port || '80'}`
+  return (
+    <>
+      {' · '}
+      <button
+        type="button"
+        className="ab-brand-ip"
+        title={`Copy ${url} — other devices can reach it only in LAN team mode`}
+        onClick={() => void navigator.clipboard?.writeText(url).then(() => setCopied(true), () => {})}
+      >
+        {copied ? 'copied ✓' : 'ip'}
+      </button>
+    </>
+  )
+}
+
 export default function Layout() {
   const { me, signOut } = useAuthInfo()
   const [mainView, setMainView] = useState<MainView>(() => loadNav().view ?? 'dashboard')
@@ -139,6 +166,7 @@ export default function Layout() {
   const [theme, setTheme] = useState<string>(
     () => document.documentElement.getAttribute('data-theme') || 'light-blue',
   )
+  const [aboutOpen, setAboutOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [mobileNavMode, setMobileNavMode] = useState(isMobileViewport)
   const [searchQuery, setSearchQuery] = useState('')
@@ -310,7 +338,7 @@ export default function Layout() {
           <div className="ab-brand-mark">A</div>
           <div>
             <div className="ab-brand-name">Approvo</div>
-            <div className="ab-brand-env">local · :5173</div>
+            <div className="ab-brand-env">local · :{window.location.port || '80'}<LanAddress /></div>
           </div>
         </div>
 
@@ -430,6 +458,16 @@ export default function Layout() {
                     <span>{it.label}</span>
                   </button>
                 ))}
+                {/* A modal, not a view: About has no project scope and nothing
+                    to restore on reload, so it stays out of the nav state. */}
+                <button
+                  type="button"
+                  className="ab-projsel-item ab-acct-item"
+                  onClick={() => { setAcctMenuOpen(false); setAboutOpen(true) }}
+                >
+                  <Icon name="info" className="ic-14" />
+                  <span>About</span>
+                </button>
                 {me && (
                   <button
                     type="button"
@@ -533,6 +571,8 @@ export default function Layout() {
           </div>
         </main>
       </div>
+
+      {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
     </div>
   )
 }
