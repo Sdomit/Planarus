@@ -24,7 +24,8 @@ shown in the calendar but are managed from Planning, not pushed out.
 
 ## What you need before you start
 
-- **Approvo running locally** (`run-agentboard.bat` opens the API on `:8000` and
+- **Approvo running locally** (`run-approvo.sh` on macOS/Linux, `run-agentboard.bat` on Windows —
+  opens the API on `:8000` and
   the UI on `:5173`).
 - A **Google** and/or **Microsoft** account.
 - The Python calendar-sync extra (installed in Step 3).
@@ -100,7 +101,7 @@ Install the extra and restart the API (from `apps/api`):
 .\.venv\Scripts\pip.exe install -e ".[calendar-sync]"
 ```
 
-Then relaunch (`run-agentboard.bat`).
+Then relaunch (`run-approvo.sh` on macOS/Linux, `run-agentboard.bat` on Windows).
 
 > **Both are required.** With no encryption key, or no client id, sync stays
 > off — the button below simply shows "not configured". A provider only appears

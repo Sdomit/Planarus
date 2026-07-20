@@ -1,99 +1,142 @@
 # Approvo
 
-> A **local-first AI project cockpit**. One place that converts long AI
-> conversations, implementation plans, Git context, decisions, risks, and
-> execution history into **structured project memory** that humans *and* agents
-> can both use.
+**AI agents propose. You approve.**
 
-Approvo is not "another project manager." It is an **AI execution control
-plane**: human planning (projects → phases → stages → tasks), an agent context
-layer (Markdown context packs, allowed/forbidden paths, prompts, approval
-gates), and an execution telemetry layer (agent runs, Git state, imports, audit
-log) — all stored locally in real folders you own.
+A local-first project cockpit that gives AI coding agents real project context —
+and puts a human approval gate in front of every write they attempt.
+
+[![CI](https://github.com/Sdomit/AgentBoard/actions/workflows/ci.yml/badge.svg)](https://github.com/Sdomit/AgentBoard/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Local-first](https://img.shields.io/badge/local--first-no%20cloud%20required-green.svg)](#your-data-stays-yours)
+
+<!-- TODO(screenshots): drop 2-3 current captures in docs/images/ and link them
+     here — Cockpit, Approvals, Context Pack. The old marketing shots predate
+     the Approvo rename and are no longer accurate. -->
 
 ---
 
-## Status
+## The problem
 
-**Working local-first app.** `apps/api` (FastAPI + SQLModel + Alembic) and
-`apps/web` (React + TS + Vite) ship fifteen surfaces: Dashboard, Cockpit,
-Planning (phases/tasks/milestones/decisions/risks/comments/links — with board
-views, custom statuses, sub-tasks, and task checklists), Roadmap, Timeline,
-Calendar (with optional external Google/Microsoft sync), Docs, Context Pack,
-Context Files, Markdown Preview, Approvals, Clients, Agent Runs, Reminders, and
-Settings — plus a project-scoped sidebar todo list. Test baseline:
-**815 pytest passed / 3 skipped, 131 vitest**. The external API exists but is
-**disabled by default** (loopback-bound; enabling it is an explicit user opt-in).
-One-command local run: `run-agentboard.bat`.
+You use ChatGPT, Claude, Codex, or Cursor to build something real. And every
+session, the same two things go wrong:
 
-| Artifact | Location |
-|---|---|
-| Source research | [deep-research-report.md](deep-research-report.md) |
-| Architecture & MVP plan | [docs/plan/00-OVERVIEW.md](docs/plan/00-OVERVIEW.md) |
-| Living context pack (read first as an agent) | [context/](context/) |
-| Agent routing instructions | [CLAUDE.md](CLAUDE.md) |
-| Developer setup | [docs/dev/setup.md](docs/dev/setup.md) |
+1. **The agent starts cold.** Your plan lives in a chat transcript it can't see.
+   You re-paste context until you run out of patience or tokens.
+2. **The agent acts, then you find out.** It edits, commits, and rewrites — and
+   your review happens after the fact, if at all.
 
-## Quickstart (Docker)
+## What Approvo does
 
-The fastest way to try Approvo — no Python, Node, or pnpm toolchain required:
+**Gives agents structured context.** Projects, phases, tasks, decisions, risks,
+docs, and Git state live in a real database mirrored to Markdown folders you
+own. Agents read a *context pack* — a minimal, ordered, token-efficient slice —
+instead of your entire repo.
+
+**Puts a gate in front of every agent write.** An agent connected over MCP or
+the HTTP API can *read* and can *propose*. It cannot apply. Proposals land in an
+approval queue as a preview; a human approves; only then does canonical state
+change. This is enforced in one code path, not by convention.
+
+**Runs on your machine.** SQLite, your filesystem, `localhost`. No account, no
+cloud, no per-seat pricing. The external API ships **disabled by default** and
+bound to loopback; exposing it is an explicit, documented opt-in.
+
+## Quickstart
+
+Docker — no Python, Node, or pnpm toolchain needed:
 
 ```bash
+git clone https://github.com/Sdomit/AgentBoard.git
+cd AgentBoard
 docker compose up --build
-# then open http://localhost:5173
+# → http://localhost:5173
 ```
 
-This runs the web UI (nginx) and the API as containers on a private network; the
-external (ChatGPT) API stays **disabled**. Your data — the SQLite DB and any
-project folders you create under `/data` — persists on the host in
-`./agentboard-data`. Stop with `docker compose down`.
+Data persists on the host in `./agentboard-data`. Port already taken? Use
+`APPROVO_PORT=5174 docker compose up`. Stop with `docker compose down`.
 
-Prefer a native setup with hot reload? See
-[docs/dev/setup.md](docs/dev/setup.md) (or `run-agentboard.bat` on Windows).
+> Creating a project folder in Docker? Put it under `/data` — that's the only
+> path that survives `docker compose down`.
 
-## The locked stack (one line)
+**Native, with hot reload:**
 
-React + Tiptap UI → served as a normal web app today (**Tauri** desktop
-packaging deferred to Phase 9+) → talking to a **FastAPI** backend
-→ **SQLite** locally (SQLAlchemy/SQLModel + Alembic, Postgres-ready) → every
-project mirrored to a **real folder of Markdown context files** → a narrow,
-approval-gated **MCP** server and REST API for agents.
+```bash
+./run-approvo.sh        # macOS / Linux
+run-agentboard.bat      # Windows
+```
 
-Full rationale: [docs/plan/02-architecture.md](docs/plan/02-architecture.md).
+Both check your setup, pick free ports if the defaults are taken, wait until
+each server actually answers, then open the UI. First-time toolchain setup is in
+[docs/dev/setup.md](docs/dev/setup.md).
 
-## What makes it different
+## What's in it
 
-Notion/ClickUp/Coda are broad and cloud-first. Linear/Jira/Height are
-product-engineering trackers. Obsidian/Anytype/Capacities own local knowledge
-but are not agent control planes. **None** are purpose-built around
-ChatGPT import/update *with an approval flow*, MCP-native *but permission-safe*
-agent access, Markdown *context packs*, and token-efficient agent orchestration
-— in one local-first product. See
-[docs/plan/01-product-and-scope.md](docs/plan/01-product-and-scope.md).
+Sixteen surfaces over a FastAPI + React stack:
 
-## For humans vs. for agents
+| | |
+|---|---|
+| **Plan** | Dashboard · Planning (phases, tasks, milestones, decisions, risks, sub-tasks, checklists, custom statuses, board + list views) · Roadmap · Timeline · Calendar |
+| **Context** | Docs (rich text) · Context Pack builder · Context Files · Markdown Preview · Canvas (Excalidraw, works offline) |
+| **Agents** | Approvals queue · Agent Runs · Reminders · Cockpit (read-only Git + PR view) |
+| **Admin** | Team (roles, attribution) · Settings (integrations, webhooks, MCP config, export/import) |
 
-- **Humans** start at [docs/plan/00-OVERVIEW.md](docs/plan/00-OVERVIEW.md).
-- **Agents** start at [CLAUDE.md](CLAUDE.md) → [context/AGENT_RULES.md](context/AGENT_RULES.md)
-  → [context/NEXT_STEP.md](context/NEXT_STEP.md). Do not scan the whole repo.
+**Connect your agent:** an approval-gated MCP server (STDIO and remote HTTP), a
+REST API, and a ChatGPT Actions contract. Configuration is generated for you in
+Settings → Integrations.
 
-## Next implementation step
+## Your data stays yours
 
-Phases 1–10, 13 (local canvas), and the 15.x line (planning boards, custom
-statuses, sub-tasks, calendar + optional external sync) are built and merged.
-The current objective is **OSS launch prep**; the next optional milestones are
-the human-gated Phase 7C2b ChatGPT exposure
-([docs/dev/phase-7c2b-go-live-runbook.md](docs/dev/phase-7c2b-go-live-runbook.md))
-and hosted go-live (code-complete, user setup only). Live objective:
-[context/NEXT_STEP.md](context/NEXT_STEP.md).
+- Everything is local: SQLite plus Markdown folders you can read, grep, and
+  commit yourself.
+- **Zero third-party network requests.** Fonts are self-hosted; nothing phones
+  home.
+- Calendar sync, LAN team mode, outbound webhooks, and the external API all ship
+  **off by default** and require explicit configuration.
+- Apache-2.0. Fork it, self-host it, no strings.
+
+## How it compares
+
+Notion, ClickUp, and Coda are broad and cloud-first. Linear, Jira, and Height
+are product-engineering trackers. Obsidian and Anytype own local knowledge but
+aren't agent control planes. None are built around **agent access with an
+approval boundary** and **token-efficient context packs** in one local-first
+tool. Longer version: [docs/plan/01-product-and-scope.md](docs/plan/01-product-and-scope.md).
+
+## Documentation
+
+- **Using Approvo** → [docs/guide/](docs/guide/) — connect ChatGPT, connect a
+  calendar, LAN team mode, team administration.
+- **Running it locally** → [docs/dev/setup.md](docs/dev/setup.md)
+- **How it's designed** → [docs/plan/00-OVERVIEW.md](docs/plan/00-OVERVIEW.md)
+- **Contributing** → [CONTRIBUTING.md](CONTRIBUTING.md)
+
+### For AI agents
+
+This repo is itself managed as an Approvo project, so `context/` is a live
+context pack. If you're an agent working here, start at
+[CLAUDE.md](CLAUDE.md) → [context/AGENT_RULES.md](context/AGENT_RULES.md) →
+[context/NEXT_STEP.md](context/NEXT_STEP.md). Don't scan the whole repo.
+
+## Status
+
+Working local-first app, pre-1.0, built and used daily by its author. Phases
+1–17 are merged: planning entities, rich docs, the approval engine, MCP, the
+external API, LAN team mode, the repo cockpit, canvas, the 15.x planning line,
+team administration, and the integration hub.
+
+Every PR is gated by CI: backend tests, frontend tests, typecheck, production
+build, a Postgres migration round-trip, and a Docker Compose build + smoke test.
+
+Not done yet: hosted/SaaS mode is code-complete groundwork but not turned on,
+and desktop packaging (Tauri) is not started.
 
 ## Contributing & security
 
-Contributions are welcome — start with [CONTRIBUTING.md](CONTRIBUTING.md). Please
-report security issues privately per [SECURITY.md](SECURITY.md), not via public
-issues.
+Contributions welcome — start with [CONTRIBUTING.md](CONTRIBUTING.md). Please
+report security issues privately per [SECURITY.md](SECURITY.md), never as a
+public issue.
 
 ## License
 
-[Apache License 2.0](LICENSE). Rationale in
-[docs/plan/10-risks-and-decisions.md](docs/plan/10-risks-and-decisions.md).
+[Apache License 2.0](LICENSE). Bundled fonts keep their own licenses — see
+[NOTICE](NOTICE).

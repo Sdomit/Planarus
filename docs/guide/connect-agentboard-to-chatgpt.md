@@ -12,7 +12,7 @@ every step yourself; nothing here happens automatically.
 
 ## What you need before you start
 
-- **Approvo running locally** on this PC (`run-agentboard.bat` opens the API on
+- **Approvo running locally** on this PC (`run-approvo.sh` on macOS/Linux, `run-agentboard.bat` on Windows — opens the API on
   `:8000` and the UI on `:5173`).
 - **A domain name you own**, added to a **free Cloudflare account**
   (e.g. `example.com` — you'll use a subdomain like `agentboard.example.com`).
@@ -119,7 +119,7 @@ In PowerShell:
 now — the external door stays locked while you prepare the key.
 
 Then **close every Approvo window and its terminal, open a fresh terminal, and
-run `run-agentboard.bat` again** so the new setting takes effect (the app reads
+relaunch it (`run-approvo.sh` / `run-agentboard.bat`)** so the new setting takes effect (the app reads
 these values once at startup).
 
 ---
@@ -155,7 +155,7 @@ to restart. (Manual equivalent, if you prefer:
 `[Environment]::SetEnvironmentVariable("AGENTBOARD_EXTERNAL_API_ENABLED","true","User")`.)
 
 Then **restart Approvo** (close its windows, open a fresh terminal, run
-`run-agentboard.bat`).
+`run-approvo.sh` / `run-agentboard.bat`).
 
 ✅ **Verify from the public address** (replace the key):
 
