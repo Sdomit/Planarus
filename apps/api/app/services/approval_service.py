@@ -169,10 +169,15 @@ def _validate_dependencies(
     return frozenset(validated)
 
 
-def _revalidate(session: Session, ar: ApprovalRequest) -> Optional[str]:
+def _revalidate(
+    session: Session, ar: ApprovalRequest, lock_target: bool = False
+) -> Optional[str]:
     """Re-check every binding. Returns a reason string if stale, else None.
 
-    Read-only: never mutates or commits.
+    Never mutates or commits. ``lock_target`` additionally takes a row lock on
+    the target for the rest of the transaction — see the note in ``apply``. Only
+    the apply path needs it: the read-only detail view must not hold locks, and
+    ``approve`` writes nothing but the approval row.
     """
     if ar.policy_version != allowlist.POLICY_VERSION:
         return "policy version changed"
@@ -199,7 +204,13 @@ def _revalidate(session: Session, ar: ApprovalRequest) -> Optional[str]:
         model = _TARGET_MODELS.get(ar.target_entity_type or "")
         if model is None:
             return "unknown target type"
-        target = session.get(model, ar.target_entity_id)
+        # Passing with_for_update at all (even False) forces a re-SELECT, so the
+        # unlocked callers keep the plain identity-map read they had before.
+        target = (
+            session.get(model, ar.target_entity_id, with_for_update=True)
+            if lock_target
+            else session.get(model, ar.target_entity_id)
+        )
         if target is None:
             return "target no longer exists"
         if target.project_id != ar.project_id:
@@ -560,8 +571,17 @@ def apply(
         )
     session.refresh(ar)  # ar.status == "applying"
 
-    # Full revalidation inside the same transaction (TOCTOU guard).
-    reason = _revalidate(session, ar)
+    # Full revalidation inside the same transaction (TOCTOU guard), holding a row
+    # lock on the target until this transaction ends.
+    #
+    # The fingerprint check alone is not enough on PostgreSQL. Under READ
+    # COMMITTED an unlocked target can be updated by a human between the check
+    # and the write below, and the handler's UPDATE ... WHERE id = ? would then
+    # silently overwrite the newer value. SQLite never showed this because the
+    # CAS above is the transaction's first write, so it already holds the single
+    # writer lock across both steps — correctness that was load-bearing by
+    # accident, not by design.
+    reason = _revalidate(session, ar, lock_target=True)
     if reason is not None:
         ar.status = "invalidated"
         ar.decided_at = now_utc()
