@@ -9,7 +9,7 @@
     "type": "git",
     "url": "https://github.com/Sdomit/AgentBoard.git"
   },
-  "packageManager": "pnpm@11.8.0",
+  "packageManager": "pnpm@10.34.5",
   "scripts": {
     "dev:web": "pnpm --filter @approvo/web dev",
     "build:web": "pnpm --filter @approvo/web build",
