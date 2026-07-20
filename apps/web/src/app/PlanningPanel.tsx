@@ -612,7 +612,7 @@ function PhasesSection({ phases, projectId, setPhases, statuses, addStatus, relo
       <div className="pp-toolbar"><ViewToggle view={view} setView={setView} />{mgr.button}</div>
       {view === 'board' ? (
         <EntityBoard
-          items={phases} columns={statusCols(statusKeys, statusDots(PHASE_DOT, statuses))} statusOf={p => p.status}
+          labelOf={p => p.title} items={phases} columns={statusCols(statusKeys, statusDots(PHASE_DOT, statuses))} statusOf={p => p.status}
           onRestatus={(p, status) => update(p.id, { status })}
           onReorder={reorder}
           onAddColumn={onAddNew}
@@ -1193,7 +1193,7 @@ function MilestonesSection({ milestones, projectId, setMilestones, statuses, add
       <div className="pp-toolbar"><ViewToggle view={view} setView={setView} />{mgr.button}</div>
       {view === 'board' ? (
         <EntityBoard
-          items={milestones} columns={statusCols(statusKeys, statusDots(MILESTONE_DOT, statuses))} statusOf={m => m.status}
+          labelOf={m => m.title} items={milestones} columns={statusCols(statusKeys, statusDots(MILESTONE_DOT, statuses))} statusOf={m => m.status}
           onRestatus={(m, status) => update(m.id, { status })}
           onReorder={reorder}
           onAddColumn={onAddNew}
@@ -1281,7 +1281,7 @@ function DecisionsSection({ decisions, projectId, setDecisions, statuses, addSta
       <div className="pp-toolbar"><ViewToggle view={view} setView={setView} />{mgr.button}</div>
       {view === 'board' ? (
         <EntityBoard
-          items={decisions} columns={statusCols(statusKeys, statusDots(DECISION_DOT, statuses))} statusOf={d => d.status}
+          labelOf={d => d.title} items={decisions} columns={statusCols(statusKeys, statusDots(DECISION_DOT, statuses))} statusOf={d => d.status}
           onRestatus={(d, status) => update(d.id, { status })}
           onReorder={reorder}
           onAddColumn={onAddNew}
@@ -1365,7 +1365,7 @@ function RisksSection({
       <div className="pp-toolbar">{risks.length > 0 && <ViewToggle view={view} setView={setView} />}{mgr.button}</div>
       {risks.length > 0 && (view === 'board' ? (
         <EntityBoard
-          items={risks} columns={statusCols(statusKeys, statusDots(RISK_STATUS_DOT, statuses))} statusOf={r => r.status}
+          labelOf={r => r.title} items={risks} columns={statusCols(statusKeys, statusDots(RISK_STATUS_DOT, statuses))} statusOf={r => r.status}
           onRestatus={(r, status) => update(r.id, { status })}
           onReorder={reorder}
           onAddColumn={onAddNew}

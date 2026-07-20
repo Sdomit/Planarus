@@ -206,6 +206,30 @@ html, body { height: 100%; margin: 0; }
   .ab-col-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .ab-task-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--space-3); cursor: grab; transition: box-shadow var(--duration-normal) var(--ease-standard), border-color var(--duration-normal) var(--ease-standard), transform var(--duration-normal) var(--ease-spring); }
   .ab-task-card:hover { box-shadow: var(--shadow-md); border-color: var(--border-default); transform: translateY(-2px); }
+
+  /* Move-between-columns controls. Always in the DOM so keyboard and screen
+     readers always reach them; only visually hidden-until-hover where a hover
+     actually exists, so touch users (who have no other way to restatus a card)
+     always see them. */
+  .ab-card-move { display: flex; justify-content: flex-end; gap: 2px; margin-top: var(--space-2); }
+  .ab-card-move-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; padding: 0;
+    border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
+    background: var(--bg-subtle); color: var(--text-secondary);
+    font-size: var(--text-base); line-height: 1; cursor: pointer;
+  }
+  .ab-card-move-btn:hover:not(:disabled) { background: var(--bg-muted); color: var(--text-primary); }
+  .ab-card-move-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .ab-card-move-btn:disabled { opacity: 0.35; cursor: default; }
+  @media (hover: hover) {
+    .ab-card-move { opacity: 0; transition: opacity var(--duration-fast) var(--ease-standard); }
+    .ab-task-card:hover .ab-card-move,
+    .ab-card-move:focus-within { opacity: 1; }
+  }
+  @media (pointer: coarse) {
+    .ab-card-move-btn { width: 44px; height: 44px; }
+  }
   .ab-task-title { font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); line-height: var(--leading-snug); margin-bottom: var(--space-2-5); }
   .ab-task-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
   .ab-task-phase { font-size: 11px; color: var(--text-tertiary); display: inline-flex; align-items: center; gap: 4px; min-width: 0; }

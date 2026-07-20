@@ -21,7 +21,11 @@ export function nextStatusForColumn(itemStatus: string, col: Pick<BoardCol, 'sta
  * contents and any per-card actions are rendered by `renderCard`.
  */
 export function EntityBoard<T extends { id: string }>({
-  items, columns, statusOf, onRestatus, renderCard, hint = 'Drag a card to change its status', onAddColumn, onReorder,
+  items, columns, statusOf, onRestatus, renderCard,
+  // Was "Drag a card to change its status" — untrue on touch, where drag
+  // events never fire and the arrows are the only route.
+  hint = 'Drag a card, or use its arrows, to change status',
+  onAddColumn, onReorder, labelOf,
 }: {
   items: T[]
   columns: BoardCol[]
@@ -31,9 +35,33 @@ export function EntityBoard<T extends { id: string }>({
   hint?: string
   onAddColumn?: () => void
   onReorder?: (dragId: string, targetId: string) => void
+  /** Card name, used for the move buttons' aria-labels. */
+  labelOf?: (item: T) => string
 }) {
   const [dragId, setDragId] = useState<string | null>(null)
   const [overCol, setOverCol] = useState<string | null>(null)
+
+  const columnIndexOf = (item: T) => columns.findIndex(c => c.statuses.includes(statusOf(item)))
+
+  /**
+   * Shift a card one column left/right.
+   *
+   * Dragging is mouse-only — HTML5 drag events never fire on touch — and board
+   * cards carry no status control of their own, so without this a card cannot
+   * change status on a phone by any route. Doubles as the keyboard path.
+   *
+   * ponytail: columns only. Reordering WITHIN a column stays drag-only here;
+   * the list view has up/down buttons for that. Add it if the board actually
+   * gets used for fine-grained ordering on touch.
+   */
+  function moveByColumn(item: T, delta: -1 | 1) {
+    const from = columnIndexOf(item)
+    if (from < 0) return
+    const to = from + delta
+    if (to < 0 || to >= columns.length) return
+    const status = nextStatusForColumn(statusOf(item), columns[to])
+    if (status) onRestatus(item, status)
+  }
 
   function dropOnColumn(col: BoardCol) {
     const id = dragId
@@ -81,19 +109,41 @@ export function EntityBoard<T extends { id: string }>({
                   <span className="ab-col-title">{col.label}</span>
                   <span className="ab-col-count">{colItems.length}</span>
                 </div>
-                {colItems.map(item => (
-                  <div
-                    key={item.id}
-                    className="ab-task-card"
-                    draggable
-                    onDragStart={() => setDragId(item.id)}
-                    onDragEnd={() => { setDragId(null); setOverCol(null) }}
-                    onDragOver={e => { e.preventDefault(); e.stopPropagation() }}
-                    onDrop={e => { e.preventDefault(); e.stopPropagation(); dropOnCard(item.id) }}
-                  >
-                    {renderCard(item)}
-                  </div>
-                ))}
+                {colItems.map(item => {
+                  const at = columnIndexOf(item)
+                  const name = labelOf?.(item) ?? 'card'
+                  return (
+                    <div
+                      key={item.id}
+                      className="ab-task-card"
+                      draggable
+                      onDragStart={() => setDragId(item.id)}
+                      onDragEnd={() => { setDragId(null); setOverCol(null) }}
+                      onDragOver={e => { e.preventDefault(); e.stopPropagation() }}
+                      onDrop={e => { e.preventDefault(); e.stopPropagation(); dropOnCard(item.id) }}
+                    >
+                      {renderCard(item)}
+                      <div className="ab-card-move" onClick={e => e.stopPropagation()}>
+                        <button
+                          type="button" className="ab-card-move-btn"
+                          disabled={at <= 0}
+                          aria-label={at > 0 ? `Move ${name} to ${columns[at - 1].label}` : `${name} is in the first column`}
+                          onClick={() => moveByColumn(item, -1)}
+                        >
+                          <span aria-hidden="true">‹</span>
+                        </button>
+                        <button
+                          type="button" className="ab-card-move-btn"
+                          disabled={at < 0 || at >= columns.length - 1}
+                          aria-label={at >= 0 && at < columns.length - 1 ? `Move ${name} to ${columns[at + 1].label}` : `${name} is in the last column`}
+                          onClick={() => moveByColumn(item, 1)}
+                        >
+                          <span aria-hidden="true">›</span>
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )
           })}
