@@ -71,7 +71,7 @@ export default function GitSnapshotPanel({ projectId }: { projectId: string }) {
 
   const header = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 'var(--space-3)', flexWrap: 'wrap' }}>
-      <Icon name="code" className="ic-16" />
+      <Icon name="code" />
       <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>Repository</span>
       <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>read-only</span>
       {snap?.is_repo && (

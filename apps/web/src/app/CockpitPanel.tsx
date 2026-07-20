@@ -104,7 +104,7 @@ export default function CockpitPanel({ projectId, onOpenCanvas }: CockpitPanelPr
           <StatusBadge kind="project" value={project.status} />
         </div>
         <button className="btn btn-outline btn-sm" type="button" onClick={onOpenCanvas} title="Open this project's canvas">
-          <Icon name="palette" className="ic-16" /> Canvas
+          <Icon name="palette" /> Canvas
         </button>
       </div>
 
@@ -137,7 +137,7 @@ function WidgetCard({ icon, title, children }: { icon: string; title: string; ch
   return (
     <div className="card ck-widget">
       <div className="ck-widget-head">
-        <Icon name={icon} className="ic-16" />
+        <Icon name={icon} />
         <span className="ck-widget-title">{title}</span>
       </div>
       {children}
