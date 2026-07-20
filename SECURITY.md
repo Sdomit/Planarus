@@ -19,9 +19,8 @@ You'll get an acknowledgement within a few days. Since this is a solo,
 pre-1.0 project, please allow reasonable time for a fix before any public
 disclosure. Coordinated disclosure is appreciated and credited.
 
-> Maintainer note: private reporting must be enabled once under
-> **Settings → Advanced Security → Private vulnerability reporting** for the link
-> above to appear.
+If the Security tab is unavailable to you for any reason, email the maintainer at
+**sarmad.domit@gmail.com** with `SECURITY` in the subject instead.
 
 ## Supported versions
 

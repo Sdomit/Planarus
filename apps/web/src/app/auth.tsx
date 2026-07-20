@@ -47,7 +47,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     // P16.2: an admin-issued temp password only unlocks the auth surface —
     // force the rotation before the app (the API fences everything else anyway).
     return (
-      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg-base)', padding: 'var(--space-4)' }}>
+      <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: 'var(--bg-canvas)', padding: 'var(--space-4)' }}>
         <ChangePasswordForm
           forced
           onChanged={() => void api.auth.me().then((me) => setState({ kind: 'user', me }))}
@@ -99,7 +99,7 @@ export function ChangePasswordForm({
   }
 
   return (
-    <form className="card" onSubmit={submit} style={{ width: 360, display: 'grid', gap: 'var(--space-4)' }}>
+    <form className="card" onSubmit={submit} style={{ width: 'min(360px, 100%)', display: 'grid', gap: 'var(--space-4)' }}>
       <div>
         <h3 style={{ margin: 0 }}>{forced ? 'Set a new password' : 'Change password'}</h3>
         <p style={{ margin: '4px 0 0', color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>
@@ -156,8 +156,8 @@ export function SignIn({ onSignedIn }: { onSignedIn: (me: AuthMe) => void }) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg-base)', padding: 'var(--space-4)' }}>
-      <form className="card" onSubmit={submit} style={{ width: 360, display: 'grid', gap: 'var(--space-4)' }}>
+    <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: 'var(--bg-canvas)', padding: 'var(--space-4)' }}>
+      <form className="card" onSubmit={submit} style={{ width: 'min(360px, 100%)', display: 'grid', gap: 'var(--space-4)' }}>
         <div>
           <h2 style={{ margin: 0 }}>Approvo</h2>
           <p style={{ margin: '4px 0 0', color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>

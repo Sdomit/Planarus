@@ -155,6 +155,13 @@ export default function Layout() {
   const toggleTheme = () => {
     const next = isDark ? 'light-blue' : 'dark-blue'
     document.documentElement.setAttribute('data-theme', next)
+    // Persist, or the choice silently reverts on the next load. The inline
+    // script in index.html reads this key before first paint.
+    try {
+      localStorage.setItem('approvo.theme', next)
+    } catch {
+      /* private mode — the toggle still works for this session */
+    }
     setTheme(next)
   }
 

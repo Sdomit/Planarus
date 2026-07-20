@@ -4,9 +4,9 @@ __pycache__/
 *.pyo
 *.pyd
 *.so
-dist/
 *.egg-info/
 .eggs/
+.pytest_cache/
 .venv/
 venv/
 env/
@@ -50,3 +50,7 @@ context/LOCAL_OPS.md
 # Local agent/tooling config — machine paths + capability ids, never published
 .claude/
 .mcp.json
+
+# Launch/marketing working material — drafts, distribution notes, internal
+# checklists. Kept locally, deliberately not part of the public repo.
+docs/marketing/

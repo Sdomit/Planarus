@@ -106,8 +106,11 @@
 .pp-caret { color: var(--text-tertiary); font-size: var(--text-xs); width: 0.9em; }
 .pp-check-count { font-size: var(--text-xs); color: var(--text-tertiary); }
 .pp-task-details { display: flex; flex-direction: column; gap: var(--space-3); }
+/* auto-fit, not a fixed 4: four 120px columns need 524px with the gaps and
+   inset, so any content pane narrower than that overflowed sideways — which
+   on a 768px tablet is the whole Planning surface. Now they reflow instead. */
 .pp-task-controls {
-  display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr));
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: var(--space-2); padding-left: var(--space-5);
 }
 .pp-task-controls label { display: flex; flex-direction: column; gap: var(--space-1); }
@@ -121,9 +124,14 @@
 .pp-check-remove {
   border: none; background: none; cursor: pointer; padding: 0 var(--space-1);
   font-size: var(--text-base); line-height: 1; color: var(--text-tertiary);
-  opacity: 0; transition: opacity 0.12s ease, color 0.12s ease;
+  transition: opacity 0.12s ease, color 0.12s ease;
 }
-.pp-check-row:hover .pp-check-remove, .pp-check-remove:focus-visible { opacity: 1; }
+/* Same as .ab-todo-act: reveal-on-hover only where hover exists, otherwise the
+   checklist item can never be removed on a touch device. */
+@media (hover: hover) {
+  .pp-check-remove { opacity: 0; }
+  .pp-check-row:hover .pp-check-remove, .pp-check-remove:focus-visible { opacity: 1; }
+}
 .pp-check-remove:hover { color: var(--status-danger-fg); }
 .pp-check-add { display: flex; gap: var(--space-2); align-items: center; }
 .pp-check-add .input { flex: 1; }

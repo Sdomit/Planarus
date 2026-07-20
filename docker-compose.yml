@@ -22,9 +22,10 @@ services:
     ports:
       # Loopback-only by default (deny-by-default, P11.3): the quickstart URL
       # stays http://localhost:5173 and nothing is reachable from the LAN.
-      # LAN team mode = change to "5173:80" AND turn auth on first — see
-      # docs/guide/lan-team-mode.md.
-      - "127.0.0.1:5173:80"
+      # LAN team mode = change to "${APPROVO_PORT:-5173}:80" AND turn auth on
+      # first — see docs/guide/lan-team-mode.md.
+      # Port already taken? APPROVO_PORT=5174 docker compose up — no file edit.
+      - "127.0.0.1:${APPROVO_PORT:-5173}:80"
     depends_on:
       - api
     restart: unless-stopped

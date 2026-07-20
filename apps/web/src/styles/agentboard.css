@@ -11,7 +11,10 @@ html, body { height: 100%; margin: 0; }
   .ic-32 { width: 32px; height: 32px; }
 
   /* ── APP SHELL ─────────────────────────────── */
-  .ab-app { display: grid; grid-template-columns: 240px 1fr; height: 100vh; overflow: hidden; }
+  /* dvh, with vh kept as the fallback for browsers that lack it: on mobile
+     Safari 100vh includes the space under the URL bar, which pushed the
+     sidebar footer — the account menu and Sign out — off screen. */
+  .ab-app { display: grid; grid-template-columns: 240px 1fr; height: 100vh; height: 100dvh; overflow: hidden; }
 
   .ab-sidebar {
     display: flex; flex-direction: column;
@@ -107,9 +110,12 @@ html, body { height: 100%; margin: 0; }
     height: 60px; flex-shrink: 0; padding: 0 var(--space-7);
     background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle);
   }
+  /* Truncation belongs here, not only in the ≤639px query: the topbar is a
+     fixed 60px and the search box beside it does not shrink, so between 640px
+     and ~900px a long project title wrapped to two lines and clipped. */
   .ab-tb-titles { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-  .ab-tb-title { font-size: var(--text-lg); font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); line-height: 1.2; }
-  .ab-tb-sub { font-size: var(--text-xs); color: var(--text-tertiary); }
+  .ab-tb-title { font-size: var(--text-lg); font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ab-tb-sub { font-size: var(--text-xs); color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ab-tb-spacer { flex: 1; }
   .ab-search {
     display: flex; align-items: center; gap: var(--space-2);
@@ -136,7 +142,10 @@ html, body { height: 100%; margin: 0; }
 
   /* ── CONTENT ─────────────────────────────── */
   .ab-content { flex: 1; overflow-y: auto; }
-  .ab-content-inner { padding: var(--space-7); }
+  /* Cap the measure on ultrawide displays. Without this a 2560px monitor gets
+     ~2250px-wide cards holding a two-digit number, and prose runs far past a
+     readable line length. 1600px still leaves boards and tables room to breathe. */
+  .ab-content-inner { padding: var(--space-7); max-width: 1600px; margin-inline: auto; }
   .ab-content-inner.has-ctx { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: var(--space-7); align-items: start; }
   @media (max-width: 1180px) { .ab-content-inner.has-ctx { grid-template-columns: minmax(0,1fr); } .ab-aside { display: none; } }
 
@@ -277,7 +286,9 @@ html, body { height: 100%; margin: 0; }
   .ab-feed-time { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
 
   /* ── TABLE TWEAKS ──────────────────────────── */
-  .ab-tablecard { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); overflow: hidden; }
+  /* auto, not hidden: the th cells are nowrap, so a wide table was clipped
+     with no way to scroll to the cut-off columns. */
+  .ab-tablecard { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-xl); overflow-x: auto; }
   .ab-tablecard table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
   .ab-tablecard th { font-size: var(--text-xs); font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; padding: var(--space-3) var(--space-4); text-align: left; background: var(--bg-subtle); border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
   .ab-tablecard td { padding: var(--space-3) var(--space-4); color: var(--text-primary); border-bottom: 1px solid var(--border-subtle); vertical-align: middle; }
