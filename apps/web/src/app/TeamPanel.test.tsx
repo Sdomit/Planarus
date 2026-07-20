@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react'
 import TeamPanel from './TeamPanel'
 import { api, type AuthMe } from '../api/client'
 
@@ -102,6 +102,46 @@ describe('TeamPanel', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
     expect(screen.queryByText('one-time-secret-pw')).toBeNull()
+  })
+
+  it('creates an account and grants workspace access in one step', async () => {
+    currentMe = ADMIN_ME
+    vi.mocked(api.admin.createUser).mockResolvedValue({
+      user: ROSTER[1] as never,
+      temp_password: 'one-time-secret-pw',
+    })
+    vi.mocked(api.members.add).mockResolvedValue(MEMBERS[0])
+    render(<TeamPanel />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Add user' }))
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'sam@team.lan' } })
+    fireEvent.change(await screen.findByLabelText('Workspace access'), { target: { value: 'ws_1' } })
+    // 'Role' also labels the workspace-members form — scope to the create form.
+    const createForm = screen.getByLabelText('Email').closest('form') as HTMLFormElement
+    fireEvent.change(within(createForm).getByLabelText('Role'), { target: { value: 'viewer' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+    await waitFor(() =>
+      expect(api.members.add).toHaveBeenCalledWith('ws_1', 'sam@team.lan', 'viewer'),
+    )
+    expect(await screen.findByText('one-time-secret-pw')).toBeTruthy()
+    expect(screen.getByText('Added to Studio as viewer.')).toBeTruthy()
+  })
+
+  it('still reveals the temp password when the grant fails', async () => {
+    currentMe = ADMIN_ME
+    vi.mocked(api.admin.createUser).mockResolvedValue({
+      user: ROSTER[1] as never,
+      temp_password: 'one-time-secret-pw',
+    })
+    vi.mocked(api.members.add).mockRejectedValue(new Error('409 already a member'))
+    render(<TeamPanel />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Add user' }))
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'sam@team.lan' } })
+    fireEvent.change(await screen.findByLabelText('Workspace access'), { target: { value: 'ws_1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+    expect(await screen.findByText('one-time-secret-pw')).toBeTruthy()
+    expect(screen.getByText(/grant failed \(409 already a member\)/)).toBeTruthy()
   })
 
   it('hides account administration from non-admins', async () => {
