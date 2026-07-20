@@ -385,6 +385,62 @@ def test_apply_stale_target_invalidates(client: TestClient, session: Session) ->
     assert session.get(Task, task.id).title == "edited"
 
 
+def _spy_on_get(monkeypatch, session: Session) -> list:
+    """Record ``(model, with_for_update)`` for every ``Session.get`` that follows."""
+    calls: list = []
+    original = type(session).get
+
+    def spy(self, entity, ident=None, *args, **kwargs):
+        calls.append((entity, kwargs.get("with_for_update")))
+        return original(self, entity, ident, *args, **kwargs)
+
+    monkeypatch.setattr(type(session), "get", spy)
+    return calls
+
+
+def test_apply_locks_the_target_row(client: TestClient, session: Session, monkeypatch) -> None:
+    """The fingerprint check is only sound while the target cannot move under it.
+
+    On PostgreSQL (READ COMMITTED) an unlocked target can be updated between
+    revalidation and the handler's write, silently overwriting a human edit.
+    SQLite serialises writers so it cannot reproduce that here — this asserts the
+    lock is actually requested, which is the part that would regress silently.
+    """
+    pid = _seed(client)
+    task = task_service.create_task(session, pid, TaskCreate(title="orig"))
+    ar = approval_service.create_proposal(
+        session, project_id=pid, action_type="task.update",
+        target_entity_id=task.id, patch={"title": "proposed"},
+    )
+    approval_service.approve(session, ar.id)
+
+    calls = _spy_on_get(monkeypatch, session)
+    res = client.post(f"/api/v1/approvals/{ar.id}/apply", headers=_hdr(client))
+    assert res.status_code == 200, res.text
+
+    assert (Task, True) in calls, (
+        "apply must re-read the target with with_for_update=True; without it the "
+        "revalidated fingerprint can go stale before the write lands"
+    )
+    assert session.get(Task, task.id).title == "proposed"
+
+
+def test_read_only_paths_do_not_lock(client: TestClient, session: Session, monkeypatch) -> None:
+    """Only apply locks. A detail view holding row locks would block writers."""
+    pid = _seed(client)
+    task = task_service.create_task(session, pid, TaskCreate(title="orig"))
+    ar = approval_service.create_proposal(
+        session, project_id=pid, action_type="task.update",
+        target_entity_id=task.id, patch={"title": "proposed"},
+    )
+
+    calls = _spy_on_get(monkeypatch, session)
+    assert client.get(f"/api/v1/approvals/{ar.id}").status_code == 200
+    approval_service.approve(session, ar.id)
+
+    assert not [c for c in calls if c[1]], f"unexpected row lock outside apply: {calls}"
+
+
 def test_patch_checksum_mismatch_invalidates(client: TestClient, session: Session) -> None:
     pid = _seed(client)
     ar = _propose_task_create(session, pid, title="good")
