@@ -150,5 +150,14 @@ class Settings(BaseSettings):
         default="", validation_alias="AGENTBOARD_LAN_ALLOWED_HOSTS"
     )
 
+    # Phase 18.0 (D44) — verified local DB backups. This is the ceiling: where
+    # backup files may be written, server-owned and never client input. The
+    # feature itself stays off until the `backup_enabled` switch is flipped.
+    # Point this at a synced folder (OneDrive/Dropbox/rclone) to get an off-box
+    # copy — an on-disk backup alone does not survive losing the disk.
+    backup_dir: str = Field(
+        default="./agentboard-backups", validation_alias="AGENTBOARD_BACKUP_DIR"
+    )
+
 
 settings = Settings()

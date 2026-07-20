@@ -780,6 +780,9 @@ export interface AppSettings {
   external_api_active: boolean
   lan_mode_active: boolean
   registration_open: boolean // P16.1 (D30): accept password self-registration
+  backup_enabled: boolean // P18.0 (D44): verified local DB backups, opt-in
+  backup_retention: number // how many backups to keep (newest N)
+  backup_offsite: boolean // P18.4 (D44): also push each backup to object storage
   // ceiling tier (env-owned, read-only status)
   external_api_permitted_by_env: boolean
   external_api_hosts_configured: boolean
@@ -788,6 +791,9 @@ export interface AppSettings {
   lan_hosts_configured: boolean
   auth_enabled_by_env: boolean
   auth_password_enabled_by_env: boolean
+  backup_supported: boolean // P18.0 (D42): file-snapshot backup is SQLite-only
+  backup_dir_configured: boolean
+  backup_offsite_supported: boolean // storage backend is not "local"
 }
 
 export interface AppSettingsUpdate {
@@ -796,6 +802,26 @@ export interface AppSettingsUpdate {
   external_api_active?: boolean
   lan_mode_active?: boolean
   registration_open?: boolean
+  backup_enabled?: boolean
+  backup_retention?: number // server validates 1–365
+  backup_offsite?: boolean
+}
+
+// --- Verified database backups (Phase 18) ------------------------------------
+
+export interface BackupFile {
+  name: string
+  size_bytes: number
+  created_at: string
+}
+
+export interface BackupResult {
+  backup: BackupFile
+  pruned: number
+  // P18.4: where the off-site copy landed, or why it didn't. The push is
+  // best-effort — a failure here still means a good verified local backup.
+  offsite: string | null
+  offsite_error: string | null
 }
 
 // P11.3 (hosted/LAN auth). The auth surface 404s when AGENTBOARD_AUTH_ENABLED
@@ -1442,5 +1468,13 @@ export const api = {
     get: () => request<AppSettings>('/settings'),
     update: (data: AppSettingsUpdate) =>
       controlRequest<AppSettings>('/settings', { method: 'PUT', body: JSON.stringify(data) }),
+  },
+
+  // P18.2: a backup is a server-management action, so both routes are
+  // control-token + server-admin gated — even the listing goes through
+  // controlRequest, unlike most GETs.
+  backups: {
+    list: () => controlRequest<BackupFile[]>('/backups'),
+    create: () => controlRequest<BackupResult>('/backups', { method: 'POST' }),
   },
 }
