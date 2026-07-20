@@ -5,9 +5,24 @@ import { StatusBadge } from './StatusBadge'
 
 const POLL_MS = 60_000
 const DESKTOP_KEY = 'ab-desktop-notifications'
+const SEEN_KEY = 'ab-seen-notifications'
 
 function desktopSupported(): boolean {
   return typeof Notification !== 'undefined'
+}
+
+// ponytail: unread state lives in localStorage, not the DB. The feed is derived
+// from canonical state (see notification_service.py) — an open blocker stays in
+// the list until it is actually resolved, so "seen" is a per-browser view
+// concern, not a fact about the project. Feed ids are stable ({kind}:{entity_id}),
+// which is what makes tracking them client-side reliable.
+function loadSeen(): Set<string> {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(SEEN_KEY) ?? '[]')
+    return new Set(Array.isArray(raw) ? raw.filter((v) => typeof v === 'string') : [])
+  } catch {
+    return new Set()
+  }
 }
 
 /** Topbar bell: in-app notification feed + optional desktop notifications. */
@@ -20,6 +35,7 @@ export default function NotificationsBell({
 }) {
   const [items, setItems] = useState<NotificationItem[]>([])
   const [open, setOpen] = useState(false)
+  const [seen, setSeen] = useState<Set<string>>(loadSeen)
   const [desktopOn, setDesktopOn] = useState(
     () => localStorage.getItem(DESKTOP_KEY) === 'true',
   )
@@ -96,18 +112,32 @@ export default function NotificationsBell({
     }
   }
 
+  const unread = items.filter((i) => !seen.has(i.id))
+
+  // Opening the panel is the "read" action. Only the ids currently in the feed
+  // are stored, so the set self-prunes as items resolve — and an item that
+  // resolves then recurs alerts again rather than staying silently seen.
+  const toggleOpen = () => {
+    if (!open) {
+      const ids = items.map((i) => i.id)
+      setSeen(new Set(ids))
+      localStorage.setItem(SEEN_KEY, JSON.stringify(ids))
+    }
+    setOpen((v) => !v)
+  }
+
   return (
     <div style={{ position: 'relative' }}>
       <button
         ref={bellRef}
         className="ab-iconbtn"
         type="button"
-        aria-label={`Notifications (${items.length})`}
+        aria-label={`Notifications (${unread.length})`}
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggleOpen}
       >
         <Icon name="bell" className="ic-18" />
-        {items.length > 0 && (
+        {unread.length > 0 && (
           <span
             aria-hidden="true"
             style={{
@@ -126,7 +156,7 @@ export default function NotificationsBell({
               textAlign: 'center',
             }}
           >
-            {items.length > 99 ? '99+' : items.length}
+            {unread.length > 99 ? '99+' : unread.length}
           </span>
         )}
       </button>
