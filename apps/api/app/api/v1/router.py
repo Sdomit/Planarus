@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
     api_clients,
     approvals,
     auth,
+    backups,
     blockers,
     calendar,
     calendar_events,
@@ -95,6 +96,9 @@ router.include_router(sync.router, tags=["sync"], dependencies=_GUARD)
 # Settings is a global, control-token-gated surface (no project scope), so it is
 # not under _GUARD — like info/auth/members/workspaces above.
 router.include_router(settings.router, tags=["settings"])
+# P18.0: verified local DB backups — a global server-management surface like
+# settings (control-token + server-admin gated inside), so not under _GUARD.
+router.include_router(backups.router, tags=["backups"])
 # P17.2: read-only MCP connection metadata for the Integrations hub — global and
 # ungated like info; discloses no capability value and no raw path in team mode.
 router.include_router(mcp.router, tags=["integrations"])

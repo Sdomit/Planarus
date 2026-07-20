@@ -13,10 +13,20 @@ class SettingsRead(BaseModel):
     external_api_active: bool
     lan_mode_active: bool  # P11.3: pause LAN acceptance within the env ceiling
     registration_open: bool  # P16.1 (D30): accept password self-registration
+    backup_enabled: bool  # P18.0 (D44): verified local DB backups, opt-in
+    backup_retention: int  # how many backups to keep (newest N)
+    backup_offsite: bool  # P18.4 (D44): also push each backup to object storage
     # --- ceiling tier (env-owned, read-only status) ---
     external_api_permitted_by_env: bool
     external_api_hosts_configured: bool
     email_smtp_loopback: bool
+    # P18.0 (D42): file-snapshot backup is SQLite-only — on Postgres the UI must
+    # point at pg_dump / managed snapshots instead of offering a button.
+    backup_supported: bool
+    backup_dir_configured: bool
+    # P18.4: an off-site copy only means anything when the storage backend is not
+    # "local" — otherwise it would write the file beside itself.
+    backup_offsite_supported: bool
     # P11.3 (LAN team mode section) — booleans only, never raw hosts.
     lan_permitted_by_env: bool
     lan_hosts_configured: bool
@@ -34,6 +44,21 @@ class SettingsUpdate(BaseModel):
     external_api_active: Optional[bool] = None
     lan_mode_active: Optional[bool] = None
     registration_open: Optional[bool] = None
+    backup_enabled: Optional[bool] = None
+    backup_retention: Optional[int] = None
+    backup_offsite: Optional[bool] = None
+
+    @field_validator("backup_retention")
+    @classmethod
+    def _valid_retention(cls, v: Optional[int]) -> Optional[int]:
+        if v is None:
+            return v
+        # Trust boundary: retention drives file deletion. A floor of 1 makes it
+        # impossible to configure "keep nothing"; the ceiling keeps the directory
+        # listing (and the prune scan) bounded.
+        if v < 1 or v > 365:
+            raise ValueError("backup_retention must be between 1 and 365")
+        return v
 
     @field_validator("email_from")
     @classmethod

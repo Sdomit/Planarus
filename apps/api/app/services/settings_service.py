@@ -65,6 +65,31 @@ def registration_open(session: Session) -> bool:
     return bool(get_setting(session, "registration_open", True))
 
 
+def backup_enabled(session: Session) -> bool:
+    """P18.0 (D44): verified local DB backups. Defaults to **False** — unlike the
+    other switches this has no env ceiling to inherit, and a backup writes files
+    outside the database, so it stays explicitly opt-in."""
+    return bool(get_setting(session, "backup_enabled", False))
+
+
+def backup_retention(session: Session) -> int:
+    """How many backups to keep (newest N). Floored at 1 even if a stored row is
+    corrupt or out of range, so retention can never be made to delete every copy."""
+    try:
+        return max(1, int(get_setting(session, "backup_retention", 7)))
+    except (TypeError, ValueError):
+        return 7
+
+
+def backup_offsite(session: Session) -> bool:
+    """P18.4 (D44): also push each verified backup to the configured storage
+    backend. Off by default. This is the part that makes backups a real strategy
+    — a copy on the same disk survives a bad migration or a mistaken delete, not
+    a dead disk — but it only does anything when ``storage_backend`` is not
+    "local", which would otherwise write the file beside itself."""
+    return bool(get_setting(session, "backup_offsite", False))
+
+
 def lan_mode_active(session: Session) -> bool:
     """The LAN-mode DB switch (P11.3). Same contract as external_api_active:
     defaults to the env ceiling, so env-only deployments are unchanged, and it
@@ -91,7 +116,17 @@ def refresh_lan_switch(session: Session) -> None:
 
 
 def read_settings(session: Session) -> SettingsRead:
+    # Local import: backup_service imports this module for the switch accessors,
+    # so importing it at module scope would be a cycle.
+    from app.services import backup_service
+
     return SettingsRead(
+        backup_enabled=backup_enabled(session),
+        backup_retention=backup_retention(session),
+        backup_supported=backup_service.is_supported(session),
+        backup_dir_configured=bool((env.backup_dir or "").strip()),
+        backup_offsite=backup_offsite(session),
+        backup_offsite_supported=env.storage_backend != "local",
         email_enabled=bool(get_setting(session, "email_enabled", env.email_enabled)),
         email_from=str(get_setting(session, "email_from", env.email_from)),
         external_api_active=bool(
