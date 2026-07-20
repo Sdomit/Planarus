@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react'
 import Layout from './Layout'
 
 // Every panel Layout renders hits the API on mount — stub the surfaces the
@@ -19,6 +19,7 @@ vi.mock('../api/client', () => {
       settings: { get: never },
       todos: { list: never },
       notifications: { feed: () => Promise.resolve({ items: [] }) },
+      info: { get: () => Promise.resolve({ name: 'Approvo', version: '0.1.0', phase: 'x', lan_ip: '192.168.1.42' }) },
     },
   }
 })
@@ -71,6 +72,37 @@ describe('sidebar account menu', () => {
     expect(screen.getByText('Settings')).toBeTruthy()
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByText('Settings')).toBeNull()
+  })
+})
+
+describe('about', () => {
+  it('opens from the account menu with the live version and author links', async () => {
+    render(<Layout />)
+    openAccountMenu()
+    fireEvent.click(screen.getByText('About'))
+
+    const dialog = screen.getByRole('dialog', { name: 'About Approvo' })
+    expect(await within(dialog).findByText('0.1.0')).toBeTruthy() // from the API, not a constant
+    expect(within(dialog).getByText('Sarmad Domit')).toBeTruthy()
+    expect(within(dialog).getByText('www.sarmaddomit.com').getAttribute('href'))
+      .toBe('https://www.sarmaddomit.com')
+    expect(within(dialog).getByText('sarmad.domit@gmail.com').getAttribute('href'))
+      .toBe('mailto:sarmad.domit@gmail.com')
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'About Approvo' })).toBeNull()
+  })
+})
+
+describe('LAN address', () => {
+  it('copies this machine\'s URL, not the loopback one', async () => {
+    const writeText = vi.fn(() => Promise.resolve())
+    Object.assign(navigator, { clipboard: { writeText } })
+    render(<Layout />)
+
+    fireEvent.click(await screen.findByText('ip'))
+    expect(writeText).toHaveBeenCalledWith(`http://192.168.1.42:${window.location.port || '80'}`)
+    expect(await screen.findByText('copied ✓')).toBeTruthy()
   })
 })
 
