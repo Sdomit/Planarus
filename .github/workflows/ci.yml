@@ -32,7 +32,7 @@ jobs:
       # imports node:sqlite) and this repo is on Node 20. 10.26+ is what makes
       # pnpm-workspace.yaml's allowBuilds key meaningful. Raising Node to 22
       # would let us move to pnpm 11 — a separate change.
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version: 20
