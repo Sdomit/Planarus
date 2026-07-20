@@ -20,7 +20,7 @@ export function Menu({ label = 'More actions', children }: { label?: string; chi
     <div className="ab-menu" ref={ref}>
       <button type="button" className="ab-menu-btn2" aria-haspopup="menu" aria-expanded={open}
         aria-label={label} onClick={() => setOpen(v => !v)}>
-        <Icon name="more" className="ic-16" />
+        <Icon name="more" />
       </button>
       {open && (
         <div className="ab-menu-pop" role="menu" onClick={() => setOpen(false)}>
