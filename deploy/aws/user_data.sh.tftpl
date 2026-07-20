@@ -26,7 +26,22 @@ if [ ! -f /swapfile ]; then
 fi
 
 # --- get the code -------------------------------------------------------------
+# A private repo needs a token. It is read from SSM at boot (never passed in via
+# user-data) and handed to git through the config env, so it never appears in the
+# clone URL, the process args, .git/config, or this log. Tracing off around it.
+set +x
+REPO_TOKEN=""
+%{ if repo_token_configured ~}
+REPO_TOKEN=$(aws ssm get-parameter --region ${region} --with-decryption --name "${ssm_prefix}/repo_token" --query Parameter.Value --output text)
+%{ endif ~}
+if [ -n "$REPO_TOKEN" ]; then
+  export GIT_CONFIG_COUNT=1
+  export GIT_CONFIG_KEY_0=http.extraheader
+  export GIT_CONFIG_VALUE_0="Authorization: Basic $(printf 'x-access-token:%s' "$REPO_TOKEN" | base64 | tr -d '\n')"
+fi
 git clone --depth 1 --branch ${repo_branch} ${repo_url} /opt/approvo
+unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0 REPO_TOKEN
+set -x
 cd /opt/approvo
 
 # Step 0: build the image WITH the postgres + oauth driver extras

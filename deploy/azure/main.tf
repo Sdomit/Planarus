@@ -145,6 +145,16 @@ resource "azurerm_key_vault_secret" "gh_secret" {
   depends_on   = [azurerm_key_vault_access_policy.deployer]
 }
 
+# Private-repo clone token. Created only when set; the box reads it at boot the
+# same way it reads the other secrets, so it never rides in the custom-data.
+resource "azurerm_key_vault_secret" "repo_token" {
+  count        = var.repo_token == "" ? 0 : 1
+  name         = "repo-token"
+  key_vault_id = azurerm_key_vault.this.id
+  value        = var.repo_token
+  depends_on   = [azurerm_key_vault_access_policy.deployer]
+}
+
 # --- The app box --------------------------------------------------------------
 resource "azurerm_network_security_group" "vm" {
   name                = "approvo-vm"
@@ -243,6 +253,8 @@ resource "azurerm_linux_virtual_machine" "vm" {
     repo_branch   = var.repo_branch
     kv_uri        = azurerm_key_vault.this.vault_uri
     uai_client_id = azurerm_user_assigned_identity.vm.client_id
+    # A boolean, never the token itself — the value stays in Key Vault, off the box's custom-data.
+    repo_token_configured = var.repo_token != ""
   }))
 
   # Boot only after Postgres is up and the secrets + read access exist.
@@ -250,6 +262,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
     azurerm_key_vault_secret.database_url,
     azurerm_key_vault_secret.gh_id,
     azurerm_key_vault_secret.gh_secret,
+    azurerm_key_vault_secret.repo_token, # empty list when no token — still a valid dependency
     azurerm_key_vault_access_policy.vm,
   ]
 }

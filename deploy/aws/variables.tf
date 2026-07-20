@@ -17,14 +17,20 @@ variable "instance_type" {
 
 variable "repo_url" {
   type        = string
-  description = "git clone URL for the Approvo repo. For a PRIVATE repo embed a token: https://x-access-token:TOKEN@github.com/you/AgentBoard.git"
-  sensitive   = true
+  description = "Plain HTTPS clone URL, NO credentials in it, e.g. https://github.com/you/AgentBoard.git. Public repos clone as-is; for a private repo set repo_token instead of embedding a token here."
 }
 
 variable "repo_branch" {
   type        = string
   default     = "main"
   description = "Branch to deploy."
+}
+
+variable "repo_token" {
+  type        = string
+  default     = ""
+  sensitive   = true
+  description = "Read-only token for a PRIVATE repo. Stored in SSM (SecureString) and fetched at boot; the VM injects it via git's config env so it never lands in the clone URL, process args, .git/config, the cloud-init log, or the instance user-data. Leave empty for a public repo."
 }
 
 variable "github_client_id" {

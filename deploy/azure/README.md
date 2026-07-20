@@ -17,7 +17,7 @@ VM (Caddy :443 ─ auto TLS)
 - A domain you control + ability to add an A record for `<domain>`.
 - A **GitHub OAuth app**, callback `https://<domain>/api/v1/auth/oauth/github/callback`.
 - An SSH public key (Azure requires one on the VM; the port stays closed by default).
-- Private repo? A read-only token to embed in `repo_url`.
+- Private repo? A read-only token — set it as `repo_token` (kept out of `repo_url`).
 
 ## Deploy
 ```bash
