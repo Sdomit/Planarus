@@ -268,6 +268,10 @@ export interface DocSummary {
   version: number
   updated_at: string
   archived_at: string | null
+  /** Note-card swatch key (see NOTE_COLORS); null = default surface. */
+  color: string | null
+  /** Body preview derived from markdown_cache — list responses only. */
+  excerpt?: string
 }
 
 export interface Doc extends DocSummary {
@@ -290,6 +294,7 @@ export interface DocCreate {
   sort_order?: number
   parent_doc_id?: string | null
   slug?: string | null
+  color?: string | null
 }
 
 export interface DocUpdate {
@@ -302,6 +307,8 @@ export interface DocUpdate {
   content_json?: string | null
   markdown_cache?: string | null
   archived_at?: string | null
+  /** A swatch key, or the "default" sentinel to clear it (null means unchanged). */
+  color?: string | null
 }
 
 export interface DocExportResponse {
@@ -917,6 +924,14 @@ export interface WebhookDelivery {
   delivered_at: string | null
 }
 
+export interface AppInfo {
+  name: string
+  version: string
+  phase: string
+  /** This machine's LAN address, or null when it has no local-network route. */
+  lan_ip: string | null
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // init is spread FIRST so the headers merge below always wins — a caller-supplied
   // headers object (e.g. controlRequest's token) must add to, not replace, the
@@ -1461,6 +1476,9 @@ export const api = {
       }),
     emailLog: (projectId: string, limit = 50) =>
       request<EmailLogEntry[]>(`/projects/${projectId}/email-log?limit=${limit}`),
+  },
+  info: {
+    get: () => request<AppInfo>('/info'),
   },
   // Runtime settings (Phase 9B). GET is a plain local read; PUT changes a
   // connection's effective state → local-control-gated.

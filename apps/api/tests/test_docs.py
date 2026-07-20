@@ -199,6 +199,54 @@ def test_list_docs_filter_type(client: TestClient) -> None:
     assert "content_json" not in items[0]
 
 
+def test_list_docs_returns_truncated_excerpt(client: TestClient) -> None:
+    """Note cards preview the body: excerpt mirrors markdown_cache, capped at 280."""
+    _, pid = _seed(client)
+    doc = client.post(
+        f"/api/v1/projects/{pid}/docs", json={"title": "Groceries", "doc_type": "note"}
+    ).json()
+    assert client.get(f"/api/v1/projects/{pid}/docs").json()[0]["excerpt"] == ""
+
+    body = "x" * 400
+    res = client.patch(
+        f"/api/v1/docs/{doc['id']}",
+        json={
+            "content_json": '{"type": "doc", "content": []}',
+            "markdown_cache": body,
+            "version": doc["version"],
+        },
+    )
+    assert res.status_code == 200
+
+    item = client.get(f"/api/v1/projects/{pid}/docs").json()[0]
+    assert item["excerpt"] == "x" * 280
+    # The preview is derived, never a second stored copy of the body.
+    assert "markdown_cache" not in item
+
+
+def test_doc_color_set_clear_and_reject(client: TestClient) -> None:
+    """0028 swatches: default NULL, set a key, clear with 'default', reject junk."""
+    _, pid = _seed(client)
+    doc = client.post(
+        f"/api/v1/projects/{pid}/docs", json={"title": "Idea", "doc_type": "note"}
+    ).json()
+    assert doc["color"] is None
+
+    res = client.patch(f"/api/v1/docs/{doc['id']}", json={"color": "teal", "version": 1})
+    assert res.status_code == 200
+    assert res.json()["color"] == "teal"
+    assert client.get(f"/api/v1/projects/{pid}/docs").json()[0]["color"] == "teal"
+
+    # The sentinel clears it — None on a PATCH field means "unchanged".
+    res = client.patch(f"/api/v1/docs/{doc['id']}", json={"color": "default", "version": 2})
+    assert res.status_code == 200
+    assert res.json()["color"] is None
+
+    # An unknown key never reaches the DOM as a class/attribute value.
+    bad = client.patch(f"/api/v1/docs/{doc['id']}", json={"color": "chartreuse", "version": 3})
+    assert bad.status_code == 422
+
+
 def test_list_docs_filter_status(client: TestClient) -> None:
     _, pid = _seed(client)
     d1 = client.post(

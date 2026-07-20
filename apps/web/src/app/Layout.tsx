@@ -24,7 +24,7 @@ import './layout.css'
 
 type MainView =
   | 'dashboard' | 'cockpit' | 'planning' | 'roadmap' | 'timeline' | 'calendar' | 'docs'
-  | 'canvas' | 'context-pack' | 'context-files' | 'preview' | 'approvals'
+  | 'notes' | 'canvas' | 'context-pack' | 'context-files' | 'preview' | 'approvals'
   | 'agent-runs' | 'reminders' | 'team' | 'settings'
 
 interface SelectedProject {
@@ -42,6 +42,7 @@ const NAV: { group: string; items: { view: MainView; label: string; icon: string
     { view: 'roadmap', label: 'Roadmap', icon: 'columns' },
     { view: 'timeline', label: 'Timeline', icon: 'clock' },
     { view: 'calendar', label: 'Calendar', icon: 'calendar' },
+    { view: 'notes', label: 'Notes', icon: 'edit' },
   ] },
   { group: 'Context', items: [
     { view: 'docs', label: 'Docs', icon: 'file' },
@@ -81,6 +82,7 @@ const TITLES: Record<MainView, { title: string; sub: string }> = {
   timeline: { title: 'Timeline', sub: 'Audited project activity' },
   calendar: { title: 'Calendar', sub: 'Events, milestones & due dates' },
   docs: { title: 'Docs', sub: 'Project documents' },
+  notes: { title: 'Notes', sub: 'Quick rich-text notes' },
   canvas: { title: 'Canvas', sub: 'Project whiteboard' },
   'context-pack': { title: 'Context Pack', sub: 'Build an AI context pack' },
   'context-files': { title: 'Context Files', sub: 'Generated Markdown context' },
@@ -517,6 +519,7 @@ export default function Layout() {
               {mainView === 'timeline' && (project ? <TimelinePanel projectId={project.id} /> : placeholder)}
               {mainView === 'calendar' && (project ? <CalendarPanel projectId={project.id} onOpenPlanning={() => navigate('planning', { planningTab: 'tasks' })} /> : placeholder)}
               {mainView === 'docs' && (project ? <DocsPanel projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
+              {mainView === 'notes' && (project ? <DocsPanel key="notes" projectId={project.id} docType="note" onClose={() => setMainView('dashboard')} /> : placeholder)}
               {mainView === 'canvas' && (project ? <CanvasPanel projectId={project.id} onBack={() => setMainView('cockpit')} /> : placeholder)}
               {mainView === 'context-pack' && (project ? <ContextPackBuilder projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
               {mainView === 'context-files' && (project ? <ContextFilesPanel projectId={project.id} /> : placeholder)}
