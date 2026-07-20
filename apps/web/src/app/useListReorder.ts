@@ -40,6 +40,26 @@ export function useListReorder<T extends { id: string }>(
     }
   }
 
+  /**
+   * Move `id` one slot up (-1) or down (+1).
+   *
+   * The touch- and keyboard-reachable equivalent of dragging: HTML5 drag events
+   * never fire on iOS or Android, so without this a list can only be reordered
+   * with a mouse.
+   *
+   * Note the asymmetry — it is not a typo. `moveBefore` removes the item first,
+   * so "insert at the next item's position" lands it right back where it was.
+   * Moving DOWN is therefore expressed as moving the next item UP past this one.
+   */
+  async function moveBy(id: string, delta: -1 | 1) {
+    const from = items.findIndex(i => i.id === id)
+    if (from < 0) return
+    const to = from + delta
+    if (to < 0 || to >= items.length) return
+    if (delta < 0) await reorder(id, items[to].id)
+    else await reorder(items[to].id, id)
+  }
+
   async function drop(targetId: string) {
     const id = dragId
     setOverId(null)
@@ -58,5 +78,5 @@ export function useListReorder<T extends { id: string }>(
     'data-dragging': dragId === id ? '' : undefined,
   })
 
-  return { dragId, overId, itemProps, reorder }
+  return { dragId, overId, itemProps, reorder, moveBy }
 }

@@ -1,0 +1,24 @@
+version: 2
+updates:
+  # Grouped and monthly on purpose: this is a solo pre-1.0 project, and a daily
+  # firehose of individual PRs is how dependabot gets muted entirely.
+  - package-ecosystem: pip
+    directory: /apps/api
+    schedule:
+      interval: monthly
+    groups:
+      python:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      javascript:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

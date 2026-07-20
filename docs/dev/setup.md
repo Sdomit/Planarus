@@ -1,34 +1,59 @@
 ---
 kind: dev_guide
-updated_at: 2026-07-15
-phase: implementation (Phases 1–9 + 4b on main)
+updated_at: 2026-07-20
+phase: implementation (Phases 1–17 on main)
 ---
 
 # Developer setup
 
-## One-command launcher (Windows)
+> Just want to run it? [`docker compose up --build`](../../README.md#quickstart)
+> needs none of this. Read on only if you want hot reload and the test suites.
 
-From the repo root, run [`run-agentboard.bat`](../../run-agentboard.bat): it
-checks the venv + pnpm, runs `alembic upgrade head`, starts the API
-(`uvicorn app.main:app --reload --port 8000`) and the web dev server
-(`pnpm dev:web`, port 5173), then opens the UI. Local dev only — the external
-API stays disabled.
+## One-command launcher
+
+From the repo root:
+
+```bash
+./run-approvo.sh        # macOS / Linux
+run-agentboard.bat      # Windows
+```
+
+Either one checks your venv and pnpm, runs `alembic upgrade head`, starts the
+API and the Vite dev server, waits until both actually answer, then opens the
+UI. If 8000 or 5173 is busy it picks the next free port and passes it through
+everywhere. Local dev only — the external API stays disabled.
 
 ## Prerequisites
 
-| Tool | Minimum version | Install |
-|------|-----------------|---------|
-| Python | 3.11 | [python.org](https://python.org) |
-| Node.js | 20 | [nodejs.org](https://nodejs.org) |
-| pnpm | 9 | `npm install -g pnpm` |
+| Tool | Version | Install |
+|------|---------|---------|
+| Python | 3.11 (see `apps/api/.python-version`) | [python.org](https://python.org) |
+| Node.js | 20 (see `.nvmrc`) | [nodejs.org](https://nodejs.org) |
+| pnpm | pinned by `packageManager` in `package.json` | `corepack enable` |
+
+Use `corepack enable` rather than `npm install -g pnpm` — corepack reads the
+pinned version from `package.json`, so you get the one this repo is tested
+against instead of whatever is newest.
+
+**Debian / Ubuntu** additionally need the venv module, which isn't bundled:
+
+```bash
+sudo apt install python3-venv
+```
 
 ## Backend (apps/api)
+
+> Run every backend command from `apps/api`. The SQLite path is relative to your
+> shell's working directory, so running these from the repo root silently
+> creates a second, empty database and every request then fails with
+> `no such table`.
 
 ```bash
 cd apps/api
 
-# Create and activate a virtual environment
-python -m venv .venv
+# Create and activate a virtual environment.
+# Use `python3` on macOS/Linux — plain `python` often doesn't exist there.
+python3 -m venv .venv
 
 # macOS / Linux
 source .venv/bin/activate
@@ -36,7 +61,7 @@ source .venv/bin/activate
 # Windows PowerShell
 .venv\Scripts\Activate.ps1
 
-# Install runtime + dev dependencies (editable install works since cfac8fb)
+# Install runtime + dev dependencies
 pip install -e ".[dev]"
 
 # Apply DB migrations before the first boot (and after pulling new ones)
@@ -51,16 +76,18 @@ uvicorn app.main:app --reload --port 8000
 #   http://localhost:8000/docs   (Swagger UI)
 ```
 
+`uvicorn` runs in the foreground and does not return. **Open a second terminal
+for the frontend** — or just use the launcher above, which handles both.
+
 ### Optional: load the Approvo project into the app (dogfooding)
 
 Approvo tracks its own roadmap. After migrating, seed the running DB with the
-live project — phases, the Phase 10 slices as stages, follow-up tasks, and launch
-milestones — so you can follow progress in the Roadmap / Task Board instead of
+live project so you can follow progress in the Roadmap / Task Board instead of
 only the Markdown context pack. Idempotent (safe to re-run); honors
 `AGENTBOARD_DATABASE_URL`:
 
 ```bash
-python scripts/seed_approvo_project.py
+python3 scripts/seed_approvo_project.py
 ```
 
 Kept in sync with `context/NEXT_STEP.md` each slice.
@@ -68,75 +95,46 @@ Kept in sync with `context/NEXT_STEP.md` each slice.
 ## Frontend (apps/web)
 
 ```bash
-cd apps/web
-
-# Install dependencies
+# from the repo root — pnpm resolves the workspace
 pnpm install
-
-# Start the dev server (hot-reload)
-pnpm dev
+pnpm dev:web
 
 # The frontend is now available at:
 #   http://localhost:5173
 ```
 
+The dev server proxies `/api` to `http://localhost:8000`. If your API is on a
+different port, point it there without editing any file:
+
+```bash
+VITE_API_TARGET=http://localhost:8001 pnpm dev:web
+```
+
 ## Running tests
 
-### Backend
+Both suites run in CI on every PR, along with typecheck, a production build, a
+Postgres migration round-trip, and a Docker Compose smoke test.
 
 ```bash
-cd apps/api
-python -m pytest
+# Backend — from apps/api
+python3 -m pytest
+
+# Frontend — from the repo root
+pnpm test:web
+pnpm typecheck:web
+pnpm build:web
 ```
 
-Expected output: **630 passed, 2 skipped** (the skips are a Windows
-symlink-privilege test and the real-Mailpit email integration test).
+A few backend tests skip by design — a Windows symlink-privilege test and
+integration tests that need a live service (e.g. real Mailpit).
 
-### Frontend
-
-```bash
-cd apps/web
-pnpm test
-```
-
-Expected output: **77 tests pass**.
-
-### Frontend typecheck
-
-```bash
-cd apps/web
-pnpm typecheck
-```
-
-### Frontend build (production bundle)
-
-```bash
-cd apps/web
-pnpm build
-```
-
-## Monorepo shortcuts (from repo root)
-
-```bash
-pnpm test:web       # frontend tests
-pnpm build:web      # frontend build
-pnpm typecheck:web  # frontend typecheck
-```
-
----
+> Expected pass counts aren't listed here on purpose — they went stale three
+> times. Compare against the last CI run on `main` instead.
 
 ## What is intentionally NOT implemented yet
 
-Phases 2–9 are implemented on `main` (CRUD, migrations, context-pack
-generation, planning UI, Tiptap docs, prompt panel, approval queue, MCP,
-external API, read-only Git metadata + Cockpit, Roadmap/Timeline/Agent-Run
-analytics, notifications + email reminders). Phase 4b then completed the
-Must-have MVP data model (Milestone/Comment/Link/ChecklistItem, migration
-`0009`). Still pending:
-
-| Feature | Phase |
-|---------|-------|
-| Opt-in ChatGPT exposure (go-live) | Phase 7C2b (human-gated) |
-| Tauri desktop packaging | Post-V1 / future |
-| Auth, billing, cloud deployment | Hosted phase (Phase 10+) |
-| CI/CD | Future phase |
+| Feature | Status |
+|---------|--------|
+| Opt-in ChatGPT exposure (go-live) | Phase 7C2b — human-gated, runbook only |
+| Hosted / SaaS mode | Code-complete groundwork, not turned on |
+| Tauri desktop packaging | Not started |

@@ -260,7 +260,7 @@ def build_ics(
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//AgentBoard//Calendar//EN",
+        "PRODID:-//Approvo//Calendar//EN",
         "CALSCALE:GREGORIAN",
     ]
     for it in cal.items:
