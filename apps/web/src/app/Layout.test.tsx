@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import Layout from './Layout'
 
 // Every panel Layout renders hits the API on mount — stub the surfaces the
@@ -93,7 +93,10 @@ describe('navigation state survives a reload', () => {
     render(<Layout />)
     expect(screen.getByText('Gone')).toBeTruthy()
     await screen.findByText('All projects') // the selector falls back once the 404 lands
-    expect(stored().project).toBeNull()
+    // The fallback (DOM) and the persist-to-localStorage run in separate effects
+    // with no ordering guarantee, so poll the stored value rather than assuming
+    // it lands in the same tick as the text (React 19 widened that window).
+    await waitFor(() => expect(stored().project).toBeNull())
   })
 
   it('falls back to the dashboard when the stored view no longer exists', () => {
