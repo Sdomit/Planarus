@@ -12,12 +12,13 @@ runs it (see the api-postgres job). Locally it collects and skips.
 """
 import os
 import threading
+from uuid import uuid4
 
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
 import app.models  # noqa: F401 — registers every table in SQLModel.metadata
-from app.core.utils import new_id, now_utc
+from app.core.utils import now_utc
 from app.models.project import Project
 from app.models.task import Task
 from app.models.workspace import Workspace
@@ -49,7 +50,7 @@ def pg_engine_fixture():
 
 def _seed(engine) -> tuple[str, str]:
     """A project with one task and an approved task.update proposal against it."""
-    suffix, now = new_id()[:12], now_utc()
+    suffix, now = uuid4().hex[:12], now_utc()
     with Session(engine) as s:
         s.add(Workspace(id=f"ws-{suffix}", name="W", slug=f"ws-{suffix}",
                         created_at=now, updated_at=now))
