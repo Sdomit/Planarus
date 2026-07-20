@@ -95,8 +95,7 @@ export function todoToRef(t: Todo): EntityRef {
   return { kind: 'todo', id: t.id, title: t.label, status: t.done ? 'done' : 'open' }
 }
 export function docToRef(d: DocSummary): EntityRef {
-  // ponytail: no detail — DocSummary carries no body preview on this base.
-  return { kind: 'doc', id: d.id, title: d.title, status: d.status, meta: d.doc_type }
+  return { kind: 'doc', id: d.id, title: d.title, status: d.status, meta: d.doc_type, detail: d.excerpt ?? undefined }
 }
 export function eventToRef(e: CalendarEvent): EntityRef {
   return { kind: 'event', id: e.id, title: e.title, status: e.status, meta: e.start_at.slice(0, 10), detail: e.description ?? e.location ?? undefined }
