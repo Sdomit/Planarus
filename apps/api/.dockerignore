@@ -6,3 +6,5 @@ __pycache__/
 *.db-*
 .pytest_cache/
 tests/
+*.egg-info/
+.venv*/

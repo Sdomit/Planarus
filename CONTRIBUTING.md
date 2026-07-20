@@ -10,7 +10,7 @@ project's [Apache License 2.0](LICENSE).
 ## Getting set up
 
 - Full instructions: [docs/dev/setup.md](docs/dev/setup.md).
-- One-command local run (Windows): `run-agentboard.bat`.
+- One-command local run: `./run-approvo.sh` (macOS/Linux) or `run-agentboard.bat` (Windows).
 - Backend: `apps/api` — FastAPI + SQLModel + Alembic (Python).
 - Frontend: `apps/web` — React + TypeScript + Vite.
 
@@ -60,7 +60,8 @@ open an issue to discuss it first.
 
 - **Security issues:** do not open a public issue — see [SECURITY.md](SECURITY.md).
 - **Bugs / features:** open a GitHub issue with repro steps or a clear use case.
-- New to the project? Look for issues labelled `good first issue`.
+- New to the project? Look for issues labelled `good first issue`. If none are
+  open yet, say hi in an issue and I'll scope one.
 
 ## Where to start reading
 
