@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties, JSX, ReactNode } from 'react'
 
 // ponytail: a small renderer for the Markdown subset Approvo itself
 // generates (headings, lists, tables, fenced code, quotes, inline marks,
@@ -131,7 +131,7 @@ export function renderMarkdown(md: string): ReactNode[] {
     const heading = trimmed.match(/^(#{1,6})\s+(.*)$/)
     if (heading) {
       flushPara()
-      const Tag = `h${heading[1].length}` as keyof JSX.IntrinsicElements
+      const Tag = `h${heading[1].length}` as keyof JSX.IntrinsicElements // React 19: JSX namespace imported, not global
       out.push(<Tag key={key++}>{parseInline(heading[2])}</Tag>)
       i += 1
       continue
