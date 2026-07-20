@@ -24,7 +24,35 @@ if [ ! -f /swapfile ]; then
 fi
 
 # --- get the code -------------------------------------------------------------
+# Key Vault reader via the VM's managed identity. Defined here because the
+# private-repo clone token (below) is the first secret we need; reused for the
+# app secrets further down. Defining it under trace is fine — no secret value
+# is touched until it's called, and every call is under `set +x`.
+get_secret() {
+  local name="$1"
+  local token
+  token=$(curl -s -H Metadata:true \
+    "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fvault.azure.net&client_id=${uai_client_id}" \
+    | jq -r .access_token)
+  curl -s -H "Authorization: Bearer $token" "${kv_uri}secrets/$name?api-version=7.4" | jq -r .value
+}
+
+# A private repo needs a token. Read from Key Vault at boot (never passed in via
+# custom-data) and handed to git through the config env, so it never appears in
+# the clone URL, the process args, .git/config, or this log. Tracing off around it.
+set +x
+REPO_TOKEN=""
+%{ if repo_token_configured ~}
+REPO_TOKEN=$(get_secret repo-token)
+%{ endif ~}
+if [ -n "$REPO_TOKEN" ]; then
+  export GIT_CONFIG_COUNT=1
+  export GIT_CONFIG_KEY_0=http.extraheader
+  export GIT_CONFIG_VALUE_0="Authorization: Basic $(printf 'x-access-token:%s' "$REPO_TOKEN" | base64 | tr -d '\n')"
+fi
 git clone --depth 1 --branch ${repo_branch} ${repo_url} /opt/approvo
+unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0 REPO_TOKEN
+set -x
 cd /opt/approvo
 
 # Step 0: build the image WITH the postgres + oauth driver extras
@@ -75,17 +103,9 @@ volumes:
   caddy-config:
 COMPOSE
 
-# --- secrets from Key Vault via the VM's managed identity (IMDS token) ---------
+# --- app secrets from Key Vault (get_secret defined above) --------------------
 # Tracing OFF so secrets don't land in /var/log/cloud-init-output.log.
 set +x
-get_secret() {
-  local name="$1"
-  local token
-  token=$(curl -s -H Metadata:true \
-    "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fvault.azure.net&client_id=${uai_client_id}" \
-    | jq -r .access_token)
-  curl -s -H "Authorization: Bearer $token" "${kv_uri}secrets/$name?api-version=7.4" | jq -r .value
-}
 DB_URL=$(get_secret database-url)
 GH_ID=$(get_secret oauth-github-client-id)
 GH_SECRET=$(get_secret oauth-github-client-secret)

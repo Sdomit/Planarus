@@ -14,7 +14,7 @@ EC2 (Caddy :443 ─ auto TLS)
 - Terraform ≥ 1.5, AWS credentials with rights to make EC2/RDS/IAM/SSM (+ Route53 if used).
 - A domain you control, and the ability to add an A record for `<domain>`.
 - A **GitHub OAuth app** with callback `https://<domain>/api/v1/auth/oauth/github/callback`.
-- If the repo is private, a read-only token to embed in `repo_url`.
+- If the repo is private, a read-only token — set it as `repo_token` (kept out of `repo_url`).
 
 ## Deploy
 ```bash

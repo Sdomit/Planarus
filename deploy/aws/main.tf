@@ -60,6 +60,15 @@ resource "aws_ssm_parameter" "gh_client_secret" {
   value = var.github_client_secret
 }
 
+# Private-repo clone token. Created only when set; the box reads it at boot the
+# same way it reads the other secrets, so it never rides in the user-data.
+resource "aws_ssm_parameter" "repo_token" {
+  count = var.repo_token == "" ? 0 : 1
+  name  = "${var.ssm_prefix}/repo_token"
+  type  = "SecureString"
+  value = var.repo_token
+}
+
 # --- Networking: two SGs, RDS only reachable from the app box -----------------
 resource "aws_security_group" "ec2" {
   name        = "approvo-ec2"
@@ -201,6 +210,8 @@ resource "aws_instance" "app" {
     ssm_prefix  = var.ssm_prefix
     repo_url    = var.repo_url
     repo_branch = var.repo_branch
+    # A boolean, never the token itself — the value stays in SSM, off the box's user-data.
+    repo_token_configured = var.repo_token != ""
   })
 
   metadata_options {
@@ -219,6 +230,7 @@ resource "aws_instance" "app" {
     aws_ssm_parameter.database_url,
     aws_ssm_parameter.gh_client_id,
     aws_ssm_parameter.gh_client_secret,
+    aws_ssm_parameter.repo_token, # empty list when no token — still a valid dependency
   ]
 
   tags = { Name = "approvo-app" }

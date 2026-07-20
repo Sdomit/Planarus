@@ -38,13 +38,19 @@ variable "admin_cidr" {
 
 variable "repo_url" {
   type        = string
-  sensitive   = true
-  description = "git clone URL. Private repo: embed a read-only token, https://x-access-token:TOKEN@github.com/you/AgentBoard.git"
+  description = "Plain HTTPS clone URL, NO credentials in it, e.g. https://github.com/you/AgentBoard.git. Public repos clone as-is; for a private repo set repo_token instead of embedding a token here."
 }
 
 variable "repo_branch" {
   type    = string
   default = "main"
+}
+
+variable "repo_token" {
+  type        = string
+  default     = ""
+  sensitive   = true
+  description = "Read-only token for a PRIVATE repo. Stored in Key Vault and fetched at boot; the VM injects it via git's config env so it never lands in the clone URL, process args, .git/config, the cloud-init log, or the instance custom-data. Leave empty for a public repo."
 }
 
 variable "github_client_id" {

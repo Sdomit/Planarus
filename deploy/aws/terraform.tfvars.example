@@ -4,10 +4,13 @@
 aws_region = "us-east-1"
 domain     = "app.yourcompany.com"
 
-# Public repo: plain URL. Private repo: embed a token (repo-scoped, read-only):
-#   https://x-access-token:ghp_xxx@github.com/you/AgentBoard.git
+# Plain clone URL — no credentials in it. Public repos work as-is.
 repo_url    = "https://github.com/you/AgentBoard.git"
 repo_branch = "main"
+# Private repo only: a repo-scoped read-only token. It's stored in SSM and the
+# box injects it via git's config env at clone time — never in the URL, args,
+# .git/config, the cloud-init log, or the instance user-data. Leave unset for public.
+# repo_token = "ghp_xxxxxxxxxxxxxxxxxxxx"
 
 # GitHub OAuth app (Settings -> Developer settings -> OAuth Apps).
 # Authorization callback URL MUST be:
