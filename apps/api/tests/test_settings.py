@@ -63,12 +63,18 @@ def test_get_settings_shape_and_no_secret_leak(client):
         # P18.0 (D42/D44) — backup switches + read-only capability status
         "backup_enabled", "backup_retention",
         "backup_supported", "backup_dir_configured",
+        # P18.4 (D44) — off-site push switch + whether the backend can hold one
+        "backup_offsite", "backup_offsite_supported",
     }
     # D44 default: off — a backup writes files outside the DB, so it is opt-in.
     assert body["backup_enabled"] is False
     assert body["backup_retention"] == 7
+    assert body["backup_offsite"] is False
     # The local install is SQLite, so file-snapshot backup is available.
     assert body["backup_supported"] is True
+    # ...but the default storage backend is "local", which cannot hold an
+    # off-site copy — pushing there would write the file beside the original.
+    assert body["backup_offsite_supported"] is False
     # Ceiling status is a boolean — never the configured directory path itself.
     assert "agentboard-backups" not in res.text
     # LAN defaults mirror a local install: ceiling off, switch inert-off.

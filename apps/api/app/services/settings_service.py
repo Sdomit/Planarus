@@ -81,6 +81,15 @@ def backup_retention(session: Session) -> int:
         return 7
 
 
+def backup_offsite(session: Session) -> bool:
+    """P18.4 (D44): also push each verified backup to the configured storage
+    backend. Off by default. This is the part that makes backups a real strategy
+    — a copy on the same disk survives a bad migration or a mistaken delete, not
+    a dead disk — but it only does anything when ``storage_backend`` is not
+    "local", which would otherwise write the file beside itself."""
+    return bool(get_setting(session, "backup_offsite", False))
+
+
 def lan_mode_active(session: Session) -> bool:
     """The LAN-mode DB switch (P11.3). Same contract as external_api_active:
     defaults to the env ceiling, so env-only deployments are unchanged, and it
@@ -116,6 +125,8 @@ def read_settings(session: Session) -> SettingsRead:
         backup_retention=backup_retention(session),
         backup_supported=backup_service.is_supported(session),
         backup_dir_configured=bool((env.backup_dir or "").strip()),
+        backup_offsite=backup_offsite(session),
+        backup_offsite_supported=env.storage_backend != "local",
         email_enabled=bool(get_setting(session, "email_enabled", env.email_enabled)),
         email_from=str(get_setting(session, "email_from", env.email_from)),
         external_api_active=bool(

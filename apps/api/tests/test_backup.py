@@ -194,3 +194,78 @@ def test_list_backups_endpoint_returns_names_only(client, backup_dir):
 def test_post_backup_endpoint_409_when_disabled(client, backup_dir):
     res = client.post("/api/v1/backups", headers=local_hdr(client))
     assert res.status_code == 409, res.text
+
+
+# --- P18.4: the off-site copy (D44) -------------------------------------------
+#
+# On-disk-only is not a backup strategy: it survives a bad migration, not a dead
+# disk. These pin that the push is opt-in, honest about where it cannot help, and
+# — most importantly — never costs you the good local copy.
+
+
+@pytest.fixture(name="memory_storage")
+def memory_storage_fixture(monkeypatch):
+    """Point the storage adapter at the in-memory backend (stands in for s3)."""
+    from app import storage
+
+    monkeypatch.setattr(env, "storage_backend", "memory")
+    storage.reset_storage()
+    yield storage
+    storage.reset_storage()
+
+
+def _enable_offsite(session):
+    settings_service.set_setting(session, "backup_offsite", True)
+    session.commit()
+
+
+def test_offsite_is_off_by_default(file_session, backup_dir):
+    _enable(file_session)
+    result = svc.create_backup(file_session)
+    assert result.offsite is None
+    assert result.offsite_error is None
+
+
+def test_offsite_refuses_the_local_backend_with_a_reason(file_session, backup_dir):
+    """Pushing to "local" would write the copy beside the original — say so
+    rather than reporting a success that protects nothing."""
+    _enable(file_session)
+    _enable_offsite(file_session)
+
+    result = svc.create_backup(file_session)
+    assert result.offsite is None
+    assert "local" in (result.offsite_error or "")
+
+
+def test_offsite_pushes_the_verified_copy(file_session, backup_dir, memory_storage):
+    _enable(file_session)
+    _enable_offsite(file_session)
+
+    result = svc.create_backup(file_session)
+    assert result.offsite_error is None
+    assert result.offsite  # a backend location string
+    # Assert the bytes actually landed, not merely that a location came back.
+    pushed = memory_storage.get_storage().read_bytes(str(backup_dir), result.backup.name)
+    assert pushed is not None
+    assert pushed[:16] == b"SQLite format 3\x00"
+
+
+def test_a_failed_push_never_costs_the_good_backup(
+    file_session, backup_dir, memory_storage, monkeypatch
+):
+    """The local file is the deliverable. An upload failure degrades the run to
+    'local only' and reports why — it must not abort a snapshot already written
+    and integrity-checked."""
+    _enable(file_session)
+    _enable_offsite(file_session)
+
+    def boom():
+        raise RuntimeError("s3 down")
+
+    monkeypatch.setattr(memory_storage, "get_storage", boom)
+
+    result = svc.create_backup(file_session)
+    assert result.offsite is None
+    assert "s3 down" in (result.offsite_error or "")
+    # The backup still exists and still passes its own integrity check.
+    svc.verify_backup(result.backup.name)
