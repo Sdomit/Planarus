@@ -175,6 +175,13 @@
 .pp-inline-status-item:hover, .pp-inline-status-item.active { background: var(--bg-muted); }
 
 .pp-row-actions { display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; }
+/* Fingers need ~44px (WCAG 2.5.5 / iOS HIG); a mouse does not. Grow the hit
+   area only on coarse pointers so the desktop row stays compact. Padding, not
+   width/height, so the icons keep their size. */
+@media (pointer: coarse) {
+  .pp-row-act { min-width: 44px; min-height: 44px; }
+  .pp-row-actions { gap: var(--space-1); }
+}
 .pp-drag-handle { cursor: grab; color: var(--text-tertiary); padding: 0 2px; user-select: none; font-size: var(--text-sm); }
 .pp-row-act {
   display: inline-flex; align-items: center; justify-content: center; gap: 4px;
