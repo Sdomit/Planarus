@@ -134,6 +134,21 @@ DOC_STATUSES: tuple[str, ...] = ("draft", "published")
 # 'excalidraw').
 DOC_FORMATS: tuple[str, ...] = ("tiptap_json", "excalidraw")
 
+# Note-card swatches (0028). Palette KEYS, not hex — the web theme maps each to a
+# light/dark shade, so no migration is needed to restyle them. NULL/absent = the
+# default surface. Validated in the schema layer only (no CHECK constraint), so
+# adding a swatch is a one-line change here.
+DOC_COLORS: tuple[str, ...] = (
+    "yellow",
+    "orange",
+    "red",
+    "green",
+    "teal",
+    "blue",
+    "purple",
+    "gray",
+)
+
 
 def doc_type_check_sql(column: str = "doc_type") -> str:
     return _check_sql(column, DOC_TYPES)

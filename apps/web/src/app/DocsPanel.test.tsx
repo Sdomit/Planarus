@@ -96,6 +96,124 @@ describe('DocsPanel', () => {
     await waitFor(() => expect(screen.getByText('Test Note')).toBeTruthy())
   })
 
+  it('docType="note" renders a card grid with the body excerpt; docs stay a list', async () => {
+    mockApi.docs.list.mockResolvedValue([{ ...DOC_SUMMARY, excerpt: 'milk, eggs, bread' }])
+    const { container, unmount } = render(<DocsPanel projectId="proj_1" docType="note" onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Test Note')).toBeTruthy())
+    expect(container.querySelector('.ab-notegrid')).toBeTruthy()
+    expect(screen.getByText('milk, eggs, bread')).toBeTruthy()
+    unmount()
+
+    // The unlocked Docs view must keep the plain list — no grid regression.
+    const docs = render(<DocsPanel projectId="proj_1" onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Test Note')).toBeTruthy())
+    expect(docs.container.querySelector('.ab-notegrid')).toBeNull()
+    expect(docs.container.querySelector('.ab-doclist')).toBeTruthy()
+  })
+
+  it('picking a swatch saves the colour and paints the card', async () => {
+    mockApi.docs.list.mockResolvedValue([{ ...DOC_SUMMARY, color: null }])
+    mockApi.docs.update.mockResolvedValue({ ...DOC_FULL, color: 'teal', version: 2 })
+    const { container } = render(<DocsPanel projectId="proj_1" docType="note" onClose={vi.fn()} />)
+    await waitFor(() => screen.getByText('Test Note'))
+    expect(container.querySelector('.ab-notecard')?.getAttribute('data-color')).toBeNull()
+
+    fireEvent.click(screen.getByLabelText('teal'))
+    await waitFor(() =>
+      expect(mockApi.docs.update).toHaveBeenCalledWith('doc_1', { color: 'teal', version: 1 })
+    )
+    // The card repaints from the response — and picks up the bumped version, so a
+    // second pick doesn't 409.
+    await waitFor(() =>
+      expect(container.querySelector('.ab-notecard')?.getAttribute('data-color')).toBe('teal')
+    )
+    fireEvent.click(screen.getByLabelText('red'))
+    await waitFor(() =>
+      expect(mockApi.docs.update).toHaveBeenLastCalledWith('doc_1', { color: 'red', version: 2 })
+    )
+  })
+
+  it('clearing a colour sends the "default" sentinel, and re-picking the same colour is a no-op', async () => {
+    mockApi.docs.list.mockResolvedValue([{ ...DOC_SUMMARY, color: 'teal' }])
+    mockApi.docs.update.mockResolvedValue({ ...DOC_FULL, color: null, version: 2 })
+    render(<DocsPanel projectId="proj_1" docType="note" onClose={vi.fn()} />)
+    await waitFor(() => screen.getByText('Test Note'))
+
+    fireEvent.click(screen.getByLabelText('teal'))       // already teal
+    expect(mockApi.docs.update).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByLabelText('No colour'))
+    await waitFor(() =>
+      expect(mockApi.docs.update).toHaveBeenCalledWith('doc_1', { color: 'default', version: 1 })
+    )
+  })
+
+  it('a failed colour change refetches instead of showing a stale swatch', async () => {
+    mockApi.docs.list.mockResolvedValue([{ ...DOC_SUMMARY, color: null }])
+    mockApi.docs.update.mockRejectedValue(new Error('409: version conflict'))
+    render(<DocsPanel projectId="proj_1" docType="note" onClose={vi.fn()} />)
+    await waitFor(() => screen.getByText('Test Note'))
+    expect(mockApi.docs.list).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByLabelText('blue'))
+    await waitFor(() => expect(mockApi.docs.list).toHaveBeenCalledTimes(2))
+  })
+
+  it('colouring from inside the editor adopts the new version so the next save works', async () => {
+    mockApi.docs.list.mockResolvedValue([DOC_SUMMARY])
+    mockApi.docs.get.mockResolvedValue(DOC_FULL)                     // version 1
+    mockApi.docs.update.mockResolvedValue({ ...DOC_FULL, color: 'green', version: 2 })
+    render(<DocsPanel projectId="proj_1" docType="note" onClose={vi.fn()} />)
+    await waitFor(() => screen.getByText('Test Note'))
+    fireEvent.click(screen.getByText('Test Note'))
+    await waitFor(() => screen.getByText('Export Markdown'))         // editor is open
+
+    fireEvent.click(screen.getByLabelText('green'))
+    await waitFor(() =>
+      expect(mockApi.docs.update).toHaveBeenCalledWith('doc_1', { color: 'green', version: 1 })
+    )
+
+    // The editor must adopt the bumped version: a second change sends 2, not 1.
+    // (This covers the `doc` state path. The versionRef that `save` itself reads
+    // is set on the same line; dirtying ProseMirror under jsdom to click Save
+    // isn't worth the scaffolding, so that path is checked in the browser.)
+    mockApi.docs.update.mockResolvedValue({ ...DOC_FULL, color: null, version: 3 })
+    fireEvent.click(screen.getByLabelText('No colour'))
+    await waitFor(() =>
+      expect(mockApi.docs.update).toHaveBeenLastCalledWith('doc_1', { color: 'default', version: 2 })
+    )
+  })
+
+  it('note card with no body shows the empty placeholder', async () => {
+    mockApi.docs.list.mockResolvedValue([{ ...DOC_SUMMARY, excerpt: '   ' }])
+    render(<DocsPanel projectId="proj_1" docType="note" onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Empty note')).toBeTruthy())
+  })
+
+  // Notes = this same panel locked to doc_type 'note' (Layout renders it as the Notes view).
+  it('docType="note" filters the list, relabels, and locks the create type', async () => {
+    mockApi.docs.list.mockResolvedValue([])
+    mockApi.docs.create.mockResolvedValue(DOC_FULL)
+    mockApi.docs.get.mockResolvedValue(DOC_FULL)
+    render(<DocsPanel projectId="proj_1" docType="note" onClose={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getByText(/No notes yet/i)).toBeTruthy())
+    expect(mockApi.docs.list).toHaveBeenCalledWith('proj_1', { doc_type: 'note' })
+
+    fireEvent.click(screen.getByText('+ New Note'))
+    // The type dropdown is hidden — a note can only ever be a note.
+    expect(screen.queryByText('Type')).toBeNull()
+    fireEvent.change(screen.getByPlaceholderText('Note title'), { target: { value: 'Groceries' } })
+    fireEvent.click(screen.getByText('Create'))
+
+    await waitFor(() =>
+      expect(mockApi.docs.create).toHaveBeenCalledWith('proj_1', {
+        title: 'Groceries',
+        doc_type: 'note',
+      })
+    )
+  })
+
   it('shows "+ New Doc" button', async () => {
     mockApi.docs.list.mockResolvedValue([])
     render(<DocsPanel projectId="proj_1" onClose={vi.fn()} />)

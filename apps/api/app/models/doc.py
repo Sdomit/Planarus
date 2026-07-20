@@ -35,6 +35,8 @@ class Doc(SQLModel, table=True):
     export_checksum: Optional[str] = None
     exported_at: Optional[str] = None
     status: str = Field(default="draft")
+    # Note-card swatch key (0028): NULL = default surface. See DOC_COLORS.
+    color: Optional[str] = Field(default=None)
     sort_order: int = Field(default=0)
     version: int = Field(default=1)
     # P16.1 (D33): who last saved it, when a signed-in user did; wired in P16.3.
@@ -42,3 +44,12 @@ class Doc(SQLModel, table=True):
     created_at: str
     updated_at: str
     archived_at: Optional[str] = None
+
+    @property
+    def excerpt(self) -> str:
+        """First few lines of the body, for note/doc cards. Derived, never stored.
+
+        ponytail: markdown_cache is already the client-serialized body, so a slice
+        of it is the whole preview — no new column, no server-side ProseMirror parse.
+        """
+        return self.markdown_cache[:280]

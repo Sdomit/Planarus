@@ -97,6 +97,7 @@ def create_doc(session: Session, project_id: str, payload: DocCreate) -> Doc:
         ),
         markdown_cache="",
         status=payload.status,
+        color=payload.color,
         sort_order=payload.sort_order,
         version=1,
         updated_by=actor.current_actor_id(),  # P16.3: creator = first editor
@@ -181,6 +182,11 @@ def update_doc(session: Session, doc_id: str, payload: DocUpdate) -> Doc:
         changed = True
     if payload.archived_at is not None:
         doc.archived_at = payload.archived_at
+        changed = True
+    if payload.color is not None:
+        # None means "unchanged" for every field here, so the sentinel "default"
+        # is how a swatch is cleared back to NULL.
+        doc.color = None if payload.color == "default" else payload.color
         changed = True
 
     if changed:

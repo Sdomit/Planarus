@@ -12,6 +12,7 @@ import { MarkdownSerializer } from 'prosemirror-markdown'
 import { api, type Doc, type DocSummary } from '../api/client'
 import { StatusBadge } from './StatusBadge'
 import { usePresence } from './usePresence'
+import { agoLabel } from './date'
 import './docs-panel.css'
 
 // Excalidraw is heavy (~1MB) and pulls in browser-only modules that crash under
@@ -101,50 +102,113 @@ export function serializeToMarkdown(doc: any): string { // eslint-disable-line @
 
 const DOC_TYPES = ['note', 'spec', 'research', 'plan', 'reference', 'canvas', 'other'] as const
 
+// A doc_type-locked panel (Notes) reuses this whole surface; only the wording changes.
+// ponytail: two forms is all the copy needs — no i18n/pluralization lib for "doc"/"note".
+function nouns(docType?: string) {
+  const noun = docType ?? 'doc'
+  return { noun, Noun: noun[0].toUpperCase() + noun.slice(1) }
+}
+
 // ---------------------------------------------------------------------------
 // Doc list view
 // ---------------------------------------------------------------------------
+
+/** Swatch keys, mirroring DOC_COLORS in apps/api/app/core/constants.py. */
+const NOTE_COLORS = ['yellow', 'orange', 'red', 'green', 'teal', 'blue', 'purple', 'gray'] as const
+
+/** Keep-style swatch row. 'default' is the sentinel that clears the colour server-side. */
+function NoteColors(
+  { doc, onChanged, onStale }: { doc: DocSummary; onChanged: (d: Doc) => void; onStale: () => void },
+) {
+  const pick = (key: string) => {
+    if ((doc.color ?? 'default') === key) return
+    api.docs.update(doc.id, { color: key, version: doc.version })
+      .then(onChanged)
+      // Almost always a 409 from a concurrent edit — refetch so the row stops lying.
+      .catch(onStale)
+  }
+  return (
+    <div className="ab-notecard-colors">
+      <button type="button" className="ab-swatch" title="No colour"
+        aria-label="No colour" aria-pressed={!doc.color} onClick={() => pick('default')} />
+      {NOTE_COLORS.map(c => (
+        <button key={c} type="button" className="ab-swatch" data-color={c}
+          title={c} aria-label={c} aria-pressed={doc.color === c} onClick={() => pick(c)} />
+      ))}
+    </div>
+  )
+}
 
 interface DocListProps {
   projectId: string
   onSelect: (doc: DocSummary) => void
   onNew: () => void
   onClose?: () => void
+  docType?: string
 }
 
-function DocList({ projectId, onSelect, onNew, onClose }: DocListProps) {
+function DocList({ projectId, onSelect, onNew, onClose, docType }: DocListProps) {
   const [docs, setDocs] = useState<DocSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { noun, Noun } = nouns(docType)
 
-  useEffect(() => {
-    setLoading(true); setError(null)
-    api.docs.list(projectId)
+  const reload = useCallback(() => {
+    setError(null)
+    api.docs.list(projectId, docType ? { doc_type: docType } : undefined)
       .then(setDocs)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [projectId])
+  }, [projectId, docType])
 
-  if (loading) return <p className="dp-state">Loading docs…</p>
+  useEffect(() => { setLoading(true); reload() }, [reload])
+
+  if (loading) return <p className="dp-state">Loading {noun}s…</p>
   if (error) return <p className="dp-state dp-error">{error}</p>
 
   return (
     <div>
       <div className="dp-list-header">
         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>
-          {docs.length} {docs.length === 1 ? 'document' : 'documents'}
+          {docs.length} {docs.length === 1 ? noun : `${noun}s`}
         </div>
-        <button className="btn btn-solid btn-sm" onClick={onNew}>+ New Doc</button>
-        {onClose && <button type="button" className="btn btn-ghost btn-sm" title="Close docs" onClick={onClose}>✕</button>}
+        <button className="btn btn-solid btn-sm" onClick={onNew}>+ New {Noun}</button>
+        {onClose && <button type="button" className="btn btn-ghost btn-sm" title={`Close ${noun}s`} onClick={onClose}>✕</button>}
       </div>
       {docs.length === 0 ? (
         <div className="ab-empty">
           <div className="ab-empty-art">
             <svg className="ic-32" aria-hidden="true"><use href="#icon-file" /></svg>
           </div>
-          <h3>No docs yet</h3>
-          <p>Create your first doc to capture specs, plans, or research.</p>
-          <button className="btn btn-solid btn-sm" onClick={onNew}>Create a doc</button>
+          <h3>No {noun}s yet</h3>
+          <p>{docType === 'note'
+            ? 'Jot down anything — meeting notes, ideas, snippets.'
+            : 'Create your first doc to capture specs, plans, or research.'}</p>
+          <button className="btn btn-solid btn-sm" onClick={onNew}>Create a {noun}</button>
+        </div>
+      ) : docType ? (
+        // Google-Keep-style card grid — the locked-type (Notes) view only; Docs keeps its list.
+        <div className="ab-notegrid">
+          {docs.map(d => (
+            <div key={d.id} className="ab-notecard" data-color={d.color ?? undefined}>
+              {/* Only this region opens the note, so the swatch buttons below
+                  aren't nested inside a role="button". */}
+              <div className="ab-notecard-open" role="button" tabIndex={0}
+                onClick={() => onSelect(d)}
+                onKeyDown={e => e.key === 'Enter' && onSelect(d)}>
+                <div className="ab-notecard-title">{d.title}</div>
+                {d.excerpt?.trim()
+                  ? <div className="ab-notecard-body">{d.excerpt}</div>
+                  : <div className="ab-notecard-body ab-notecard-empty">Empty {noun}</div>}
+              </div>
+              <div className="ab-notecard-foot">
+                <StatusBadge kind="docstatus" value={d.status} />
+                <span className="ab-notecard-date">{agoLabel(d.updated_at)}</span>
+              </div>
+              <NoteColors doc={d} onStale={reload} onChanged={updated =>
+                setDocs(prev => prev.map(x => (x.id === updated.id ? { ...x, ...updated } : x)))} />
+            </div>
+          ))}
         </div>
       ) : (
         <div className="ab-doclist">
@@ -175,11 +239,13 @@ interface CreateDocFormProps {
   projectId: string
   onCreated: (doc: Doc) => void
   onCancel: () => void
+  lockedType?: string
 }
 
-function CreateDocForm({ projectId, onCreated, onCancel }: CreateDocFormProps) {
+function CreateDocForm({ projectId, onCreated, onCancel, lockedType }: CreateDocFormProps) {
   const [title, setTitle] = useState('')
-  const [docType, setDocType] = useState<string>('note')
+  const [docType, setDocType] = useState<string>(lockedType ?? 'note')
+  const { Noun } = nouns(lockedType)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -198,21 +264,25 @@ function CreateDocForm({ projectId, onCreated, onCancel }: CreateDocFormProps) {
   return (
     <div>
       <div className="dp-list-header">
-        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>New document</span>
+        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>
+          New {lockedType ?? 'document'}
+        </span>
         <button className="btn btn-ghost btn-sm" onClick={onCancel}>Cancel</button>
       </div>
       <form className="dp-form" onSubmit={handleSubmit}>
         <div className="form-field">
           <label className="form-label">Title</label>
-          <input className="input" type="text" placeholder="Doc title" value={title}
+          <input className="input" type="text" placeholder={`${Noun} title`} value={title}
             onChange={e => setTitle(e.target.value)} required autoFocus />
         </div>
-        <div className="form-field">
-          <label className="form-label">Type</label>
-          <select className="input select" value={docType} onChange={e => setDocType(e.target.value)}>
-            {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
+        {!lockedType && (
+          <div className="form-field">
+            <label className="form-label">Type</label>
+            <select className="input select" value={docType} onChange={e => setDocType(e.target.value)}>
+              {DOC_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+        )}
         {error && <p className="form-error">{error}</p>}
         <div className="dp-form-actions">
           <button type="submit" disabled={saving || !title.trim()} className="btn btn-solid btn-sm">
@@ -405,6 +475,13 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
     }
   }, [editor])
 
+  // A colour PATCH bumps the doc version server-side, so adopt the new version
+  // here or the next content save 409s against a version we just invalidated.
+  // Unsaved editor content is untouched: only the load effect ever sets content.
+  const applyColor = useCallback((updated: Doc) => {
+    setDoc(updated); docRef.current = updated; versionRef.current = updated.version
+  }, [])
+
   const exportMarkdown = useCallback(async () => {
     if (!doc) return
     setExportMsg(null)
@@ -430,11 +507,15 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
     `Error: ${saveError ?? 'unknown'}`
 
   return (
-    <div className="ab-editor">
+    <div className="ab-editor" data-color={doc.color ?? undefined}>
       <div className="dp-editor-nav" style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--border-subtle)' }}>
         <button className="btn btn-ghost btn-sm" onClick={onBack} title="Back to list">← Back</button>
         <span className="dp-editor-name">{doc.title}</span>
         <StatusBadge kind="docstatus" value={doc.status} />
+        {/* Swatches only where the colour is actually rendered — the Notes grid. */}
+        {doc.doc_type === 'note' && !lockedByOther && (
+          <NoteColors doc={doc} onChanged={applyColor} onStale={() => setSaveState('conflict')} />
+        )}
         {lockedByOther && (
           <span
             className="badge badge-warning badge-sm"
@@ -480,9 +561,10 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
 // Root panel
 // ---------------------------------------------------------------------------
 
-interface DocsPanelProps { projectId: string; onClose: () => void }
+/** `docType` locks the panel to one type — the Notes view is this panel with docType="note". */
+interface DocsPanelProps { projectId: string; onClose: () => void; docType?: string }
 
-export default function DocsPanel({ projectId, onClose }: DocsPanelProps) {
+export default function DocsPanel({ projectId, onClose, docType }: DocsPanelProps) {
   const [view, setView] = useState<'list' | 'new' | 'editor'>('list')
   const [selected, setSelected] = useState<{ id: string; format: string } | null>(null)
 
@@ -491,8 +573,8 @@ export default function DocsPanel({ projectId, onClose }: DocsPanelProps) {
 
   return (
     <div className="dp-panel">
-      {view === 'list' && <DocList projectId={projectId} onSelect={handleSelect} onNew={() => setView('new')} onClose={onClose} />}
-      {view === 'new' && <CreateDocForm projectId={projectId} onCreated={handleCreated} onCancel={() => setView('list')} />}
+      {view === 'list' && <DocList projectId={projectId} onSelect={handleSelect} onNew={() => setView('new')} onClose={onClose} docType={docType} />}
+      {view === 'new' && <CreateDocForm projectId={projectId} onCreated={handleCreated} onCancel={() => setView('list')} lockedType={docType} />}
       {view === 'editor' && selected && (
         selected.format === 'excalidraw'
           ? <Suspense fallback={<p className="dp-state">Loading canvas…</p>}>
