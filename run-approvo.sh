@@ -29,10 +29,9 @@ if [ ! -d "$ROOT/apps/web/node_modules" ]; then
 fi
 
 # --- pick free ports ---------------------------------------------------------
-# Bind-test on 0.0.0.0 rather than connect-test on 127.0.0.1: Vite binds the
-# IPv6 loopback (::1), so a connect test against IPv4 reports a busy 5173 as
-# free and we hand the server a port it cannot have. Python is already a hard
-# dependency of this script, so use it.
+# Python is already a hard dependency of this script, so use it for the probe.
+# How the probe decides a port is taken — and why it connects rather than binds,
+# on both loopback families — is documented in free_port itself.
 # ponytail: check-then-bind races if something grabs the port in the next
 # second; the server logs the bind error — rerun. Add a retry loop only if
 # that actually happens to you.
@@ -68,9 +67,20 @@ WEB_PORT=$(free_port 5173)
 echo "Starting Approvo  |  API :$API_PORT   Web :$WEB_PORT"
 
 # --- start both, and make sure they die with this script ---------------------
+# Job control on, so each background job leads its own process group and cleanup
+# can signal the whole tree with a negative PID.
+#
+# `$!` is the *subshell*, not the server inside it: uvicorn --reload runs a
+# reload supervisor plus a worker, and `pnpm dev:web` runs Vite as its own child.
+# Killing the bare PID leaves those alive, still holding 8000/5173, so the next
+# run silently steps to 8001/5174 and you debug a stale server. Ctrl+C happened
+# to work anyway — the terminal signals the whole foreground group — but any
+# other exit path (a `set -e` abort, SIGTERM) orphaned both servers.
+set -m
+
 API_PID=""; WEB_PID=""
-cleanup() { [ -n "$API_PID" ] && kill "$API_PID" 2>/dev/null || true
-            [ -n "$WEB_PID" ] && kill "$WEB_PID" 2>/dev/null || true; }
+stop_group() { [ -n "$1" ] && kill -- -"$1" 2>/dev/null || true; }
+cleanup() { stop_group "$API_PID"; stop_group "$WEB_PID"; }
 trap cleanup EXIT INT TERM
 
 # Force the external API off regardless of what is exported in your shell.
