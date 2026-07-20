@@ -139,6 +139,41 @@ function NoteColors(
   )
 }
 
+/**
+ * Keep's "Take a note…" bar: type a title, press Enter, land in the editor.
+ * ponytail: a plain input, not an expanding inline rich-text composer — the
+ * editor is one keystroke away and already does everything.
+ */
+function NoteComposer(
+  { projectId, docType, onCreated }: { projectId: string; docType: string; onCreated: (d: Doc) => void },
+) {
+  const [title, setTitle] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const create = () => {
+    const t = title.trim()
+    if (!t || busy) return
+    setBusy(true); setError(null)
+    api.docs.create(projectId, { title: t, doc_type: docType })
+      .then(d => { setTitle(''); onCreated(d) })
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setBusy(false))
+  }
+
+  return (
+    <div className="ab-note-composer">
+      <input className="input" type="text" value={title} disabled={busy}
+        placeholder={`Take a ${nouns(docType).noun}…`} aria-label={`New ${nouns(docType).noun} title`}
+        onChange={e => setTitle(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); create() } }} />
+      <button type="button" className="btn btn-solid btn-sm" disabled={!title.trim() || busy}
+        onClick={create}>{busy ? 'Adding…' : 'Add'}</button>
+      {error && <p className="form-error">{error}</p>}
+    </div>
+  )
+}
+
 interface DocListProps {
   projectId: string
   onSelect: (doc: DocSummary) => void
@@ -151,19 +186,39 @@ function DocList({ projectId, onSelect, onNew, onClose, docType }: DocListProps)
   const [docs, setDocs] = useState<DocSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [query, setQuery] = useState('')      // debounced copy of `search`
   const { noun, Noun } = nouns(docType)
+
+  // Debounce so typing doesn't fire a request per keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(search), 200)
+    return () => clearTimeout(t)
+  }, [search])
 
   const reload = useCallback(() => {
     setError(null)
-    api.docs.list(projectId, docType ? { doc_type: docType } : undefined)
+    api.docs.list(projectId, { ...(docType ? { doc_type: docType } : {}), q: query })
       .then(setDocs)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [projectId, docType])
+  }, [projectId, docType, query])
 
   useEffect(() => { setLoading(true); reload() }, [reload])
 
-  if (loading) return <p className="dp-state">Loading {noun}s…</p>
+  const searching = query.trim().length > 0
+
+  // Keep-ish: an always-present composer instead of a button that swaps the view.
+  const composer = docType ? (
+    <NoteComposer projectId={projectId} docType={docType} onCreated={onSelect} />
+  ) : null
+
+  const searchBox = (
+    <input className="input dp-search" type="search" value={search}
+      placeholder={`Search ${noun}s…`} aria-label={`Search ${noun}s`}
+      onChange={e => setSearch(e.target.value)} />
+  )
+
   if (error) return <p className="dp-state dp-error">{error}</p>
 
   return (
@@ -172,10 +227,15 @@ function DocList({ projectId, onSelect, onNew, onClose, docType }: DocListProps)
         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>
           {docs.length} {docs.length === 1 ? noun : `${noun}s`}
         </div>
-        <button className="btn btn-solid btn-sm" onClick={onNew}>+ New {Noun}</button>
+        {searchBox}
+        {!docType && <button className="btn btn-solid btn-sm" onClick={onNew}>+ New {Noun}</button>}
         {onClose && <button type="button" className="btn btn-ghost btn-sm" title={`Close ${noun}s`} onClick={onClose}>✕</button>}
       </div>
-      {docs.length === 0 ? (
+      {composer}
+      {loading ? <p className="dp-state">Loading {noun}s…</p>
+        : searching && docs.length === 0 ? (
+        <p className="dp-state">No {noun}s match “{query}”.</p>
+      ) : docs.length === 0 ? (
         <div className="ab-empty">
           <div className="ab-empty-art">
             <svg className="ic-32" aria-hidden="true"><use href="#icon-file" /></svg>
@@ -184,7 +244,8 @@ function DocList({ projectId, onSelect, onNew, onClose, docType }: DocListProps)
           <p>{docType === 'note'
             ? 'Jot down anything — meeting notes, ideas, snippets.'
             : 'Create your first doc to capture specs, plans, or research.'}</p>
-          <button className="btn btn-solid btn-sm" onClick={onNew}>Create a {noun}</button>
+          {/* Notes already have the composer directly above — no second button. */}
+          {!docType && <button className="btn btn-solid btn-sm" onClick={onNew}>Create a {noun}</button>}
         </div>
       ) : docType ? (
         // Google-Keep-style card grid — the locked-type (Notes) view only; Docs keeps its list.
@@ -205,8 +266,20 @@ function DocList({ projectId, onSelect, onNew, onClose, docType }: DocListProps)
                 <StatusBadge kind="docstatus" value={d.status} />
                 <span className="ab-notecard-date">{agoLabel(d.updated_at)}</span>
               </div>
-              <NoteColors doc={d} onStale={reload} onChanged={updated =>
-                setDocs(prev => prev.map(x => (x.id === updated.id ? { ...x, ...updated } : x)))} />
+              <div className="ab-notecard-tools">
+                <NoteColors doc={d} onStale={reload} onChanged={updated =>
+                  setDocs(prev => prev.map(x => (x.id === updated.id ? { ...x, ...updated } : x)))} />
+                <button type="button" className="ab-note-del" title={`Delete ${noun}`}
+                  aria-label={`Delete ${d.title}`}
+                  onClick={() => {
+                    if (!window.confirm(`Delete “${d.title}”? This can't be undone.`)) return
+                    api.docs.remove(d.id)
+                      .then(() => setDocs(prev => prev.filter(x => x.id !== d.id)))
+                      .catch(reload)
+                  }}>
+                  <svg className="ic-14" aria-hidden="true"><use href="#icon-trash" /></svg>
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -214,6 +287,7 @@ function DocList({ projectId, onSelect, onNew, onClose, docType }: DocListProps)
         <div className="ab-doclist">
           {docs.map(d => (
             <div key={d.id} className="ab-docitem" role="button" tabIndex={0}
+              data-color={d.color ?? undefined}
               onClick={() => onSelect(d)}
               onKeyDown={e => e.key === 'Enter' && onSelect(d)}>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -399,6 +473,49 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
 // Doc editor
 // ---------------------------------------------------------------------------
 
+/**
+ * Turn a pasted/dropped image into an inline data URI.
+ *
+ * ponytail: data URIs, no upload endpoint and no blob store — the note IS the
+ * image's home. The ceiling is real though: content_json is capped at 2 MB
+ * server-side, so anything sizeable is downscaled first, and a single image that
+ * still won't fit is rejected here rather than failing the save later. Upgrade
+ * path if notes become image-heavy: a real upload endpoint + /media/{id} refs.
+ */
+const IMAGE_PASSTHROUGH_BYTES = 400 * 1024   // small enough to embed untouched
+const IMAGE_MAX_EDGE = 1400
+const IMAGE_MAX_DATA_URL = 1_200_000         // ~1.2 MB of base64, inside the 2 MB doc cap
+
+function readAsDataUrl(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader()
+    fr.onload = () => resolve(fr.result as string)
+    fr.onerror = () => reject(new Error('Could not read the image'))
+    fr.readAsDataURL(file)
+  })
+}
+
+async function imageToDataUrl(file: File): Promise<string> {
+  if (file.size <= IMAGE_PASSTHROUGH_BYTES) return readAsDataUrl(file)
+
+  const bitmap = await createImageBitmap(file)
+  const scale = Math.min(1, IMAGE_MAX_EDGE / Math.max(bitmap.width, bitmap.height))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(bitmap.width * scale)
+  canvas.height = Math.round(bitmap.height * scale)
+  canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+  bitmap.close()
+  // JPEG: a pasted screenshot as PNG is several times larger for no visible gain.
+  const out = canvas.toDataURL('image/jpeg', 0.8)
+  if (out.length > IMAGE_MAX_DATA_URL) {
+    throw new Error('That image is too large to embed — resize it and try again.')
+  }
+  return out
+}
+
+const imageFilesOf = (dt: DataTransfer | null | undefined): File[] =>
+  Array.from(dt?.files ?? []).filter(f => f.type.startsWith('image/'))
+
 interface DocEditorProps { docId: string; onBack: () => void }
 type SaveState = 'saved' | 'unsaved' | 'saving' | 'conflict' | 'error'
 
@@ -410,8 +527,12 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [showPreview, setShowPreview] = useState(false)
   const [exportMsg, setExportMsg] = useState<string | null>(null)
+  const [title, setTitle] = useState('')
   const versionRef = useRef<number>(1)
   const docRef = useRef<Doc | null>(null)
+  const titleRef = useRef('')
+  // Paste/drop handlers are built once inside useEditor, before `editor` exists.
+  const editorRef = useRef<ReturnType<typeof useEditor> | null>(null)
 
   // P11.2 soft-lock (dormant in local mode — the presence surface 404s).
   const { lockedByOther, editorName } = usePresence(docId, true)
@@ -438,7 +559,48 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
     ],
     content: '',
     onUpdate: () => setSaveState('unsaved'),
+    editorProps: {
+      // Images arrive as files on both paths, so both share one handler. Returning
+      // false for anything else leaves ProseMirror's native text paste/drop alone —
+      // which is what makes dragging plain text in already work.
+      handlePaste: (_view, event) => insertImages(imageFilesOf(event.clipboardData)),
+      handleDrop: (view, event) => {
+        const files = imageFilesOf((event as DragEvent).dataTransfer)
+        if (files.length === 0) return false
+        // Drop where the pointer is, not at the caret — otherwise the image lands
+        // wherever you last typed, and a selected node gets replaced outright.
+        const at = view.posAtCoords({
+          left: (event as DragEvent).clientX,
+          top: (event as DragEvent).clientY,
+        })
+        return insertImages(files, at?.pos)
+      },
+    },
   })
+  editorRef.current = editor
+
+  /** True = we took the files. Insertion is async; the handlers must answer now. */
+  function insertImages(files: File[], at?: number): boolean {
+    if (files.length === 0) return false
+    void (async () => {
+      let pos = at
+      for (const file of files) {
+        try {
+          const src = await imageToDataUrl(file)
+          const node = { type: 'image', attrs: { src, alt: file.name } }
+          // Explicit position for the first dropped file; the caret has moved past
+          // it by the time the next one lands, so the rest just follow the cursor.
+          if (pos != null) editorRef.current?.chain().focus().insertContentAt(pos, node).run()
+          else editorRef.current?.chain().focus().setImage({ src, alt: file.name }).run()
+          pos = undefined
+        } catch (e: unknown) {
+          setSaveError(e instanceof Error ? e.message : String(e))
+          setSaveState('error')
+        }
+      }
+    })()
+    return true
+  }
 
   useEffect(() => {
     editor?.setEditable(!lockedByOther)
@@ -449,6 +611,7 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
     api.docs.get(docId)
       .then(d => {
         setDoc(d); docRef.current = d; versionRef.current = d.version
+        setTitle(d.title); titleRef.current = d.title
         if (editor) {
           let parsed: object | null = null
           try { parsed = JSON.parse(d.content_json) } catch { /* ignore */ }
@@ -464,16 +627,49 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
     if (!editor || !docRef.current) return
     const contentJson = JSON.stringify(editor.getJSON())
     const markdownCache = serializeToMarkdown(editor.state.doc)
+    const nextTitle = titleRef.current.trim()
     setSaveState('saving'); setSaveError(null)
     try {
-      const updated = await api.docs.update(docRef.current.id, { version: versionRef.current, content_json: contentJson, markdown_cache: markdownCache })
-      setDoc(updated); docRef.current = updated; versionRef.current = updated.version; setSaveState('saved')
+      const updated = await api.docs.update(docRef.current.id, {
+        version: versionRef.current,
+        content_json: contentJson,
+        markdown_cache: markdownCache,
+        // Only when it actually changed — an empty box must not blank the title.
+        ...(nextTitle && nextTitle !== docRef.current.title ? { title: nextTitle } : {}),
+      })
+      setDoc(updated); docRef.current = updated; versionRef.current = updated.version
+      // Edits made *during* the request would otherwise be marked clean and sit
+      // unsaved until the next keystroke.
+      const settled =
+        JSON.stringify(editor.getJSON()) === contentJson && titleRef.current.trim() === nextTitle
+      setSaveState(settled ? 'saved' : 'unsaved')
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
       if (msg.startsWith('409')) setSaveState('conflict')
       else { setSaveState('error'); setSaveError(msg) }
     }
   }, [editor])
+
+  // Autosave: one debounced write per pause in typing. 'conflict' and 'error' are
+  // deliberately excluded — retrying on a loop would hammer a doomed request.
+  useEffect(() => {
+    if (saveState !== 'unsaved' || lockedByOther) return
+    const t = setTimeout(() => { void save() }, 900)
+    return () => clearTimeout(t)
+  }, [saveState, save, lockedByOther])
+
+  const rename = (next: string) => {
+    setTitle(next); titleRef.current = next
+    if (next.trim() && next.trim() !== docRef.current?.title) setSaveState('unsaved')
+  }
+
+  const remove = () => {
+    if (!docRef.current) return
+    if (!window.confirm(`Delete “${docRef.current.title}”? This can't be undone.`)) return
+    api.docs.remove(docRef.current.id)
+      .then(onBack)
+      .catch((e: Error) => { setSaveError(e.message); setSaveState('error') })
+  }
 
   // A colour PATCH bumps the doc version server-side, so adopt the new version
   // here or the next content save 409s against a version we just invalidated.
@@ -510,7 +706,11 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
     <div className="ab-editor" data-color={doc.color ?? undefined}>
       <div className="dp-editor-nav" style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--border-subtle)' }}>
         <button className="btn btn-ghost btn-sm" onClick={onBack} title="Back to list">← Back</button>
-        <span className="dp-editor-name">{doc.title}</span>
+        {/* The title is the note's section heading — edit in place, autosaved. */}
+        <input className="dp-title-input" type="text" value={title} disabled={lockedByOther}
+          aria-label="Title" placeholder="Untitled"
+          onChange={e => rename(e.target.value)}
+          onBlur={() => { if (!title.trim()) rename(doc.title) }} />
         <StatusBadge kind="docstatus" value={doc.status} />
         {/* Swatches only where the colour is actually rendered — the Notes grid. */}
         {doc.doc_type === 'note' && !lockedByOther && (
@@ -550,6 +750,9 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
         </button>
         <button type="button" className="btn btn-ghost btn-xs" onClick={() => exportMarkdown()}>
           Export Markdown
+        </button>
+        <button type="button" className="btn btn-ghost btn-xs dp-danger" onClick={remove}>
+          Delete
         </button>
       </div>
       {exportMsg && <p className="dp-export-msg">{exportMsg}</p>}

@@ -12,6 +12,7 @@ import json
 import re
 from typing import Optional
 
+from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
 from app.core import actor
@@ -53,6 +54,11 @@ def _slugify(title: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "-", s)
     s = s.strip("-")
     return s or "doc"
+
+
+def _escape_like(term: str) -> str:
+    """Neutralise LIKE wildcards so searching for "50%" or "a_b" matches literally."""
+    return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _unique_slug(session: Session, project_id: str, base: str) -> str:
@@ -132,10 +138,23 @@ def list_docs(
     status: Optional[str] = None,
     parent_doc_id: Optional[str] = None,
     include_archived: bool = False,
+    q: Optional[str] = None,
 ) -> list[Doc]:
     stmt = select(Doc).where(Doc.project_id == project_id)
     if not include_archived:
         stmt = stmt.where(Doc.archived_at.is_(None))  # type: ignore[union-attr]
+    if q is not None and q.strip():
+        # Case-insensitive substring over title AND body. Searching markdown_cache
+        # rather than the excerpt means a hit deep in a long note still counts.
+        # ponytail: LIKE, not FTS — a local project's notes are hundreds of rows,
+        # not millions. Add an FTS5 table if a scan ever shows up in a profile.
+        needle = f"%{_escape_like(q.strip())}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(Doc.title).like(func.lower(needle), escape="\\"),
+                func.lower(Doc.markdown_cache).like(func.lower(needle), escape="\\"),
+            )
+        )
     if doc_type is not None:
         stmt = stmt.where(Doc.doc_type == doc_type)
     if status is not None:
