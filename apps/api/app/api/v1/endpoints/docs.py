@@ -32,6 +32,7 @@ def list_docs(
     doc_status: Optional[str] = Query(default=None, alias="status"),
     parent_doc_id: Optional[str] = Query(default=None),
     include_archived: bool = Query(default=False),
+    q: Optional[str] = Query(default=None, max_length=200),
     session: Session = Depends(get_session),
 ) -> list[DocSummary]:
     return doc_service.list_docs(
@@ -41,6 +42,7 @@ def list_docs(
         status=doc_status,
         parent_doc_id=parent_doc_id,
         include_archived=include_archived,
+        q=q,
     )
 
 

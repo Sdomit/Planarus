@@ -247,6 +247,44 @@ def test_doc_color_set_clear_and_reject(client: TestClient) -> None:
     assert bad.status_code == 422
 
 
+def test_list_docs_search_is_case_insensitive_and_covers_the_body(client: TestClient) -> None:
+    _, pid = _seed(client)
+
+    def mk(title: str, body: str) -> None:
+        d = client.post(
+            f"/api/v1/projects/{pid}/docs", json={"title": title, "doc_type": "note"}
+        ).json()
+        client.patch(
+            f"/api/v1/docs/{d['id']}",
+            json={
+                "content_json": '{"type": "doc", "content": []}',
+                "markdown_cache": body,
+                "version": d["version"],
+            },
+        )
+
+    mk("Groceries", "milk and EGGS")
+    mk("Standup", "shipped the 50% rollout")
+    mk("Empty", "")
+
+    def titles(q: str) -> list[str]:
+        res = client.get(f"/api/v1/projects/{pid}/docs", params={"q": q})
+        assert res.status_code == 200
+        return [d["title"] for d in res.json()]
+
+    assert titles("groc") == ["Groceries"]          # title, different case
+    assert titles("GROC") == ["Groceries"]
+    assert titles("eggs") == ["Groceries"]          # body, different case
+    assert titles("shipped") == ["Standup"]         # body only, not in the title
+    assert titles("nope") == []
+    # A literal % must not act as a wildcard: searching "%" finds only the note
+    # that actually contains one. Unescaped, it would match all three.
+    assert titles("50%") == ["Standup"]
+    assert titles("%") == ["Standup"]
+    assert titles("_") == []  # same for the single-char wildcard
+    assert len(titles("")) == 3                     # blank query = no filter
+
+
 def test_list_docs_filter_status(client: TestClient) -> None:
     _, pid = _seed(client)
     d1 = client.post(

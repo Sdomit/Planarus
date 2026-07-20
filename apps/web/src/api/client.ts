@@ -1290,11 +1290,12 @@ export const api = {
       request<Link>(`/projects/${projectId}/links`, { method: 'POST', body: JSON.stringify(data) }),
   },
   docs: {
-    list: (projectId: string, params?: { doc_type?: string; status?: string; include_archived?: boolean }) => {
+    list: (projectId: string, params?: { doc_type?: string; status?: string; include_archived?: boolean; q?: string }) => {
       const q = new URLSearchParams()
       if (params?.doc_type) q.set('doc_type', params.doc_type)
       if (params?.status) q.set('status', params.status)
       if (params?.include_archived) q.set('include_archived', 'true')
+      if (params?.q?.trim()) q.set('q', params.q.trim())
       const qs = q.toString()
       return request<DocSummary[]>(`/projects/${projectId}/docs${qs ? `?${qs}` : ''}`)
     },
