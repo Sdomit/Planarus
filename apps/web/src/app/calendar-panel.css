@@ -118,8 +118,12 @@
 .cal-filter--task.on { border-color: var(--ca-500); }
 
 /* ── Time grid (week / day) ───────────────────────────────── */
-.cal-timegrid { display: grid; border: 1px solid var(--border-default); border-radius: var(--radius-lg); overflow: hidden; max-height: 70vh; overflow-y: auto; }
-.cal-timegrid--7 { grid-template-columns: 52px repeat(7, 1fr); }
+/* overflow must be `auto`, not `hidden` + `overflow-y: auto`: the shorthand
+   pins overflow-x to hidden, which silently CLIPS the last day columns with no
+   scrollbar to reach them. minmax() keeps a day legible instead of squashing
+   seven of them into slivers — below ~556px the grid scrolls sideways. */
+.cal-timegrid { display: grid; border: 1px solid var(--border-default); border-radius: var(--radius-lg); overflow: auto; max-height: 70vh; }
+.cal-timegrid--7 { grid-template-columns: 52px repeat(7, minmax(72px, 1fr)); }
 .cal-timegrid--1 { grid-template-columns: 52px 1fr; }
 .cal-tg-gutter { border-right: 1px solid var(--border-subtle); }
 .cal-tg-corner { height: 44px; border-bottom: 1px solid var(--border-subtle); position: sticky; top: 0; background: var(--bg-subtle); z-index: 2; }

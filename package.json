@@ -2,6 +2,14 @@
   "name": "approvo",
   "private": true,
   "version": "0.1.0",
+  "description": "Local-first AI project cockpit. AI agents propose, you approve.",
+  "license": "Apache-2.0",
+  "author": "Sarmad Domit",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Sdomit/AgentBoard.git"
+  },
+  "packageManager": "pnpm@10.34.5",
   "scripts": {
     "dev:web": "pnpm --filter @approvo/web dev",
     "build:web": "pnpm --filter @approvo/web build",
@@ -10,6 +18,6 @@
   },
   "engines": {
     "node": ">=20",
-    "pnpm": ">=9"
+    "pnpm": ">=10.26"
   }
 }
