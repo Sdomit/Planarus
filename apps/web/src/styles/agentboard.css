@@ -305,6 +305,14 @@ html, body { height: 100%; margin: 0; }
   [data-theme^="dark"] [data-color="purple"] { --note-bg: #262042; --note-border: #392F63; }
   [data-theme^="dark"] [data-color="gray"]   { --note-bg: #2A2D33; --note-border: #3D424A; }
   .ab-notecard[data-color] { background: var(--note-bg); border-color: var(--note-border); }
+  /* Docs list rows show the colour too. Declared after .ab-docitem:hover/.active
+     (equal specificity, so order decides) — hover therefore signals with the
+     border instead of a background swap that would wipe the tint. */
+  .ab-docitem[data-color] { background: var(--note-bg); border-color: var(--note-border); }
+  .ab-docitem[data-color]:hover { border-color: var(--border-strong); }
+  .ab-docitem[data-color].active { border-color: var(--accent); }
+  /* Same reason as the cards: the tertiary ink is unreadable on a tint. */
+  .ab-docitem[data-color] .ab-doc-meta { color: var(--text-primary); opacity: 0.7; }
   /* The muted inks are tuned for the default surface and drop to ~2.3:1 on a
      pastel one. Coloured cards switch to the primary ink, dimmed just enough to
      keep the title/body hierarchy while staying past AA. */
@@ -317,6 +325,35 @@ html, body { height: 100%; margin: 0; }
      and the Tiptap highlight/colour marks read the way they will on export. */
   .ab-editor[data-color] { background: var(--note-bg); border-color: var(--note-border); }
   .ab-editor[data-color] .dp-tiptap-wrap { background: var(--bg-surface); }
+
+  /* Keep-style composer + live search */
+  .ab-note-composer { display: flex; gap: var(--space-2); align-items: center; margin-bottom: var(--space-4); }
+  .ab-note-composer .input { flex: 1; }
+  .dp-search { max-width: 260px; }
+  /* Title doubles as the note's section heading: looks like text, edits like a field. */
+  .dp-title-input {
+    flex: 1; min-width: 0; font-size: var(--text-md); font-weight: 700; color: var(--text-primary);
+    background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm);
+    padding: var(--space-1) var(--space-2); font-family: inherit;
+  }
+  .dp-title-input:hover:not(:disabled) { border-color: var(--border-subtle); }
+  .dp-title-input:focus { outline: none; border-color: var(--accent); background: var(--bg-surface); }
+  .dp-danger { color: var(--danger, #DC2626); }
+
+  /* Card tools row: swatches + delete, revealed together. */
+  .ab-notecard-tools { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+  .ab-note-del {
+    display: inline-flex; align-items: center; justify-content: center; padding: 2px;
+    background: none; border: none; border-radius: var(--radius-sm);
+    color: var(--text-tertiary); cursor: pointer; opacity: 0;
+    transition: opacity var(--duration-fast) var(--ease-standard);
+  }
+  .ab-notecard:hover .ab-note-del, .ab-notecard:focus-within .ab-note-del { opacity: 1; }
+  @media (hover: none) { .ab-note-del { opacity: 1; } }
+  .ab-note-del:hover { color: var(--danger, #DC2626); background: var(--bg-subtle); }
+  .ab-note-del:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .ab-notecard[data-color] .ab-note-del { color: var(--text-primary); opacity: 0; }
+  .ab-notecard[data-color]:hover .ab-note-del, .ab-notecard[data-color]:focus-within .ab-note-del { opacity: 0.75; }
 
   /* Palette row: hidden until the card is hovered/focused, always shown where
      there's no hover (touch), so the swatches are never unreachable. */
