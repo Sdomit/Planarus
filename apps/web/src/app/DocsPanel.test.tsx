@@ -22,6 +22,7 @@ vi.mock('../api/client', () => ({
       get: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      remove: vi.fn(),
       exportMarkdown: vi.fn(),
       // P11.2 presence: reject like the auth-off backend so the hook goes dormant.
       presenceBeat: vi.fn().mockRejectedValue(new Error('404: not found')),
@@ -38,6 +39,7 @@ const mockApi = api as unknown as {
     get: ReturnType<typeof vi.fn>
     create: ReturnType<typeof vi.fn>
     update: ReturnType<typeof vi.fn>
+    remove: ReturnType<typeof vi.fn>
     exportMarkdown: ReturnType<typeof vi.fn>
     presenceBeat: ReturnType<typeof vi.fn>
     presenceLeave: ReturnType<typeof vi.fn>
@@ -75,6 +77,9 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  // A fake-timer test that fails before its own useRealTimers() would otherwise
+  // leave timers faked, hanging every test after it in 5s waitFor timeouts.
+  vi.useRealTimers()
 })
 
 describe('DocsPanel', () => {
@@ -184,6 +189,98 @@ describe('DocsPanel', () => {
     )
   })
 
+  it('the Docs list row carries the colour, and an uncoloured one has no attribute', async () => {
+    mockApi.docs.list.mockResolvedValue([
+      { ...DOC_SUMMARY, id: 'doc_1', title: 'Coloured', color: 'orange' },
+      { ...DOC_SUMMARY, id: 'doc_2', title: 'Plain', color: null },
+    ])
+    const { container } = render(<DocsPanel projectId="proj_1" onClose={vi.fn()} />)
+    await waitFor(() => screen.getByText('Coloured'))
+    const rows = container.querySelectorAll('.ab-docitem')
+    expect(rows[0].getAttribute('data-color')).toBe('orange')
+    expect(rows[1].getAttribute('data-color')).toBeNull()
+  })
+
+  it('live search debounces and sends the raw query to the server', async () => {
+    vi.useFakeTimers()
+    mockApi.docs.list.mockResolvedValue([DOC_SUMMARY])
+    render(<DocsPanel projectId="proj_1" docType="note" onClose={vi.fn()} />)
+    await act(async () => { await vi.advanceTimersByTimeAsync(250) })
+    mockApi.docs.list.mockClear()
+
+    const box = screen.getByPlaceholderText('Search notes…')
+    fireEvent.change(box, { target: { value: 'gro' } })
+    fireEvent.change(box, { target: { value: 'groc' } })
+    // Mid-debounce: still nothing sent.
+    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    expect(mockApi.docs.list).not.toHaveBeenCalled()
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(200) })
+    // One request for the settled value, not one per keystroke. Case is preserved —
+    // the server lowercases both sides, so matching stays insensitive.
+    expect(mockApi.docs.list).toHaveBeenCalledTimes(1)
+    expect(mockApi.docs.list).toHaveBeenCalledWith('proj_1', { doc_type: 'note', q: 'groc' })
+    vi.useRealTimers()
+  })
+
+  it('a search with no hits says so instead of showing the empty-state pitch', async () => {
+    vi.useFakeTimers()
+    mockApi.docs.list.mockResolvedValue([])
+    render(<DocsPanel projectId="proj_1" docType="note" onClose={vi.fn()} />)
+    await act(async () => { await vi.advanceTimersByTimeAsync(250) })
+    fireEvent.change(screen.getByPlaceholderText('Search notes…'), { target: { value: 'zzz' } })
+    await act(async () => { await vi.advanceTimersByTimeAsync(250) })
+    expect(screen.getByText(/No notes match/)).toBeTruthy()
+    expect(screen.queryByText(/No notes yet/)).toBeNull()
+    vi.useRealTimers()
+  })
+
+  it('deleting a note card asks first, then drops it from the grid', async () => {
+    mockApi.docs.list.mockResolvedValue([DOC_SUMMARY])
+    mockApi.docs.remove.mockResolvedValue(undefined)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    render(<DocsPanel projectId="proj_1" docType="note" onClose={vi.fn()} />)
+    await waitFor(() => screen.getByText('Test Note'))
+
+    fireEvent.click(screen.getByLabelText('Delete Test Note'))
+    expect(confirm).toHaveBeenCalled()
+    expect(mockApi.docs.remove).not.toHaveBeenCalled()   // declined = no delete
+
+    confirm.mockReturnValue(true)
+    fireEvent.click(screen.getByLabelText('Delete Test Note'))
+    await waitFor(() => expect(mockApi.docs.remove).toHaveBeenCalledWith('doc_1'))
+    await waitFor(() => expect(screen.queryByText('Test Note')).toBeNull())
+    confirm.mockRestore()
+  })
+
+  it('renaming in the editor autosaves the title without blanking it on empty', async () => {
+    vi.useFakeTimers()
+    mockApi.docs.list.mockResolvedValue([DOC_SUMMARY])
+    mockApi.docs.get.mockResolvedValue(DOC_FULL)
+    mockApi.docs.update.mockResolvedValue({ ...DOC_FULL, title: 'Renamed', version: 2 })
+    render(<DocsPanel projectId="proj_1" docType="note" onClose={vi.fn()} />)
+    await act(async () => { await vi.advanceTimersByTimeAsync(250) })
+    fireEvent.click(screen.getByText('Test Note'))
+    await act(async () => { await vi.advanceTimersByTimeAsync(50) })
+
+    const titleBox = screen.getByLabelText('Title') as HTMLInputElement
+    expect(titleBox.value).toBe('Test Note')
+
+    fireEvent.change(titleBox, { target: { value: 'Renamed' } })
+    expect(mockApi.docs.update).not.toHaveBeenCalled()      // debounced, not per keystroke
+    // No waitFor under fake timers — it polls on the very timers we froze.
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
+    expect(mockApi.docs.update.mock.calls[0][1].title).toBe('Renamed')
+
+    // Clearing the box must not save an empty title — blur restores the current one.
+    mockApi.docs.update.mockClear()
+    fireEvent.change(titleBox, { target: { value: '' } })
+    fireEvent.blur(titleBox)
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
+    expect(mockApi.docs.update).not.toHaveBeenCalled()
+    vi.useRealTimers()
+  })
+
   it('note card with no body shows the empty placeholder', async () => {
     mockApi.docs.list.mockResolvedValue([{ ...DOC_SUMMARY, excerpt: '   ' }])
     render(<DocsPanel projectId="proj_1" docType="note" onClose={vi.fn()} />)
@@ -191,20 +288,20 @@ describe('DocsPanel', () => {
   })
 
   // Notes = this same panel locked to doc_type 'note' (Layout renders it as the Notes view).
-  it('docType="note" filters the list, relabels, and locks the create type', async () => {
+  it('docType="note" filters the list and creates from the Keep-style composer', async () => {
     mockApi.docs.list.mockResolvedValue([])
     mockApi.docs.create.mockResolvedValue(DOC_FULL)
     mockApi.docs.get.mockResolvedValue(DOC_FULL)
     render(<DocsPanel projectId="proj_1" docType="note" onClose={vi.fn()} />)
 
     await waitFor(() => expect(screen.getByText(/No notes yet/i)).toBeTruthy())
-    expect(mockApi.docs.list).toHaveBeenCalledWith('proj_1', { doc_type: 'note' })
+    expect(mockApi.docs.list).toHaveBeenCalledWith('proj_1', { doc_type: 'note', q: '' })
 
-    fireEvent.click(screen.getByText('+ New Note'))
-    // The type dropdown is hidden — a note can only ever be a note.
+    // No "+ New Note" button and no type dropdown — the composer replaces both.
+    expect(screen.queryByText('+ New Note')).toBeNull()
     expect(screen.queryByText('Type')).toBeNull()
-    fireEvent.change(screen.getByPlaceholderText('Note title'), { target: { value: 'Groceries' } })
-    fireEvent.click(screen.getByText('Create'))
+    fireEvent.change(screen.getByPlaceholderText('Take a note…'), { target: { value: 'Groceries' } })
+    fireEvent.keyDown(screen.getByPlaceholderText('Take a note…'), { key: 'Enter' })
 
     await waitFor(() =>
       expect(mockApi.docs.create).toHaveBeenCalledWith('proj_1', {
