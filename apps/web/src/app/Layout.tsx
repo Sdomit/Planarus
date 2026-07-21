@@ -336,7 +336,7 @@ export default function Layout() {
         aria-hidden={mobileNavMode && !mobileMenuOpen ? true : undefined}
       >
         <div className="ab-brand">
-          <div className="ab-brand-mark">A</div>
+          <div className="ab-brand-mark">P</div>
           <div>
             <div className="ab-brand-name">Planarus</div>
             <div className="ab-brand-env">local · :{window.location.port || '80'}<LanAddress /></div>
