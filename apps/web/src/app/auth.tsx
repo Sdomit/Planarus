@@ -69,6 +69,11 @@ function friendly(msg: string): string {
   if (msg.startsWith('429')) return 'Too many attempts — wait a minute and try again.'
   if (msg.startsWith('404')) return 'Password sign-in is not enabled on this server.'
   if (msg.startsWith('422')) return 'Password must be at least 10 characters.'
+  // client.ts prefixes every HTTP failure with its status, so a message without
+  // one never reached the server: API down, wrong proxy target, dropped LAN
+  // link. Browsers word that differently ("Failed to fetch", "Load failed",
+  // "NetworkError…"), so key off the missing status rather than the wording.
+  if (!/^\d{3}/.test(msg)) return 'Cannot reach the server. Is the API running?'
   return msg
 }
 
