@@ -365,6 +365,21 @@ def list_members(session: Session, workspace_id: str) -> list[WorkspaceMember]:
     )
 
 
+def member_candidates(session: Session, workspace_id: str) -> list[User]:
+    """Active accounts not already in this workspace — the invite pick-list.
+
+    Scoped per workspace and gated on the owner role at the endpoint, so this
+    is not a directory any signed-in user can enumerate: you already manage a
+    workspace, and adding someone means learning their address anyway. Already
+    members are excluded because adding them is a 409.
+    """
+    member_ids = {m.user_id for m in list_members(session, workspace_id)}
+    users = session.exec(
+        select(User).where(User.is_active == True).order_by(User.email)  # noqa: E712
+    ).all()
+    return [u for u in users if u.id not in member_ids]
+
+
 def count_owners(session: Session, workspace_id: str) -> int:
     return len(
         [m for m in list_members(session, workspace_id) if m.role == "owner"]

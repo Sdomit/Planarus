@@ -32,6 +32,18 @@ class MemberRoleUpdate(BaseModel):
         return _validate_role(v)
 
 
+class MemberCandidate(BaseModel):
+    """An account that could be added to a workspace — email + name, nothing else.
+
+    Deliberately not MemberRead: a candidate has no membership row yet, and the
+    admin flags (is_admin / is_active) are the admin plane's business, not a
+    workspace owner's.
+    """
+
+    email: str
+    display_name: str
+
+
 class MemberRead(BaseModel):
     id: str
     workspace_id: str
