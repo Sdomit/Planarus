@@ -177,14 +177,8 @@ describe('navigation state survives a reload', () => {
 })
 
 describe('brand mark', () => {
-  it('matches the product name, so a rename cannot leave it stale', () => {
-    // The mark read "A" (Approvo/AgentBoard) for the whole Planarus rename
-    // because nothing asserted it. Derive the expectation from the name.
-    const { container } = render(<Layout />)
-    const mark = container.querySelector('.ab-brand-mark')
-    const name = container.querySelector('.ab-brand-name')
-    expect(mark?.textContent?.trim()).toBe(name?.textContent?.trim()?.[0])
-  })
+  // The letter-mark rename guard that used to live here retired with the
+  // letter: the mark is now the approved artwork, asserted in "Cosmo theme".
 
   it('falls back to the product initials in the chips, not a stale brand', () => {
     // Same rename miss, one layer down: the project selector and account chip
