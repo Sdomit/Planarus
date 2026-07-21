@@ -84,8 +84,13 @@ def auth_status(session: Session = Depends(get_session)) -> dict:
 
     Unauthenticated by necessity — it is read before anyone can sign in — and
     only ever true before the first account exists (D29).
+
+    Gated on the password provider too: the setup screen it drives is the
+    register form, and with the provider off that form 404s. An OAuth-only or
+    dev-login server answers false and gets the plain gate instead.
     """
-    return {"needs_setup": auth_service.needs_setup(session)}
+    unclaimed = settings.auth_password_enabled and auth_service.needs_setup(session)
+    return {"needs_setup": unclaimed}
 
 
 # --- P11.1: local email+password provider (D25) --------------------------------
