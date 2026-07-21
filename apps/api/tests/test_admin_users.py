@@ -160,6 +160,63 @@ def test_first_run_to_guest_journey(client, auth_on):
     ] == "Roadmap"
 
 
+def _ownerless_workspace(session, name="Default Workspace") -> str:
+    """A workspace with zero members — via the service layer, bypassing the
+    POST /workspaces auto-owner (D-whatever): the exact shape auth-off,
+    pre-existing local-mode data is in the moment auth gets turned on."""
+    from app.schemas.workspace import WorkspaceCreate
+    from app.services import workspace_service
+
+    ws = workspace_service.create_workspace(
+        session, WorkspaceCreate(name=name, slug=name.lower().replace(" ", "-"))
+    )
+    session.commit()
+    return ws.id
+
+
+def test_unclaimed_workspaces_admin_only(client, session, auth_on):
+    _ownerless_workspace(session)
+    admin = _login(client, "root@acme.co")
+    plain = _login(client, "user@acme.co")
+    assert client.get("/api/v1/admin/workspaces/unclaimed", cookies=_auth(plain)).status_code == 403
+    listed = client.get("/api/v1/admin/workspaces/unclaimed", cookies=_auth(admin))
+    assert listed.status_code == 200
+    assert [w["name"] for w in listed.json()] == ["Default Workspace"]
+
+
+def test_claiming_removes_it_from_the_unclaimed_list(client, session, auth_on):
+    ws_id = _ownerless_workspace(session)
+    admin = _login(client, "root@acme.co")
+
+    join = client.post(
+        f"/api/v1/workspaces/{ws_id}/members",
+        json={"email": "root@acme.co", "role": "owner"},
+        cookies=_auth(admin),
+    )
+    assert join.status_code == 201, join.text
+
+    listed = client.get("/api/v1/admin/workspaces/unclaimed", cookies=_auth(admin))
+    assert listed.json() == []
+    # And the whole point: projects in it are now visible.
+    ws_list = client.get("/api/v1/workspaces", cookies=_auth(admin))
+    assert [w["id"] for w in ws_list.json()] == [ws_id]
+
+
+def test_a_workspace_with_any_member_never_appears(client, session, auth_on):
+    """Sanity check the query isn't accidentally "all workspaces"."""
+    ws_id = _ownerless_workspace(session, "Already Owned")
+    admin = _login(client, "root@acme.co")
+    client.post(
+        f"/api/v1/workspaces/{ws_id}/members",
+        json={"email": "root@acme.co", "role": "owner"},
+        cookies=_auth(admin),
+    )
+    other_ws = _ownerless_workspace(session, "Still Unowned")
+
+    listed = client.get("/api/v1/admin/workspaces/unclaimed", cookies=_auth(admin))
+    assert [w["id"] for w in listed.json()] == [other_ws]
+
+
 def test_roster_admin_only(client, auth_on):
     admin = _login(client, "root@acme.co")
     plain = _login(client, "user@acme.co")
