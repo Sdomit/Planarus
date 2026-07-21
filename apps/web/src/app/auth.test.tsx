@@ -90,6 +90,21 @@ describe('AuthGate', () => {
     }
   })
 
+  it('tells a locked-out user how to get back in, but not during setup', async () => {
+    vi.mocked(api.auth.me).mockRejectedValue(new Error('401: authentication required'))
+    render(<AuthGate><p>the app</p></AuthGate>)
+    // Sign-in: both routes are named (ask an admin, or the recovery CLI).
+    expect(await screen.findByText(/An admin can reset your password/)).toBeTruthy()
+    expect(screen.getByText(/--reset-password/)).toBeTruthy()
+    cleanup()
+
+    // Setup: there are no admins and no accounts yet, so the advice is noise.
+    vi.mocked(api.auth.status).mockResolvedValue({ needs_setup: true })
+    render(<AuthGate><p>the app</p></AuthGate>)
+    expect(await screen.findByText('Set up Planarus')).toBeTruthy()
+    expect(screen.queryByText(/An admin can reset your password/)).toBeNull()
+  })
+
   it('registers via the create-account mode', async () => {
     vi.mocked(api.auth.me).mockRejectedValue(new Error('401: authentication required'))
     vi.mocked(api.auth.passwordRegister).mockResolvedValue(ME)
