@@ -23,6 +23,7 @@ class RiskCreate(BaseModel):
     severity: str
     status: str = "open"
     mitigation: Optional[str] = None
+    phase_id: Optional[str] = None
 
     @field_validator("severity")
     @classmethod
@@ -45,6 +46,7 @@ class RiskUpdate(BaseModel):
     severity: Optional[str] = None
     status: Optional[str] = None
     mitigation: Optional[str] = None
+    phase_id: Optional[str] = None
 
     @field_validator("severity")
     @classmethod
@@ -64,6 +66,7 @@ class RiskUpdate(BaseModel):
 class RiskRead(BaseModel):
     id: str
     project_id: str
+    phase_id: Optional[str]
     title: str
     description: Optional[str]
     severity: str

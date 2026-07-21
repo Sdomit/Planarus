@@ -108,6 +108,7 @@ export interface Task {
 export interface Decision {
   id: string
   project_id: string
+  phase_id: string | null
   title: string
   decision: string
   context: string | null
@@ -120,6 +121,7 @@ export interface Decision {
 export interface Risk {
   id: string
   project_id: string
+  phase_id: string | null
   title: string
   description: string | null
   severity: string
@@ -1150,12 +1152,12 @@ export const api = {
   },
   decisions: {
     list: (projectId: string) => request<Decision[]>(`/projects/${projectId}/decisions`),
-    create: (projectId: string, data: { title: string; decision: string; status?: string }) =>
+    create: (projectId: string, data: { title: string; decision: string; status?: string; phase_id?: string }) =>
       request<Decision>(`/projects/${projectId}/decisions`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    update: (id: string, data: Partial<Pick<Decision, 'title' | 'decision' | 'context' | 'status'>>) =>
+    update: (id: string, data: Partial<Pick<Decision, 'title' | 'decision' | 'context' | 'status' | 'phase_id'>>) =>
       request<Decision>(`/decisions/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remove: (id: string) => request<void>(`/decisions/${id}`, { method: 'DELETE' }),
     reorder: (projectId: string, ids: string[]) =>
@@ -1163,9 +1165,9 @@ export const api = {
   },
   risks: {
     list: (projectId: string) => request<Risk[]>(`/projects/${projectId}/risks`),
-    create: (projectId: string, data: { title: string; severity: string; status?: string }) =>
+    create: (projectId: string, data: { title: string; severity: string; status?: string; phase_id?: string }) =>
       request<Risk>(`/projects/${projectId}/risks`, { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: Partial<Pick<Risk, 'title' | 'description' | 'severity' | 'status' | 'mitigation'>>) =>
+    update: (id: string, data: Partial<Pick<Risk, 'title' | 'description' | 'severity' | 'status' | 'mitigation' | 'phase_id'>>) =>
       request<Risk>(`/risks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remove: (id: string) => request<void>(`/risks/${id}`, { method: 'DELETE' }),
     reorder: (projectId: string, ids: string[]) =>

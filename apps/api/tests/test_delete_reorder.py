@@ -172,3 +172,26 @@ def test_reorder_writes_single_audit_event(client: TestClient, session) -> None:
         ).all()
     )
     assert len(events) == 1
+
+
+def test_delete_phase_unlinks_decisions_and_risks(client: TestClient) -> None:
+    """Phase 19: decisions/risks gained phase_id, so delete_phase must clear it.
+    Miss them and the enforced FK makes the phase permanently undeletable."""
+    pid = _seed(client)
+    phase = client.post(f"/api/v1/projects/{pid}/phases", json={"title": "P1"}).json()
+    dec = client.post(
+        f"/api/v1/projects/{pid}/decisions",
+        json={"title": "D", "decision": "X", "phase_id": phase["id"]},
+    ).json()
+    risk = client.post(
+        f"/api/v1/projects/{pid}/risks",
+        json={"title": "R", "severity": "high", "phase_id": phase["id"]},
+    ).json()
+
+    assert client.delete(f"/api/v1/phases/{phase['id']}").status_code == 204
+
+    # Both survive the phase, unphased rather than deleted or dangling.
+    decisions = client.get(f"/api/v1/projects/{pid}/decisions").json()
+    risks = client.get(f"/api/v1/projects/{pid}/risks").json()
+    assert [(d["id"], d["phase_id"]) for d in decisions] == [(dec["id"], None)]
+    assert [(r["id"], r["phase_id"]) for r in risks] == [(risk["id"], None)]

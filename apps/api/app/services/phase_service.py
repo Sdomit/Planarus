@@ -5,9 +5,11 @@ from sqlmodel import Session, select
 
 from app.core.utils import new_id, now_utc
 from app.models.calendar_event import CalendarEvent
+from app.models.decision import Decision
 from app.models.milestone import Milestone
 from app.models.phase import Phase
 from app.models.project import Project
+from app.models.risk import Risk
 from app.models.stage import Stage
 from app.models.task import Task
 from app.schemas.phase import PhaseCreate, PhaseUpdate
@@ -102,8 +104,13 @@ def update_phase(
 
 def delete_phase(session: Session, phase_id: str) -> bool:
     """Delete a phase. Its tasks are unphased (phase_id/stage_id cleared),
-    milestones and calendar events are unlinked (phase_id cleared), and the
-    phase's stages are deleted (D-P15.3). Tasks/milestones/events survive."""
+    milestones, calendar events, decisions and risks are unlinked (phase_id
+    cleared), and the phase's stages are deleted (D-P15.3). Every one of those
+    children survives — only the phase and its stages go.
+
+    Phase 19: decisions/risks joined this list when they gained phase_id. Miss
+    one and the phase becomes permanently undeletable, since the FK is enforced
+    and nothing here would clear the reference."""
     phase = session.get(Phase, phase_id)
     if phase is None:
         return False
@@ -127,6 +134,16 @@ def delete_phase(session: Session, phase_id: str) -> bool:
         event.phase_id = None
         event.updated_at = now
         session.add(event)
+    for decision in session.exec(
+        select(Decision).where(Decision.phase_id == phase_id)
+    ).all():
+        decision.phase_id = None
+        decision.updated_at = now
+        session.add(decision)
+    for risk in session.exec(select(Risk).where(Risk.phase_id == phase_id)).all():
+        risk.phase_id = None
+        risk.updated_at = now
+        session.add(risk)
     for stage in session.exec(select(Stage).where(Stage.phase_id == phase_id)).all():
         session.delete(stage)
 
