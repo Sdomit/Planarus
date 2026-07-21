@@ -200,7 +200,12 @@ def test_list_decisions_emits_and_filters_phase(client: TestClient, session: Ses
 
     unfiltered = read.list_decisions(session, cap, read.ListPhaseScopedArgs(project_id=pid))
     assert unfiltered.metadata["count"] == 2
-    assert f"phase_id: {phase_id}" in unfiltered.text
+    # The linkage is emitted per block. Assert on the FIELD, not the id value:
+    # a phase id is 32 hex chars, so the serializer's secret scanner redacts it
+    # as a high-entropy string for some (not all) generated ids — asserting the
+    # literal id here is flaky. Agents get the id from metadata, which is not
+    # redacted, and pass it back as the filter (exercised below).
+    assert unfiltered.text.count("phase_id: ") == 2
     assert "phase_id: (none)" in unfiltered.text  # unphased renders explicitly
 
     filtered = read.list_decisions(
@@ -219,7 +224,8 @@ def test_list_risks_emits_and_filters_phase(client: TestClient, session: Session
 
     unfiltered = read.list_risks(session, cap, read.ListPhaseScopedArgs(project_id=pid))
     assert unfiltered.metadata["count"] == 2
-    assert f"phase_id: {phase_id}" in unfiltered.text
+    assert unfiltered.text.count("phase_id: ") == 2  # see note in the decision test
+    assert "phase_id: (none)" in unfiltered.text
 
     filtered = read.list_risks(
         session, cap, read.ListPhaseScopedArgs(project_id=pid, phase_id=phase_id)
@@ -269,3 +275,40 @@ def test_get_active_work_excludes_closed_phase_risks(
     res = read.get_active_work(session, cap, read.ProjectArgs(project_id=pid))
     assert res.metadata["phase_open_risk_count"] == 0
     assert "handled risk" not in res.text
+
+
+def test_get_active_work_never_returns_another_projects_rows(
+    client: TestClient, session: Session
+) -> None:
+    """The FK only requires the phase to EXIST, not to belong to this project.
+    A cross-project link (reachable via a crafted import) must not splice
+    foreign text into this project's agent brief."""
+    from app.models.decision import Decision
+    from app.models.risk import Risk
+    from app.core.utils import new_id, now_utc
+
+    ws, pid = seed(client, "rp94")
+    _, other = seed(client, "rp95")
+    phase = client.post(
+        f"/api/v1/projects/{pid}/phases", json={"title": "P", "status": "active"}
+    ).json()
+
+    # Plant rows owned by the OTHER project that point at this project's phase.
+    now = now_utc()
+    session.add(Decision(
+        id=new_id("dec"), project_id=other, phase_id=phase["id"],
+        title="FOREIGN decision", decision="leaked body", status="proposed",
+        sort_order=0, created_at=now, updated_at=now,
+    ))
+    session.add(Risk(
+        id=new_id("rsk"), project_id=other, phase_id=phase["id"],
+        title="FOREIGN risk", severity="high", status="open",
+        sort_order=0, created_at=now, updated_at=now,
+    ))
+    session.commit()
+
+    res = read.get_active_work(session, read_cap(ws, pid), read.ProjectArgs(project_id=pid))
+    assert res.metadata["phase_decision_count"] == 0
+    assert res.metadata["phase_open_risk_count"] == 0
+    assert "FOREIGN" not in res.text
+    assert "leaked body" not in res.text
