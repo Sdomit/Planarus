@@ -31,7 +31,11 @@ const me = {
 let auth: { me: typeof me | null; signOut: () => void } = { me: null, signOut: vi.fn() }
 vi.mock('./auth', () => ({ useAuthInfo: () => auth }))
 
-beforeEach(() => { auth = { me: null, signOut: vi.fn() }; localStorage.clear() })
+beforeEach(() => {
+  auth = { me: null, signOut: vi.fn() }
+  localStorage.clear()
+  document.documentElement.setAttribute('data-theme', 'light-cosmo')
+})
 afterEach(cleanup)
 
 const NAV_KEY = 'planarus.nav'
@@ -103,6 +107,27 @@ describe('LAN address', () => {
     fireEvent.click(await screen.findByText('ip'))
     expect(writeText).toHaveBeenCalledWith(`http://192.168.1.42:${window.location.port || '80'}`)
     expect(await screen.findByText('copied ✓')).toBeTruthy()
+  })
+})
+
+describe('Cosmo theme', () => {
+  it('renders the approved brand mark', () => {
+    const { container } = render(<Layout />)
+
+    expect(container.querySelector('.ab-brand-mark')?.getAttribute('src'))
+      .toBe('/planarus-icon.png')
+  })
+
+  it('toggles the persisted Cosmo light and dark pair', () => {
+    render(<Layout />)
+
+    fireEvent.click(screen.getByLabelText('Toggle theme'))
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark-cosmo')
+    expect(localStorage.getItem('planarus.theme')).toBe('dark-cosmo')
+
+    fireEvent.click(screen.getByLabelText('Toggle theme'))
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light-cosmo')
+    expect(localStorage.getItem('planarus.theme')).toBe('light-cosmo')
   })
 })
 
