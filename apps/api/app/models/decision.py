@@ -14,6 +14,9 @@ class Decision(SQLModel, table=True):
 
     id: str = Field(primary_key=True)
     project_id: str = Field(foreign_key="project.id", index=True)
+    # Phase 19 (D45): optional phase this decision was made for. NULL = a
+    # cross-cutting decision that belongs to the project, not one phase.
+    phase_id: Optional[str] = Field(default=None, foreign_key="phase.id", index=True)
     title: str = Field(max_length=200)
     context: Optional[str] = None
     decision: str

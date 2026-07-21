@@ -179,26 +179,32 @@ def list_tasks(
 @router.get("/projects/{project_id}/decisions")
 def list_decisions(
     project_id: str,
+    phase_id: Optional[str] = None,
     limit: int = Query(default=MAX_LIST_ROWS, ge=1, le=MAX_LIST_ROWS),
     cap: Capability = Depends(require_external_read),
     session: Session = Depends(get_session),
 ) -> dict:
     return _run_read(
         session, cap, read_tools.list_decisions,
-        read_tools.ListScopedArgs(project_id=project_id, limit=limit),
+        read_tools.ListPhaseScopedArgs(
+            project_id=project_id, phase_id=phase_id, limit=limit
+        ),
     )
 
 
 @router.get("/projects/{project_id}/risks")
 def list_risks(
     project_id: str,
+    phase_id: Optional[str] = None,
     limit: int = Query(default=MAX_LIST_ROWS, ge=1, le=MAX_LIST_ROWS),
     cap: Capability = Depends(require_external_read),
     session: Session = Depends(get_session),
 ) -> dict:
     return _run_read(
         session, cap, read_tools.list_risks,
-        read_tools.ListScopedArgs(project_id=project_id, limit=limit),
+        read_tools.ListPhaseScopedArgs(
+            project_id=project_id, phase_id=phase_id, limit=limit
+        ),
     )
 
 

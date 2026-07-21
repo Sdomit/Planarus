@@ -55,3 +55,52 @@ def test_import_rejects_unrecognized_payload(client):
 def test_export_missing_project_404(client):
     res = client.get("/api/v1/projects/proj_does_not_exist/export")
     assert res.status_code == 404
+
+
+def test_import_remaps_decision_and_risk_phase(client):
+    """Phase 19: import_project has its own graph walk, separate from
+    duplicate_project's — the phase_id remap must be applied here too, or the
+    copy points at the SOURCE project's phase (and 500s on another instance)."""
+    ws, proj = seed(client, "exp-phase")
+    phase = _create(client, f"/api/v1/projects/{proj}/phases", {"title": "Phase 1"})
+    _create(client, f"/api/v1/projects/{proj}/decisions",
+            {"title": "D-phased", "decision": "x", "phase_id": phase["id"]})
+    _create(client, f"/api/v1/projects/{proj}/risks",
+            {"title": "R-phased", "severity": "high", "phase_id": phase["id"]})
+    _create(client, f"/api/v1/projects/{proj}/decisions", {"title": "D-global", "decision": "y"})
+
+    data = client.get(f"/api/v1/projects/{proj}/export").json()
+    new = client.post("/api/v1/projects/import", json={"workspace_id": ws, "data": data})
+    assert new.status_code in (200, 201), new.text
+    new_id_ = new.json()["id"]
+
+    new_phase_ids = {p["id"] for p in client.get(f"/api/v1/projects/{new_id_}/phases").json()}
+    assert phase["id"] not in new_phase_ids  # remapped, so the source id is gone
+
+    decisions = {d["title"]: d["phase_id"] for d in client.get(f"/api/v1/projects/{new_id_}/decisions").json()}
+    risks = {r["title"]: r["phase_id"] for r in client.get(f"/api/v1/projects/{new_id_}/risks").json()}
+    assert decisions["D-phased"] in new_phase_ids, "decision must point at the COPY's phase"
+    assert risks["R-phased"] in new_phase_ids, "risk must point at the COPY's phase"
+    assert decisions["D-global"] is None
+
+
+def test_import_drops_unresolvable_phase_reference(client):
+    """A caller-supplied phase_id that isn't in this import's own payload must
+    become NULL, never be written through at a foreign project's row."""
+    ws, proj = seed(client, "exp-forge")
+    other_ws, other_proj = seed(client, "exp-victim")
+    victim_phase = _create(client, f"/api/v1/projects/{other_proj}/phases", {"title": "Victim"})
+
+    data = client.get(f"/api/v1/projects/{proj}/export").json()
+    data["phases"] = []
+    data["decisions"] = [{
+        "id": "dec_forged", "project_id": proj, "phase_id": victim_phase["id"],
+        "title": "forged", "decision": "x", "context": None, "status": "proposed",
+        "sort_order": 0, "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+    }]
+
+    new = client.post("/api/v1/projects/import", json={"workspace_id": ws, "data": data})
+    assert new.status_code in (200, 201), new.text
+    imported = client.get(f"/api/v1/projects/{new.json()['id']}/decisions").json()
+    assert [d["phase_id"] for d in imported] == [None]

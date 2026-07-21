@@ -409,3 +409,31 @@ def test_project_metadata_injection_defanged(client: TestClient) -> None:
     assert "assistant:" not in section4
     assert "tool_call" not in section4
     assert "<|im_start|>" not in section4
+
+
+def test_pack_annotates_decisions_and_risks_with_phase(client: TestClient) -> None:
+    """Phase 19 (D46): the Markdown an agent reads carries the same phase
+    structure the MCP tools expose — unphased items stay unannotated."""
+    pid = _seed_project(client, "cp-phase")
+    phase = client.post(
+        f"/api/v1/projects/{pid}/phases", json={"title": "Auth phase"}
+    ).json()
+    client.post(
+        f"/api/v1/projects/{pid}/decisions",
+        json={"title": "Use OAuth", "decision": "OAuth 2.1", "phase_id": phase["id"]},
+    )
+    client.post(
+        f"/api/v1/projects/{pid}/risks",
+        json={"title": "Token leak", "severity": "high", "phase_id": phase["id"]},
+    )
+    client.post(
+        f"/api/v1/projects/{pid}/decisions",
+        json={"title": "Use SQLite", "decision": "local-first"},
+    )
+
+    md = _preview(client, pid).json()["markdown"]
+    assert "Use OAuth (phase: Auth phase)" in md
+    assert "Token leak (phase: Auth phase)" in md
+    # A project-level decision carries no phase annotation at all.
+    assert "Use SQLite (phase:" not in md
+    assert "Use SQLite" in md

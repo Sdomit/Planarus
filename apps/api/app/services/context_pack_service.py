@@ -18,6 +18,7 @@ Guarantees:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Optional
 
 from sqlmodel import Session, select
 
@@ -299,16 +300,30 @@ def _resolved_blockers_lines(ctx: RenderContext) -> list[str]:
     return [f"Resolved/closed blockers: {len(resolved)}"]
 
 
+def _phase_titles(ctx: RenderContext) -> dict[str, str]:
+    """Phase 19 (D46): id -> title, so decisions/risks read with the same phase
+    structure in Markdown that the MCP tools expose."""
+    return {p.id: p.title for p in ctx.phases}
+
+
+def _phase_suffix(titles: dict[str, str], phase_id: Optional[str]) -> str:
+    if not phase_id:
+        return ""
+    return f" (phase: {titles.get(phase_id, phase_id)})"
+
+
 def _open_risks_lines(ctx: RenderContext) -> list[str]:
     openr = [r for r in ctx.risks if r.status not in _CLOSED_RISK]
     sev_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     openr.sort(key=lambda r: (sev_order.get(r.severity, 99), r.id))
+    titles = _phase_titles(ctx)
     lines = [f"Open risks ({len(openr)}):"]
     if not openr:
         lines.append("- none")
     for r in openr:
         mit = f" — mitigation: {r.mitigation}" if r.mitigation else ""
-        lines.append(f"- [{r.severity}/{r.status}] {r.title}{mit}")
+        phase = _phase_suffix(titles, getattr(r, "phase_id", None))
+        lines.append(f"- [{r.severity}/{r.status}] {r.title}{phase}{mit}")
     return lines
 
 
@@ -327,12 +342,15 @@ def _split_decisions(ctx: RenderContext) -> tuple[list, list]:
     return recent, extra
 
 
-def _decisions_lines(items: list, header: str) -> list[str]:
+def _decisions_lines(
+    items: list, header: str, titles: Optional[dict[str, str]] = None
+) -> list[str]:
     lines = [f"{header} ({len(items)}):"]
     if not items:
         lines.append("- none")
     for d in items:
-        lines.append(f"- [{d.status}] {d.title}: {d.decision}")
+        phase = _phase_suffix(titles or {}, getattr(d, "phase_id", None))
+        lines.append(f"- [{d.status}] {d.title}{phase}: {d.decision}")
     return lines
 
 
@@ -419,7 +437,7 @@ def _build_structured_fragments(
         "Recent decisions",
         "canonical",
         None,
-        _decisions_lines(recent, "Recent decisions"),
+        _decisions_lines(recent, "Recent decisions", _phase_titles(ctx)),
         default_on=True,
     )
     # Optional structured sources (trimmable).
@@ -452,7 +470,7 @@ def _build_structured_fragments(
         "Additional decisions",
         "canonical",
         tokens.TRIM_DECISIONS_EXTRA,
-        _decisions_lines(extra, "Additional decisions"),
+        _decisions_lines(extra, "Additional decisions", _phase_titles(ctx)),
         default_on=sel.include_all_decisions,
     )
     if sel.include_audit_slice and "audit_recent" not in excluded:
@@ -1010,13 +1028,13 @@ def build_sources(session: Session, project: Project) -> ContextPackSourcesRespo
             ("blockers_open", "Open blockers", "canonical", True, False, _open_blockers_lines(ctx)),
             ("risks_open", "Open risks", "canonical", True, False, _open_risks_lines(ctx)),
             ("decisions_recent", "Recent decisions", "canonical", True, False,
-             _decisions_lines(recent, "Recent decisions")),
+             _decisions_lines(recent, "Recent decisions", _phase_titles(ctx))),
             ("tasks_done", "Completed tasks (count)", "canonical", False, True, _done_tasks_lines(ctx)),
             ("risks_closed", "Closed risks (count)", "canonical", False, True, _closed_risks_lines(ctx)),
             ("blockers_resolved", "Resolved blockers (count)", "canonical", False, True,
              _resolved_blockers_lines(ctx)),
             ("decisions_extra", "Additional decisions", "canonical", False, True,
-             _decisions_lines(extra, "Additional decisions")),
+             _decisions_lines(extra, "Additional decisions", _phase_titles(ctx))),
             ("audit_recent", "Recent audit metadata", "derived", False, True,
              _audit_lines(session, project)),
         ]

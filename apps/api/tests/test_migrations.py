@@ -178,3 +178,51 @@ def test_0006_origin_check_allows_mcp(tmp_path):
                 con.rollback()
     finally:
         con.close()
+
+
+def test_0029_adds_phase_link_to_decision_and_risk(tmp_path):
+    """Phase 19 (D45): the migration must produce the same nullable phase_id FK
+    the models declare — the API tests build their schema with create_all, so
+    only this catches migration/model drift."""
+    db_path = tmp_path / "phase19.db"
+    cfg = _config(db_path)
+    command.upgrade(cfg, "head")
+
+    con = sqlite3.connect(db_path)
+    try:
+        for table in ("decision", "risk"):
+            cols = {row[1]: row for row in con.execute(f"PRAGMA table_info({table})")}
+            assert "phase_id" in cols, f"{table}.phase_id missing"
+            assert cols["phase_id"][3] == 0, f"{table}.phase_id must be nullable"
+
+            fks = {row[3]: row[2] for row in con.execute(f"PRAGMA foreign_key_list({table})")}
+            assert fks.get("phase_id") == "phase", f"{table}.phase_id must reference phase"
+
+            indexes = {row[1] for row in con.execute(f"PRAGMA index_list({table})")}
+            assert f"ix_{table}_phase_id" in indexes
+
+        # Old rows are unphased, not broken: insert pre-dates nothing, but the
+        # column must accept NULL for every existing row shape.
+        con.execute(
+            "INSERT INTO project (id, workspace_id, title, slug, status, created_at,"
+            " updated_at) VALUES ('proj_x', 'ws_x', 'T', 's', 'idea', 'n', 'n')"
+        )
+        con.execute(
+            "INSERT INTO decision (id, project_id, title, decision, status,"
+            " sort_order, created_at, updated_at)"
+            " VALUES ('dec_x', 'proj_x', 'T', 'D', 'proposed', 0, 'n', 'n')"
+        )
+        assert con.execute(
+            "SELECT phase_id FROM decision WHERE id='dec_x'"
+        ).fetchone()[0] is None
+    finally:
+        con.close()
+
+    command.downgrade(cfg, "0028")
+    con = sqlite3.connect(db_path)
+    try:
+        for table in ("decision", "risk"):
+            cols = {row[1] for row in con.execute(f"PRAGMA table_info({table})")}
+            assert "phase_id" not in cols
+    finally:
+        con.close()
