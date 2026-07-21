@@ -34,7 +34,19 @@ if not exist "%ROOT%apps\web\node_modules" (
   )
 )
 
-echo Starting Planarus  ^|  API :8000   Web :5173
+REM --- optional team mode: run-planarus.bat team ------------------------------
+REM  Off by default (D25/D26): a plain run stays the single-user local tool with
+REM  no sign-in at all. "team" turns on the account gate and the password
+REM  provider, so the first account you create claims the server as its admin
+REM  and you can add viewers from Team. setlocal keeps both out of your shell.
+set "MODE=local (no sign-in)"
+if /i "%~1"=="team" (
+  set "PLANARUS_AUTH_ENABLED=true"
+  set "PLANARUS_AUTH_PASSWORD_ENABLED=true"
+  set "MODE=team (sign-in required)"
+)
+
+echo Starting Planarus  ^|  API :8000   Web :5173   Mode: %MODE%
 echo.
 
 REM --- backend window: migrate to head, then run with hot reload --------------
@@ -99,5 +111,6 @@ echo.
 echo Opened two windows: API (:8000) and Web (:5173).
 echo   UI:        http://localhost:5173
 echo   API docs:  http://localhost:8000/docs
+echo   Mode:      %MODE%   ^(run "run-planarus.bat team" for sign-in + roles^)
 echo Stop everything by closing those two windows (or Ctrl+C in each).
 endlocal
