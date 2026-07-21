@@ -26,7 +26,7 @@ from app.models.notification_rule import NotificationRule
 from app.models.project import Project
 from app.models.task import Task
 from app.models.workspace import Workspace
-from app.services import email_service, settings_service
+from app.services import auth_service, email_service, settings_service
 
 _PAST = "2000-01-01T00:00:00+00:00"
 
@@ -229,6 +229,86 @@ def test_backup_writes_one_verified_snapshot(cli, backup_dir, capsys) -> None:
     written = list(backup_dir.iterdir())
     assert len(written) == 1
     assert written[0].name in capsys.readouterr().out
+
+
+# --- account recovery (Phase 21, D53) ----------------------------------------
+
+
+@pytest.fixture(name="auth_on")
+def auth_on_fixture(monkeypatch):
+    monkeypatch.setattr(env, "auth_enabled", True)
+    monkeypatch.setattr(env, "auth_password_enabled", True)
+    yield
+
+
+def _account(session, email="pat@team.lan"):
+    user, _token = auth_service.register_password_user(
+        session, email, "a long enough phrase", "Pat"
+    )
+    return user
+
+
+def test_admin_refuses_when_auth_is_off(cli, capsys) -> None:
+    """Exit 2, not 1: nothing is broken, there is simply nothing to administer."""
+    assert jobs.main(["admin", "--list"]) == jobs.EXIT_REFUSED
+    assert "auth is disabled" in capsys.readouterr().err
+
+
+def test_admin_list_reports_an_unclaimed_server(cli, auth_on, capsys) -> None:
+    assert jobs.main(["admin", "--list"]) == jobs.EXIT_OK
+    assert "no accounts yet" in capsys.readouterr().out
+
+
+def test_admin_list_shows_accounts_and_their_flags(cli, auth_on, capsys) -> None:
+    _account(cli)  # first account bootstraps to admin (D29)
+    assert jobs.main(["admin", "--list"]) == jobs.EXIT_OK
+    out = capsys.readouterr().out
+    assert "pat@team.lan" in out
+    assert "admin" in out
+
+
+def test_admin_grant_promotes_an_existing_account(cli, auth_on) -> None:
+    _account(cli, "root@team.lan")  # first = admin
+    second = _account(cli, "sam@team.lan")
+    assert second.is_admin is False
+
+    assert jobs.main(["admin", "--grant", "sam@team.lan"]) == jobs.EXIT_OK
+    cli.refresh(second)
+    assert second.is_admin is True
+
+
+def test_admin_grant_is_case_and_space_insensitive(cli, auth_on) -> None:
+    """Emails are stored normalized, so recovery must not fail on a capital."""
+    _account(cli, "root@team.lan")
+    second = _account(cli, "sam@team.lan")
+    assert jobs.main(["admin", "--grant", "  SAM@Team.LAN "]) == jobs.EXIT_OK
+    cli.refresh(second)
+    assert second.is_admin is True
+
+
+def test_admin_grant_on_an_unknown_email_fails(cli, auth_on, capsys) -> None:
+    assert jobs.main(["admin", "--grant", "ghost@team.lan"]) == jobs.EXIT_FAILED
+    assert "no account for" in capsys.readouterr().err
+
+
+def test_admin_reset_password_prints_a_temp_and_forces_a_change(cli, auth_on, capsys) -> None:
+    user = _account(cli)
+    assert jobs.main(["admin", "--reset-password", "pat@team.lan"]) == jobs.EXIT_OK
+
+    out = capsys.readouterr().out
+    assert "temporary password" in out
+    # The printed secret must be the one that actually works.
+    temp = out.split("temporary password for pat@team.lan:")[1].split()[0]
+    assert auth_service.password_must_change(cli, user.id) is True
+    assert auth_service.login_with_password(cli, "pat@team.lan", temp) is not None
+
+
+def test_admin_actions_are_mutually_exclusive(cli, auth_on) -> None:
+    """A typo must never silently grant admin *and* rotate a password."""
+    with pytest.raises(SystemExit):
+        jobs.main(["admin", "--grant", "a@b.lan", "--reset-password", "a@b.lan"])
+    with pytest.raises(SystemExit):
+        jobs.main(["admin"])  # no action at all
 
 
 # --- argument handling -------------------------------------------------------
