@@ -92,66 +92,119 @@
   .ab-formgrid { grid-template-columns: 1fr; }
 }
 
-/* ── PLANARUS BRAND THEME ────────────────────────────────── */
-/* Blue carries the product signal; amber is its only complementary accent. */
+/* ── PLANARUS ART DIRECTION ───────────────────────────────── */
+/* Palette and UI direction only. The supplied visual mark is deliberately
+   absent until a logo is explicitly approved. */
 :root,
-[data-theme="light-blue"] {
-  --ab-brand-cool: #2563EB;
-  --ab-brand-cool-strong: #1D4ED8;
-  --ab-brand-cool-rgb: 37, 99, 235;
-  --ab-brand-cool-on-dark: #93C5FD;
-  --ab-brand-warm: #D97706;
-  --ab-sidebar-start: #142446;
-  --ab-sidebar-end: #0F172A;
+[data-theme="light-cosmo"] {
+  --ab-brand-cool: #2D77FF;
+  --ab-brand-cool-strong: #1F63DB;
+  --ab-brand-cool-rgb: 45, 119, 255;
+  --ab-brand-cool-on-dark: #EAF6FF;
+  --ab-brand-warm: #7B61FF;
+  --ab-sidebar-start: #FFFFFF;
+  --ab-sidebar-end: #FFFFFF;
+  --ab-sidebar-border: #E2E9F2;
+  --ab-sidebar-panel: #F8FAFC;
+  --ab-sidebar-panel-hover: #EEF5FD;
+  --ab-sidebar-text-primary: #0B1226;
+  --ab-sidebar-text-secondary: #52617B;
+  --ab-sidebar-text-muted: #7C8AA2;
 }
 
-[data-theme="dark-blue"] {
-  --ab-brand-cool: #60A5FA;
-  --ab-brand-cool-strong: #3B82F6;
-  --ab-brand-cool-rgb: 96, 165, 250;
-  --ab-brand-cool-on-dark: #BFDBFE;
-  --ab-brand-warm: #F59E0B;
-  --ab-sidebar-start: #101A33;
-  --ab-sidebar-end: #070D1B;
+[data-theme="dark-cosmo"] {
+  --ab-brand-cool: #5EC3FF;
+  --ab-brand-cool-strong: #43B1F1;
+  --ab-brand-cool-rgb: 94, 195, 255;
+  --ab-brand-cool-on-dark: #EAF6FF;
+  --ab-brand-warm: #7B61FF;
+  --ab-sidebar-start: #0B1226;
+  --ab-sidebar-end: #0B1226;
+  --ab-sidebar-border: rgba(205, 221, 248, 0.12);
+  --ab-sidebar-panel: rgba(255, 255, 255, 0.05);
+  --ab-sidebar-panel-hover: rgba(255, 255, 255, 0.09);
+  --ab-sidebar-text-primary: #F2F6FF;
+  --ab-sidebar-text-secondary: #C2CCDC;
+  --ab-sidebar-text-muted: #8493AA;
 }
 
 body {
-  background:
-    radial-gradient(circle at 86% -8%, rgba(var(--ab-brand-cool-rgb), 0.09), transparent 32%),
-    var(--bg-canvas);
+  background: var(--bg-canvas);
+}
+
+/* Keep the source art direction clean in light mode. */
+[data-theme="light-cosmo"] .ab-main,
+[data-theme="dark-cosmo"] .ab-main {
+  background: var(--bg-canvas);
+}
+
+/* Dark mode gets a restrained, non-repeating particle field. The uneven
+   positions and varied opacity avoid a tiled pattern while leaving workspace
+   content and its contrast untouched. */
+[data-theme="dark-cosmo"] .ab-main {
+  background-image:
+    radial-gradient(circle at 4% 9%, rgba(94, 195, 255, 0.50) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 11% 41%, rgba(123, 97, 255, 0.36) 0 0.8px, transparent 1.5px),
+    radial-gradient(circle at 18% 17%, rgba(234, 246, 255, 0.40) 0 0.7px, transparent 1.4px),
+    radial-gradient(circle at 23% 73%, rgba(94, 195, 255, 0.33) 0 0.6px, transparent 1.3px),
+    radial-gradient(circle at 31% 28%, rgba(123, 97, 255, 0.48) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 37% 91%, rgba(94, 195, 255, 0.42) 0 0.8px, transparent 1.5px),
+    radial-gradient(circle at 44% 6%, rgba(234, 246, 255, 0.34) 0 0.6px, transparent 1.2px),
+    radial-gradient(circle at 49% 54%, rgba(94, 195, 255, 0.38) 0 0.9px, transparent 1.6px),
+    radial-gradient(circle at 56% 31%, rgba(123, 97, 255, 0.34) 0 0.7px, transparent 1.4px),
+    radial-gradient(circle at 62% 82%, rgba(234, 246, 255, 0.44) 0 0.8px, transparent 1.5px),
+    radial-gradient(circle at 68% 14%, rgba(94, 195, 255, 0.47) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 73% 62%, rgba(123, 97, 255, 0.38) 0 0.7px, transparent 1.4px),
+    radial-gradient(circle at 79% 36%, rgba(234, 246, 255, 0.32) 0 0.6px, transparent 1.2px),
+    radial-gradient(circle at 84% 92%, rgba(94, 195, 255, 0.40) 0 0.8px, transparent 1.5px),
+    radial-gradient(circle at 88% 20%, rgba(123, 97, 255, 0.46) 0 0.9px, transparent 1.7px),
+    radial-gradient(circle at 93% 57%, rgba(94, 195, 255, 0.34) 0 0.7px, transparent 1.4px),
+    radial-gradient(circle at 97% 4%, rgba(234, 246, 255, 0.38) 0 0.7px, transparent 1.4px),
+    radial-gradient(circle at 7% 97%, rgba(123, 97, 255, 0.34) 0 0.6px, transparent 1.3px);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
 }
 
 .ab-sidebar {
-  background: linear-gradient(165deg, var(--ab-sidebar-start), var(--ab-sidebar-end));
-  border-right-color: rgba(255, 255, 255, 0.08);
+  background: var(--ab-sidebar-start);
+  border-right-color: var(--ab-sidebar-border);
 }
 .ab-brand { position: relative; border-bottom: 0; }
 .ab-brand::after {
   content: ''; position: absolute; right: var(--space-5); bottom: 0; left: var(--space-5); height: 2px;
-  background: linear-gradient(90deg, var(--ab-brand-cool), var(--ab-brand-warm));
+  background: var(--ab-brand-cool);
   border-radius: var(--radius-full);
 }
 .ab-brand-mark {
-  background: linear-gradient(145deg, var(--ab-brand-cool), var(--ab-brand-cool-strong));
-  box-shadow: 0 8px 18px rgba(var(--ab-brand-cool-rgb), 0.28);
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  object-fit: contain;
+  background: transparent;
+  box-shadow: none;
 }
-.ab-brand-name { color: #F8FAFC; letter-spacing: -0.03em; }
-.ab-brand-env { color: #94A3B8; }
+.ab-brand-name { color: var(--ab-sidebar-text-primary); letter-spacing: -0.03em; }
+.ab-brand-env { color: var(--ab-sidebar-text-muted); }
 .ab-projsel {
-  background: rgba(255, 255, 255, 0.045);
-  border-color: rgba(255, 255, 255, 0.09);
+  background: var(--ab-sidebar-panel);
+  border-color: var(--ab-sidebar-border);
 }
-.ab-projsel:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(var(--ab-brand-cool-rgb), 0.42); }
-.ab-projsel .pj-mark { background: rgba(var(--ab-brand-cool-rgb), 0.18); color: var(--ab-brand-cool-on-dark); }
-.ab-sidebar .ab-projsel .pj-name { color: #F8FAFC; }
-.ab-sidebar .ab-projsel .pj-sub { color: #94A3B8; }
+.ab-projsel:hover { background: var(--ab-sidebar-panel-hover); border-color: rgba(var(--ab-brand-cool-rgb), 0.42); }
+.ab-projsel .pj-mark { background: rgba(var(--ab-brand-cool-rgb), 0.14); color: var(--ab-brand-cool-strong); }
+.ab-sidebar .ab-projsel .pj-name { color: var(--ab-sidebar-text-primary); }
+.ab-sidebar .ab-projsel .pj-sub { color: var(--ab-sidebar-text-muted); }
 .ab-sidebar .sidebar-nav-item.active {
-  background: rgba(var(--ab-brand-cool-rgb), 0.16);
-  border-color: rgba(var(--ab-brand-cool-rgb), 0.28);
-  box-shadow: inset 2px 0 0 var(--ab-brand-cool-on-dark);
-  color: #F8FAFC;
+  background: rgba(var(--ab-brand-cool-rgb), 0.11);
+  border-color: rgba(var(--ab-brand-cool-rgb), 0.20);
+  box-shadow: inset 2px 0 0 var(--ab-brand-cool);
+  color: var(--ab-brand-cool-strong);
 }
-.ab-sidebar .sidebar-nav-item.active .nav-icon { color: var(--ab-brand-cool-on-dark); }
+.ab-sidebar .sidebar-nav-item.active .nav-icon { color: var(--ab-brand-cool); }
+.ab-sidebar .sidebar-nav-item { color: var(--ab-sidebar-text-secondary); }
+.ab-sidebar .sidebar-nav-item:hover { background: var(--ab-sidebar-panel-hover); color: var(--ab-sidebar-text-primary); }
+.ab-sidebar .sidebar-nav-label,
+.ab-sidebar .nav-icon { color: var(--ab-sidebar-text-muted); }
+.ab-sidebar .sidebar-nav-item:hover .nav-icon { color: var(--ab-sidebar-text-secondary); }
 
 /* ── Sidebar todos (project-scoped, self-nesting checklist) ─────────────── */
 .ab-todos { margin-top: var(--space-4); border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: var(--space-2); }
@@ -200,18 +253,41 @@ body {
 .ab-todos-input::placeholder { color: #67748C; }
 .ab-todos-input:focus { outline: none; border-color: var(--accent); }
 
+/* The existing todo module assumed a dark sidebar. Restore its contrast on the
+   reference's white sidebar without changing its behaviour. */
+[data-theme="light-cosmo"] .ab-todos { border-top-color: var(--ab-sidebar-border); }
+[data-theme="light-cosmo"] .ab-todos-head { color: var(--ab-sidebar-text-muted); }
+[data-theme="light-cosmo"] .ab-todos-head:hover { color: var(--ab-sidebar-text-primary); }
+[data-theme="light-cosmo"] .ab-todos-count {
+  color: var(--ab-sidebar-text-secondary);
+  background: var(--ab-sidebar-panel-hover);
+}
+[data-theme="light-cosmo"] .ab-todos-empty,
+[data-theme="light-cosmo"] .ab-todo-label.done,
+[data-theme="light-cosmo"] .ab-todo-act,
+[data-theme="light-cosmo"] .ab-todos-input::placeholder { color: var(--ab-sidebar-text-muted); }
+[data-theme="light-cosmo"] .ab-todo-row:hover,
+[data-theme="light-cosmo"] .ab-todo-act:hover { background: var(--ab-sidebar-panel-hover); }
+[data-theme="light-cosmo"] .ab-todo-label { color: var(--ab-sidebar-text-secondary); }
+[data-theme="light-cosmo"] .ab-todo-act:hover { color: var(--ab-sidebar-text-primary); }
+[data-theme="light-cosmo"] .ab-todos-input {
+  color: var(--ab-sidebar-text-primary);
+  background: #FFFFFF;
+  border-color: var(--ab-sidebar-border);
+}
+
 .ab-topbar {
   border-bottom-color: rgba(var(--ab-brand-cool-rgb), 0.12);
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
   position: relative; z-index: var(--z-raised);
 }
 .btn-solid {
-  background: linear-gradient(135deg, var(--accent), var(--ab-brand-cool-strong));
+  background: var(--accent);
   border-color: transparent;
   box-shadow: 0 8px 18px rgba(var(--ab-brand-cool-rgb), 0.24);
 }
 .btn-solid:hover {
-  background: linear-gradient(135deg, var(--ab-brand-cool), var(--accent));
+  background: var(--accent-hover);
   border-color: transparent;
   box-shadow: 0 10px 22px rgba(var(--ab-brand-cool-rgb), 0.3);
   transform: translateY(-1px);
@@ -236,13 +312,13 @@ body {
 }
 .ab-proj::before {
   content: ''; position: absolute; inset: 0 0 auto; height: 3px;
-  background: linear-gradient(90deg, var(--ab-brand-cool) 0 72%, var(--ab-brand-warm) 100%);
+  background: var(--ab-brand-cool);
 }
 .ab-proj.card-interactive:hover {
   border-color: rgba(var(--ab-brand-cool-rgb), 0.34);
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.1), 0 5px 12px rgba(var(--ab-brand-cool-rgb), 0.08);
 }
-.ab-meter > span { background: linear-gradient(90deg, var(--accent), var(--ab-brand-cool-strong)); }
+.ab-meter > span { background: var(--accent); }
 
 /* Phase 15.9: reusable kebab actions menu */
 .ab-menu { position: relative; display: inline-flex; }
