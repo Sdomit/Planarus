@@ -160,9 +160,13 @@ describe('TeamPanel', () => {
     // browser does the searching — nothing custom to keyboard-navigate.
     const listId = field.getAttribute('list')
     expect(listId).toBeTruthy()
-    const options = document.querySelectorAll(`#${listId} option`)
-    expect(Array.from(options, (o) => o.getAttribute('value')))
-      .toEqual(['sam@team.lan', 'kim@team.lan'])
+    // The field renders before the candidates fetch resolves, so poll for the
+    // options rather than reading them in the same tick — asserting directly
+    // here lost the race on CI.
+    await waitFor(() =>
+      expect(Array.from(document.querySelectorAll(`#${listId} option`), (o) => o.getAttribute('value')))
+        .toEqual(['sam@team.lan', 'kim@team.lan']),
+    )
     cleanup()
 
     // A viewer has no add form, so it must not even ask (the API 403s).
