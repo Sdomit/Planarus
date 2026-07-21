@@ -1,9 +1,10 @@
 """Seed a running Planarus database with the Planarus project itself (dogfooding).
 
-Planarus manages Planarus: this loads the real roadmap — phases, the Phase 10
-slices as stages, follow-up tasks, and launch milestones — into a running DB so
-you can follow progress in the app's Roadmap / Task Board instead of only the
-Markdown context pack. Kept in sync with context/NEXT_STEP.md each slice.
+Planarus manages Planarus: this loads the real roadmap — every phase plus the
+launch milestones — into a running DB so you can follow progress in the app's
+Roadmap / Task Board instead of only the Markdown context pack. Phase and
+milestone titles + statuses mirror context/NEXT_STEP.md; slice-level detail
+lives in docs/dev/ and docs/plan/, not here.
 
 Idempotent at the project level: if the ``planarus`` project already exists it
 does nothing (re-running is safe). Run against a **migrated** DB — the app applies
@@ -22,87 +23,51 @@ from app.models.workspace import Workspace
 from app.schemas.milestone import MilestoneCreate
 from app.schemas.phase import PhaseCreate
 from app.schemas.project import ProjectCreate
-from app.schemas.stage import StageCreate
-from app.schemas.task import TaskCreate
 from app.schemas.workspace import WorkspaceCreate
 from app.services import (
     milestone_service,
     phase_service,
     project_service,
-    stage_service,
-    task_service,
     workspace_service,
 )
 
 WORKSPACE_SLUG = "planarus"
 PROJECT_SLUG = "planarus"
+# Pre-rename slugs (AgentBoard → Approvo → Planarus), OLDEST LAST. These are live
+# DB values, not brand references — a DB seeded before a rename still carries the
+# old slug, so both lookups below match these too and re-seeding stays a no-op
+# instead of creating a duplicate workspace/project. Do not "clean up" to the
+# current name.
+LEGACY_SLUGS = ("approvo", "agentboard")
 
-# (title, status). Phases 1–10 + 4b are done; Phase 11 (LAN team mode) is active.
+# (title, status). Phases 0–18 shipped; 7C2b and 14 remain planned/deferred.
+# Flat phases mirror the live roadmap; per-slice tasks are worked in the app.
 PHASES: list[dict] = [
-    {"title": "Phase 1 — Foundation", "status": "done"},
-    {"title": "Phase 2 — Project CRUD", "status": "done"},
-    {"title": "Phase 3 — Filesystem memory + context generation", "status": "done"},
-    {"title": "Phase 4 — Planning entities", "status": "done"},
-    {"title": "Phase 4b — MVP data model (milestone/checklist/comment/link)", "status": "done"},
-    {"title": "Phase 5 — Rich docs (Tiptap)", "status": "done"},
-    {"title": "Phase 6A — AI context pack builder", "status": "done"},
-    {"title": "Phase 7 — Approvals + MCP + external API", "status": "done"},
-    {"title": "Phase 8 — Read-only Git context", "status": "done"},
-    {"title": "Phase 9 — V1 interface + notifications", "status": "done"},
-    {
-        "title": "Phase 10 — Hosted / SaaS",
-        "status": "done",
-        # slices modeled as stages; blocked = gated on local product validation
-        "stages": [
-            {"title": "P10.0 — Postgres-portability harness", "status": "done"},
-            {"title": "P10.1b — Real OAuth (Google/GitHub)", "status": "done"},
-            {
-                "title": "P10.1 — Identity + workspace membership",
-                "status": "done",
-                "tasks": [
-                    {"title": "Identity models + migration 0010", "status": "done"},
-                    {"title": "Auth core + endpoints + membership RBAC", "status": "done"},
-                    {"title": "Tests + Postgres verify + docs", "status": "done"},
-                ],
-            },
-            {
-                "title": "P10.2 — Tenant enforcement (workspace/project + D22)",
-                "status": "done",
-                "tasks": [
-                    {"title": "Request-scoped tenant context from session", "status": "done"},
-                    {"title": "Workspace/project access filtering + role gating", "status": "done"},
-                    {"title": "Approver-role gating on approve/apply (D22)", "status": "done"},
-                ],
-            },
-            {
-                "title": "P10.2b — Per-child-route tenant guards (full isolation)",
-                "status": "done",
-                "tasks": [
-                    {"title": "Registry-driven tenant_guard on all domain routers", "status": "done"},
-                    {"title": "Resolve-via-parent on flat item routes (/tasks/{id}…)", "status": "done"},
-                    {"title": "Cross-tenant denial sweep test over every domain route", "status": "done"},
-                ],
-            },
-            {"title": "P10.3 — Storage adapter (Storage protocol + backends)", "status": "done"},
-            {"title": "P10.3b — S3 storage backend", "status": "done"},
-            {"title": "P10.4 — Hosted deploy shape (config + docs)", "status": "done"},
-            {"title": "P10.5 — SQLite→Postgres ETL (gate lifted, D24)", "status": "done"},
-            {"title": "P10.6 — Sync foundation: manifest + conflict detection", "status": "done"},
-            {"title": "P10.6b — Sync apply + baseline persistence", "status": "done"},
-            {"title": "P10.6c — Cross-machine sync transport (snapshot/push)", "status": "done"},
-        ],
-    },
-    {
-        "title": "Phase 11 — LAN team mode",
-        "status": "active",
-        # plan: docs/plan/13-lan-team-mode.md; gate decisions D25–D28 ratified
-        "stages": [
-            {"title": "P11.0 — LAN ceiling + host guard (fail-closed on auth)", "status": "done"},
-            {"title": "P11.1 — Local email+password provider (D25)", "status": "done"},
-            {"title": "P11.2 — Presence / soft-lock, polling (D27)", "status": "done"},
-            {"title": "P11.3 — Settings UI + LAN setup guide", "status": "done"},
-        ],
-    },
+    {"title": "Phase 0 — Documentation acceptance gate", "status": "done"},
+    {"title": "Phase 1 — Minimal runnable foundation", "status": "done"},
+    {"title": "Phase 2 — SQLite + project CRUD", "status": "done"},
+    {"title": "Phase 3 — Project folder + Markdown generation (fs-memory)", "status": "done"},
+    {"title": "Phase 4 — Planning entities + essential UI", "status": "done"},
+    {"title": "Phase 4b — Finish the MVP data model", "status": "done"},
+    {"title": "Phase 5 — Rich documents (Tiptap editor)", "status": "done"},
+    {"title": "Phase 6A — AI Context Pack Builder", "status": "done"},
+    {"title": "Phase 7A — Approval engine + local queue", "status": "done"},
+    {"title": "Phase 7B — STDIO MCP (read + propose)", "status": "done"},
+    {"title": "Phase 7C0 — Framework-neutral exception boundary", "status": "done"},
+    {"title": "Phase 7C1 — External HTTP API (disabled by default)", "status": "done"},
+    {"title": "Phase 7C2a — Static GPT Actions OpenAPI contract", "status": "done"},
+    {"title": "Phase 7C2b — User-authorized private GPT go-live", "status": "planned"},
+    {"title": "Phase 8 — Read-only Git context + MVP release gate", "status": "done"},
+    {"title": "Phase 9 — V1 interface expansion + notifications", "status": "done"},
+    {"title": "Phase 10 — Discovery: local AI control plane (specs only, ≠ shipped hosted P10.x)", "status": "done"},
+    {"title": "Phase 11 — LAN team mode (local server, one canonical DB)", "status": "done"},
+    {"title": "Phase 12 — Repo cockpit: live local Git + GitHub visuals (show, don't do)", "status": "done"},
+    {"title": "Phase 13 — Local canvas (Miro/Canva-like, fully offline)", "status": "done"},
+    {"title": "Phase 14 — Hosted/SaaS mode (deferred; gated architecture review)", "status": "planned"},
+    {"title": "Phase 15 — Boards, roadmap, timeline & calendar (15.0-15.12)", "status": "done"},
+    {"title": "Phase 16 — Team administration & attribution (D29-D35)", "status": "done"},
+    {"title": "Phase 17 — Integration hub (D36-D40)", "status": "done"},
+    {"title": "Phase 18 — Notifications & backup (D41-D44)", "status": "done"},
 ]
 
 # Project-level milestones.
@@ -115,7 +80,9 @@ MILESTONES: list[dict] = [
 
 def _seed(session: Session) -> Project:
     ws = session.exec(
-        select(Workspace).where(Workspace.slug == WORKSPACE_SLUG)
+        select(Workspace).where(
+            Workspace.slug.in_((WORKSPACE_SLUG, *LEGACY_SLUGS))
+        )
     ).first()
     if ws is None:
         ws = workspace_service.create_workspace(
@@ -139,26 +106,9 @@ def _seed(session: Session) -> Project:
     )
 
     for p in PHASES:
-        phase = phase_service.create_phase(
+        phase_service.create_phase(
             session, project.id, PhaseCreate(title=p["title"], status=p["status"])
         )
-        for s in p.get("stages", []):
-            stage = stage_service.create_stage(
-                session,
-                project.id,
-                StageCreate(phase_id=phase.id, title=s["title"], status=s["status"]),
-            )
-            for t in s.get("tasks", []):
-                task_service.create_task(
-                    session,
-                    project.id,
-                    TaskCreate(
-                        title=t["title"],
-                        status=t["status"],
-                        phase_id=phase.id,
-                        stage_id=stage.id,
-                    ),
-                )
 
     for m in MILESTONES:
         milestone_service.create_milestone(
@@ -172,7 +122,9 @@ def _seed(session: Session) -> Project:
 def main() -> int:
     with Session(engine) as session:
         existing = session.exec(
-            select(Project).where(Project.slug == PROJECT_SLUG)
+            select(Project).where(
+                Project.slug.in_((PROJECT_SLUG, *LEGACY_SLUGS))
+            )
         ).first()
         if existing is not None:
             print(
@@ -182,15 +134,10 @@ def main() -> int:
         project = _seed(session)
         project_id = project.id  # read before the session closes (avoids detach)
 
-    n_phases = len(PHASES)
-    n_stages = sum(len(p.get("stages", [])) for p in PHASES)
-    n_tasks = sum(
-        len(s.get("tasks", [])) for p in PHASES for s in p.get("stages", [])
-    )
     print(
         f"Seeded Planarus project (id={project_id}): "
-        f"{n_phases} phases, {n_stages} stages, {n_tasks} tasks, "
-        f"{len(MILESTONES)} milestones. Open the app to follow along."
+        f"{len(PHASES)} phases, {len(MILESTONES)} milestones. "
+        f"Open the app to follow along."
     )
     return 0
 
