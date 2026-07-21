@@ -72,6 +72,24 @@ describe('AuthGate', () => {
     expect(screen.queryByText('the app')).toBeNull()
   })
 
+  it('says the server is unreachable instead of leaking the browser string', async () => {
+    // A dead API rejects with the browser's own TypeError — no status prefix.
+    // Wording differs per browser, so both forms must map to the same message.
+    for (const raw of ['Failed to fetch', 'Load failed']) {
+      vi.mocked(api.auth.me).mockRejectedValue(new Error('401: authentication required'))
+      vi.mocked(api.auth.passwordLogin).mockRejectedValue(new TypeError(raw))
+      render(<AuthGate><p>the app</p></AuthGate>)
+
+      fireEvent.change(await screen.findByLabelText('Email'), { target: { value: 'pat@team.lan' } })
+      fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'correct horse battery' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+
+      expect(await screen.findByText('Cannot reach the server. Is the API running?')).toBeTruthy()
+      expect(screen.queryByText(raw)).toBeNull()
+      cleanup()
+    }
+  })
+
   it('registers via the create-account mode', async () => {
     vi.mocked(api.auth.me).mockRejectedValue(new Error('401: authentication required'))
     vi.mocked(api.auth.passwordRegister).mockResolvedValue(ME)
