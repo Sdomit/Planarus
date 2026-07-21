@@ -60,6 +60,17 @@ def test_first_user_bootstraps_to_admin(client, auth_on):
     assert me2["is_admin"] is False
 
 
+def test_auth_status_flags_unclaimed_server(client, auth_on):
+    """The first-run signal: true before anyone registers, false after."""
+    assert client.get("/api/v1/auth/status").json() == {"needs_setup": True}
+    _login(client, "root@acme.co")
+    assert client.get("/api/v1/auth/status").json() == {"needs_setup": False}
+
+
+def test_auth_status_404_when_auth_off(client):
+    assert client.get("/api/v1/auth/status").status_code == 404
+
+
 def test_roster_admin_only(client, auth_on):
     admin = _login(client, "root@acme.co")
     plain = _login(client, "user@acme.co")

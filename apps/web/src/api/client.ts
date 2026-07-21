@@ -993,6 +993,7 @@ export interface PresenceView {
 export const api = {
   auth: {
     me: () => request<AuthMe>('/auth/me'),
+    status: () => request<{ needs_setup: boolean }>('/auth/status'),
     passwordLogin: (email: string, password: string) =>
       request<AuthMe>('/auth/password/login', {
         method: 'POST',
