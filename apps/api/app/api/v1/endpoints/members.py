@@ -18,7 +18,12 @@ from app.db.session import get_session
 from app.models.user import User
 from app.models.workspace import Workspace
 from app.models.workspace_member import WorkspaceMember
-from app.schemas.member import MemberAddRequest, MemberRead, MemberRoleUpdate
+from app.schemas.member import (
+    MemberAddRequest,
+    MemberCandidate,
+    MemberRead,
+    MemberRoleUpdate,
+)
 from app.services import auth_service
 
 router = APIRouter(dependencies=[Depends(require_auth_enabled)])
@@ -59,6 +64,28 @@ def list_members(
     return [
         _member_read(session, m)
         for m in auth_service.list_members(session, workspace_id)
+    ]
+
+
+@router.get(
+    "/workspaces/{workspace_id}/member-candidates",
+    response_model=list[MemberCandidate],
+)
+def list_member_candidates(
+    workspace_id: str,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> list[MemberCandidate]:
+    """Who this owner could add — powers the pick-list on the add-member field.
+
+    Owner-only, matching who may actually add: the roster is readable by any
+    member, but "every account on the server" is not.
+    """
+    _require_workspace(session, workspace_id)
+    require_workspace_role(session, workspace_id, user, "owner")
+    return [
+        MemberCandidate(email=u.email, display_name=u.display_name)
+        for u in auth_service.member_candidates(session, workspace_id)
     ]
 
 
