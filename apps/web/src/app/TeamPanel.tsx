@@ -422,6 +422,55 @@ function WorkspaceMembers({
   )
 }
 
+// --- workspaces auth left ownerless (server admin only) -----------------------
+function UnclaimedWorkspaces({ selfEmail, onClaimed }: { selfEmail: string; onClaimed: () => void }) {
+  const [workspaces, setWorkspaces] = useState<Workspace[] | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(() => {
+    api.admin.unclaimedWorkspaces().then(setWorkspaces).catch(() => setWorkspaces([]))
+  }, [])
+  useEffect(load, [load])
+
+  const claim = (ws: Workspace) => {
+    setBusyId(ws.id)
+    setError(null)
+    api.members.add(ws.id, selfEmail, 'owner')
+      .then(() => { load(); onClaimed() })
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setBusyId(null))
+  }
+
+  // Turning auth on for the first time on a server that already had local-mode
+  // data leaves every existing workspace with no members at all — invisible to
+  // its own admin (D30's membership scoping applies uniformly). This is the
+  // only place that gap is surfaced; without it there is no UI path to it.
+  if (!workspaces || workspaces.length === 0) return null
+
+  return (
+    <section className="card" style={{ display: 'grid', gap: 'var(--space-3)' }}>
+      <h3 style={{ margin: 0 }}>Unclaimed workspaces</h3>
+      <p style={{ margin: 0, color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>
+        These existed before sign-in was turned on and have no owner yet — claim
+        one to see its projects.
+      </p>
+      {error && <p className="form-error" role="alert" style={{ margin: 0 }}>{error}</p>}
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }}>
+        {workspaces.map((ws) => (
+          <li key={ws.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ flex: 1 }}>{ws.name}</span>
+            <button type="button" className="btn btn-solid btn-sm" disabled={busyId === ws.id}
+              onClick={() => claim(ws)}>
+              {busyId === ws.id ? 'Claiming…' : 'Claim as owner'}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 // --- the panel ----------------------------------------------------------------
 export default function TeamPanel() {
   const { me } = useAuthInfo()
@@ -470,6 +519,17 @@ export default function TeamPanel() {
           </div>
         )}
       </section>
+
+      {me.user.is_admin && (
+        <UnclaimedWorkspaces
+          selfEmail={me.user.email}
+          // me.memberships is set once at sign-in — a partial refetch here
+          // would still leave the freshly-claimed workspace missing from it,
+          // so the roster below wouldn't render. Same fix signOut already
+          // uses: reload, and every panel picks up the new /auth/me.
+          onClaimed={() => window.location.reload()}
+        />
+      )}
 
       {me.user.is_admin && (
         <AccountsSection
