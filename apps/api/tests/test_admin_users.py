@@ -78,6 +78,88 @@ def test_auth_status_false_without_the_password_provider(client, auth_on, monkey
     assert client.get("/api/v1/auth/status").json() == {"needs_setup": False}
 
 
+def test_first_run_to_guest_journey(client, auth_on):
+    """The whole human path, end to end, over the real HTTP surface.
+
+    Setup screen claims the server -> admin invites a guest -> guest signs in
+    with the temp password, rotates it, can read and cannot write. Each half is
+    covered elsewhere; this pins the join, which is what an operator actually
+    walks and what nothing else asserts.
+    """
+    # 1. Unclaimed server: the gate offers setup.
+    assert client.get("/api/v1/auth/status").json() == {"needs_setup": True}
+
+    # 2. The first account claims it (D29) — the setup screen's own call.
+    reg = client.post(
+        "/api/v1/auth/password/register",
+        json={"email": "root@acme.co", "password": "a long enough phrase"},
+    )
+    assert reg.status_code == 201, reg.text
+    assert reg.json()["user"]["is_admin"] is True
+    admin = client.cookies.get(SESSION_COOKIE)
+    client.cookies.clear()
+    # ...and the offer is gone for good.
+    assert client.get("/api/v1/auth/status").json() == {"needs_setup": False}
+
+    # 3. Admin makes something worth guarding.
+    ws = client.post(
+        "/api/v1/workspaces",
+        json={"name": "Acme", "slug": "acme"},
+        cookies=_auth(admin),
+    )
+    assert ws.status_code == 201, ws.text
+    ws_id = ws.json()["id"]
+    pid = client.post(
+        "/api/v1/projects",
+        json={"workspace_id": ws_id, "title": "Roadmap", "slug": "roadmap"},
+        cookies=_auth(admin),
+    ).json()["id"]
+
+    # 4. Invite the guest, with read-only access to that workspace.
+    created = client.post(
+        "/api/v1/admin/users",
+        json={"email": "guest@acme.co", "display_name": "Guest"},
+        headers=_control(client),
+        cookies=_auth(admin),
+    )
+    assert created.status_code == 201, created.text
+    temp = created.json()["temp_password"]
+    member = client.post(
+        f"/api/v1/workspaces/{ws_id}/members",
+        json={"email": "guest@acme.co", "role": "viewer"},
+        cookies=_auth(admin),
+    )
+    assert member.status_code in (200, 201), member.text
+
+    # 5. Guest signs in and is forced to replace the temp password first.
+    code, guest = _pw_login(client, "guest@acme.co", temp)
+    assert code == 200
+    assert client.get("/api/v1/auth/me", cookies=_auth(guest)).json()[
+        "password_must_change"
+    ] is True
+    rotated = client.post(
+        "/api/v1/auth/password/change",
+        json={"current_password": temp, "new_password": "another long phrase"},
+        cookies=_auth(guest),
+    )
+    assert rotated.status_code == 204, rotated.text
+
+    # Rotation signs every session out, including this one — sign back in.
+    code, guest = _pw_login(client, "guest@acme.co", "another long phrase")
+    assert code == 200
+
+    # 6. The point of the whole journey: reads yes, writes no.
+    assert client.get(f"/api/v1/projects/{pid}", cookies=_auth(guest)).status_code == 200
+    denied = client.patch(
+        f"/api/v1/projects/{pid}", json={"title": "guest was here"}, cookies=_auth(guest)
+    )
+    assert denied.status_code == 403, denied.text
+    # ...and the refusal is real, not just a hidden button.
+    assert client.get(f"/api/v1/projects/{pid}", cookies=_auth(admin)).json()[
+        "title"
+    ] == "Roadmap"
+
+
 def test_roster_admin_only(client, auth_on):
     admin = _login(client, "root@acme.co")
     plain = _login(client, "user@acme.co")

@@ -46,7 +46,16 @@ if /i "%~1"=="team" (
   set "MODE=team (sign-in required)"
 )
 
-echo Starting Planarus  ^|  API :8000   Web :5173   Mode: %MODE%
+REM --- pick free ports (parity with run-planarus.sh) --------------------------
+REM  Without this, a second copy - or a leftover window - meant uvicorn failed to
+REM  bind while Vite came up fine, so the browser loaded the app and every call
+REM  died with "Failed to fetch". netstat is built in, so no Python probe here.
+call :free_port 8000 API_PORT
+call :free_port 5173 WEB_PORT
+if not "%API_PORT%"=="8000" echo [PORT] 8000 busy - API moved to :%API_PORT%
+if not "%WEB_PORT%"=="5173" echo [PORT] 5173 busy - Web moved to :%WEB_PORT%
+
+echo Starting Planarus  ^|  API :%API_PORT%   Web :%WEB_PORT%   Mode: %MODE%
 echo.
 
 REM --- backend window: migrate to head, then run with hot reload --------------
@@ -57,11 +66,16 @@ set "PLANARUS_EXTERNAL_API_ENABLED=false"
 cd /d "%ROOT%apps\api"
 REM  --reload-dir app: watch only source; without it the watcher scans .venv
 REM  (thousands of files - minutes on this OneDrive-synced tree).
-start "Planarus API (:8000)" cmd /k "call .venv\Scripts\activate.bat && alembic upgrade head && uvicorn app.main:app --reload --reload-dir app --port 8000"
+start "Planarus API (:%API_PORT%)" cmd /k "call .venv\Scripts\activate.bat && alembic upgrade head && uvicorn app.main:app --reload --reload-dir app --port %API_PORT%"
 
 REM --- frontend window: Vite dev server (root workspace script) ---------------
+REM  VITE_PORT also flips Vite to strictPort, so it fails loudly instead of
+REM  silently landing on +1 and leaving the URL below pointing at nothing.
+REM  VITE_API_TARGET repoints the /api proxy when the API moved.
 cd /d "%ROOT%"
-start "Planarus Web (:5173)" cmd /k "pnpm dev:web"
+set "VITE_PORT=%WEB_PORT%"
+set "VITE_API_TARGET=http://localhost:%API_PORT%"
+start "Planarus Web (:%WEB_PORT%)" cmd /k "pnpm dev:web"
 
 REM --- open the UI when both servers actually answer (max ~60s each) ----------
 REM  /health only returns 2xx once migrations ran and the app imported, so this
@@ -78,39 +92,66 @@ if errorlevel 1 (
 
 set /a _tries=0
 :wait_api
-curl -sf -o NUL --max-time 2 http://localhost:8000/health >nul 2>&1
+curl -sf -o NUL --max-time 2 http://localhost:%API_PORT%/health >nul 2>&1
 if not errorlevel 1 goto :api_up
 set /a _tries+=1
 if %_tries% geq 120 (
-  echo [WARN] API not answering on :8000 after 120s - check the API window for errors.
+  echo [WARN] API not answering on :%API_PORT% after 120s - check the API window for errors.
   goto :open_ui
 )
 ping -n 2 127.0.0.1 >nul
 goto :wait_api
 :api_up
-echo   API is up   http://localhost:8000
+echo   API is up   http://localhost:%API_PORT%
 
 set /a _tries=0
 :wait_web
-curl -sf -o NUL --max-time 2 http://localhost:5173 >nul 2>&1
+curl -sf -o NUL --max-time 2 http://localhost:%WEB_PORT% >nul 2>&1
 if not errorlevel 1 goto :web_up
 set /a _tries+=1
 if %_tries% geq 60 (
-  echo [WARN] Web not answering on :5173 after 60s - check the Web window for errors.
+  echo [WARN] Web not answering on :%WEB_PORT% after 60s - check the Web window for errors.
   goto :open_ui
 )
 ping -n 2 127.0.0.1 >nul
 goto :wait_web
 :web_up
-echo   Web is up   http://localhost:5173
+echo   Web is up   http://localhost:%WEB_PORT%
 
 :open_ui
-start "" http://localhost:5173
+start "" http://localhost:%WEB_PORT%
 
 echo.
-echo Opened two windows: API (:8000) and Web (:5173).
-echo   UI:        http://localhost:5173
-echo   API docs:  http://localhost:8000/docs
+echo Opened two windows: API (:%API_PORT%) and Web (:%WEB_PORT%).
+echo   UI:        http://localhost:%WEB_PORT%
+echo   API docs:  http://localhost:%API_PORT%/docs
 echo   Mode:      %MODE%   ^(run "run-planarus.bat team" for sign-in + roles^)
 echo Stop everything by closing those two windows (or Ctrl+C in each).
 endlocal
+goto :eof
+
+REM --- free_port START VARNAME: first free port at or above START -------------
+REM  Ask netstat rather than binding: SO_REUSEADDR and Windows'
+REM  0.0.0.0-vs-127.0.0.1 rules both let a bind succeed on a taken port. The
+REM  colon anchor keeps :8000 from matching :18000.
+REM  NO "-p tcp": that flag drops every IPv6 row, and Vite binds [::1] only -
+REM  with it, a busy :5173 reads as free and the second copy dies on bind.
+REM  UDP rows come along without the filter but never say LISTENING.
+REM  ponytail: check-then-start races if something grabs the port in the next
+REM  second - the server window logs the bind error, rerun. Same caveat the
+REM  shell twin carries.
+:free_port
+setlocal enabledelayedexpansion
+set /a _p=%~1
+set /a _stop=%~1+50
+:free_port_probe
+netstat -ano | findstr /r /c:":!_p! .*LISTENING" >nul 2>&1
+if errorlevel 1 goto :free_port_done
+set /a _p+=1
+if !_p! lss !_stop! goto :free_port_probe
+REM  50 in a row busy: fall back to the requested port and let the server
+REM  report the bind error rather than silently scanning forever.
+set /a _p=%~1
+:free_port_done
+endlocal & set "%~2=%_p%"
+goto :eof

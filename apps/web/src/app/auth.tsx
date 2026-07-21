@@ -227,6 +227,17 @@ export function SignIn({ onSignedIn }: { onSignedIn: (me: AuthMe) => void }) {
           {busy ? 'Working…' : setup ? 'Create admin account' : mode === 'signin' ? 'Sign in' : 'Create account'}
         </button>
 
+        {/* D54: there is no self-service reset (a reset mail has nowhere to go
+            until outbound email ships), so the gate has to say what the two
+            real routes are — otherwise a locked-out admin has no way back. */}
+        {!setup && mode === 'signin' && (
+          <p style={{ margin: 0, color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)' }}>
+            Forgotten it? An admin can reset your password from Team. If nobody
+            can sign in, run <code>python -m app.jobs admin --reset-password YOU@EXAMPLE</code> on
+            the machine hosting Planarus.
+          </p>
+        )}
+
         {/* No accounts exist during setup, so there is nothing to switch to. */}
         {!setup && (
           <button
