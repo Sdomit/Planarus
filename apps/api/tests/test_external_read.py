@@ -108,3 +108,54 @@ def test_propose_only_key_cannot_read(client, external_api):
     res = client.get("/api/external/v1/projects", headers=auth(raw))
     assert res.status_code == 403
     assert res.json()["type"].endswith("/forbidden")
+
+
+def test_external_decisions_and_risks_accept_phase_filter(env, client, session):
+    """Phase 19 (D46): the external REST mirror inherits the phase filter from
+    the shared read handlers — it must not silently ignore the query param."""
+    from app.models.phase import Phase
+    from app.models.risk import Risk
+
+    now = now_utc()
+    phase_id = new_id("pha")
+    session.add(
+        Phase(
+            id=phase_id, project_id=env.proj, title="Scoped phase",
+            status="active", sort_order=0, created_at=now, updated_at=now,
+        )
+    )
+    # Commit the phase before its children: these models carry no ORM
+    # relationships, so SQLAlchemy has no dependency order to sort by and can
+    # otherwise insert the decision first, tripping the new FK.
+    session.commit()
+    session.add(
+        Decision(
+            id=new_id("dec"), project_id=env.proj, phase_id=phase_id,
+            title="Phased decision", decision="scoped", status="accepted",
+            created_at=now, updated_at=now,
+        )
+    )
+    session.add(
+        Risk(
+            id=new_id("rsk"), project_id=env.proj, phase_id=phase_id,
+            title="Phased risk", severity="high", status="open",
+            created_at=now, updated_at=now,
+        )
+    )
+    session.commit()
+
+    for path, kept, dropped in (
+        ("decisions", "Phased decision", "A decision"),
+        ("risks", "Phased risk", None),
+    ):
+        res = client.get(
+            f"/api/external/v1/projects/{env.proj}/{path}?phase_id={phase_id}",
+            headers=auth(env.key),
+        )
+        assert res.status_code == 200, path
+        body = res.json()
+        assert body["metadata"]["phase_id"] == phase_id
+        assert body["metadata"]["count"] == 1, path
+        assert kept in body["text"]
+        if dropped:
+            assert dropped not in body["text"]
