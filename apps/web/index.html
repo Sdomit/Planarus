@@ -10,8 +10,7 @@
       // Resolve the theme before first paint, otherwise a dark-OS user gets a
       // white flash on every load. Inline and synchronous on purpose — the app
       // bundle is a module and runs too late to prevent it.
-      // localStorage throws in some privacy modes, so fall back to the
-      // reference's light presentation.
+      // localStorage throws in some privacy modes, so fall back to the OS.
       (function () {
         var stored = null
         try { stored = localStorage.getItem('planarus.theme') } catch (e) {}
@@ -20,9 +19,11 @@
         // Cosmo brand immediately instead of a flash of the retired palette.
         if (stored === 'light-blue') stored = 'light-cosmo'
         if (stored === 'dark-blue') stored = 'dark-cosmo'
+        var prefersDark =
+          window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
         document.documentElement.setAttribute(
           'data-theme',
-          stored || 'light-cosmo',
+          stored || (prefersDark ? 'dark-cosmo' : 'light-cosmo'),
         )
       })()
     </script>
