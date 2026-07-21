@@ -160,4 +160,14 @@ describe('brand mark', () => {
     const name = container.querySelector('.ab-brand-name')
     expect(mark?.textContent?.trim()).toBe(name?.textContent?.trim()?.[0])
   })
+
+  it('falls back to the product initials in the chips, not a stale brand', () => {
+    // Same rename miss, one layer down: the project selector and account chip
+    // both hardcoded "AB" (AgentBoard). No project + local mode = both fall back.
+    const { container } = render(<Layout />)
+    const name = container.querySelector('.ab-brand-name')?.textContent?.trim() ?? ''
+    const marks = Array.from(container.querySelectorAll('.pj-mark'), (e) => e.textContent?.trim())
+    expect(marks.length).toBe(2)
+    expect(marks).toEqual([name.slice(0, 2).toUpperCase(), name.slice(0, 2).toUpperCase()])
+  })
 })
