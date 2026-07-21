@@ -31,7 +31,11 @@ const me = {
 let auth: { me: typeof me | null; signOut: () => void } = { me: null, signOut: vi.fn() }
 vi.mock('./auth', () => ({ useAuthInfo: () => auth }))
 
-beforeEach(() => { auth = { me: null, signOut: vi.fn() }; localStorage.clear() })
+beforeEach(() => {
+  auth = { me: null, signOut: vi.fn() }
+  localStorage.clear()
+  document.documentElement.setAttribute('data-theme', 'light-cosmo')
+})
 afterEach(cleanup)
 
 const NAV_KEY = 'planarus.nav'
@@ -106,6 +110,27 @@ describe('LAN address', () => {
   })
 })
 
+describe('Cosmo theme', () => {
+  it('renders the approved brand mark', () => {
+    const { container } = render(<Layout />)
+
+    expect(container.querySelector('.ab-brand-mark')?.getAttribute('src'))
+      .toBe('/planarus-icon.png')
+  })
+
+  it('toggles the persisted Cosmo light and dark pair', () => {
+    render(<Layout />)
+
+    fireEvent.click(screen.getByLabelText('Toggle theme'))
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark-cosmo')
+    expect(localStorage.getItem('planarus.theme')).toBe('dark-cosmo')
+
+    fireEvent.click(screen.getByLabelText('Toggle theme'))
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light-cosmo')
+    expect(localStorage.getItem('planarus.theme')).toBe('light-cosmo')
+  })
+})
+
 describe('navigation state survives a reload', () => {
   const stored = () => JSON.parse(localStorage.getItem(NAV_KEY) ?? '{}')
 
@@ -152,14 +177,8 @@ describe('navigation state survives a reload', () => {
 })
 
 describe('brand mark', () => {
-  it('matches the product name, so a rename cannot leave it stale', () => {
-    // The mark read "A" (Approvo/AgentBoard) for the whole Planarus rename
-    // because nothing asserted it. Derive the expectation from the name.
-    const { container } = render(<Layout />)
-    const mark = container.querySelector('.ab-brand-mark')
-    const name = container.querySelector('.ab-brand-name')
-    expect(mark?.textContent?.trim()).toBe(name?.textContent?.trim()?.[0])
-  })
+  // The letter-mark rename guard that used to live here retired with the
+  // letter: the mark is now the approved artwork, asserted in "Cosmo theme".
 
   it('falls back to the product initials in the chips, not a stale brand', () => {
     // Same rename miss, one layer down: the project selector and account chip
