@@ -150,3 +150,14 @@ describe('navigation state survives a reload', () => {
     expect(stored().project.id).toBe('p2')
   })
 })
+
+describe('brand mark', () => {
+  it('matches the product name, so a rename cannot leave it stale', () => {
+    // The mark read "A" (Approvo/AgentBoard) for the whole Planarus rename
+    // because nothing asserted it. Derive the expectation from the name.
+    const { container } = render(<Layout />)
+    const mark = container.querySelector('.ab-brand-mark')
+    const name = container.querySelector('.ab-brand-name')
+    expect(mark?.textContent?.trim()).toBe(name?.textContent?.trim()?.[0])
+  })
+})
