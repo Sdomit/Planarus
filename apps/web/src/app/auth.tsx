@@ -69,6 +69,11 @@ function friendly(msg: string): string {
   if (msg.startsWith('429')) return 'Too many attempts — wait a minute and try again.'
   if (msg.startsWith('404')) return 'Password sign-in is not enabled on this server.'
   if (msg.startsWith('422')) return 'Password must be at least 10 characters.'
+  // client.ts prefixes every HTTP failure with its status, so a message without
+  // one never reached the server: API down, wrong proxy target, dropped LAN
+  // link. Browsers word that differently ("Failed to fetch", "Load failed",
+  // "NetworkError…"), so key off the missing status rather than the wording.
+  if (!/^\d{3}/.test(msg)) return 'Cannot reach the server. Is the API running?'
   return msg
 }
 
@@ -134,12 +139,26 @@ export function ChangePasswordForm({
 }
 
 export function SignIn({ onSignedIn }: { onSignedIn: (me: AuthMe) => void }) {
+  // First run: nobody has claimed the server yet, so open on the register form
+  // and say what the account is about to become (D29). Stays false forever after.
+  const [setup, setSetup] = useState(false)
   const [mode, setMode] = useState<'signin' | 'register'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    api.auth
+      .status()
+      .then(({ needs_setup }) => {
+        if (!needs_setup) return
+        setSetup(true)
+        setMode('register')
+      })
+      .catch(() => {}) // older server without /auth/status: plain sign-in
+  }, [])
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -159,9 +178,13 @@ export function SignIn({ onSignedIn }: { onSignedIn: (me: AuthMe) => void }) {
     <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: 'var(--bg-canvas)', padding: 'var(--space-4)' }}>
       <form className="card" onSubmit={submit} style={{ width: 'min(360px, 100%)', display: 'grid', gap: 'var(--space-4)' }}>
         <div>
-          <h2 style={{ margin: 0 }}>Planarus</h2>
+          <h2 style={{ margin: 0 }}>{setup ? 'Set up Planarus' : 'Planarus'}</h2>
           <p style={{ margin: '4px 0 0', color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>
-            {mode === 'signin' ? 'Sign in to your team workspace' : 'Create your account'}
+            {setup
+              ? 'This first account becomes the server admin — it can add people and grant admin from Team.'
+              : mode === 'signin'
+                ? 'Sign in to your team workspace'
+                : 'Create your account'}
           </p>
         </div>
 
@@ -201,15 +224,29 @@ export function SignIn({ onSignedIn }: { onSignedIn: (me: AuthMe) => void }) {
         {error && <p className="form-error" role="alert" style={{ margin: 0 }}>{error}</p>}
 
         <button type="submit" className="btn btn-solid" disabled={busy}>
-          {busy ? 'Working…' : mode === 'signin' ? 'Sign in' : 'Create account'}
+          {busy ? 'Working…' : setup ? 'Create admin account' : mode === 'signin' ? 'Sign in' : 'Create account'}
         </button>
 
-        <button
-          type="button" className="btn btn-ghost btn-sm"
-          onClick={() => { setMode((m) => (m === 'signin' ? 'register' : 'signin')); setError(null) }}
-        >
-          {mode === 'signin' ? 'New here? Create an account' : 'Have an account? Sign in'}
-        </button>
+        {/* D54: there is no self-service reset (a reset mail has nowhere to go
+            until outbound email ships), so the gate has to say what the two
+            real routes are — otherwise a locked-out admin has no way back. */}
+        {!setup && mode === 'signin' && (
+          <p style={{ margin: 0, color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)' }}>
+            Forgotten it? An admin can reset your password from Team. If nobody
+            can sign in, run <code>python -m app.jobs admin --reset-password YOU@EXAMPLE</code> on
+            the machine hosting Planarus.
+          </p>
+        )}
+
+        {/* No accounts exist during setup, so there is nothing to switch to. */}
+        {!setup && (
+          <button
+            type="button" className="btn btn-ghost btn-sm"
+            onClick={() => { setMode((m) => (m === 'signin' ? 'register' : 'signin')); setError(null) }}
+          >
+            {mode === 'signin' ? 'New here? Create an account' : 'Have an account? Sign in'}
+          </button>
+        )}
       </form>
     </div>
   )

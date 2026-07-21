@@ -127,10 +127,13 @@ function loadNav(): { view?: MainView; project?: SelectedProject } {
   }
 }
 
+/** Two-letter brand fallback, matching the "P" of the sidebar brand mark. */
+const MARK = 'PL'
+
 function initials(s: string): string {
   return (
     s.replace(/[^a-zA-Z0-9 ]/g, '').split(/\s+/).filter(Boolean).slice(0, 2)
-      .map((w) => w[0]).join('').toUpperCase() || 'AB'
+      .map((w) => w[0]).join('').toUpperCase() || MARK
   )
 }
 
@@ -354,7 +357,7 @@ export default function Layout() {
               aria-label="Switch project"
               onClick={() => setProjMenuOpen(v => !v)}
             >
-              <span className="pj-mark">{project ? initials(project.title) : 'AB'}</span>
+              <span className="pj-mark">{project ? initials(project.title) : MARK}</span>
               <span className="pj-meta">
                 <span className="pj-name">{project ? project.title : 'All projects'}</span>
                 <span className="pj-sub">{project ? project.slug : 'Select a project'}</span>
@@ -431,7 +434,7 @@ export default function Layout() {
               aria-label="Account and workspace settings"
               onClick={() => setAcctMenuOpen(v => !v)}
             >
-              <span className="pj-mark">{me ? initials(me.user.display_name || me.user.email) : 'AB'}</span>
+              <span className="pj-mark">{me ? initials(me.user.display_name || me.user.email) : MARK}</span>
               <span className="pj-meta">
                 <span className="pj-name">{me ? me.user.display_name : 'Local workspace'}</span>
                 <span className="pj-sub">{me ? me.user.email : 'Single-user'}</span>

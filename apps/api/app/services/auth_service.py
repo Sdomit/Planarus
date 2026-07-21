@@ -127,6 +127,16 @@ def _bootstrap_admin(session: Session) -> bool:
     return session.exec(select(User.id).limit(1)).first() is None
 
 
+def needs_setup(session: Session) -> bool:
+    """Whether this server is still unclaimed — the next account becomes admin.
+
+    Public read of the same D29 check, for the first-run sign-in screen. It does
+    leak "no accounts yet", unlike D30's deliberately opaque closed-registration
+    404, but only until someone registers: after that it is false forever.
+    """
+    return _bootstrap_admin(session)
+
+
 def login_with_identity(
     session: Session,
     provider: str,
@@ -353,6 +363,21 @@ def list_members(session: Session, workspace_id: str) -> list[WorkspaceMember]:
             )
         ).all()
     )
+
+
+def member_candidates(session: Session, workspace_id: str) -> list[User]:
+    """Active accounts not already in this workspace — the invite pick-list.
+
+    Scoped per workspace and gated on the owner role at the endpoint, so this
+    is not a directory any signed-in user can enumerate: you already manage a
+    workspace, and adding someone means learning their address anyway. Already
+    members are excluded because adding them is a 409.
+    """
+    member_ids = {m.user_id for m in list_members(session, workspace_id)}
+    users = session.exec(
+        select(User).where(User.is_active == True).order_by(User.email)  # noqa: E712
+    ).all()
+    return [u for u in users if u.id not in member_ids]
 
 
 def count_owners(session: Session, workspace_id: str) -> int:

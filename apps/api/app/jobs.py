@@ -22,6 +22,7 @@ recording success, and can tell "switched off on purpose" apart from "broken".
     python -m app.jobs backup
     python -m app.jobs verify [NAME]
     python -m app.jobs restore NAME --yes
+    python -m app.jobs admin --list | --grant EMAIL | --reset-password EMAIL
 """
 from __future__ import annotations
 
@@ -32,9 +33,11 @@ from collections.abc import Iterator
 
 from sqlmodel import Session, select
 
+from app.core.config import settings
 from app.core.exceptions import ConflictError
 from app.models.project import Project
-from app.services import backup_service, email_service, settings_service
+from app.models.user import User
+from app.services import admin_service, backup_service, email_service, settings_service
 
 # Refusing a destructive action without explicit confirmation is a distinct
 # outcome from "it failed" — a scheduler/operator can tell them apart.
@@ -146,6 +149,61 @@ def _cmd_restore(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+# --- operator: account recovery (D53) ------------------------------------------
+
+
+def _cmd_admin(args: argparse.Namespace) -> int:
+    """Get back into a server nobody can sign in to.
+
+    A CLI and never a route (D53, following D43): whoever can run this already
+    has the database file and could edit the row by hand, so it adds convenience
+    and not a trust boundary — where an HTTP recovery path would be permanent
+    unauthenticated surface for a once-a-year need.
+    """
+    if not settings.auth_enabled:
+        print(
+            "admin: auth is disabled on this server — no accounts to administer",
+            file=sys.stderr,
+        )
+        return EXIT_REFUSED
+
+    with _session() as session:
+        if args.list:
+            rows = admin_service.list_users(session)
+            if not rows:
+                print("admin: no accounts yet — the first sign-up claims the server")
+                return EXIT_OK
+            for user, last_seen, _memberships in rows:
+                flags = ", ".join(
+                    f
+                    for f in (
+                        "admin" if user.is_admin else "",
+                        "" if user.is_active else "deactivated",
+                    )
+                    if f
+                )
+                print(f"{user.email}{'  [' + flags + ']' if flags else ''}"
+                      f"  last seen: {last_seen or 'never'}")
+            return EXIT_OK
+
+        email = (args.grant or args.reset_password or "").strip().lower()
+        user = session.exec(select(User).where(User.email == email)).first()
+        if user is None:
+            print(f"admin: no account for {email}", file=sys.stderr)
+            return EXIT_FAILED
+
+        if args.grant:
+            admin_service.set_admin(session, user, True)
+            print(f"admin: {user.email} is now a server admin")
+            return EXIT_OK
+
+        temp = admin_service.reset_password(session, user)
+        print(f"admin: temporary password for {user.email}: {temp}")
+        print("       shown once; they must change it at sign-in, and every "
+              "existing session for that account is now signed out")
+        return EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m app.jobs",
@@ -176,6 +234,22 @@ def main(argv: list[str] | None = None) -> int:
         "--yes", action="store_true", help="confirm this destructive action"
     )
     restore.set_defaults(func=_cmd_restore)
+
+    admin = sub.add_parser(
+        "admin",
+        help="account recovery: list accounts, grant admin, reset a password",
+    )
+    # Exactly one action per run — "grant and also reset" is two decisions, and
+    # a typo that silently did both would be a bad surprise on a recovery path.
+    action = admin.add_mutually_exclusive_group(required=True)
+    action.add_argument("--list", action="store_true", help="list every account")
+    action.add_argument("--grant", metavar="EMAIL", help="make this account a server admin")
+    action.add_argument(
+        "--reset-password",
+        metavar="EMAIL",
+        help="issue a one-time temp password and sign that account out everywhere",
+    )
+    admin.set_defaults(func=_cmd_admin)
 
     args = parser.parse_args(argv)
     try:

@@ -108,6 +108,7 @@ export interface Task {
 export interface Decision {
   id: string
   project_id: string
+  phase_id: string | null
   title: string
   decision: string
   context: string | null
@@ -120,6 +121,7 @@ export interface Decision {
 export interface Risk {
   id: string
   project_id: string
+  phase_id: string | null
   title: string
   description: string | null
   severity: string
@@ -857,6 +859,12 @@ export interface AuthMe {
 
 // P16.2 — Team surface: workspace members (P10.1 API, first UI here) and the
 // server-admin account roster (P16.1 admin plane).
+/** An account a workspace owner could add — no membership row exists yet. */
+export interface MemberCandidate {
+  email: string
+  display_name: string
+}
+
 export interface MemberRead {
   id: string
   workspace_id: string
@@ -993,6 +1001,7 @@ export interface PresenceView {
 export const api = {
   auth: {
     me: () => request<AuthMe>('/auth/me'),
+    status: () => request<{ needs_setup: boolean }>('/auth/status'),
     passwordLogin: (email: string, password: string) =>
       request<AuthMe>('/auth/password/login', {
         method: 'POST',
@@ -1021,6 +1030,8 @@ export const api = {
   members: {
     list: (workspaceId: string) =>
       request<MemberRead[]>(`/workspaces/${workspaceId}/members`),
+    candidates: (workspaceId: string) =>
+      request<MemberCandidate[]>(`/workspaces/${workspaceId}/member-candidates`),
     add: (workspaceId: string, email: string, role: string) =>
       request<MemberRead>(`/workspaces/${workspaceId}/members`, {
         method: 'POST',
@@ -1041,6 +1052,7 @@ export const api = {
   // shown once and never persisted by the client.
   admin: {
     users: () => request<AdminUser[]>('/admin/users'),
+    unclaimedWorkspaces: () => request<Workspace[]>('/admin/workspaces/unclaimed'),
     createUser: (email: string, displayName?: string) =>
       controlRequest<AdminUserCreated>('/admin/users', {
         method: 'POST',
@@ -1150,12 +1162,12 @@ export const api = {
   },
   decisions: {
     list: (projectId: string) => request<Decision[]>(`/projects/${projectId}/decisions`),
-    create: (projectId: string, data: { title: string; decision: string; status?: string }) =>
+    create: (projectId: string, data: { title: string; decision: string; status?: string; phase_id?: string }) =>
       request<Decision>(`/projects/${projectId}/decisions`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    update: (id: string, data: Partial<Pick<Decision, 'title' | 'decision' | 'context' | 'status'>>) =>
+    update: (id: string, data: Partial<Pick<Decision, 'title' | 'decision' | 'context' | 'status' | 'phase_id'>>) =>
       request<Decision>(`/decisions/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remove: (id: string) => request<void>(`/decisions/${id}`, { method: 'DELETE' }),
     reorder: (projectId: string, ids: string[]) =>
@@ -1163,9 +1175,9 @@ export const api = {
   },
   risks: {
     list: (projectId: string) => request<Risk[]>(`/projects/${projectId}/risks`),
-    create: (projectId: string, data: { title: string; severity: string; status?: string }) =>
+    create: (projectId: string, data: { title: string; severity: string; status?: string; phase_id?: string }) =>
       request<Risk>(`/projects/${projectId}/risks`, { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: Partial<Pick<Risk, 'title' | 'description' | 'severity' | 'status' | 'mitigation'>>) =>
+    update: (id: string, data: Partial<Pick<Risk, 'title' | 'description' | 'severity' | 'status' | 'mitigation' | 'phase_id'>>) =>
       request<Risk>(`/risks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     remove: (id: string) => request<void>(`/risks/${id}`, { method: 'DELETE' }),
     reorder: (projectId: string, ids: string[]) =>

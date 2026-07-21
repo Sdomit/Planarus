@@ -186,8 +186,8 @@ export default function PlanningPanel({
     title: '', status: 'backlog', priority: '', phase_id: '', stage_id: '',
   })
   const [milestoneForm, setMilestoneForm] = useState({ title: '', status: 'planned', target_date: '' })
-  const [decisionForm, setDecisionForm] = useState({ title: '', decision: '', status: 'proposed' })
-  const [riskForm, setRiskForm] = useState({ title: '', severity: 'medium', status: 'open' })
+  const [decisionForm, setDecisionForm] = useState({ title: '', decision: '', status: 'proposed', phase_id: '' })
+  const [riskForm, setRiskForm] = useState({ title: '', severity: 'medium', status: 'open', phase_id: '' })
   const [commentForm, setCommentForm] = useState({ body: '' })
   const [linkForm, setLinkForm] = useState({ url: '', title: '' })
 
@@ -272,11 +272,17 @@ export default function PlanningPanel({
         const mil = await api.milestones.create(project.id, { title: milestoneForm.title, status: milestoneForm.status, target_date: milestoneForm.target_date || undefined })
         setMilestones(prev => [...prev, mil]); setMilestoneForm({ title: '', status: 'planned', target_date: '' })
       } else if (tab === 'decisions') {
-        const dec = await api.decisions.create(project.id, { title: decisionForm.title, decision: decisionForm.decision, status: decisionForm.status })
-        setDecisions(prev => [dec, ...prev]); setDecisionForm({ title: '', decision: '', status: 'proposed' })
+        const dec = await api.decisions.create(project.id, {
+          title: decisionForm.title, decision: decisionForm.decision, status: decisionForm.status,
+          phase_id: decisionForm.phase_id || undefined,
+        })
+        setDecisions(prev => [dec, ...prev]); setDecisionForm({ title: '', decision: '', status: 'proposed', phase_id: '' })
       } else if (tab === 'risks') {
-        const rsk = await api.risks.create(project.id, { title: riskForm.title, severity: riskForm.severity, status: riskForm.status })
-        setRisks(prev => [...prev, rsk]); setRiskForm({ title: '', severity: 'medium', status: 'open' })
+        const rsk = await api.risks.create(project.id, {
+          title: riskForm.title, severity: riskForm.severity, status: riskForm.status,
+          phase_id: riskForm.phase_id || undefined,
+        })
+        setRisks(prev => [...prev, rsk]); setRiskForm({ title: '', severity: 'medium', status: 'open', phase_id: '' })
       } else if (tab === 'comments') {
         const cmt = await api.comments.create(project.id, { entity_type: 'project', entity_id: project.id, body: commentForm.body })
         setComments(prev => [...prev, cmt]); setCommentForm({ body: '' })
@@ -441,6 +447,11 @@ export default function PlanningPanel({
                   onChange={e => setDecisionForm(f => ({ ...f, status: e.target.value }))}>
                   {(decisionStatuses.length ? decisionStatuses.map(o => o.key) : DECISION_STATUSES).map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
                 </select>
+                <select className="input select" value={decisionForm.phase_id} aria-label="Decision phase"
+                  onChange={e => setDecisionForm(f => ({ ...f, phase_id: e.target.value }))}>
+                  <option value="">No phase (project-wide)</option>
+                  {phases.map(ph => <option key={ph.id} value={ph.id}>{ph.title}</option>)}
+                </select>
               </>
             )}
             {tab === 'risks' && (
@@ -454,6 +465,11 @@ export default function PlanningPanel({
                 <select className="input select" value={riskForm.status} aria-label="Risk status"
                   onChange={e => setRiskForm(f => ({ ...f, status: e.target.value }))}>
                   {(riskStatuses.length ? riskStatuses.map(o => o.key) : RISK_STATUSES).map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+                </select>
+                <select className="input select" value={riskForm.phase_id} aria-label="Risk phase"
+                  onChange={e => setRiskForm(f => ({ ...f, phase_id: e.target.value }))}>
+                  <option value="">No phase (project-wide)</option>
+                  {phases.map(ph => <option key={ph.id} value={ph.id}>{ph.title}</option>)}
                 </select>
               </>
             )}
@@ -477,7 +493,8 @@ export default function PlanningPanel({
         )}
 
         {tab === 'phases' && (
-          <PhasesSection phases={phases} projectId={project.id} setPhases={setPhases}
+          <PhasesSection phases={phases} tasks={tasks} decisions={decisions} risks={risks}
+            projectId={project.id} setPhases={setPhases}
             statuses={phaseStatuses} reloadStatuses={reloadStatuses.phase}
             addStatus={addStatusFor('phase')} />
         )}
@@ -495,13 +512,14 @@ export default function PlanningPanel({
             addStatus={addStatusFor('milestone')} />
         )}
         {tab === 'decisions' && (
-          <DecisionsSection decisions={decisions} projectId={project.id} setDecisions={setDecisions}
+          <DecisionsSection decisions={decisions} phases={phases} projectId={project.id} setDecisions={setDecisions}
             statuses={decisionStatuses} reloadStatuses={reloadStatuses.decision}
             addStatus={addStatusFor('decision')} />
         )}
         {tab === 'risks' && (
           <RisksSection
             risks={risks}
+            phases={phases}
             blockers={openBlockers}
             projectId={project.id}
             setRisks={setRisks}
@@ -589,10 +607,38 @@ function useEditable(value: string, onSave: (next: string) => void) {
   return { editing, start, node }
 }
 
-function PhasesSection({ phases, projectId, setPhases, statuses, addStatus, reloadStatuses }: {
+/** Phase 19 (D45): what a phase rolls up, so a phase reads as a complete unit
+ *  — "8/12 tasks · 2 decisions · 3 open risks" — instead of a bare title. */
+export interface PhaseRollup {
+  tasksDone: number
+  tasksTotal: number
+  decisions: number
+  openRisks: number
+}
+
+const CLOSED_RISK_STATUSES = new Set(['mitigated', 'accepted', 'closed'])
+
+export function phaseRollups(
+  tasks: Task[], decisions: Decision[], risks: Risk[],
+): Map<string, PhaseRollup> {
+  const out = new Map<string, PhaseRollup>()
+  const at = (id: string) => {
+    let r = out.get(id)
+    if (!r) { r = { tasksDone: 0, tasksTotal: 0, decisions: 0, openRisks: 0 }; out.set(id, r) }
+    return r
+  }
+  for (const t of tasks) if (t.phase_id) { const r = at(t.phase_id); r.tasksTotal++; if (t.status === 'done') r.tasksDone++ }
+  for (const d of decisions) if (d.phase_id) at(d.phase_id).decisions++
+  for (const r of risks) if (r.phase_id && !CLOSED_RISK_STATUSES.has(r.status)) at(r.phase_id).openRisks++
+  return out
+}
+
+function PhasesSection({ phases, tasks = [], decisions = [], risks = [], projectId, setPhases, statuses, addStatus, reloadStatuses }: {
   phases: Phase[]; projectId: string; setPhases: React.Dispatch<React.SetStateAction<Phase[]>>
+  tasks?: Task[]; decisions?: Decision[]; risks?: Risk[]
   statuses?: StatusOption[]; addStatus?: (label: string) => Promise<void>; reloadStatuses?: () => Promise<void>
 }) {
+  const rollups = phaseRollups(tasks, decisions, risks)
   const [view, setView] = useState<'list' | 'board'>('list')
   const statusKeys = statuses && statuses.length ? statuses.map(o => o.key) : PHASE_STATUSES
   const onAddNew = addStatus ? () => promptNewStatus(addStatus) : undefined
@@ -626,7 +672,7 @@ function PhasesSection({ phases, projectId, setPhases, statuses, addStatus, relo
       ) : (
         <ul className="pp-rows">
           {phases.map(ph => (
-            <PhaseListRow key={ph.id} phase={ph} update={update} remove={remove} dragProps={itemProps(ph.id)} move={delta => void moveBy(ph.id, delta)}
+            <PhaseListRow key={ph.id} phase={ph} rollup={rollups.get(ph.id)} update={update} remove={remove} dragProps={itemProps(ph.id)} move={delta => void moveBy(ph.id, delta)}
               statusKeys={statusKeys} onAddNew={onAddNew} colorOf={colorOf} />
           ))}
         </ul>
@@ -636,8 +682,9 @@ function PhasesSection({ phases, projectId, setPhases, statuses, addStatus, relo
   )
 }
 
-function PhaseListRow({ phase, update, remove, dragProps, move, statusKeys = PHASE_STATUSES, onAddNew, colorOf }: {
+function PhaseListRow({ phase, rollup, update, remove, dragProps, move, statusKeys = PHASE_STATUSES, onAddNew, colorOf }: {
   phase: Phase
+  rollup?: PhaseRollup
   update: (id: string, patch: Parameters<typeof api.phases.update>[1]) => void
   statusKeys?: string[]
   onAddNew?: () => void
@@ -656,6 +703,7 @@ function PhaseListRow({ phase, update, remove, dragProps, move, statusKeys = PHA
           <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
           {editable.node ?? <span className="pp-row-title">{phase.title}</span>}
         </button>
+        {rollup && <PhaseRollupChips rollup={rollup} />}
         <InlineStatusSelect kind="phase" value={phase.status} options={statusKeys}
           onChange={s => update(phase.id, { status: s })} label={`Change status of ${phase.title}`} onAddNew={onAddNew} colorOf={colorOf} />
         <RowActions title={phase.title} onEdit={editable.start} onDelete={() => remove(phase.id)} dragHandle
@@ -667,6 +715,42 @@ function PhaseListRow({ phase, update, remove, dragProps, move, statusKeys = PHA
         </div>
       )}
     </li>
+  )
+}
+
+/** The phase's contents at a glance. Zero-valued parts are omitted rather than
+ *  shown as "0", so a phase only carries the signal it actually has. */
+function PhaseRollupChips({ rollup }: { rollup: PhaseRollup }) {
+  const parts: string[] = []
+  if (rollup.tasksTotal) parts.push(`${rollup.tasksDone}/${rollup.tasksTotal} tasks`)
+  if (rollup.decisions) parts.push(`${rollup.decisions} decision${rollup.decisions === 1 ? '' : 's'}`)
+  if (rollup.openRisks) parts.push(`${rollup.openRisks} open risk${rollup.openRisks === 1 ? '' : 's'}`)
+  if (!parts.length) return null
+  return <span className="pp-card-phase" title="Tasks, decisions and open risks in this phase">{parts.join(' · ')}</span>
+}
+
+/** Phase 19: which phase an item belongs to. Renders nothing when unphased —
+ *  a project-wide decision/risk is a valid shape, not a missing value. */
+function PhaseChip({ phaseId, phases }: { phaseId: string | null; phases: Phase[] }) {
+  if (!phaseId) return null
+  const title = phases.find(p => p.id === phaseId)?.title
+  if (!title) return null
+  return <span className="pp-card-phase">{title}</span>
+}
+
+/** Re-assign (or clear) an item's phase. '' maps to null, not undefined, so
+ *  clearing actually sends the field instead of omitting it from the PATCH. */
+function PhasePicker({ phaseId, phases, label, onChange }: {
+  phaseId: string | null; phases: Phase[]; label: string
+  onChange: (phaseId: string | null) => void
+}) {
+  if (phases.length === 0) return null
+  return (
+    <select className="input select input-sm" aria-label={label} value={phaseId ?? ''}
+      onChange={e => onChange(e.target.value || null)}>
+      <option value="">No phase (project-wide)</option>
+      {phases.map(ph => <option key={ph.id} value={ph.id}>{ph.title}</option>)}
+    </select>
   )
 }
 
@@ -1259,8 +1343,8 @@ function MilestoneListRow({ milestone, update, remove, dragProps, move, statusKe
   )
 }
 
-function DecisionsSection({ decisions, projectId, setDecisions, statuses, addStatus, reloadStatuses }: {
-  decisions: Decision[]; projectId: string; setDecisions: React.Dispatch<React.SetStateAction<Decision[]>>
+function DecisionsSection({ decisions, phases = [], projectId, setDecisions, statuses, addStatus, reloadStatuses }: {
+  decisions: Decision[]; phases?: Phase[]; projectId: string; setDecisions: React.Dispatch<React.SetStateAction<Decision[]>>
   statuses?: StatusOption[]; addStatus?: (label: string) => Promise<void>; reloadStatuses?: () => Promise<void>
 }) {
   const [view, setView] = useState<'list' | 'board'>('list')
@@ -1295,7 +1379,7 @@ function DecisionsSection({ decisions, projectId, setDecisions, statuses, addSta
       ) : (
         <ul className="pp-rows">
           {decisions.map(d => (
-            <DecisionListRow key={d.id} decision={d} update={update} remove={remove} dragProps={itemProps(d.id)} move={delta => void moveBy(d.id, delta)}
+            <DecisionListRow key={d.id} decision={d} phases={phases} update={update} remove={remove} dragProps={itemProps(d.id)} move={delta => void moveBy(d.id, delta)}
               statusKeys={statusKeys} onAddNew={onAddNew} colorOf={colorOf} />
           ))}
         </ul>
@@ -1305,8 +1389,9 @@ function DecisionsSection({ decisions, projectId, setDecisions, statuses, addSta
   )
 }
 
-function DecisionListRow({ decision, update, remove, dragProps, move, statusKeys = DECISION_STATUSES, onAddNew, colorOf }: {
+function DecisionListRow({ decision, phases = [], update, remove, dragProps, move, statusKeys = DECISION_STATUSES, onAddNew, colorOf }: {
   decision: Decision
+  phases?: Phase[]
   update: (id: string, patch: Parameters<typeof api.decisions.update>[1]) => void
   remove: (id: string) => void
   dragProps: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
@@ -1325,6 +1410,7 @@ function DecisionListRow({ decision, update, remove, dragProps, move, statusKeys
           <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
           {editable.node ?? <span className="pp-row-title">{decision.title}</span>}
         </button>
+        <PhaseChip phaseId={decision.phase_id} phases={phases} />
         <InlineStatusSelect kind="decision" value={decision.status} options={statusKeys}
           onChange={s => update(decision.id, { status: s })} label={`Change status of ${decision.title}`} onAddNew={onAddNew} colorOf={colorOf} />
         <RowActions title={decision.title} onEdit={editable.start} onDelete={() => remove(decision.id)} dragHandle
@@ -1334,6 +1420,8 @@ function DecisionListRow({ decision, update, remove, dragProps, move, statusKeys
         <div className="pp-task-details">
           <p className="pp-row-desc">{decision.decision}</p>
           {decision.context && <p className="pp-row-desc">{decision.context}</p>}
+          <PhasePicker phaseId={decision.phase_id} phases={phases} label={`Phase for ${decision.title}`}
+            onChange={phase_id => update(decision.id, { phase_id })} />
         </div>
       )}
     </li>
@@ -1341,9 +1429,9 @@ function DecisionListRow({ decision, update, remove, dragProps, move, statusKeys
 }
 
 function RisksSection({
-  risks, blockers, projectId, setRisks, onBlockerUpdated, statuses, addStatus, reloadStatuses,
+  risks, phases = [], blockers, projectId, setRisks, onBlockerUpdated, statuses, addStatus, reloadStatuses,
 }: {
-  risks: Risk[]; blockers: Blocker[]; projectId: string
+  risks: Risk[]; phases?: Phase[]; blockers: Blocker[]; projectId: string
   setRisks: React.Dispatch<React.SetStateAction<Risk[]>>; onBlockerUpdated: (b: Blocker) => void
   statuses?: StatusOption[]; addStatus?: (label: string) => Promise<void>; reloadStatuses?: () => Promise<void>
 }) {
@@ -1380,7 +1468,7 @@ function RisksSection({
       ) : (
         <ul className="pp-rows">
           {risks.map(r => (
-            <RiskListRow key={r.id} risk={r} update={update} remove={remove} dragProps={itemProps(r.id)} move={delta => void moveBy(r.id, delta)}
+            <RiskListRow key={r.id} risk={r} phases={phases} update={update} remove={remove} dragProps={itemProps(r.id)} move={delta => void moveBy(r.id, delta)}
               statusKeys={statusKeys} onAddNew={onAddNew} colorOf={colorOf} />
           ))}
         </ul>
@@ -1400,8 +1488,9 @@ function RisksSection({
   )
 }
 
-function RiskListRow({ risk, update, remove, dragProps, move, statusKeys = RISK_STATUSES, onAddNew, colorOf }: {
+function RiskListRow({ risk, phases = [], update, remove, dragProps, move, statusKeys = RISK_STATUSES, onAddNew, colorOf }: {
   risk: Risk
+  phases?: Phase[]
   update: (id: string, patch: Parameters<typeof api.risks.update>[1]) => void
   remove: (id: string) => void
   dragProps: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
@@ -1420,6 +1509,7 @@ function RiskListRow({ risk, update, remove, dragProps, move, statusKeys = RISK_
           <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
           {editable.node ?? <span className="pp-row-title">{risk.title}</span>}
         </button>
+        <PhaseChip phaseId={risk.phase_id} phases={phases} />
         <InlineStatusSelect kind="severity" value={risk.severity} options={RISK_SEVERITIES}
           onChange={s => update(risk.id, { severity: s })} label={`Change severity of ${risk.title}`} />
         <InlineStatusSelect kind="riskstatus" value={risk.status} options={statusKeys}
@@ -1431,6 +1521,8 @@ function RiskListRow({ risk, update, remove, dragProps, move, statusKeys = RISK_
         <div className="pp-task-details">
           {risk.description && <p className="pp-row-desc">{risk.description}</p>}
           {risk.mitigation && <p className="pp-row-desc"><strong>Mitigation:</strong> {risk.mitigation}</p>}
+          <PhasePicker phaseId={risk.phase_id} phases={phases} label={`Phase for ${risk.title}`}
+            onChange={phase_id => update(risk.id, { phase_id })} />
         </div>
       )}
     </li>

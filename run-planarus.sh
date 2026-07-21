@@ -64,7 +64,18 @@ WEB_PORT=$(free_port 5173)
 [ "$API_PORT" = "8000" ] || echo "[PORT] 8000 busy — API moved to :$API_PORT"
 [ "$WEB_PORT" = "5173" ] || echo "[PORT] 5173 busy — Web moved to :$WEB_PORT"
 
-echo "Starting Planarus  |  API :$API_PORT   Web :$WEB_PORT"
+# --- optional team mode: ./run-planarus.sh team ------------------------------
+# Off by default (D25/D26): a plain run stays the single-user local tool with no
+# sign-in at all. "team" turns on the account gate and the password provider, so
+# the first account you create claims the server as its admin and you can add
+# viewers from Team. Exported for the children only — this shell exits with them.
+MODE="local (no sign-in)"
+if [ "${1:-}" = "team" ]; then
+  export PLANARUS_AUTH_ENABLED=true PLANARUS_AUTH_PASSWORD_ENABLED=true
+  MODE="team (sign-in required)"
+fi
+
+echo "Starting Planarus  |  API :$API_PORT   Web :$WEB_PORT   Mode: $MODE"
 
 # --- start both, and make sure they die with this script ---------------------
 # Job control on, so each background job leads its own process group and cleanup

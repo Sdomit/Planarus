@@ -22,6 +22,7 @@ from app.core.utils import new_id, now_utc
 from app.models.user import User
 from app.models.user_identity import UserIdentity
 from app.models.user_session import UserSession
+from app.models.workspace import Workspace
 from app.models.workspace_member import WorkspaceMember
 from app.services import auth_service
 from app.services.api_credentials import hash_secret
@@ -84,6 +85,22 @@ def list_users(session: Session) -> list[tuple[User, Optional[str], list[Workspa
     for m in session.exec(select(WorkspaceMember)).all():
         members.setdefault(m.user_id, []).append(m)
     return [(u, seen.get(u.id), members.get(u.id, [])) for u in users]
+
+
+def list_unclaimed_workspaces(session: Session) -> list[Workspace]:
+    """Workspaces with zero members — invisible to /workspaces (D30's own
+    membership scoping) and therefore invisible to their own admin.
+
+    Real case, not a hypothetical: turning auth on for the first time on a
+    server that already had local-mode data leaves every existing workspace
+    ownerless, and ``members.py``'s own bootstrap rule ("the first member must
+    be yourself, added as owner") has no UI that ever shows the workspace to
+    claim. Admin-only: naming an empty workspace is a narrow, deliberate leak
+    to the one role that can already list every account on the server.
+    """
+    owned = set(session.exec(select(WorkspaceMember.workspace_id)).all())
+    workspaces = session.exec(select(Workspace).order_by(Workspace.created_at)).all()
+    return [w for w in workspaces if w.id not in owned]
 
 
 def create_user(

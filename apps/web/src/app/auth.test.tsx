@@ -7,6 +7,7 @@ vi.mock('../api/client', () => ({
   api: {
     auth: {
       me: vi.fn(),
+      status: vi.fn(),
       passwordLogin: vi.fn(),
       passwordRegister: vi.fn(),
       logout: vi.fn(),
@@ -23,7 +24,11 @@ const ME: AuthMe = {
   memberships: [{ workspace_id: 'ws_1', role: 'owner' }],
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  // Default: a server someone already claimed, so the gate is a plain sign-in.
+  vi.mocked(api.auth.status).mockResolvedValue({ needs_setup: false })
+})
 afterEach(cleanup)
 
 describe('AuthGate', () => {
@@ -67,6 +72,39 @@ describe('AuthGate', () => {
     expect(screen.queryByText('the app')).toBeNull()
   })
 
+  it('says the server is unreachable instead of leaking the browser string', async () => {
+    // A dead API rejects with the browser's own TypeError — no status prefix.
+    // Wording differs per browser, so both forms must map to the same message.
+    for (const raw of ['Failed to fetch', 'Load failed']) {
+      vi.mocked(api.auth.me).mockRejectedValue(new Error('401: authentication required'))
+      vi.mocked(api.auth.passwordLogin).mockRejectedValue(new TypeError(raw))
+      render(<AuthGate><p>the app</p></AuthGate>)
+
+      fireEvent.change(await screen.findByLabelText('Email'), { target: { value: 'pat@team.lan' } })
+      fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'correct horse battery' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+
+      expect(await screen.findByText('Cannot reach the server. Is the API running?')).toBeTruthy()
+      expect(screen.queryByText(raw)).toBeNull()
+      cleanup()
+    }
+  })
+
+  it('tells a locked-out user how to get back in, but not during setup', async () => {
+    vi.mocked(api.auth.me).mockRejectedValue(new Error('401: authentication required'))
+    render(<AuthGate><p>the app</p></AuthGate>)
+    // Sign-in: both routes are named (ask an admin, or the recovery CLI).
+    expect(await screen.findByText(/An admin can reset your password/)).toBeTruthy()
+    expect(screen.getByText(/--reset-password/)).toBeTruthy()
+    cleanup()
+
+    // Setup: there are no admins and no accounts yet, so the advice is noise.
+    vi.mocked(api.auth.status).mockResolvedValue({ needs_setup: true })
+    render(<AuthGate><p>the app</p></AuthGate>)
+    expect(await screen.findByText('Set up Planarus')).toBeTruthy()
+    expect(screen.queryByText(/An admin can reset your password/)).toBeNull()
+  })
+
   it('registers via the create-account mode', async () => {
     vi.mocked(api.auth.me).mockRejectedValue(new Error('401: authentication required'))
     vi.mocked(api.auth.passwordRegister).mockResolvedValue(ME)
@@ -82,6 +120,23 @@ describe('AuthGate', () => {
     await waitFor(() =>
       expect(api.auth.passwordRegister).toHaveBeenCalledWith('new@team.lan', 'a long enough phrase', 'Newbie'),
     )
+  })
+
+  it('opens in setup mode on an unclaimed server (D29)', async () => {
+    vi.mocked(api.auth.me).mockRejectedValue(new Error('401: authentication required'))
+    vi.mocked(api.auth.status).mockResolvedValue({ needs_setup: true })
+    vi.mocked(api.auth.passwordRegister).mockResolvedValue(ME)
+    render(<AuthGate><p>the app</p></AuthGate>)
+
+    // Register form up front, no toggle back to a sign-in nobody can use.
+    expect(await screen.findByText('Set up Planarus')).toBeTruthy()
+    expect(screen.getByLabelText('Display name (optional)')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'New here? Create an account' })).toBeNull()
+
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'root@team.lan' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'a long enough phrase' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create admin account' }))
+    expect(await screen.findByText('the app')).toBeTruthy()
   })
 
   it('forces the change-password screen on a temp password (P16.2)', async () => {

@@ -26,6 +26,7 @@ from app.schemas.admin import (
     AdminUserRead,
 )
 from app.schemas.auth import WorkspaceMembershipRead
+from app.schemas.workspace import WorkspaceRead
 from app.services import admin_service
 
 router = APIRouter(
@@ -66,6 +67,18 @@ def list_users(
     return [
         _read(u, seen, members)
         for u, seen, members in admin_service.list_users(session)
+    ]
+
+
+@router.get("/workspaces/unclaimed", response_model=list[WorkspaceRead])
+def list_unclaimed_workspaces(
+    session: Session = Depends(get_session),
+    _admin: User = Depends(require_server_admin),
+) -> list[WorkspaceRead]:
+    """Workspaces auth left ownerless — see admin_service for why this exists."""
+    return [
+        WorkspaceRead.model_validate(w)
+        for w in admin_service.list_unclaimed_workspaces(session)
     ]
 
 
