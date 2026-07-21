@@ -19,5 +19,5 @@ output "dns_action" {
 
 output "shell_in" {
   value       = "aws ssm start-session --target ${aws_instance.app.id} --region ${var.aws_region}"
-  description = "Open a shell on the box (no SSH needed). Then: cd /opt/approvo"
+  description = "Open a shell on the box (no SSH needed). Then: cd /opt/planarus"
 }

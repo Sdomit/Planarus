@@ -1,4 +1,4 @@
-# AgentBoard API — FastAPI + SQLite. Alembic migrates to head on startup.
+# Planarus API — FastAPI + SQLite. Alembic migrates to head on startup.
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -11,8 +11,8 @@ RUN pip install --no-cache-dir .
 
 EXPOSE 8000
 
-# The app default (sqlite:///./agentboard.db, cwd=/app) and Alembic
-# (alembic.ini → sqlite:///agentboard.db, cwd=/app) both resolve to
-# /app/agentboard.db. Symlink it onto the /data volume so they share one
+# The app default (sqlite:///./planarus.db, cwd=/app) and Alembic
+# (alembic.ini → sqlite:///planarus.db, cwd=/app) both resolve to
+# /app/planarus.db. Symlink it onto the /data volume so they share one
 # persisted file (SQLite puts -wal/-shm next to the real file, i.e. on /data).
-CMD ["sh", "-c", "ln -sf /data/agentboard.db /app/agentboard.db && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "ln -sf /data/planarus.db /app/planarus.db && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]

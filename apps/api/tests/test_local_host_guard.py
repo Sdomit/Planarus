@@ -53,6 +53,6 @@ def test_configured_public_host_accepted_locally(client, monkeypatch):
     # it must pass on local paths too (cloudflared health checks hit /health).
     from app.core.config import settings
 
-    monkeypatch.setattr(settings, "external_api_allowed_hosts", "agentboard.example.com")
-    res = client.get("/health", headers={"Host": "agentboard.example.com"})
+    monkeypatch.setattr(settings, "external_api_allowed_hosts", "planarus.example.com")
+    res = client.get("/health", headers={"Host": "planarus.example.com"})
     assert res.status_code == 200

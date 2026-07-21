@@ -78,7 +78,7 @@ export default function RemindersPanel({ projectId }: { projectId: string }) {
         <div style={{ fontWeight: 600, marginBottom: 4 }}>Email reminders</div>
         <p style={{ margin: '0 0 12px', fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>
           Local-only: sends go to a loopback SMTP sink (Mailpit) and only when
-          <code> AGENTBOARD_EMAIL_ENABLED=true</code>. There is no scheduler — use “Send now”.
+          <code> PLANARUS_EMAIL_ENABLED=true</code>. There is no scheduler — use “Send now”.
         </p>
 
         <form onSubmit={addRule} style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'flex-end' }}>

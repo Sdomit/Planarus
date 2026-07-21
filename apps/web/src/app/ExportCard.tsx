@@ -38,7 +38,7 @@ export default function ExportCard() {
     setError(null)
     const proj = projects.find(p => p.id === exportId)
     api.projects.export(exportId)
-      .then(data => downloadJson(`${proj?.slug || 'project'}.approvo.json`, data))
+      .then(data => downloadJson(`${proj?.slug || 'project'}.planarus.json`, data))
       .catch((e: Error) => setError(e.message))
   }
 
@@ -59,7 +59,7 @@ export default function ExportCard() {
     <section>
       <h3 style={{ marginTop: 0 }}>Export &amp; import</h3>
       <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', margin: '0 0 var(--space-3)' }}>
-        Move a project between Approvo instances as portable JSON — its planning graph (phases, tasks,
+        Move a project between Planarus instances as portable JSON — its planning graph (phases, tasks,
         decisions, docs, comments…), with ids remapped on import. History, approvals, and webhooks stay
         with the original. “Get my data out” is part of connecting to anything.
       </p>

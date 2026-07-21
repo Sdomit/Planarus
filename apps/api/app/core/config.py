@@ -3,37 +3,37 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    app_name: str = "Approvo"
+    app_name: str = "Planarus"
     app_version: str = "0.1.0"
     # P10.0: env-overridable so the app (and Alembic, which reads this field via
-    # alembic/env.py) can target Postgres without a code change. AGENTBOARD_* wins
+    # alembic/env.py) can target Postgres without a code change. PLANARUS_* wins
     # over the platform-conventional DATABASE_URL when both are set.
     database_url: str = Field(
-        default="sqlite:///./agentboard.db",
-        validation_alias=AliasChoices("AGENTBOARD_DATABASE_URL", "DATABASE_URL"),
+        default="sqlite:///./planarus.db",
+        validation_alias=AliasChoices("PLANARUS_DATABASE_URL", "DATABASE_URL"),
     )
 
     # Phase 7C1 external HTTP API. DISABLED by default; when off, every
     # /api/external/v1 route returns a generic not_found. Per-field env aliases are
     # used (not a global env_prefix) so the existing fields' resolution is untouched.
     external_api_enabled: bool = Field(
-        default=False, validation_alias="AGENTBOARD_EXTERNAL_API_ENABLED"
+        default=False, validation_alias="PLANARUS_EXTERNAL_API_ENABLED"
     )
     # Optional comma-separated extra Host-header values for a deliberate, documented
     # non-loopback deployment. Empty (default) → only loopback hosts are accepted.
     external_api_allowed_hosts: str = Field(
-        default="", validation_alias="AGENTBOARD_EXTERNAL_API_ALLOWED_HOSTS"
+        default="", validation_alias="PLANARUS_EXTERNAL_API_ALLOWED_HOSTS"
     )
 
     # Phase 9 email reminders. DISABLED by default; when enabled, sends go only to
     # a loopback SMTP host (Mailpit) — the service refuses any non-loopback host.
     email_enabled: bool = Field(
-        default=False, validation_alias="AGENTBOARD_EMAIL_ENABLED"
+        default=False, validation_alias="PLANARUS_EMAIL_ENABLED"
     )
-    smtp_host: str = Field(default="127.0.0.1", validation_alias="AGENTBOARD_SMTP_HOST")
-    smtp_port: int = Field(default=1025, validation_alias="AGENTBOARD_SMTP_PORT")
+    smtp_host: str = Field(default="127.0.0.1", validation_alias="PLANARUS_SMTP_HOST")
+    smtp_port: int = Field(default=1025, validation_alias="PLANARUS_SMTP_PORT")
     email_from: str = Field(
-        default="agentboard@localhost", validation_alias="AGENTBOARD_EMAIL_FROM"
+        default="planarus@localhost", validation_alias="PLANARUS_EMAIL_FROM"
     )
 
     # Phase 12b explicit fetch. DISABLED by default. This is the SOLE documented
@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     # that updates remote-tracking refs + FETCH_HEAD only (working tree untouched).
     # Never auto-fetches; the endpoint is additionally control-token-gated.
     git_fetch_enabled: bool = Field(
-        default=False, validation_alias="AGENTBOARD_GIT_FETCH_ENABLED"
+        default=False, validation_alias="PLANARUS_GIT_FETCH_ENABLED"
     )
 
     # Phase 10.1 (hosted mode) — identity/auth. DISABLED by default: when off, the
@@ -49,39 +49,39 @@ class Settings(BaseSettings):
     # local single-user tool it has always been. Only a hosted deployment turns
     # this on. No tenant enforcement on existing domain routes yet (that is P10.2).
     auth_enabled: bool = Field(
-        default=False, validation_alias="AGENTBOARD_AUTH_ENABLED"
+        default=False, validation_alias="PLANARUS_AUTH_ENABLED"
     )
     # The password-less "dev" identity provider (get-or-create login) for local
     # bootstrap + tests. Doubly-gated: ignored unless auth_enabled is ALSO true.
     # NEVER enable in a real hosted deployment — it is an unauthenticated
     # account-creation path by design.
     auth_dev_login_enabled: bool = Field(
-        default=False, validation_alias="AGENTBOARD_AUTH_DEV_LOGIN"
+        default=False, validation_alias="PLANARUS_AUTH_DEV_LOGIN"
     )
     # P11.1 (D25) — the local email+password provider, the LAN-mode identity
     # method (OAuth needs a public redirect URI a LAN box doesn't have). Doubly-
     # gated like dev-login: ignored unless auth_enabled is ALSO true. Off by
     # default so enabling hosted auth never silently opens a password surface.
     auth_password_enabled: bool = Field(
-        default=False, validation_alias="AGENTBOARD_AUTH_PASSWORD_ENABLED"
+        default=False, validation_alias="PLANARUS_AUTH_PASSWORD_ENABLED"
     )
     # Server-side session lifetime in hours (default 30 days).
     auth_session_ttl_hours: int = Field(
-        default=720, validation_alias="AGENTBOARD_AUTH_SESSION_TTL_HOURS"
+        default=720, validation_alias="PLANARUS_AUTH_SESSION_TTL_HOURS"
     )
 
     # Phase 10.3 (hosted mode) — storage backend for generated project artifacts.
     # "local" (default) is the filesystem, byte-identical to before. "memory" is
     # for tests/ephemeral use. A hosted "s3" adapter is a future addition.
     storage_backend: str = Field(
-        default="local", validation_alias="AGENTBOARD_STORAGE_BACKEND"
+        default="local", validation_alias="PLANARUS_STORAGE_BACKEND"
     )
     # P10.3b — S3 backend config (used only when storage_backend == "s3").
-    storage_s3_bucket: str = Field(default="", validation_alias="AGENTBOARD_S3_BUCKET")
-    storage_s3_prefix: str = Field(default="", validation_alias="AGENTBOARD_S3_PREFIX")
-    storage_s3_region: str = Field(default="", validation_alias="AGENTBOARD_S3_REGION")
+    storage_s3_bucket: str = Field(default="", validation_alias="PLANARUS_S3_BUCKET")
+    storage_s3_prefix: str = Field(default="", validation_alias="PLANARUS_S3_PREFIX")
+    storage_s3_region: str = Field(default="", validation_alias="PLANARUS_S3_REGION")
     storage_s3_endpoint_url: str = Field(
-        default="", validation_alias="AGENTBOARD_S3_ENDPOINT_URL"
+        default="", validation_alias="PLANARUS_S3_ENDPOINT_URL"
     )
 
     # Phase 10.4 (hosted deploy) — extra allowed browser origins for the hosted
@@ -89,22 +89,22 @@ class Settings(BaseSettings):
     # means only the local dev origins are trusted, so nothing changes locally.
     # These are added to the CORS allowlist and the Origin check for the local
     # control-token endpoints.
-    web_origins: str = Field(default="", validation_alias="AGENTBOARD_WEB_ORIGINS")
+    web_origins: str = Field(default="", validation_alias="PLANARUS_WEB_ORIGINS")
 
     # Phase 10.1b — real OAuth providers. A provider is only available when its
     # client id is set; unset (default) → its routes 404. Secrets are never logged
     # or returned. Requires the optional [oauth] extra (httpx) at runtime.
     oauth_google_client_id: str = Field(
-        default="", validation_alias="AGENTBOARD_OAUTH_GOOGLE_CLIENT_ID"
+        default="", validation_alias="PLANARUS_OAUTH_GOOGLE_CLIENT_ID"
     )
     oauth_google_client_secret: str = Field(
-        default="", validation_alias="AGENTBOARD_OAUTH_GOOGLE_CLIENT_SECRET"
+        default="", validation_alias="PLANARUS_OAUTH_GOOGLE_CLIENT_SECRET"
     )
     oauth_github_client_id: str = Field(
-        default="", validation_alias="AGENTBOARD_OAUTH_GITHUB_CLIENT_ID"
+        default="", validation_alias="PLANARUS_OAUTH_GITHUB_CLIENT_ID"
     )
     oauth_github_client_secret: str = Field(
-        default="", validation_alias="AGENTBOARD_OAUTH_GITHUB_CLIENT_SECRET"
+        default="", validation_alias="PLANARUS_OAUTH_GITHUB_CLIENT_SECRET"
     )
 
     # Phase 15.12b — calendar external sync (Google/Microsoft). Fully inert unless
@@ -114,24 +114,24 @@ class Settings(BaseSettings):
     # Secrets/key live only in the environment (a forbidden path) and are never
     # logged or returned. Requires the optional [calendar-sync] extra at runtime.
     calendar_enc_key: str = Field(
-        default="", validation_alias="AGENTBOARD_CALENDAR_ENC_KEY"
+        default="", validation_alias="PLANARUS_CALENDAR_ENC_KEY"
     )
     # P17.3: separate Fernet key for webhook signing-secret encryption. Webhooks
     # are inert until this is set (same env-gated model as calendar sync).
     webhook_enc_key: str = Field(
-        default="", validation_alias="AGENTBOARD_WEBHOOK_ENC_KEY"
+        default="", validation_alias="PLANARUS_WEBHOOK_ENC_KEY"
     )
     calendar_google_client_id: str = Field(
-        default="", validation_alias="AGENTBOARD_CALENDAR_GOOGLE_CLIENT_ID"
+        default="", validation_alias="PLANARUS_CALENDAR_GOOGLE_CLIENT_ID"
     )
     calendar_google_client_secret: str = Field(
-        default="", validation_alias="AGENTBOARD_CALENDAR_GOOGLE_CLIENT_SECRET"
+        default="", validation_alias="PLANARUS_CALENDAR_GOOGLE_CLIENT_SECRET"
     )
     calendar_microsoft_client_id: str = Field(
-        default="", validation_alias="AGENTBOARD_CALENDAR_MICROSOFT_CLIENT_ID"
+        default="", validation_alias="PLANARUS_CALENDAR_MICROSOFT_CLIENT_ID"
     )
     calendar_microsoft_client_secret: str = Field(
-        default="", validation_alias="AGENTBOARD_CALENDAR_MICROSOFT_CLIENT_SECRET"
+        default="", validation_alias="PLANARUS_CALENDAR_MICROSOFT_CLIENT_SECRET"
     )
 
     # Phase 11.0 (LAN team mode) — ceiling env vars, DISABLED by default. When
@@ -144,10 +144,10 @@ class Settings(BaseSettings):
     # the actual socket bind stays the user's explicit uvicorn choice (D26 —
     # plain HTTP on the LAN is a documented, warned-about tradeoff).
     lan_mode_enabled: bool = Field(
-        default=False, validation_alias="AGENTBOARD_LAN_MODE_ENABLED"
+        default=False, validation_alias="PLANARUS_LAN_MODE_ENABLED"
     )
     lan_allowed_hosts: str = Field(
-        default="", validation_alias="AGENTBOARD_LAN_ALLOWED_HOSTS"
+        default="", validation_alias="PLANARUS_LAN_ALLOWED_HOSTS"
     )
 
     # Phase 18.0 (D44) — verified local DB backups. This is the ceiling: where
@@ -156,7 +156,7 @@ class Settings(BaseSettings):
     # Point this at a synced folder (OneDrive/Dropbox/rclone) to get an off-box
     # copy — an on-disk backup alone does not survive losing the disk.
     backup_dir: str = Field(
-        default="./agentboard-backups", validation_alias="AGENTBOARD_BACKUP_DIR"
+        default="./planarus-backups", validation_alias="PLANARUS_BACKUP_DIR"
     )
 
 

@@ -1,6 +1,6 @@
-# Contributing to Approvo
+# Contributing to Planarus
 
-Thanks for your interest. Approvo is a local-first AI project cockpit built
+Thanks for your interest. Planarus is a local-first AI project cockpit built
 around one idea: **AI agents propose, humans approve.** Contributions that keep
 that promise intact are very welcome.
 
@@ -10,7 +10,7 @@ project's [Apache License 2.0](LICENSE).
 ## Getting set up
 
 - Full instructions: [docs/dev/setup.md](docs/dev/setup.md).
-- One-command local run: `./run-approvo.sh` (macOS/Linux) or `run-agentboard.bat` (Windows).
+- One-command local run: `./run-planarus.sh` (macOS/Linux) or `run-planarus.bat` (Windows).
 - Backend: `apps/api` — FastAPI + SQLModel + Alembic (Python).
 - Frontend: `apps/web` — React + TypeScript + Vite.
 
@@ -31,7 +31,7 @@ Also run the frontend typecheck/build (`pnpm build`) if you touched `apps/web`.
 
 ## The invariant you must not break
 
-Approvo's whole value is its trust model. A PR that weakens any of these
+Planarus's whole value is its trust model. A PR that weakens any of these
 will be sent back:
 
 - **External AI surfaces are read/propose-only.** MCP, the HTTP external API,

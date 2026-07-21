@@ -5,7 +5,7 @@ labels: enhancement
 ---
 
 **The problem you're hitting**
-What are you trying to do, and where does Approvo get in the way? Describe the
+What are you trying to do, and where does Planarus get in the way? Describe the
 situation rather than a solution — it usually leads somewhere better.
 
 **What you've tried**

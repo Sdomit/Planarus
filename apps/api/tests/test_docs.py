@@ -496,7 +496,7 @@ def test_export_doc_drift_returns_409(client: TestClient, tmp_path) -> None:
     # Export must detect drift and return 409 without overwriting
     r2 = client.post(f"/api/v1/docs/{d['id']}/export-markdown")
     assert r2.status_code == 409
-    assert "changed outside Approvo" in r2.json()["detail"]
+    assert "changed outside Planarus" in r2.json()["detail"]
 
     # File on disk still has external content (was NOT overwritten)
     with open(disk_path, encoding="utf-8") as f:

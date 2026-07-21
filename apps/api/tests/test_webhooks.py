@@ -78,7 +78,7 @@ def test_test_send_delivers_signed(client, wh):
     call = wh[0]
     assert call["url"] == "http://localhost:9/hook"
     expected = "sha256=" + hmac.new(secret.encode(), call["body"], hashlib.sha256).hexdigest()
-    assert call["headers"]["X-Approvo-Signature"] == expected
+    assert call["headers"]["X-Planarus-Signature"] == expected
     assert json.loads(call["body"])["kind"] == "webhook.test"
     deliveries = client.get(f"/api/v1/webhooks/{sub_id}/deliveries", headers=local_hdr(client)).json()
     assert deliveries[0]["status"] == "delivered"

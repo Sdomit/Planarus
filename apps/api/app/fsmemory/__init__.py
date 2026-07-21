@@ -1,4 +1,4 @@
-"""Safe filesystem layer for Approvo project folders.
+"""Safe filesystem layer for Planarus project folders.
 
 This package owns every write into a generated project folder. The DB is the
 source of truth; the folder is a portable, derived export. Generated paths come

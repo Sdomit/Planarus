@@ -1,6 +1,6 @@
 # LAN team mode — setup guide
 
-Share one running Approvo with a small team on the same local network: real
+Share one running Planarus with a small team on the same local network: real
 per-person sign-in, one shared database, the same approval boundary. No cloud,
 no public exposure, no TLS requirement.
 
@@ -14,7 +14,7 @@ Built by Phase 11 against ratified decisions **D25–D28**
 - **D26** — **plain HTTP on the LAN is allowed and is the default.** Your team's
   traffic is UNENCRYPTED on your local network. That is a conscious, documented
   tradeoff — the same one printers, NAS UIs, and most self-hosted tools make.
-  If you want TLS, front Approvo with your own reverse proxy; Approvo never
+  If you want TLS, front Planarus with your own reverse proxy; Planarus never
   manages certificates.
 - **D27** — presence ("X is editing — read-only") is a polling heartbeat, not
   realtime co-editing. The first active editor of a doc/canvas holds a soft
@@ -33,13 +33,13 @@ keeps behaving exactly as before — loopback-only, no accounts.
 Set the environment for the API process:
 
 ```bash
-AGENTBOARD_AUTH_ENABLED=true            # per-person sign-in (required — fail-closed)
-AGENTBOARD_AUTH_PASSWORD_ENABLED=true   # the email+password provider (D25)
-AGENTBOARD_LAN_MODE_ENABLED=true        # the LAN ceiling
-AGENTBOARD_LAN_ALLOWED_HOSTS=192.168.1.50,studio-pc.local
+PLANARUS_AUTH_ENABLED=true            # per-person sign-in (required — fail-closed)
+PLANARUS_AUTH_PASSWORD_ENABLED=true   # the email+password provider (D25)
+PLANARUS_LAN_MODE_ENABLED=true        # the LAN ceiling
+PLANARUS_LAN_ALLOWED_HOSTS=192.168.1.50,studio-pc.local
 ```
 
-`AGENTBOARD_LAN_ALLOWED_HOSTS` is the exact Host names/IPs teammates will type
+`PLANARUS_LAN_ALLOWED_HOSTS` is the exact Host names/IPs teammates will type
 into their browser (ports are ignored when matching; IPv6 literals use the
 bracket form). Requests for any other Host still get 403 — this is the
 DNS-rebinding defense, so keep the list tight.
@@ -65,7 +65,7 @@ cd apps/web && pnpm dev -- --host
 ```
 
 Teammates browse `http://192.168.1.50:5173`. Add that IP (and only it) to
-`AGENTBOARD_LAN_ALLOWED_HOSTS`… **note:** with the Vite dev proxy, the API sees
+`PLANARUS_LAN_ALLOWED_HOSTS`… **note:** with the Vite dev proxy, the API sees
 Host `localhost` (the proxy runs on the host machine), so strictly only the web
 port needs the LAN — but list your LAN IP anyway for direct-API tools.
 
@@ -118,10 +118,10 @@ is your LAN on/off switch at the OS level.
 
 | Symptom | Cause / fix |
 |---|---|
-| `RuntimeError: AGENTBOARD_LAN_MODE_ENABLED requires AGENTBOARD_AUTH_ENABLED` | The D25 fail-closed check. Turn auth on (step 1). |
-| Teammate gets **403** on every request | Their Host isn't in `AGENTBOARD_LAN_ALLOWED_HOSTS` (exact name/IP they typed, port ignored), or the Settings LAN switch is unchecked. |
-| Sign-in succeeds but immediately forgets the session | You're fronting Approvo with TLS-terminating proxy while LAN mode is off, or accessing over plain HTTP in a mode that requires Secure cookies. Under LAN mode the session cookie deliberately drops the `Secure` flag (D26) so plain HTTP works. |
-| "Password sign-in is not enabled on this server" | `AGENTBOARD_AUTH_PASSWORD_ENABLED` is unset. |
+| `RuntimeError: PLANARUS_LAN_MODE_ENABLED requires PLANARUS_AUTH_ENABLED` | The D25 fail-closed check. Turn auth on (step 1). |
+| Teammate gets **403** on every request | Their Host isn't in `PLANARUS_LAN_ALLOWED_HOSTS` (exact name/IP they typed, port ignored), or the Settings LAN switch is unchecked. |
+| Sign-in succeeds but immediately forgets the session | You're fronting Planarus with TLS-terminating proxy while LAN mode is off, or accessing over plain HTTP in a mode that requires Secure cookies. Under LAN mode the session cookie deliberately drops the `Secure` flag (D26) so plain HTTP works. |
+| "Password sign-in is not enabled on this server" | `PLANARUS_AUTH_PASSWORD_ENABLED` is unset. |
 | **429** at sign-in | Per-email throttle: 10 attempts/minute. Wait and retry. |
 | Writes feel serialized under load | D28: SQLite's single-writer model. Fine for a small team; the ETL to Postgres is the growth path. |
 
@@ -132,5 +132,5 @@ including session cookies (D26 — accepted tradeoff, loud warning at startup an
 in Settings). Passwords are stored only as Argon2id hashes; session tokens only
 as SHA-256 hashes; login failures are generic and throttled. The exposure
 boundary remains: your OS firewall + the Host allowlist + auth. If any of that
-is unacceptable for your network, front Approvo with your own TLS reverse proxy
+is unacceptable for your network, front Planarus with your own TLS reverse proxy
 or don't open the port.

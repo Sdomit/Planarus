@@ -36,7 +36,7 @@ vi.mock('../api/client', () => ({
       emailLog: vi.fn(async () => [
         {
           id: 'eml_1', project_id: 'proj_1', rule_id: 'nrl_1',
-          to_email: 'me@example.com', subject: '[Approvo] P — task reminders',
+          to_email: 'me@example.com', subject: '[Planarus] P — task reminders',
           status: 'sent', error: null,
           sent_at: '2026-07-10T12:00:00+00:00', created_at: 't',
         },

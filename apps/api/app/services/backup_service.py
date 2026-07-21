@@ -12,7 +12,7 @@ snapshots + point-in-time recovery rather than a hand-rolled dump.
 
 Boundaries:
   * **Off by default** — the ``backup_enabled`` switch gates the whole feature.
-  * The destination is an **env ceiling** (``AGENTBOARD_BACKUP_DIR``), never
+  * The destination is an **env ceiling** (``PLANARUS_BACKUP_DIR``), never
     client input; callers cannot choose where bytes land.
   * Retention only ever deletes files matching the generated name pattern —
     anything else living in that directory is left alone.
@@ -46,10 +46,10 @@ _MIN_SQLITE = (3, 27, 0)
 # The retention default and its floor live in settings_service.backup_retention —
 # one source of truth, so a corrupt or out-of-range row behaves identically here.
 
-# agentboard-20260719T220501123456Z.db — date, then 12 digits (HHMMSS + micros).
+# planarus-20260719T220501123456Z.db — date, then 12 digits (HHMMSS + micros).
 # Microsecond precision makes names unique *and* chronologically sortable, so
 # retention can order by filename alone and no collision suffix is needed.
-_NAME_RE = re.compile(r"^agentboard-\d{8}T\d{12}Z\.db$")
+_NAME_RE = re.compile(r"^planarus-\d{8}T\d{12}Z\.db$")
 
 
 def is_supported(session: Session) -> bool:
@@ -66,7 +66,7 @@ def backup_dir() -> Path:
 
 def _target(directory: Path) -> Path:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    return directory / f"agentboard-{stamp}.db"
+    return directory / f"planarus-{stamp}.db"
 
 
 def _describe(path: Path) -> BackupFile:
@@ -143,7 +143,7 @@ def _push_offsite(session: Session, path: Path) -> tuple[str | None, str | None]
         return None, (
             "off-site copy skipped: the storage backend is 'local', which would "
             "write the copy beside the original. Use the s3 backend, or point "
-            "AGENTBOARD_BACKUP_DIR at a synced folder instead."
+            "PLANARUS_BACKUP_DIR at a synced folder instead."
         )
     try:
         # Local import: the s3 backend pulls boto3, an optional extra — keep it

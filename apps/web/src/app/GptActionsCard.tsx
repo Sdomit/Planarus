@@ -83,7 +83,7 @@ export default function GptActionsCard(
 
       <div className="form-field" style={{ marginBottom: 'var(--space-3)' }}>
         <label className="form-label" htmlFor="gpt-host">Public HTTPS host (optional — pre-fills the schema’s server URL)</label>
-        <input id="gpt-host" className="input input-sm" placeholder="agentboard.example.com" value={host} onChange={e => setHost(e.target.value)} />
+        <input id="gpt-host" className="input input-sm" placeholder="planarus.example.com" value={host} onChange={e => setHost(e.target.value)} />
       </div>
 
       {error && <p className="form-error" role="alert">{error}</p>}
@@ -99,7 +99,7 @@ export default function GptActionsCard(
 
       <ol style={{ margin: 'var(--space-4) 0 0', paddingLeft: 'var(--space-5)', display: 'grid', gap: 4, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
         <li>Create a <strong>read-only</strong> <code>agbk_</code> key (one project) in the <strong>API Keys</strong> tab.</li>
-        <li>Put Approvo behind an HTTPS tunnel — see <code>docs/guide/connect-agentboard-to-chatgpt.md</code>.</li>
+        <li>Put Planarus behind an HTTPS tunnel — see <code>docs/guide/connect-planarus-to-chatgpt.md</code>.</li>
         <li>ChatGPT → create a GPT (<strong>Only me</strong>) → Actions → paste the schema → Auth: Bearer, your key.</li>
       </ol>
     </section>

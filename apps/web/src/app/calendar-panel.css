@@ -1,4 +1,4 @@
-/* Calendar Panel — month/week/day views over Forma / agentboard primitives */
+/* Calendar Panel — month/week/day views over Forma / planarus primitives */
 
 .cal-panel { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
 

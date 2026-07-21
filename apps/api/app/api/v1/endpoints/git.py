@@ -68,7 +68,7 @@ def fetch_project_git(
 ) -> GitFetchResult:
     """Explicit, human-clicked fetch of remote-tracking refs (Phase 12b) — the
     sole documented exception to "SHOW, DON'T DO". Disabled unless
-    AGENTBOARD_GIT_FETCH_ENABLED=true (raises 409 otherwise). Working tree
+    PLANARUS_GIT_FETCH_ENABLED=true (raises 409 otherwise). Working tree
     untouched; every actual outbound attempt is audited."""
     project = project_service.get_project(session, project_id)
     if project is None:

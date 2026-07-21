@@ -1,16 +1,16 @@
-# Approvo — one-command local run:  docker compose up --build  →  http://localhost:5173
+# Planarus — one-command local run:  docker compose up --build  →  http://localhost:5173
 #
 # The external (ChatGPT) API stays DISABLED. The API port is NOT published to the
 # host — only the web container is reachable, and it reaches the API over the
 # private compose network. Data (SQLite DB + any project folders you create under
-# /data) persists on the host in ./agentboard-data.
+# /data) persists on the host in ./planarus-data.
 services:
   api:
     build: ./apps/api
     environment:
-      AGENTBOARD_EXTERNAL_API_ENABLED: "false"
+      PLANARUS_EXTERNAL_API_ENABLED: "false"
     volumes:
-      - ./agentboard-data:/data
+      - ./planarus-data:/data
     expose:
       - "8000"
     restart: unless-stopped
@@ -22,10 +22,10 @@ services:
     ports:
       # Loopback-only by default (deny-by-default, P11.3): the quickstart URL
       # stays http://localhost:5173 and nothing is reachable from the LAN.
-      # LAN team mode = change to "${APPROVO_PORT:-5173}:80" AND turn auth on
+      # LAN team mode = change to "${PLANARUS_PORT:-5173}:80" AND turn auth on
       # first — see docs/guide/lan-team-mode.md.
-      # Port already taken? APPROVO_PORT=5174 docker compose up — no file edit.
-      - "127.0.0.1:${APPROVO_PORT:-5173}:80"
+      # Port already taken? PLANARUS_PORT=5174 docker compose up — no file edit.
+      - "127.0.0.1:${PLANARUS_PORT:-5173}:80"
     depends_on:
       - api
     restart: unless-stopped

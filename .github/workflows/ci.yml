@@ -52,18 +52,18 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: approvo
-          POSTGRES_PASSWORD: approvo
-          POSTGRES_DB: approvo
+          POSTGRES_USER: planarus
+          POSTGRES_PASSWORD: planarus
+          POSTGRES_DB: planarus
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U approvo"
+          --health-cmd "pg_isready -U planarus"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     env:
-      AGENTBOARD_DATABASE_URL: postgresql+psycopg2://approvo:approvo@localhost:5432/approvo
+      PLANARUS_DATABASE_URL: postgresql+psycopg2://planarus:planarus@localhost:5432/planarus
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7

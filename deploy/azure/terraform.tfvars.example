@@ -4,7 +4,7 @@ location = "eastus"
 domain   = "app.yourcompany.com"
 
 # Plain clone URL — no credentials in it. Public repos work as-is.
-repo_url    = "https://github.com/you/AgentBoard.git"
+repo_url    = "https://github.com/you/Planarus.git"
 repo_branch = "main"
 # Private repo only: a repo-scoped read-only token. It's stored in Key Vault and
 # the box injects it via git's config env at clone time — never in the URL, args,

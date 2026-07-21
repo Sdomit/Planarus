@@ -1,6 +1,6 @@
 # Team administration — roles, accounts, and provisioning
 
-Once [LAN team mode](lan-team-mode.md) (or a hosted deployment) is on, Approvo
+Once [LAN team mode](lan-team-mode.md) (or a hosted deployment) is on, Planarus
 has real per-person accounts. This guide covers the layer on top: **who can do
 what**, the in-app **Team** view for managing people, and the **scripted API**
 for provisioning users from IT tooling or another system.
@@ -13,13 +13,13 @@ account, or an admin.
 
 > **Prerequisite:** sign-in must be enabled. See
 > [lan-team-mode.md §1](lan-team-mode.md) for the environment
-> (`AGENTBOARD_AUTH_ENABLED=true`, `AGENTBOARD_AUTH_PASSWORD_ENABLED=true`, and
+> (`PLANARUS_AUTH_ENABLED=true`, `PLANARUS_AUTH_PASSWORD_ENABLED=true`, and
 > the LAN ceiling if you're serving a network). With auth off, every route and
 > screen below returns 404 / is hidden.
 
 ## 1. Two kinds of authority
 
-Approvo separates **project authority** from **account authority** — different
+Planarus separates **project authority** from **account authority** — different
 scopes, granted independently.
 
 | | Governs | Granted by |
@@ -109,7 +109,7 @@ in once to clear its temp password) rather than scripting a real person's login.
 
 ### The admin routes
 
-All under `/api/v1`. Mutations require `X-Approvo-Local-Token`; all require an
+All under `/api/v1`. Mutations require `X-Planarus-Local-Token`; all require an
 admin session cookie.
 
 | Method + path | Effect |
@@ -124,7 +124,7 @@ admin session cookie.
 | `DELETE /workspaces/{ws}/members/{user_id}` | Remove a member |
 
 Run from the host machine (loopback is always allowed) or from a Host in
-`AGENTBOARD_LAN_ALLOWED_HOSTS`.
+`PLANARUS_LAN_ALLOWED_HOSTS`.
 
 ### Bash / curl
 
@@ -141,12 +141,12 @@ TOKEN=$(curl -s -b cookies.txt "$BASE/local-session" | jq -r .token)
 
 # 3. create an account — capture the one-time temp password to hand over
 curl -s -b cookies.txt -X POST "$BASE/admin/users" \
-  -H "X-Approvo-Local-Token: $TOKEN" -H 'Content-Type: application/json' \
+  -H "X-Planarus-Local-Token: $TOKEN" -H 'Content-Type: application/json' \
   -d '{"email":"newhire@studio.lan","display_name":"New Hire"}'
 
 # 4. add them to a workspace as an editor
 curl -s -b cookies.txt -X POST "$BASE/workspaces/<ws_id>/members" \
-  -H "X-Approvo-Local-Token: $TOKEN" -H 'Content-Type: application/json' \
+  -H "X-Planarus-Local-Token: $TOKEN" -H 'Content-Type: application/json' \
   -d '{"email":"newhire@studio.lan","role":"editor"}'
 ```
 
@@ -158,7 +158,7 @@ $login = @{ email = 'provisioner@studio.lan'; password = '<password>' } | Conver
 Invoke-RestMethod "$base/auth/password/login" -Method Post -Body $login `
   -ContentType 'application/json' -SessionVariable s | Out-Null
 $token = (Invoke-RestMethod "$base/local-session" -WebSession $s).token
-$hdr = @{ 'X-Approvo-Local-Token' = $token }
+$hdr = @{ 'X-Planarus-Local-Token' = $token }
 
 $body = @{ email = 'newhire@studio.lan'; display_name = 'New Hire' } | ConvertTo-Json
 $acct = Invoke-RestMethod "$base/admin/users" -Method Post -WebSession $s `
@@ -172,7 +172,7 @@ four calls — build it when an org with an IdP actually asks.
 
 ## 5. Faces — who did what
 
-With accounts in place, Approvo attributes actions to people (D32/D33):
+With accounts in place, Planarus attributes actions to people (D32/D33):
 
 - **Tasks** carry an **assignee** — set it in the task detail, scan it as a chip
   on each row, and use the **"Assigned to me"** filter.
@@ -195,5 +195,5 @@ unattributed — and all of it is empty in local single-user mode.
   a **server admin** (D35) — the local control token alone is a CSRF guard the
   served web app hands to every browser, not an identity.
 - The LAN transport caveat still applies: plain HTTP on a LAN is unencrypted
-  (D26). Temp passwords cross that wire in the clear unless you front Approvo
+  (D26). Temp passwords cross that wire in the clear unless you front Planarus
   with TLS — see [lan-team-mode.md → Security posture](lan-team-mode.md).

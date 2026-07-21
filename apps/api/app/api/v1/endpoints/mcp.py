@@ -20,7 +20,7 @@ from app.mcp.registry import PROPOSE_TOOLS, READ_TOOLS
 
 router = APIRouter()
 
-SERVER_NAME = "agentboard"  # mirrors app.mcp.server.SERVER_NAME (kept SDK-free)
+SERVER_NAME = "planarus"  # mirrors app.mcp.server.SERVER_NAME (kept SDK-free)
 
 # apps/api — the cwd from which ``python -m app.mcp.server`` can import ``app``.
 # This file is apps/api/app/api/v1/endpoints/mcp.py → parents[4] == apps/api.

@@ -3,7 +3,7 @@
    Registers the two Forma families so the design-system compiler
    can resolve --font-sans / --font-mono.
 
-   Self-hosted from apps/web/public/fonts/ on purpose: Approvo is
+   Self-hosted from apps/web/public/fonts/ on purpose: Planarus is
    local-first, so a page load must not call out to a third party.
    Both are variable fonts (all weights via the wght axis), split
    into the latin and latin-ext subsets Google publishes — latin-ext

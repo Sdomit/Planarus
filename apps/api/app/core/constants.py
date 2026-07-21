@@ -395,10 +395,10 @@ def link_entity_type_check_sql(column: str = "entity_type") -> str:
 WORKSPACE_ROLES: tuple[str, ...] = ("owner", "editor", "viewer")
 
 # Authentication identity providers. "dev" is a password-less, doubly-gated local
-# provider for bootstrap + tests (never usable unless BOTH AGENTBOARD_AUTH_ENABLED
-# and AGENTBOARD_AUTH_DEV_LOGIN are on); real OAuth providers wire in at P10.1b.
+# provider for bootstrap + tests (never usable unless BOTH PLANARUS_AUTH_ENABLED
+# and PLANARUS_AUTH_DEV_LOGIN are on); real OAuth providers wire in at P10.1b.
 # "password" is the local email+password provider (P11.1, D25) — also doubly-gated
-# (AGENTBOARD_AUTH_PASSWORD_ENABLED). Widening this tuple requires a paired
+# (PLANARUS_AUTH_PASSWORD_ENABLED). Widening this tuple requires a paired
 # migration rewriting the frozen ``ck_useridentity_provider`` (0025 for 'password').
 AUTH_PROVIDERS: tuple[str, ...] = ("dev", "google", "github", "password")
 

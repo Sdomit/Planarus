@@ -46,8 +46,8 @@ from tests.external_util import auth, issue_key, seed
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DOCS_API = REPO_ROOT / "docs" / "api"
-READONLY_FILE = DOCS_API / "agentboard-gpt-actions-readonly.openapi.json"
-PROPOSE_FILE = DOCS_API / "agentboard-gpt-actions-read-propose.openapi.json"
+READONLY_FILE = DOCS_API / "planarus-gpt-actions-readonly.openapi.json"
+PROPOSE_FILE = DOCS_API / "planarus-gpt-actions-read-propose.openapi.json"
 
 READ_OPERATION_IDS = {
     "listProjects", "getProjectSummary", "listTasks", "listDecisions",
@@ -336,9 +336,9 @@ def test_request_schemas_match_live_models_and_bounds():
 
 def test_profiles_are_visibly_marked():
     ro, rp = build_readonly_openapi(), build_read_propose_openapi()
-    assert ro["info"]["x-agentboard-profile-note"] == READONLY_PROFILE_NOTE
+    assert ro["info"]["x-planarus-profile-note"] == READONLY_PROFILE_NOTE
     assert READONLY_PROFILE_NOTE in ro["info"]["description"]
-    assert rp["info"]["x-agentboard-profile-note"] == PROPOSE_PROFILE_NOTE
+    assert rp["info"]["x-planarus-profile-note"] == PROPOSE_PROFILE_NOTE
     assert PROPOSE_PROFILE_NOTE in rp["info"]["description"]
     assert "Do not import this profile" in PROPOSE_PROFILE_NOTE
     assert ro["info"]["version"] == rp["info"]["version"] == CONTRACT_VERSION
@@ -456,7 +456,7 @@ def test_no_runtime_external_route_added_or_served():
 
 
 def test_external_api_remains_disabled_by_default():
-    # No `external_api` fixture → AGENTBOARD_EXTERNAL_API_ENABLED defaults to False.
+    # No `external_api` fixture → PLANARUS_EXTERNAL_API_ENABLED defaults to False.
     from fastapi.testclient import TestClient
 
     res = TestClient(app).get(

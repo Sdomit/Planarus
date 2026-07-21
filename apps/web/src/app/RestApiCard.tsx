@@ -86,7 +86,7 @@ export default function RestApiCard({ active, permitted }: { active: boolean; pe
     <section>
       <h3 style={{ marginTop: 0 }}>REST API</h3>
       <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', margin: '0 0 var(--space-3)' }}>
-        Point any pipeline, script, or agent at Approvo with a scoped key from the{' '}
+        Point any pipeline, script, or agent at Planarus with a scoped key from the{' '}
         <strong>API Keys</strong> tab. Read &amp; pending-proposal only — external calls never approve or apply.
       </p>
 

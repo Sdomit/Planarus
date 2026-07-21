@@ -9,7 +9,7 @@ Design constraints (all honoured here):
   on the session turns each committed ``AuditEvent`` (for project-content entities)
   into a webhook of kind ``{entity_type}.{event_type}`` (e.g. ``task.create``).
 * **Inert without the key.** Everything short-circuits unless
-  ``webhook_crypto.is_enabled()`` (``AGENTBOARD_WEBHOOK_ENC_KEY`` set), so the
+  ``webhook_crypto.is_enabled()`` (``PLANARUS_WEBHOOK_ENC_KEY`` set), so the
   default install and every existing test are unaffected.
 * **HMAC-SHA256 signed** with the per-subscription secret (Fernet-encrypted at
   rest). Auto-disabled after too many consecutive failures.
@@ -211,7 +211,7 @@ def _render_text(env: dict) -> str:
     entity = env.get("entity") or {}
     where = f" · project {env['project_id']}" if env.get("project_id") else ""
     return (
-        f"[Approvo] {env['kind']} — {entity.get('type', '')} "
+        f"[Planarus] {env['kind']} — {entity.get('type', '')} "
         f"{entity.get('id', '') or ''}{where}"
     ).strip()
 
@@ -249,10 +249,10 @@ def _deliver(delivery_id: str, engine) -> None:
         body = d.request_body.encode()
         headers = {
             "Content-Type": "application/json",
-            "User-Agent": "Approvo-Webhooks/1",
-            "X-Approvo-Event": d.event_kind,
-            "X-Approvo-Delivery": d.id,
-            "X-Approvo-Signature": f"sha256={_sign(secret, body)}",
+            "User-Agent": "Planarus-Webhooks/1",
+            "X-Planarus-Event": d.event_kind,
+            "X-Planarus-Delivery": d.id,
+            "X-Planarus-Signature": f"sha256={_sign(secret, body)}",
         }
         if _target_blocked(sub.target_url):
             status_code, error = None, "blocked_non_public_host"

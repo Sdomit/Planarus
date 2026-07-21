@@ -1,26 +1,26 @@
-# Going live: hosted Approvo (OAuth + S3)
+# Going live: hosted Planarus (OAuth + S3)
 
 Everything hosted is **off by default** — the code is complete and config-driven,
 so going live is providing infrastructure and secrets, not writing code. Work
 top-to-bottom; the last step (`doctor`) verifies the whole thing before you deploy.
 
-All settings are `AGENTBOARD_*` env vars; `apps/api/deploy/hosted.env.example` is a
+All settings are `PLANARUS_*` env vars; `apps/api/deploy/hosted.env.example` is a
 fill-in-the-blanks template.
 
 ## 1. Database (Postgres)
 1. Provision managed Postgres (Supabase, RDS, Neon, …).
-2. `AGENTBOARD_DATABASE_URL=postgresql+psycopg2://USER:PASS@HOST:5432/approvo`
+2. `PLANARUS_DATABASE_URL=postgresql+psycopg2://USER:PASS@HOST:5432/planarus`
 3. Install the driver + migrate: `pip install -e ".[postgres]" && alembic upgrade head`.
 
 ## 2. Auth + tenancy
 ```
-AGENTBOARD_AUTH_ENABLED=true
-# do NOT set AGENTBOARD_AUTH_DEV_LOGIN in production (it's an unauthenticated backdoor)
-AGENTBOARD_WEB_ORIGINS=https://app.yourdomain.com   # your frontend origin(s), CSV
+PLANARUS_AUTH_ENABLED=true
+# do NOT set PLANARUS_AUTH_DEV_LOGIN in production (it's an unauthenticated backdoor)
+PLANARUS_WEB_ORIGINS=https://app.yourdomain.com   # your frontend origin(s), CSV
 ```
 
 ## 3. OAuth — register an app per provider
-You provide the client id/secret; Approvo has the flow. The **callback/redirect URL**
+You provide the client id/secret; Planarus has the flow. The **callback/redirect URL**
 must be exactly:
 ```
 https://<your-api-host>/api/v1/auth/oauth/<provider>/callback
@@ -31,8 +31,8 @@ https://<your-api-host>/api/v1/auth/oauth/<provider>/callback
 2. Add the callback URL above (`…/oauth/google/callback`) under *Authorized redirect URIs*.
 3. Copy the client id/secret:
    ```
-   AGENTBOARD_OAUTH_GOOGLE_CLIENT_ID=...
-   AGENTBOARD_OAUTH_GOOGLE_CLIENT_SECRET=...
+   PLANARUS_OAUTH_GOOGLE_CLIENT_ID=...
+   PLANARUS_OAUTH_GOOGLE_CLIENT_SECRET=...
    ```
 
 ### GitHub
@@ -40,8 +40,8 @@ https://<your-api-host>/api/v1/auth/oauth/<provider>/callback
 2. *Authorization callback URL* = the callback above (`…/oauth/github/callback`).
 3. Copy the client id + generate a secret:
    ```
-   AGENTBOARD_OAUTH_GITHUB_CLIENT_ID=...
-   AGENTBOARD_OAUTH_GITHUB_CLIENT_SECRET=...
+   PLANARUS_OAUTH_GITHUB_CLIENT_ID=...
+   PLANARUS_OAUTH_GITHUB_CLIENT_SECRET=...
    ```
 
 Install the extra: `pip install -e ".[oauth]"`. A provider that isn't fully
@@ -50,10 +50,10 @@ configured simply 404s — you can ship with just one.
 ## 4. Storage (optional — S3 for generated artifacts)
 Local disk is the default and fine for a single API node. For object storage:
 ```
-AGENTBOARD_STORAGE_BACKEND=s3
-AGENTBOARD_S3_BUCKET=approvo-artifacts
-AGENTBOARD_S3_REGION=us-east-1
-# AGENTBOARD_S3_ENDPOINT_URL=https://...   # for MinIO/R2/other S3-compatibles
+PLANARUS_STORAGE_BACKEND=s3
+PLANARUS_S3_BUCKET=planarus-artifacts
+PLANARUS_S3_REGION=us-east-1
+# PLANARUS_S3_ENDPOINT_URL=https://...   # for MinIO/R2/other S3-compatibles
 ```
 Credentials come from the standard AWS chain (instance role, `AWS_*` env, etc.).
 Install the extra: `pip install -e ".[s3]"`. The IAM principal needs

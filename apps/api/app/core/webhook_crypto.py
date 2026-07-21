@@ -3,7 +3,7 @@
 Each webhook subscription's HMAC-SHA256 signing secret is a *recoverable*
 credential — the server must hold the plaintext to sign every outgoing payload —
 so it is encrypted at rest with Fernet (AES-128-CBC + HMAC), keyed by
-``AGENTBOARD_WEBHOOK_ENC_KEY`` from the environment. That key is a forbidden path
+``PLANARUS_WEBHOOK_ENC_KEY`` from the environment. That key is a forbidden path
 the user configures; it is never logged, returned, or persisted anywhere but the
 process env.
 
@@ -34,7 +34,7 @@ def _fernet():
 
     if not settings.webhook_enc_key:
         raise RuntimeError(
-            "webhook secret encryption is not configured (set AGENTBOARD_WEBHOOK_ENC_KEY)"
+            "webhook secret encryption is not configured (set PLANARUS_WEBHOOK_ENC_KEY)"
         )
     return Fernet(settings.webhook_enc_key.encode())
 

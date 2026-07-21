@@ -63,9 +63,9 @@ def test_memory_backend_write_if_changed(memory_backend):
 
 def test_memory_backend_append_jsonl(memory_backend):
     root = "/virtual"
-    atomic_io.append_jsonl(root, ".agentboard/audit.jsonl", {"a": 1})
-    atomic_io.append_jsonl(root, ".agentboard/audit.jsonl", {"b": 2})
-    lines = atomic_io.read_text(root, ".agentboard/audit.jsonl").splitlines()
+    atomic_io.append_jsonl(root, ".planarus/audit.jsonl", {"a": 1})
+    atomic_io.append_jsonl(root, ".planarus/audit.jsonl", {"b": 2})
+    lines = atomic_io.read_text(root, ".planarus/audit.jsonl").splitlines()
     assert len(lines) == 2
 
 

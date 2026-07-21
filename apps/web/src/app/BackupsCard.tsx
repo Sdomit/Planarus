@@ -118,8 +118,8 @@ export default function BackupsCard({
           }}
         />
         <p style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)', margin: '6px 0 0' }}>
-          Older backups are pruned; only files Approvo generated are ever deleted. Destination is{' '}
-          <code>AGENTBOARD_BACKUP_DIR</code> (configured: <strong>{dirConfigured ? 'Yes' : 'No'}</strong>).
+          Older backups are pruned; only files Planarus generated are ever deleted. Destination is{' '}
+          <code>PLANARUS_BACKUP_DIR</code> (configured: <strong>{dirConfigured ? 'Yes' : 'No'}</strong>).
         </p>
       </div>
 
@@ -137,9 +137,9 @@ export default function BackupsCard({
           <>A copy goes to your configured object storage after each verified snapshot.</>
         ) : (
           <>
-            Needs an object-storage backend (<code>AGENTBOARD_STORAGE_BACKEND=s3</code>). On the
+            Needs an object-storage backend (<code>PLANARUS_STORAGE_BACKEND=s3</code>). On the
             default local backend this would copy the file beside the original — point{' '}
-            <code>AGENTBOARD_BACKUP_DIR</code> at a synced folder instead.
+            <code>PLANARUS_BACKUP_DIR</code> at a synced folder instead.
           </>
         )}{' '}
         A backup on the same disk survives a bad migration, not a dead disk.

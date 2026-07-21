@@ -130,7 +130,7 @@ def test_preview_is_deterministic(client: TestClient) -> None:
     assert r1["markdown"] == r2["markdown"]
     assert r1["pack_checksum"] == r2["pack_checksum"]
     assert "pack_checksum: " in r1["markdown"]
-    assert "agentboard_pack: true" in r1["markdown"]
+    assert "planarus_pack: true" in r1["markdown"]
 
 
 def test_preview_has_injection_boundary_and_objective(client: TestClient) -> None:

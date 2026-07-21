@@ -19,7 +19,7 @@ def test_project_export_import_round_trips(client):
     exported = client.get(f"/api/v1/projects/{proj}/export")
     assert exported.status_code == 200, exported.text
     data = exported.json()
-    assert data["approvo_export"] == 1
+    assert data["planarus_export"] == 1
     assert len(data["tasks"]) == 2
     assert len(data["phases"]) == 1
     assert len(data["decisions"]) == 1

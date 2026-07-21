@@ -1,6 +1,6 @@
 import type { CSSProperties, JSX, ReactNode } from 'react'
 
-// ponytail: a small renderer for the Markdown subset Approvo itself
+// ponytail: a small renderer for the Markdown subset Planarus itself
 // generates (headings, lists, tables, fenced code, quotes, inline marks,
 // links) — everything is emitted as React elements, never raw HTML, so user
 // content can't inject markup. Upgrade to a real parser lib if authors need

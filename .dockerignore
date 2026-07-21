@@ -5,6 +5,6 @@
 **/*.pyc
 **/dist/
 apps/web/.vite/
-agentboard-data/
+planarus-data/
 *.db
 *.db-*

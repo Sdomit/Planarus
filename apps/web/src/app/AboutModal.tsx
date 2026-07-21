@@ -58,7 +58,7 @@ export default function AboutModal({ onClose }: { onClose: () => void }) {
     <div className="modal-overlay">
       <div className="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="about-title">
         <div className="modal-header">
-          <span className="modal-title" id="about-title">About Approvo</span>
+          <span className="modal-title" id="about-title">About Planarus</span>
         </div>
         <div className="modal-body">
           <p style={{ marginTop: 0 }}>
@@ -69,7 +69,7 @@ export default function AboutModal({ onClose }: { onClose: () => void }) {
           <div style={headingStyle}>Application</div>
           <Row label="Version">{version ?? '…'}</Row>
           <Row label="Source">
-            <Ext href="https://github.com/Sdomit/AgentBoard" text="github.com/Sdomit/AgentBoard" />
+            <Ext href="https://github.com/Sdomit/Planarus" text="github.com/Sdomit/Planarus" />
           </Row>
           <Row label="License">Apache-2.0</Row>
 

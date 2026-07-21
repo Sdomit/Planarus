@@ -76,7 +76,7 @@ def _map_mcp_error(exc: MCPToolError) -> ExternalProblem:
     if code == CODE_TOO_LARGE:
         return ExternalProblem(413, "payload_too_large", "Payload Too Large", "request exceeds the size limit")
     if code == CODE_UNAVAILABLE:
-        return ExternalProblem(503, "unavailable", "Service Unavailable", "Approvo data is temporarily unavailable")
+        return ExternalProblem(503, "unavailable", "Service Unavailable", "Planarus data is temporarily unavailable")
     # CODE_INTERNAL or anything unexpected — never leak detail.
     assert code == CODE_INTERNAL or True
     return ExternalProblem(500, "internal_error", "Internal Server Error", "internal error")
@@ -90,7 +90,7 @@ def _run_read(session: Session, cap: Capability, handler, args) -> dict:
     except (OperationalError, ProgrammingError):
         raise ExternalProblem(
             503, "unavailable", "Service Unavailable",
-            "Approvo data is temporarily unavailable",
+            "Planarus data is temporarily unavailable",
         )
     # metadata = safe scalars only; text = precedence sentence + boundary-wrapped,
     # redacted content. Raw project text is never duplicated into metadata.
@@ -105,7 +105,7 @@ def _run_propose(session: Session, cap: Capability, handler, args) -> dict:
     except (OperationalError, ProgrammingError):
         raise ExternalProblem(
             503, "unavailable", "Service Unavailable",
-            "Approvo data is temporarily unavailable",
+            "Planarus data is temporarily unavailable",
         )
     # Proposal result is exactly {approval_id, status, action_type, expires_at,
     # review_hint} — never the diff/patch.

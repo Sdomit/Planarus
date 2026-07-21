@@ -1,28 +1,28 @@
-# Approvo — Cloudflare Tunnel config template.
+# Planarus — Cloudflare Tunnel config template.
 #
 # 1. Copy this file to:  C:\Users\<you>\.cloudflared\config.yml
 # 2. Replace the three <PLACEHOLDERS> below.
-# 3. Run:  cloudflared tunnel run agentboard
+# 3. Run:  cloudflared tunnel run planarus
 #
-# Full walkthrough: docs/guide/connect-agentboard-to-chatgpt.md (Step 1).
+# Full walkthrough: docs/guide/connect-planarus-to-chatgpt.md (Step 1).
 
-tunnel: agentboard
+tunnel: planarus
 credentials-file: C:\Users\<YOUR-WINDOWS-USERNAME>\.cloudflared\<YOUR-TUNNEL-ID>.json
 
 ingress:
-  # Only the read-only external API and the health check reach Approvo.
+  # Only the read-only external API and the health check reach Planarus.
   # Every other path is refused at the tunnel (defense in depth).
   # httpHostHeader forces the Host the app sees to equal your public hostname,
-  # which must match AGENTBOARD_EXTERNAL_API_ALLOWED_HOSTS exactly (guide Step 2).
-  - hostname: <agentboard.example.com>
+  # which must match PLANARUS_EXTERNAL_API_ALLOWED_HOSTS exactly (guide Step 2).
+  - hostname: <planarus.example.com>
     path: ^/api/external/.*
     service: http://127.0.0.1:8000
     originRequest:
-      httpHostHeader: <agentboard.example.com>
-  - hostname: <agentboard.example.com>
+      httpHostHeader: <planarus.example.com>
+  - hostname: <planarus.example.com>
     path: ^/health$
     service: http://127.0.0.1:8000
     originRequest:
-      httpHostHeader: <agentboard.example.com>
+      httpHostHeader: <planarus.example.com>
   # Catch-all: anything not matched above gets a 404 from the tunnel itself.
   - service: http_status:404

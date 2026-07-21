@@ -1,5 +1,5 @@
 #!/bin/bash
-# Approvo app box bootstrap (Ubuntu 22.04). Logs: /var/log/cloud-init-output.log
+# Planarus app box bootstrap (Ubuntu 22.04). Logs: /var/log/cloud-init-output.log
 set -euxo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
@@ -50,29 +50,29 @@ if [ -n "$REPO_TOKEN" ]; then
   export GIT_CONFIG_KEY_0=http.extraheader
   export GIT_CONFIG_VALUE_0="Authorization: Basic $(printf 'x-access-token:%s' "$REPO_TOKEN" | base64 | tr -d '\n')"
 fi
-git clone --depth 1 --branch ${repo_branch} ${repo_url} /opt/approvo
+git clone --depth 1 --branch ${repo_branch} ${repo_url} /opt/planarus
 unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0 REPO_TOKEN
 set -x
-cd /opt/approvo
+cd /opt/planarus
 
 # Step 0: build the image WITH the postgres + oauth driver extras
 sed -i 's|pip install --no-cache-dir \.$|pip install --no-cache-dir ".[postgres,oauth]"|' apps/api/Dockerfile
 
 # --- compose + Caddy ----------------------------------------------------------
-cat > /opt/approvo/Caddyfile <<'CADDY'
+cat > /opt/planarus/Caddyfile <<'CADDY'
 ${domain} {
     reverse_proxy web:80
 }
 CADDY
 
-cat > /opt/approvo/docker-compose.hosted.yml <<'COMPOSE'
+cat > /opt/planarus/docker-compose.hosted.yml <<'COMPOSE'
 services:
   api:
     build:
       context: ./apps/api
     env_file: hosted.env
     volumes:
-      - approvo-data:/data
+      - planarus-data:/data
     expose:
       - "8000"
     restart: unless-stopped
@@ -98,7 +98,7 @@ services:
       - web
     restart: unless-stopped
 volumes:
-  approvo-data:
+  planarus-data:
   caddy-data:
   caddy-config:
 COMPOSE
@@ -110,16 +110,16 @@ DB_URL=$(get_secret database-url)
 GH_ID=$(get_secret oauth-github-client-id)
 GH_SECRET=$(get_secret oauth-github-client-secret)
 
-cat > /opt/approvo/hosted.env <<ENV
-AGENTBOARD_DATABASE_URL=$DB_URL
-AGENTBOARD_AUTH_ENABLED=true
-AGENTBOARD_WEB_ORIGINS=https://${domain}
-AGENTBOARD_OAUTH_GITHUB_CLIENT_ID=$GH_ID
-AGENTBOARD_OAUTH_GITHUB_CLIENT_SECRET=$GH_SECRET
-AGENTBOARD_STORAGE_BACKEND=local
-AGENTBOARD_EXTERNAL_API_ENABLED=false
+cat > /opt/planarus/hosted.env <<ENV
+PLANARUS_DATABASE_URL=$DB_URL
+PLANARUS_AUTH_ENABLED=true
+PLANARUS_WEB_ORIGINS=https://${domain}
+PLANARUS_OAUTH_GITHUB_CLIENT_ID=$GH_ID
+PLANARUS_OAUTH_GITHUB_CLIENT_SECRET=$GH_SECRET
+PLANARUS_STORAGE_BACKEND=local
+PLANARUS_EXTERNAL_API_ENABLED=false
 ENV
-chmod 600 /opt/approvo/hosted.env
+chmod 600 /opt/planarus/hosted.env
 set -x
 
 # --- up (builds api+web, runs alembic upgrade head, Caddy gets the cert) ------

@@ -14,7 +14,7 @@ Safety model:
   target repo's own ``.git/config`` cannot turn a read into code execution
   (``core.fsmonitor`` is run as a program during index refresh — the
   CVE-2021-43891 class) or make ``git status`` rewrite ``.git/index``. Note: the
-  folder must still be one the user trusts to point Approvo at.
+  folder must still be one the user trusts to point Planarus at.
 - Bounded per-command timeout; failures degrade to an ``is_repo=False`` result or
   an ``unread`` marker on ``message`` rather than raising or asserting a false
   negative.
@@ -418,15 +418,15 @@ def snapshot(project_id: str, folder_path: Optional[str]) -> GitSnapshot:
 
 # --- Explicit fetch: the ONE gated exception to no-mutation (Phase 12b) ------
 #
-# This is the sole place AgentBoard mutates a repo, and it is deliberately kept
+# This is the sole place Planarus mutates a repo, and it is deliberately kept
 # OUT of the read-only machinery:
 #   - "fetch" is NOT in _READ_ONLY_VERBS, so `_run` still refuses it (the
 #     read-only gate never learns to fetch — verified in test_git_readonly).
 #   - `_run_fetch` is a separate subprocess call with a fixed argv, longer
 #     network timeout, and no `shell`. It updates remote-tracking refs +
 #     FETCH_HEAD only; the working tree and local branches are never touched.
-#   - AgentBoard never auto-fetches: this runs only from a human click, behind
-#     AGENTBOARD_GIT_FETCH_ENABLED (off by default) and the local control token
+#   - Planarus never auto-fetches: this runs only from a human click, behind
+#     PLANARUS_GIT_FETCH_ENABLED (off by default) and the local control token
 #     (enforced at the endpoint), plus an in-process min-interval rate limit.
 
 _FETCH_TIMEOUT_S = 30  # network op — generous vs the 5s read timeout
@@ -487,7 +487,7 @@ def fetch(project_id: str, folder_path: Optional[str]) -> GitFetchResult:
     """
     if not settings.git_fetch_enabled:
         raise ConflictError(
-            "git fetch is disabled — set AGENTBOARD_GIT_FETCH_ENABLED=true to "
+            "git fetch is disabled — set PLANARUS_GIT_FETCH_ENABLED=true to "
             "allow the explicit, human-clicked fetch (remote-tracking refs only)"
         )
 
