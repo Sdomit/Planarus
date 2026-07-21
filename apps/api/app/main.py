@@ -35,7 +35,7 @@ from app.core.config import settings
 from app.core.security import allowed_ui_origins
 from app.fsmemory.path_safety import PathSafetyError
 
-_log = logging.getLogger("approvo")
+_log = logging.getLogger("planarus")
 
 
 def _is_external(request: Request) -> bool:
@@ -82,7 +82,7 @@ def create_app() -> FastAPI:
     # not an identity — refuse to start without real per-user auth.
     if settings.lan_mode_enabled and not settings.auth_enabled:
         raise RuntimeError(
-            "AGENTBOARD_LAN_MODE_ENABLED requires AGENTBOARD_AUTH_ENABLED=true "
+            "PLANARUS_LAN_MODE_ENABLED requires PLANARUS_AUTH_ENABLED=true "
             "(D25): LAN mode without per-user auth would expose the whole "
             "database to the local network. Refusing to start."
         )
@@ -95,7 +95,7 @@ def create_app() -> FastAPI:
             "Traffic is plain HTTP: UNENCRYPTED on your local network (D26). "
             "The server socket still binds only where you point uvicorn "
             "(e.g. --host 0.0.0.0 to actually listen on the LAN).",
-            lan_hosts or "(none configured — set AGENTBOARD_LAN_ALLOWED_HOSTS)",
+            lan_hosts or "(none configured — set PLANARUS_LAN_ALLOWED_HOSTS)",
         )
         # P11.3: prime the middleware's process-local mirror of the LAN DB
         # switch so a switch left off survives a restart. Best-effort: on a
@@ -113,7 +113,7 @@ def create_app() -> FastAPI:
             pass
 
     app = FastAPI(
-        title="Approvo API",
+        title="Planarus API",
         version="0.2.0",
         description="Local-first AI project cockpit — API",
         lifespan=mcp_lifespan,

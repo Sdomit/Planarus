@@ -56,7 +56,7 @@ def test_idempotent_second_run(session, tmp_path):
         for spec in CONTEXT_FILES
     }
     json_snap = {
-        name: (tmp_path / ".agentboard" / name).read_bytes()
+        name: (tmp_path / ".planarus" / name).read_bytes()
         for name in ("project.json", "workspace-link.json", "settings.json")
     }
 
@@ -67,7 +67,7 @@ def test_idempotent_second_run(session, tmp_path):
     for spec in CONTEXT_FILES:
         assert (tmp_path / spec.relative_path).read_bytes() == md_snap[spec.relative_path]
     for name, data in json_snap.items():
-        assert (tmp_path / ".agentboard" / name).read_bytes() == data
+        assert (tmp_path / ".planarus" / name).read_bytes() == data
 
 
 def test_pinned_file_skipped(session, tmp_path):
@@ -220,7 +220,7 @@ def test_audit_event_and_log_line(session, tmp_path):
     assert len(events) == 1
 
     log_lines = (
-        (tmp_path / ".agentboard" / "audit-log.jsonl")
+        (tmp_path / ".planarus" / "audit-log.jsonl")
         .read_text(encoding="utf-8")
         .strip()
         .splitlines()

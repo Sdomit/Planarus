@@ -10,8 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 CONTEXT_DIR = "context"
-AGENTBOARD_DIR = ".agentboard"
-AUDIT_LOG_RELPATH = f"{AGENTBOARD_DIR}/audit-log.jsonl"
+PLANARUS_DIR = ".planarus"
+AUDIT_LOG_RELPATH = f"{PLANARUS_DIR}/audit-log.jsonl"
 
 
 @dataclass(frozen=True)

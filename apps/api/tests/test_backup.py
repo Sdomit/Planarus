@@ -36,7 +36,7 @@ def backup_dir_fixture(tmp_path, monkeypatch):
 def file_session_fixture(tmp_path):
     """A real on-disk SQLite database — the thing backups actually snapshot."""
     engine = create_engine(
-        f"sqlite:///{tmp_path / 'agentboard.db'}",
+        f"sqlite:///{tmp_path / 'planarus.db'}",
         connect_args={"check_same_thread": False},
     )
     configure_sqlite_pragmas(engine)
@@ -145,11 +145,11 @@ def test_retention_keeps_newest_and_never_touches_foreign_files(
 
 def test_list_backups_ignores_non_matching_names(backup_dir):
     backup_dir.mkdir(parents=True, exist_ok=True)
-    (backup_dir / "agentboard-20260719T220501123456Z.db").write_bytes(b"x")
-    (backup_dir / "agentboard-backup.db").write_bytes(b"x")
+    (backup_dir / "planarus-20260719T220501123456Z.db").write_bytes(b"x")
+    (backup_dir / "planarus-backup.db").write_bytes(b"x")
     (backup_dir / "notes.txt").write_bytes(b"x")
     assert [b.name for b in svc.list_backups()] == [
-        "agentboard-20260719T220501123456Z.db"
+        "planarus-20260719T220501123456Z.db"
     ]
 
 
@@ -182,11 +182,11 @@ def test_backup_routes_require_local_control(client):
 
 def test_list_backups_endpoint_returns_names_only(client, backup_dir):
     backup_dir.mkdir(parents=True, exist_ok=True)
-    (backup_dir / "agentboard-20260719T220501123456Z.db").write_bytes(b"x")
+    (backup_dir / "planarus-20260719T220501123456Z.db").write_bytes(b"x")
     res = client.get("/api/v1/backups", headers=local_hdr(client))
     assert res.status_code == 200, res.text
     body = res.json()
-    assert [b["name"] for b in body] == ["agentboard-20260719T220501123456Z.db"]
+    assert [b["name"] for b in body] == ["planarus-20260719T220501123456Z.db"]
     # The server-owned directory is never disclosed to the client.
     assert str(backup_dir) not in res.text
 

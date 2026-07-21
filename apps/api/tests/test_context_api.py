@@ -27,7 +27,7 @@ def test_create_with_folder_auto_provisions(client, tmp_path):
     files = client.get(f"/api/v1/context-files?project_id={proj['id']}").json()
     assert len(files) == 16
     assert (tmp_path / "context" / "PROJECT.md").is_file()
-    assert (tmp_path / ".agentboard" / "project.json").is_file()
+    assert (tmp_path / ".planarus" / "project.json").is_file()
 
 
 def test_regenerate_endpoint_idempotent(client, tmp_path):

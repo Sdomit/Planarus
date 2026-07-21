@@ -21,7 +21,7 @@ from app.models.workspace_member import WorkspaceMember
 from app.services.api_credentials import dummy_verify, hash_secret, verify_secret
 from app.services.audit_service import create_audit_event
 
-SESSION_COOKIE = "approvo_session"
+SESSION_COOKIE = "planarus_session"
 
 
 # --- sessions -----------------------------------------------------------------

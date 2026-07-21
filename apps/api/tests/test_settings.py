@@ -76,7 +76,7 @@ def test_get_settings_shape_and_no_secret_leak(client):
     # off-site copy — pushing there would write the file beside the original.
     assert body["backup_offsite_supported"] is False
     # Ceiling status is a boolean — never the configured directory path itself.
-    assert "agentboard-backups" not in res.text
+    assert "planarus-backups" not in res.text
     # LAN defaults mirror a local install: ceiling off, switch inert-off.
     assert body["lan_permitted_by_env"] is False
     assert body["lan_mode_active"] is False

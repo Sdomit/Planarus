@@ -17,7 +17,7 @@ variable "instance_type" {
 
 variable "repo_url" {
   type        = string
-  description = "Plain HTTPS clone URL, NO credentials in it, e.g. https://github.com/you/AgentBoard.git. Public repos clone as-is; for a private repo set repo_token instead of embedding a token here."
+  description = "Plain HTTPS clone URL, NO credentials in it, e.g. https://github.com/you/Planarus.git. Public repos clone as-is; for a private repo set repo_token instead of embedding a token here."
 }
 
 variable "repo_branch" {
@@ -63,6 +63,6 @@ variable "admin_cidr" {
 
 variable "ssm_prefix" {
   type        = string
-  default     = "/approvo"
+  default     = "/planarus"
   description = "SSM Parameter Store path prefix for the secrets the instance reads at boot."
 }

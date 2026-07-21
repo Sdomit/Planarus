@@ -103,7 +103,7 @@ export default function SettingsPanel() {
             </label>
             {!s.external_api_permitted_by_env && (
               <p style={{ color: 'var(--status-warning-fg, var(--text-tertiary))', fontSize: 'var(--text-sm)', margin: '6px 0 0' }}>
-                Inert until <code>AGENTBOARD_EXTERNAL_API_ENABLED=true</code> is set in the
+                Inert until <code>PLANARUS_EXTERNAL_API_ENABLED=true</code> is set in the
                 environment. This switch can only turn a permitted feature off — never widen exposure.
               </p>
             )}
@@ -214,7 +214,7 @@ export default function SettingsPanel() {
               </p>
             ) : (
               <p style={{ color: 'var(--status-warning-fg, var(--text-tertiary))', fontSize: 'var(--text-sm)', margin: '6px 0 0' }}>
-                Inert until <code>AGENTBOARD_LAN_MODE_ENABLED=true</code> (plus sign-in and LAN hosts)
+                Inert until <code>PLANARUS_LAN_MODE_ENABLED=true</code> (plus sign-in and LAN hosts)
                 is set in the environment — see <code>docs/guide/lan-team-mode.md</code>. This switch
                 can only pause a permitted LAN — never widen exposure.
               </p>

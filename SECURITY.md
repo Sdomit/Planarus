@@ -1,6 +1,6 @@
 # Security Policy
 
-Approvo is a **trust product**: AI agents *propose*, humans *approve*. Its
+Planarus is a **trust product**: AI agents *propose*, humans *approve*. Its
 security model is the point, so we take reports seriously.
 
 ## Reporting a vulnerability
@@ -29,7 +29,7 @@ security fixes for older commits or tags yet.
 
 ## Security model (what you're testing against)
 
-Approvo is local-first and self-hosted. The invariants below are load-bearing
+Planarus is local-first and self-hosted. The invariants below are load-bearing
 — a bug that breaks one of them is a security bug:
 
 - **Every external-AI write is approval-gated.** External clients (MCP, the HTTP

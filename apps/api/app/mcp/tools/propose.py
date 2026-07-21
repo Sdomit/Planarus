@@ -30,7 +30,7 @@ from app.prompt import boundary
 from app.services import approval_service
 
 REVIEW_HINT = (
-    "Pending human review in Approvo Approval Queue. Nothing has changed "
+    "Pending human review in Planarus Approval Queue. Nothing has changed "
     "until a local human approves and applies this exact proposal."
 )
 

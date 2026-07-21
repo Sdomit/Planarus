@@ -55,7 +55,7 @@ def export_project(session: Session, project_id: str) -> Optional[dict]:
     proj = session.get(Project, project_id)
     if proj is None:
         return None
-    out: dict = {"approvo_export": EXPORT_VERSION, "project": proj.model_dump()}
+    out: dict = {"planarus_export": EXPORT_VERSION, "project": proj.model_dump()}
     for key, model in _PROJECT_SCOPED:
         rows = session.exec(select(model).where(model.project_id == project_id)).all()
         out[key] = [r.model_dump() for r in rows]
@@ -76,7 +76,7 @@ def export_project(session: Session, project_id: str) -> Optional[dict]:
 def import_project(session: Session, workspace_id: str, data: dict) -> Project:
     """Create a fresh project from an export dict, remapping every id. Raises
     ValueError on an unrecognized payload."""
-    if not isinstance(data, dict) or data.get("approvo_export") != EXPORT_VERSION:
+    if not isinstance(data, dict) or data.get("planarus_export") != EXPORT_VERSION:
         raise ValueError("unrecognized export format")
     src = data.get("project") or {}
     now = now_utc()

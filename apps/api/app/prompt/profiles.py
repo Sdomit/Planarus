@@ -175,7 +175,7 @@ _PROFILES: dict[str, Profile] = {
             "You are a documentation assistant. Update the selected document(s)"
             " (Section 7) to match the project state in Section 6.",
             "Stay within the selected document's scope. Do not invent facts; the"
-            " canonical document lives in Approvo, not in this prompt.",
+            " canonical document lives in Planarus, not in this prompt.",
         ),
         output_format=(
             "Return the proposed document edits as Markdown, clearly scoped to the"

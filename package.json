@@ -1,5 +1,5 @@
 {
-  "name": "approvo",
+  "name": "planarus",
   "private": true,
   "version": "0.1.0",
   "description": "Local-first AI project cockpit. AI agents propose, you approve.",
@@ -7,14 +7,14 @@
   "author": "Sarmad Domit",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Sdomit/AgentBoard.git"
+    "url": "https://github.com/Sdomit/Planarus.git"
   },
   "packageManager": "pnpm@10.34.5",
   "scripts": {
-    "dev:web": "pnpm --filter @approvo/web dev",
-    "build:web": "pnpm --filter @approvo/web build",
-    "test:web": "pnpm --filter @approvo/web test",
-    "typecheck:web": "pnpm --filter @approvo/web typecheck"
+    "dev:web": "pnpm --filter @planarus/web dev",
+    "build:web": "pnpm --filter @planarus/web build",
+    "test:web": "pnpm --filter @planarus/web test",
+    "typecheck:web": "pnpm --filter @planarus/web typecheck"
   },
   "engines": {
     "node": ">=20",

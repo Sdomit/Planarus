@@ -14,8 +14,8 @@ phase: implementation (Phases 1–17 on main)
 From the repo root:
 
 ```bash
-./run-approvo.sh        # macOS / Linux
-run-agentboard.bat      # Windows
+./run-planarus.sh        # macOS / Linux
+run-planarus.bat      # Windows
 ```
 
 Either one checks your venv and pnpm, runs `alembic upgrade head`, starts the
@@ -79,15 +79,15 @@ uvicorn app.main:app --reload --port 8000
 `uvicorn` runs in the foreground and does not return. **Open a second terminal
 for the frontend** — or just use the launcher above, which handles both.
 
-### Optional: load the Approvo project into the app (dogfooding)
+### Optional: load the Planarus project into the app (dogfooding)
 
-Approvo tracks its own roadmap. After migrating, seed the running DB with the
+Planarus tracks its own roadmap. After migrating, seed the running DB with the
 live project so you can follow progress in the Roadmap / Task Board instead of
 only the Markdown context pack. Idempotent (safe to re-run); honors
-`AGENTBOARD_DATABASE_URL`:
+`PLANARUS_DATABASE_URL`:
 
 ```bash
-python3 scripts/seed_approvo_project.py
+python3 scripts/seed_planarus_project.py
 ```
 
 Kept in sync with `context/NEXT_STEP.md` each slice.

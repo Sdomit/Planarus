@@ -38,7 +38,7 @@ def test_lan_host_rejected_when_lan_mode_off(client, monkeypatch):
 def test_lan_mode_without_auth_refuses_to_start(monkeypatch):
     monkeypatch.setattr(settings, "lan_mode_enabled", True)
     monkeypatch.setattr(settings, "auth_enabled", False)
-    with pytest.raises(RuntimeError, match="AGENTBOARD_AUTH_ENABLED"):
+    with pytest.raises(RuntimeError, match="PLANARUS_AUTH_ENABLED"):
         create_app()
 
 

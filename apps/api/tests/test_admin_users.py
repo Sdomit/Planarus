@@ -42,7 +42,7 @@ def _auth(token):
 
 def _control(client) -> dict:
     return {
-        "X-Approvo-Local-Token": client.get("/api/v1/local-session").json()["token"]
+        "X-Planarus-Local-Token": client.get("/api/v1/local-session").json()["token"]
     }
 
 

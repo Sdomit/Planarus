@@ -2,7 +2,7 @@
 project: golden-project
 kind: agent_rules
 updated_at: 2026-06-19T00:00:00+00:00
-source_of_truth: Approvo
+source_of_truth: Planarus
 generated: true
 pinned: false
 ---

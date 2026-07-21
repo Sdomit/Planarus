@@ -60,12 +60,12 @@ export default function NotificationsBell({
           Notification.permission === 'granted'
         ) {
           const head = fresh[0]
-          new Notification(`Approvo — ${head.project_title}`, {
+          new Notification(`Planarus — ${head.project_title}`, {
             body:
               fresh.length === 1
                 ? head.title
                 : `${head.title} (+${fresh.length - 1} more)`,
-            tag: 'agentboard-feed', // replaces instead of stacking
+            tag: 'planarus-feed', // replaces instead of stacking
           })
         }
       })

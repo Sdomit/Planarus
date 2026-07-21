@@ -35,9 +35,9 @@ from app.mcp.errors import (
 )
 from app.mcp.registry import ToolSpec, get_spec, visible_specs
 
-logger = logging.getLogger("agentboard.mcp")
+logger = logging.getLogger("planarus.mcp")
 
-SERVER_NAME = "agentboard"
+SERVER_NAME = "planarus"
 
 
 def _run_tool(spec: ToolSpec, capability: Capability, arguments: dict):
@@ -48,7 +48,7 @@ def _run_tool(spec: ToolSpec, capability: Capability, arguments: dict):
             result = spec.handler(session, capability, args)
     except (OperationalError, ProgrammingError):
         # Schema/DB not available — never leak the SQL/DB URL.
-        raise MCPToolError(CODE_UNAVAILABLE, "Approvo data is unavailable")
+        raise MCPToolError(CODE_UNAVAILABLE, "Planarus data is unavailable")
     return (
         [types.TextContent(type="text", text=result.text)],
         result.metadata,
@@ -111,7 +111,7 @@ def main() -> None:
     capability = resolve_capability()
     if not capability.valid:
         logger.warning(
-            "starting with no valid capability (default-deny); set AGENTBOARD_MCP_CAPABILITY"
+            "starting with no valid capability (default-deny); set PLANARUS_MCP_CAPABILITY"
         )
     else:
         logger.info(

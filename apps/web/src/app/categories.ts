@@ -2,8 +2,8 @@
 // no backend, no migration — so categories don't sync across machines and aren't
 // visible to the API/agents. Two keys: the ordered list of category names, and a
 // {projectId: category} assignment map.
-const CATS_KEY = 'approvo.categories'
-const ASSIGN_KEY = 'approvo.projectCategory'
+const CATS_KEY = 'planarus.categories'
+const ASSIGN_KEY = 'planarus.projectCategory'
 
 export const UNCATEGORIZED = '__uncategorized__'
 

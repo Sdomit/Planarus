@@ -12,7 +12,7 @@ from typing import Optional
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-PROBLEM_TYPE_BASE = "https://agentboard.app/problems/"
+PROBLEM_TYPE_BASE = "https://planarus.app/problems/"
 PROBLEM_MEDIA_TYPE = "application/problem+json"
 REQUEST_ID_HEADER = "X-Request-Id"
 

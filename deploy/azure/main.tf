@@ -25,7 +25,7 @@ resource "azurerm_resource_group" "this" {
 
 # --- Network: VM subnet + a delegated subnet for private Postgres -------------
 resource "azurerm_virtual_network" "this" {
-  name                = "approvo-vnet"
+  name                = "planarus-vnet"
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
   address_space       = ["10.20.0.0/16"]
@@ -53,12 +53,12 @@ resource "azurerm_subnet" "pg" {
 }
 
 resource "azurerm_private_dns_zone" "pg" {
-  name                = "approvo.postgres.database.azure.com"
+  name                = "planarus.postgres.database.azure.com"
   resource_group_name = azurerm_resource_group.this.name
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "pg" {
-  name                  = "approvo-pg"
+  name                  = "planarus-pg"
   resource_group_name   = azurerm_resource_group.this.name
   private_dns_zone_name  = azurerm_private_dns_zone.pg.name
   virtual_network_id    = azurerm_virtual_network.this.id
@@ -71,11 +71,11 @@ resource "random_password" "db" {
 }
 
 resource "azurerm_postgresql_flexible_server" "this" {
-  name                = "approvo-${random_string.suffix.result}"
+  name                = "planarus-${random_string.suffix.result}"
   resource_group_name = azurerm_resource_group.this.name
   location            = azurerm_resource_group.this.location
   version             = "16"
-  administrator_login = "approvo"
+  administrator_login = "planarus"
   administrator_password = random_password.db.result
   sku_name            = "B_Standard_B1ms"
   storage_mb          = 32768
@@ -86,8 +86,8 @@ resource "azurerm_postgresql_flexible_server" "this" {
   depends_on = [azurerm_private_dns_zone_virtual_network_link.pg]
 }
 
-resource "azurerm_postgresql_flexible_server_database" "approvo" {
-  name      = "approvo"
+resource "azurerm_postgresql_flexible_server_database" "planarus" {
+  name      = "planarus"
   server_id = azurerm_postgresql_flexible_server.this.id
   charset   = "UTF8"
   collation = "en_US.utf8"
@@ -97,13 +97,13 @@ resource "azurerm_postgresql_flexible_server_database" "approvo" {
 # User-assigned (not system-assigned) so the access policy exists BEFORE the VM
 # boots and cloud-init fetches — no chicken/egg.
 resource "azurerm_user_assigned_identity" "vm" {
-  name                = "approvo-vm"
+  name                = "planarus-vm"
   resource_group_name = azurerm_resource_group.this.name
   location            = azurerm_resource_group.this.location
 }
 
 resource "azurerm_key_vault" "this" {
-  name                = "approvo-kv-${random_string.suffix.result}"
+  name                = "planarus-kv-${random_string.suffix.result}"
   resource_group_name = azurerm_resource_group.this.name
   location            = azurerm_resource_group.this.location
   tenant_id           = data.azurerm_client_config.current.tenant_id
@@ -127,7 +127,7 @@ resource "azurerm_key_vault_access_policy" "vm" {
 resource "azurerm_key_vault_secret" "database_url" {
   name         = "database-url"
   key_vault_id = azurerm_key_vault.this.id
-  value        = "postgresql+psycopg2://approvo:${random_password.db.result}@${azurerm_postgresql_flexible_server.this.fqdn}:5432/approvo?sslmode=require"
+  value        = "postgresql+psycopg2://planarus:${random_password.db.result}@${azurerm_postgresql_flexible_server.this.fqdn}:5432/planarus?sslmode=require"
   depends_on   = [azurerm_key_vault_access_policy.deployer]
 }
 
@@ -157,7 +157,7 @@ resource "azurerm_key_vault_secret" "repo_token" {
 
 # --- The app box --------------------------------------------------------------
 resource "azurerm_network_security_group" "vm" {
-  name                = "approvo-vm"
+  name                = "planarus-vm"
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
 
@@ -195,7 +195,7 @@ resource "azurerm_subnet_network_security_group_association" "vm" {
 }
 
 resource "azurerm_public_ip" "vm" {
-  name                = "approvo-vm"
+  name                = "planarus-vm"
   resource_group_name = azurerm_resource_group.this.name
   location            = azurerm_resource_group.this.location
   allocation_method   = "Static"
@@ -203,7 +203,7 @@ resource "azurerm_public_ip" "vm" {
 }
 
 resource "azurerm_network_interface" "vm" {
-  name                = "approvo-vm"
+  name                = "planarus-vm"
   location            = azurerm_resource_group.this.location
   resource_group_name = azurerm_resource_group.this.name
 
@@ -216,7 +216,7 @@ resource "azurerm_network_interface" "vm" {
 }
 
 resource "azurerm_linux_virtual_machine" "vm" {
-  name                  = "approvo"
+  name                  = "planarus"
   resource_group_name   = azurerm_resource_group.this.name
   location              = azurerm_resource_group.this.location
   size                  = var.vm_size

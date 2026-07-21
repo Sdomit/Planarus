@@ -1,4 +1,4 @@
-"""Preflight config check for a hosted Approvo deployment (Phase 10.6 turnkey).
+"""Preflight config check for a hosted Planarus deployment (Phase 10.6 turnkey).
 
 Validates the environment BEFORE you boot the app — database reachable and
 migrated, auth/tenancy configured sanely, each OAuth provider fully configured,
@@ -7,7 +7,7 @@ checklist and exits non-zero if anything is a hard FAIL.
 
     cd apps/api && python scripts/doctor.py
 
-Reads the same AGENTBOARD_* settings the app does; see deploy/hosted.env.example.
+Reads the same PLANARUS_* settings the app does; see deploy/hosted.env.example.
 """
 import sys
 
@@ -54,13 +54,13 @@ def check_database() -> None:
 
 def check_auth() -> None:
     if not settings.auth_enabled:
-        _report(_WARN, "auth", "AGENTBOARD_AUTH_ENABLED is off — single-user/local mode")
+        _report(_WARN, "auth", "PLANARUS_AUTH_ENABLED is off — single-user/local mode")
         return
     _report(_OK, "auth", "enabled")
     if settings.auth_dev_login_enabled:
         _report(_FAIL, "auth.dev_login", "dev-login is ON in an auth-enabled deploy — this is an unauthenticated account-creation backdoor; turn it OFF")
     if not settings.web_origins.strip():
-        _report(_WARN, "auth.web_origins", "AGENTBOARD_WEB_ORIGINS is empty — the hosted frontend origin won't be allowed for login/CORS")
+        _report(_WARN, "auth.web_origins", "PLANARUS_WEB_ORIGINS is empty — the hosted frontend origin won't be allowed for login/CORS")
 
 
 def check_oauth() -> None:
@@ -91,7 +91,7 @@ def check_storage() -> None:
         _report(_FAIL, "storage", f"unknown backend {backend!r}")
         return
     if not settings.storage_s3_bucket:
-        _report(_FAIL, "storage.s3", "AGENTBOARD_S3_BUCKET is not set")
+        _report(_FAIL, "storage.s3", "PLANARUS_S3_BUCKET is not set")
         return
     try:
         import boto3  # noqa: F401
@@ -123,7 +123,7 @@ def check_storage() -> None:
 
 
 def main() -> int:
-    print("Approvo hosted preflight\n" + "=" * 24)
+    print("Planarus hosted preflight\n" + "=" * 24)
     check_database()
     check_auth()
     check_oauth()

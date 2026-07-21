@@ -6,11 +6,11 @@ vi.mock('../api/client', () => ({
   api: {
     integrations: {
       mcp: vi.fn(async () => ({
-        server_name: 'agentboard',
+        server_name: 'planarus',
         command: 'python',
         args: ['-m', 'app.mcp.server'],
         cwd: '/home/me/apps/api',
-        capability_env: 'AGENTBOARD_MCP_CAPABILITY',
+        capability_env: 'PLANARUS_MCP_CAPABILITY',
         read_tools: [{ name: 'list_projects', description: 'List projects.' }],
         propose_tools: [{ name: 'create_task_proposal', description: 'Propose a task.' }],
       })),
@@ -30,7 +30,7 @@ describe('McpCard', () => {
     const cfg = screen.getByText(/mcpServers/).textContent ?? ''
     expect(cfg).toContain('app.mcp.server')       // launch module
     expect(cfg).toContain('/home/me/apps/api')     // real cwd from the endpoint
-    expect(cfg).toContain('AGENTBOARD_MCP_CAPABILITY')
+    expect(cfg).toContain('PLANARUS_MCP_CAPABILITY')
     expect(cfg).toContain('proj_1')                // both projects → zero hand-editing
   })
 
@@ -38,7 +38,7 @@ describe('McpCard', () => {
     render(<McpCard />)
     await waitFor(() => screen.getByText(/mcpServers/))
     fireEvent.click(screen.getByRole('tab', { name: 'Claude Code CLI' }))
-    expect(screen.getByText(/claude mcp add agentboard/)).toBeTruthy()
+    expect(screen.getByText(/claude mcp add planarus/)).toBeTruthy()
   })
 
   it('adds propose tools to the catalog when access is read+propose', async () => {

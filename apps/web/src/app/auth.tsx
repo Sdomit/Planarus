@@ -4,7 +4,7 @@ import { api, type AuthMe } from '../api/client'
 /**
  * P11.3 — hosted/LAN sign-in surface.
  *
- * The auth API 404s when AGENTBOARD_AUTH_ENABLED is off, so:
+ * The auth API 404s when PLANARUS_AUTH_ENABLED is off, so:
  *   404 → "local" single-user mode: render the app exactly as before, no auth UI.
  *   401 → auth is on and nobody is signed in: show the sign-in gate.
  *   200 → signed in: render the app and expose `me` via context (sidebar chip).
@@ -159,7 +159,7 @@ export function SignIn({ onSignedIn }: { onSignedIn: (me: AuthMe) => void }) {
     <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: 'var(--bg-canvas)', padding: 'var(--space-4)' }}>
       <form className="card" onSubmit={submit} style={{ width: 'min(360px, 100%)', display: 'grid', gap: 'var(--space-4)' }}>
         <div>
-          <h2 style={{ margin: 0 }}>Approvo</h2>
+          <h2 style={{ margin: 0 }}>Planarus</h2>
           <p style={{ margin: '4px 0 0', color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>
             {mode === 'signin' ? 'Sign in to your team workspace' : 'Create your account'}
           </p>

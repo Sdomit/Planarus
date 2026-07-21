@@ -6,7 +6,7 @@ afterEach(cleanup)
 
 const base = {
   email_enabled: false,
-  email_from: 'approvo@localhost',
+  email_from: 'planarus@localhost',
   external_api_active: true,
   lan_mode_active: false,
   registration_open: true,
@@ -41,8 +41,8 @@ vi.mock('../api/client', () => ({
     apiClients: { list: vi.fn(async () => []), create: vi.fn(), revoke: vi.fn() },
     integrations: {
       mcp: vi.fn(async () => ({
-        server_name: 'agentboard', command: 'python', args: ['-m', 'app.mcp.server'],
-        cwd: '/x/apps/api', capability_env: 'AGENTBOARD_MCP_CAPABILITY',
+        server_name: 'planarus', command: 'python', args: ['-m', 'app.mcp.server'],
+        cwd: '/x/apps/api', capability_env: 'PLANARUS_MCP_CAPABILITY',
         read_tools: [], propose_tools: [],
       })),
       // P17.5: the GPT Actions card fetches the contract on the Integrations tab.
@@ -59,17 +59,17 @@ describe('SettingsPanel', () => {
   it('renders loaded settings and the read-only ceiling status across tabs', async () => {
     render(<SettingsPanel />)
     // Integrations tab (default): email + external API ceiling
-    expect(await screen.findByDisplayValue('approvo@localhost')).toBeTruthy()
-    expect(screen.getByText('AGENTBOARD_EXTERNAL_API_ENABLED=true')).toBeTruthy()
+    expect(await screen.findByDisplayValue('planarus@localhost')).toBeTruthy()
+    expect(screen.getByText('PLANARUS_EXTERNAL_API_ENABLED=true')).toBeTruthy()
     // Team & Access tab: LAN ceiling
     fireEvent.click(screen.getByRole('tab', { name: 'Team & Access' }))
-    expect(screen.getByText('AGENTBOARD_LAN_MODE_ENABLED=true')).toBeTruthy()
+    expect(screen.getByText('PLANARUS_LAN_MODE_ENABLED=true')).toBeTruthy()
     expect(screen.getByLabelText('Accept teammates from the LAN')).toBeTruthy()
   })
 
   it('saves the LAN switch when toggled (global Save works from the Team tab)', async () => {
     render(<SettingsPanel />)
-    await screen.findByDisplayValue('approvo@localhost')
+    await screen.findByDisplayValue('planarus@localhost')
     fireEvent.click(screen.getByRole('tab', { name: 'Team & Access' }))
     fireEvent.click(screen.getByLabelText('Accept teammates from the LAN'))
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -78,7 +78,7 @@ describe('SettingsPanel', () => {
 
   it('saves the registration switch when closed (P16.2, D30)', async () => {
     render(<SettingsPanel />)
-    await screen.findByDisplayValue('approvo@localhost')
+    await screen.findByDisplayValue('planarus@localhost')
     fireEvent.click(screen.getByRole('tab', { name: 'Team & Access' }))
     fireEvent.click(screen.getByLabelText('Accept self-registration on the sign-in screen'))
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -87,7 +87,7 @@ describe('SettingsPanel', () => {
 
   it('saves only the changed switch and confirms', async () => {
     render(<SettingsPanel />)
-    await screen.findByDisplayValue('approvo@localhost')
+    await screen.findByDisplayValue('planarus@localhost')
     fireEvent.click(screen.getByLabelText('Send email reminders'))
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     // Only the touched key is sent — untouched switches must not get pinned
@@ -98,7 +98,7 @@ describe('SettingsPanel', () => {
 
   it('saves the backup switch (P18.2, D44)', async () => {
     render(<SettingsPanel />)
-    await screen.findByDisplayValue('approvo@localhost')
+    await screen.findByDisplayValue('planarus@localhost')
     fireEvent.click(screen.getByLabelText('Enable backups'))
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(update).toHaveBeenCalledWith({ backup_enabled: true }))
@@ -106,7 +106,7 @@ describe('SettingsPanel', () => {
 
   it('relocates the external API keys panel into the API Keys tab (P17.0, D36)', async () => {
     render(<SettingsPanel />)
-    await screen.findByDisplayValue('approvo@localhost')
+    await screen.findByDisplayValue('planarus@localhost')
     fireEvent.click(screen.getByRole('tab', { name: 'API Keys' }))
     // ExternalClientsPanel's own loopback exposure note proves it is embedded here.
     await waitFor(() => expect(screen.getByText(/disabled by default/i)).toBeTruthy())

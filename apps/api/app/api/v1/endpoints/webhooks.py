@@ -3,7 +3,7 @@
 Workspace-owner + local-control-token gated (like api-clients: a workspace-scoped
 integration resource, so owner-gated rather than server-admin — see the D35
 as-built note). The whole surface 404s when webhook encryption is unconfigured
-(``AGENTBOARD_WEBHOOK_ENC_KEY`` unset) — indistinguishable from "no such route".
+(``PLANARUS_WEBHOOK_ENC_KEY`` unset) — indistinguishable from "no such route".
 The signing secret is returned exactly once (create) and never in any read.
 Deliveries are outbound read/notify only — a webhook never approves or applies.
 """

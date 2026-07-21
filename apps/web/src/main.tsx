@@ -6,7 +6,7 @@ import './styles/forma/tokens.css'
 import './styles/forma/themes.css'
 import './styles/forma/components.css'
 import './styles/forma/animations.css'
-import './styles/agentboard.css'
+import './styles/planarus.css'
 import './styles/index.css'
 import App from './App'
 

@@ -29,7 +29,7 @@ def _seed(client: TestClient, suffix: str = "eml") -> str:
 
 def _hdr(client: TestClient) -> dict:
     token = client.get("/api/v1/local-session").json()["token"]
-    return {"X-Approvo-Local-Token": token}
+    return {"X-Planarus-Local-Token": token}
 
 
 def _post_rule(client: TestClient, pid: str, **payload):

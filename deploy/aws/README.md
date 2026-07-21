@@ -1,4 +1,4 @@
-# Approvo on AWS — Terraform (single VM + compose + RDS)
+# Planarus on AWS — Terraform (single VM + compose + RDS)
 
 Stands up: RDS Postgres, one EC2 app box running the CI-proven compose stack
 (Caddy → web/nginx → api) behind auto-TLS on your domain, secrets in SSM, shell via
@@ -35,14 +35,14 @@ Then:
    ```
 3. **Preflight** — from the box:
    ```bash
-   cd /opt/approvo
+   cd /opt/planarus
    docker compose -f docker-compose.hosted.yml run --rm api python scripts/doctor.py
    ```
    Require exit 0 before you hand it to the team.
 4. **First sign-in = admin** (Phase 16 bootstrap). Invite the team from the Team view.
 
 ## Day 2
-- **Update to a new version:** on the box, `cd /opt/approvo && git pull && docker compose
+- **Update to a new version:** on the box, `cd /opt/planarus && git pull && docker compose
   -f docker-compose.hosted.yml up -d --build`.
 - **Logs:** `docker compose -f docker-compose.hosted.yml logs -f api`
 - **Rotate the GitHub secret:** update the SSM param, then re-run the hosted.env assembly

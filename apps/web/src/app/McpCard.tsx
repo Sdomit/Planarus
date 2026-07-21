@@ -5,7 +5,7 @@ import CopyButton from './CopyButton'
 // P17.2: MCP config generator + live tool catalog for the Integrations tab.
 // The launch command, real cwd, and tool list come from GET /integrations/mcp
 // (sourced from app/mcp/registry.py — D37, can't drift). The scope is built into
-// a valid AGENTBOARD_MCP_CAPABILITY JSON grant, so the emitted config needs zero
+// a valid PLANARUS_MCP_CAPABILITY JSON grant, so the emitted config needs zero
 // hand-editing. The capability is a local scope declaration, not a secret.
 
 type Fmt = 'json' | 'cli'
