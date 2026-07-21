@@ -118,7 +118,7 @@ describe('ApprovalQueuePanel', () => {
     await waitFor(() =>
       expect(
         screen.getByText(
-          /Approving allows Approvo to apply only this exact proposal once/i,
+          /Approving allows Planarus to apply only this exact proposal once/i,
         ),
       ).toBeTruthy(),
     )

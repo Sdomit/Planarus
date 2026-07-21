@@ -1,6 +1,6 @@
 """Golden-file tests for every `context/*` kind.
 
-Run once with AGENTBOARD_UPDATE_GOLDEN=1 to (re)generate the fixtures under
+Run once with PLANARUS_UPDATE_GOLDEN=1 to (re)generate the fixtures under
 tests/golden/, then commit them. Thereafter the test fails on any rendering
 change, which is the point — generated output must be stable and reviewed.
 """
@@ -48,11 +48,11 @@ def test_golden(spec):
     assert "\r" not in rendered
 
     golden_path = GOLDEN_DIR / spec.filename
-    if os.environ.get("AGENTBOARD_UPDATE_GOLDEN"):
+    if os.environ.get("PLANARUS_UPDATE_GOLDEN"):
         GOLDEN_DIR.mkdir(parents=True, exist_ok=True)
         golden_path.write_bytes(rendered.encode("utf-8"))
         return
 
-    assert golden_path.exists(), f"missing golden for {spec.filename} (run with AGENTBOARD_UPDATE_GOLDEN=1)"
+    assert golden_path.exists(), f"missing golden for {spec.filename} (run with PLANARUS_UPDATE_GOLDEN=1)"
     expected = golden_path.read_bytes().decode("utf-8")
     assert rendered == expected, f"golden mismatch for {spec.filename}"

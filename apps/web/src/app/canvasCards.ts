@@ -119,8 +119,8 @@ export function cardLabel(ref: EntityRef): string {
 
 /** Read a card ref off an element's customData, or null if it isn't a card. */
 export function readCardRef(customData: unknown): EntityCardRef | null {
-  const c = customData as { approvoEntity?: { kind?: string; id?: string } } | undefined
-  const e = c?.approvoEntity
+  const c = customData as { planarusEntity?: { kind?: string; id?: string } } | undefined
+  const e = c?.planarusEntity
   if (e && typeof e.id === 'string' && (CARD_KINDS as string[]).includes(e.kind ?? '')) {
     return { kind: e.kind as EntityKind, id: e.id }
   }

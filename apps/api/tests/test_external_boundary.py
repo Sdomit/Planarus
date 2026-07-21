@@ -21,7 +21,7 @@ def keys(client, external_api):
 
 
 def test_external_disabled_by_default_returns_404(client):
-    # No `external_api` fixture → AGENTBOARD_EXTERNAL_API_ENABLED defaults to False.
+    # No `external_api` fixture → PLANARUS_EXTERNAL_API_ENABLED defaults to False.
     res = client.get(PROJECTS, headers={"Host": "127.0.0.1", "Authorization": "Bearer agbk_a_b"})
     assert res.status_code == 404
     assert res.headers["content-type"].startswith("application/problem+json")

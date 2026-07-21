@@ -14,7 +14,7 @@ from moto import mock_aws  # noqa: E402
 from app.storage import Storage, StorageError  # noqa: E402
 from app.storage.s3 import S3Storage  # noqa: E402
 
-BUCKET = "approvo-test"
+BUCKET = "planarus-test"
 
 
 @pytest.fixture(name="store")
@@ -39,7 +39,7 @@ def test_write_read_roundtrip_and_key_layout(store):
     loc = store.write_bytes("/proj/root", "context/A.md", b"hello")
     assert store.read_bytes("/proj/root", "context/A.md") == b"hello"
     # key = prefix / root / rel (root stripped of leading slash)
-    assert loc == "s3://approvo-test/pfx/proj/root/context/A.md"
+    assert loc == "s3://planarus-test/pfx/proj/root/context/A.md"
 
 
 def test_missing_object_reads_none(store):

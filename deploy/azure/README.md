@@ -1,4 +1,4 @@
-# Approvo on Azure — Terraform (single VM + compose + Flexible Server)
+# Planarus on Azure — Terraform (single VM + compose + Flexible Server)
 
 Same shape as the AWS module, Azure-native: one Ubuntu VM runs the CI-proven compose
 stack (Caddy → web/nginx → api) behind auto-TLS on your domain; **private** Postgres
@@ -31,18 +31,18 @@ Then:
 2. **Wait** ~4–7 min for cloud-init (installs Docker, clones, applies the
    `[postgres,oauth]` image fix, builds api+web, migrates, Caddy issues TLS). Watch it:
    ```bash
-   az vm run-command invoke -g approvo -n approvo --command-id RunShellScript \
+   az vm run-command invoke -g planarus -n planarus --command-id RunShellScript \
      --scripts 'tail -n 80 /var/log/cloud-init-output.log'
    ```
 3. **Preflight** — same box, gate on exit 0:
    ```bash
-   az vm run-command invoke -g approvo -n approvo --command-id RunShellScript \
-     --scripts 'cd /opt/approvo && docker compose -f docker-compose.hosted.yml run --rm api python scripts/doctor.py'
+   az vm run-command invoke -g planarus -n planarus --command-id RunShellScript \
+     --scripts 'cd /opt/planarus && docker compose -f docker-compose.hosted.yml run --rm api python scripts/doctor.py'
    ```
 4. **First sign-in = admin** (Phase 16 bootstrap). Invite the team from the Team view.
 
 ## Day 2
-- **Update:** `cd /opt/approvo && git pull && docker compose -f docker-compose.hosted.yml up -d --build` (via run-command or SSH).
+- **Update:** `cd /opt/planarus && git pull && docker compose -f docker-compose.hosted.yml up -d --build` (via run-command or SSH).
 - **Rotate the GitHub secret:** update the `oauth-github-client-secret` Key Vault secret (or the tfvar + `apply`), then re-run the hosted.env assembly and `up -d`.
 - **Teardown:** `terraform destroy`. Snapshot the Flexible Server first if you want to keep the data.
 

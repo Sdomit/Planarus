@@ -35,11 +35,11 @@ describe('canvasCards helpers', () => {
   })
 
   it('reads a valid card ref and rejects non-card / malformed customData', () => {
-    expect(readCardRef({ approvoEntity: { kind: 'task', id: 't1' } })).toEqual({ kind: 'task', id: 't1' })
+    expect(readCardRef({ planarusEntity: { kind: 'task', id: 't1' } })).toEqual({ kind: 'task', id: 't1' })
     expect(readCardRef(undefined)).toBeNull()
     expect(readCardRef({ foo: 1 })).toBeNull()
-    expect(readCardRef({ approvoEntity: { kind: 'bogus', id: 'x' } })).toBeNull()
-    expect(readCardRef({ approvoEntity: { kind: 'task' } })).toBeNull() // missing id
+    expect(readCardRef({ planarusEntity: { kind: 'bogus', id: 'x' } })).toBeNull()
+    expect(readCardRef({ planarusEntity: { kind: 'task' } })).toBeNull() // missing id
   })
 
   it('normalizes the wider entity kinds', () => {
@@ -63,7 +63,7 @@ describe('canvasCards helpers', () => {
 
   it('reads a review-pin comment id and rejects non-pins', () => {
     expect(readReviewPin({ reviewPin: { commentId: 'cmt_1' } })).toBe('cmt_1')
-    expect(readReviewPin({ approvoEntity: { kind: 'task', id: 't1' } })).toBeNull()
+    expect(readReviewPin({ planarusEntity: { kind: 'task', id: 't1' } })).toBeNull()
     expect(readReviewPin({ reviewPin: {} })).toBeNull()
     expect(readReviewPin(undefined)).toBeNull()
   })

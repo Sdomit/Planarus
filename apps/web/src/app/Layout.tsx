@@ -116,7 +116,7 @@ function useDismiss(
 }
 
 // Survive a refresh: the open view + selected project are the whole of navigation state.
-const NAV_KEY = 'approvo.nav'
+const NAV_KEY = 'planarus.nav'
 function loadNav(): { view?: MainView; project?: SelectedProject } {
   try {
     const saved = JSON.parse(localStorage.getItem(NAV_KEY) ?? '{}')
@@ -189,7 +189,7 @@ export default function Layout() {
     // Persist, or the choice silently reverts on the next load. The inline
     // script in index.html reads this key before first paint.
     try {
-      localStorage.setItem('approvo.theme', next)
+      localStorage.setItem('planarus.theme', next)
     } catch {
       /* private mode — the toggle still works for this session */
     }
@@ -338,7 +338,7 @@ export default function Layout() {
         <div className="ab-brand">
           <div className="ab-brand-mark">A</div>
           <div>
-            <div className="ab-brand-name">Approvo</div>
+            <div className="ab-brand-name">Planarus</div>
             <div className="ab-brand-env">local · :{window.location.port || '80'}<LanAddress /></div>
           </div>
         </div>

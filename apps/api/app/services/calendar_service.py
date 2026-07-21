@@ -235,7 +235,7 @@ def _ics_dt_line(name: str, iso: str, all_day: bool) -> str:
 def _vevent(it: CalendarItem, dtstamp: str) -> list[str]:
     out = [
         "BEGIN:VEVENT",
-        f"UID:{it.id}@agentboard",
+        f"UID:{it.id}@planarus",
         f"DTSTAMP:{dtstamp}",
         _ics_dt_line("DTSTART", it.start_at, it.all_day),
     ]
@@ -260,7 +260,7 @@ def build_ics(
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//Approvo//Calendar//EN",
+        "PRODID:-//Planarus//Calendar//EN",
         "CALSCALE:GREGORIAN",
     ]
     for it in cal.items:

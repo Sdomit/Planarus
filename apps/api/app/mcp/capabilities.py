@@ -1,6 +1,6 @@
 """Launch-time capability scope guard for the MCP server (Phase 7B).
 
-Resolved ONCE at process start from the ``AGENTBOARD_MCP_CAPABILITY`` env var —
+Resolved ONCE at process start from the ``PLANARUS_MCP_CAPABILITY`` env var —
 never from a tool argument. Two tiers only: ``read`` and ``propose``. There is no
 approve/apply tier. Any missing, malformed, oversized, or empty capability is
 **default-deny**.
@@ -18,7 +18,7 @@ import os
 from dataclasses import dataclass
 from typing import Mapping, Optional
 
-ENV_VAR = "AGENTBOARD_MCP_CAPABILITY"
+ENV_VAR = "PLANARUS_MCP_CAPABILITY"
 MAX_PROJECT_IDS = 50
 MAX_LABEL_LEN = 64
 MAX_RAW_LEN = 8192

@@ -158,7 +158,7 @@ export default function GitSnapshotPanel({ projectId }: { projectId: string }) {
 }
 
 // Phase 12c: read-only open-PR list via the local gh CLI. Click-to-load only —
-// AgentBoard never auto-polls an outbound surface; the backend adds a 60s TTL.
+// Planarus never auto-polls an outbound surface; the backend adds a 60s TTL.
 function PrSection({ projectId }: { projectId: string }) {
   const [summary, setSummary] = useState<GitPrSummary | null>(null)
   const [loading, setLoading] = useState(false)

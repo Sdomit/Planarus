@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  Approvo — local dev launcher for macOS / Linux (the run-agentboard.bat twin)
+#  Planarus — local dev launcher for macOS / Linux (the run-planarus.bat twin)
 #  Starts the FastAPI backend + Vite frontend, waits until both actually answer,
 #  then opens the UI. Commands mirror docs/dev/setup.md.
 #  NOTE: local dev only — the external (ChatGPT) API stays DISABLED.
@@ -64,7 +64,7 @@ WEB_PORT=$(free_port 5173)
 [ "$API_PORT" = "8000" ] || echo "[PORT] 8000 busy — API moved to :$API_PORT"
 [ "$WEB_PORT" = "5173" ] || echo "[PORT] 5173 busy — Web moved to :$WEB_PORT"
 
-echo "Starting Approvo  |  API :$API_PORT   Web :$WEB_PORT"
+echo "Starting Planarus  |  API :$API_PORT   Web :$WEB_PORT"
 
 # --- start both, and make sure they die with this script ---------------------
 # Job control on, so each background job leads its own process group and cleanup
@@ -84,7 +84,7 @@ cleanup() { stop_group "$API_PID"; stop_group "$WEB_PID"; }
 trap cleanup EXIT INT TERM
 
 # Force the external API off regardless of what is exported in your shell.
-export AGENTBOARD_EXTERNAL_API_ENABLED=false
+export PLANARUS_EXTERNAL_API_ENABLED=false
 # --reload-dir app: watch only source, not the thousands of files in .venv.
 (cd "$ROOT/apps/api" \
   && .venv/bin/alembic upgrade head \

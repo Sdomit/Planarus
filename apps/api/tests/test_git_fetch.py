@@ -19,7 +19,7 @@ from app.services import git_service
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git not installed")
 
-TOKEN_HEADER = {"X-Approvo-Local-Token": get_local_control_token()}
+TOKEN_HEADER = {"X-Planarus-Local-Token": get_local_control_token()}
 
 
 def _git(cwd, *args) -> str:

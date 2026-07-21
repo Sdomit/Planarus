@@ -19,8 +19,8 @@ describe('GptActionsCard', () => {
   it('serves the contract and finalizes the server URL from a public host', async () => {
     render(<GptActionsCard active permitted hostsConfigured />)
     await waitFor(() => expect(screen.getByText(/REPLACE-WITH-YOUR-PUBLIC-HOST/)).toBeTruthy())
-    fireEvent.change(screen.getByLabelText(/Public HTTPS host/i), { target: { value: 'https://approvo.example.com/' } })
-    await waitFor(() => expect(screen.getByText(/https:\/\/approvo\.example\.com\/api\/external\/v1/)).toBeTruthy())
+    fireEvent.change(screen.getByLabelText(/Public HTTPS host/i), { target: { value: 'https://planarus.example.com/' } })
+    await waitFor(() => expect(screen.getByText(/https:\/\/planarus\.example\.com\/api\/external\/v1/)).toBeTruthy())
     // Placeholder is fully replaced in the finalized schema.
     expect(screen.queryByText(/REPLACE-WITH-YOUR-PUBLIC-HOST/)).toBeNull()
   })

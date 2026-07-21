@@ -9,7 +9,7 @@
 - [ ] Clicked through the affected surface
 
 **The invariant**
-Approvo's rule is that external AI clients may read and propose, never apply.
+Planarus's rule is that external AI clients may read and propose, never apply.
 
 - [ ] This PR doesn't add a path for an agent to write project state without
       human approval — or it does, and I've explained why below.

@@ -187,7 +187,7 @@ def test_approver_gate_requires_owner(client, session, auth_on):
     ar = approval_service.create_proposal(
         session, project_id=pid, action_type="task.create", patch={"title": "T"}
     )
-    hdr = {"X-Approvo-Local-Token": client.get("/api/v1/local-session").json()["token"]}
+    hdr = {"X-Planarus-Local-Token": client.get("/api/v1/local-session").json()["token"]}
 
     # Non-member with a valid control token still cannot approve (D22).
     r = client.post(f"/api/v1/approvals/{ar.id}/approve", headers=hdr, cookies=_auth(bob))
@@ -219,5 +219,5 @@ def test_approver_gate_noop_when_auth_off(client, session):
     ar = approval_service.create_proposal(
         session, project_id=pid, action_type="task.create", patch={"title": "T"}
     )
-    hdr = {"X-Approvo-Local-Token": client.get("/api/v1/local-session").json()["token"]}
+    hdr = {"X-Planarus-Local-Token": client.get("/api/v1/local-session").json()["token"]}
     assert client.post(f"/api/v1/approvals/{ar.id}/approve", headers=hdr).status_code == 200

@@ -14,7 +14,7 @@ _DOCTOR_PATH = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "doctor
 
 
 def _load_doctor():
-    spec = importlib.util.spec_from_file_location("approvo_doctor", _DOCTOR_PATH)
+    spec = importlib.util.spec_from_file_location("planarus_doctor", _DOCTOR_PATH)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod  # fresh module → _fails/_warns start at 0

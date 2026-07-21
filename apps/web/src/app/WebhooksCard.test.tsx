@@ -52,6 +52,6 @@ describe('WebhooksCard', () => {
   it('shows the inert note when webhooks are not configured (404)', async () => {
     list.mockRejectedValue(new Error('404: not found'))
     render(<WebhooksCard />)
-    await waitFor(() => expect(screen.getByText(/AGENTBOARD_WEBHOOK_ENC_KEY/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/PLANARUS_WEBHOOK_ENC_KEY/)).toBeTruthy())
   })
 })

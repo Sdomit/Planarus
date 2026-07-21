@@ -1,6 +1,6 @@
 import CopyButton from './CopyButton'
 
-// P17.5: docs-as-cards. Copy-paste starters that drive Approvo from a pipeline
+// P17.5: docs-as-cards. Copy-paste starters that drive Planarus from a pipeline
 // via the external API — they ride on the API Keys + REST cards, no new backend.
 
 const codeBlock: React.CSSProperties = {
@@ -18,18 +18,18 @@ const codeBlock: React.CSSProperties = {
 
 // Plain-string array so GitHub's ${{ … }} expression syntax stays literal.
 const GH_ACTIONS = [
-  '# .github/workflows/approvo.yml — read Approvo project status from CI',
-  'name: approvo-status',
+  '# .github/workflows/planarus.yml — read Planarus project status from CI',
+  'name: planarus-status',
   'on: [workflow_dispatch]',
   'jobs:',
   '  status:',
   '    runs-on: ubuntu-latest',
   '    steps:',
-  '      - name: List Approvo projects',
+  '      - name: List Planarus projects',
   '        run: |',
   '          curl -sS \\',
-  '            -H "Authorization: Bearer ${{ secrets.APPROVO_API_KEY }}" \\',
-  '            "${{ vars.APPROVO_BASE_URL }}/projects"',
+  '            -H "Authorization: Bearer ${{ secrets.PLANARUS_API_KEY }}" \\',
+  '            "${{ vars.PLANARUS_BASE_URL }}/projects"',
 ].join('\n')
 
 export default function RecipesCard() {
@@ -37,8 +37,8 @@ export default function RecipesCard() {
     <section>
       <h3 style={{ marginTop: 0 }}>Recipes (CI &amp; automation)</h3>
       <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', margin: '0 0 var(--space-3)' }}>
-        Starters that drive Approvo from a pipeline via the external API. Store the key as a secret
-        (never commit it) and set <code>APPROVO_BASE_URL</code> to your public <code>…/api/external/v1</code> host.
+        Starters that drive Planarus from a pipeline via the external API. Store the key as a secret
+        (never commit it) and set <code>PLANARUS_BASE_URL</code> to your public <code>…/api/external/v1</code> host.
       </p>
       <div className="form-field">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>

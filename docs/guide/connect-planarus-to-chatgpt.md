@@ -1,7 +1,7 @@
-# Connect Approvo to a private ChatGPT (read-only) — manual setup
+# Connect Planarus to a private ChatGPT (read-only) — manual setup
 
 A plain, follow-along guide for letting **your own private ChatGPT** read your
-Approvo projects — safely, read-only, and reversible in one click. You run
+Planarus projects — safely, read-only, and reversible in one click. You run
 every step yourself; nothing here happens automatically.
 
 > **Time:** ~1 hour the first time (almost all of it is the Cloudflare setup).
@@ -12,17 +12,17 @@ every step yourself; nothing here happens automatically.
 
 ## What you need before you start
 
-- **Approvo running locally** on this PC (`run-approvo.sh` on macOS/Linux, `run-agentboard.bat` on Windows — opens the API on
+- **Planarus running locally** on this PC (`run-planarus.sh` on macOS/Linux, `run-planarus.bat` on Windows — opens the API on
   `:8000` and the UI on `:5173`).
 - **A domain name you own**, added to a **free Cloudflare account**
-  (e.g. `example.com` — you'll use a subdomain like `agentboard.example.com`).
+  (e.g. `example.com` — you'll use a subdomain like `planarus.example.com`).
 - **A ChatGPT plan that can create GPTs** (Plus, Team, or Enterprise).
 
 ## The picture
 
 ```
-   ChatGPT  ──►  https://agentboard.example.com   ──►   your PC
-              (Cloudflare, valid HTTPS)      (secure tunnel)   Approvo API
+   ChatGPT  ──►  https://planarus.example.com   ──►   your PC
+              (Cloudflare, valid HTTPS)      (secure tunnel)   Planarus API
                                                               127.0.0.1:8000
                                                               (read-only)
 ```
@@ -32,7 +32,7 @@ your machine, so there's nothing inbound to expose or firewall.
 
 ---
 
-## Step 1 — Put Approvo behind a public HTTPS address (Cloudflare Tunnel)
+## Step 1 — Put Planarus behind a public HTTPS address (Cloudflare Tunnel)
 
 **1a. Install cloudflared.** In PowerShell:
 
@@ -49,7 +49,7 @@ cloudflared tunnel login
 **1c. Create a named tunnel:**
 
 ```powershell
-cloudflared tunnel create agentboard
+cloudflared tunnel create planarus
 ```
 
 Note the **Tunnel ID** it prints and the credentials file path
@@ -58,7 +58,7 @@ Note the **Tunnel ID** it prints and the credentials file path
 **1d. Point your subdomain at the tunnel:**
 
 ```powershell
-cloudflared tunnel route dns agentboard agentboard.example.com
+cloudflared tunnel route dns planarus planarus.example.com
 ```
 
 **1e. Create the config file** `C:\Users\<you>\.cloudflared\config.yml`. The
@@ -68,31 +68,31 @@ there and replace the three `<PLACEHOLDERS>`. It looks like this (already scoped
 just the external API — see the hardening note below):
 
 ```yaml
-tunnel: agentboard
+tunnel: planarus
 credentials-file: C:\Users\<you>\.cloudflared\<TunnelID>.json
 ingress:
-  - hostname: agentboard.example.com
+  - hostname: planarus.example.com
     path: ^/api/external/.*
     service: http://127.0.0.1:8000
     originRequest:
-      httpHostHeader: agentboard.example.com
-  - hostname: agentboard.example.com
+      httpHostHeader: planarus.example.com
+  - hostname: planarus.example.com
     path: ^/health$
     service: http://127.0.0.1:8000
     originRequest:
-      httpHostHeader: agentboard.example.com
+      httpHostHeader: planarus.example.com
   - service: http_status:404
 ```
 
 **1f. Run the tunnel** (leave this window open while you want the GPT to work):
 
 ```powershell
-cloudflared tunnel run agentboard
+cloudflared tunnel run planarus
 ```
 
 ✅ **You should see:** "Registered tunnel connection" lines. Visiting
-`https://agentboard.example.com/health` in a browser now returns a small JSON
-health response served by Approvo.
+`https://planarus.example.com/health` in a browser now returns a small JSON
+health response served by Planarus.
 
 > **Why the `path:` rules?** They make the tunnel forward *only* the read-only API
 > (`/api/external/...`) and the health check — everything else (the local
@@ -102,31 +102,31 @@ health response served by Approvo.
 
 ---
 
-## Step 2 — Tell Approvo its public name (but keep the door LOCKED)
+## Step 2 — Tell Planarus its public name (but keep the door LOCKED)
 
-Approvo only accepts a public hostname you explicitly allow. Set it as a
+Planarus only accepts a public hostname you explicitly allow. Set it as a
 **Windows user environment variable** so the launcher picks it up automatically.
 In PowerShell:
 
 ```powershell
-[Environment]::SetEnvironmentVariable("AGENTBOARD_EXTERNAL_API_ALLOWED_HOSTS","agentboard.example.com","User")
+[Environment]::SetEnvironmentVariable("PLANARUS_EXTERNAL_API_ALLOWED_HOSTS","planarus.example.com","User")
 ```
 
 > Prefer clicking? Windows **Settings → System → About → Advanced system settings
 > → Environment Variables → New (User)** does the same thing.
 
-**Do not enable the API yet.** Leave `AGENTBOARD_EXTERNAL_API_ENABLED` unset for
+**Do not enable the API yet.** Leave `PLANARUS_EXTERNAL_API_ENABLED` unset for
 now — the external door stays locked while you prepare the key.
 
-Then **close every Approvo window and its terminal, open a fresh terminal, and
-relaunch it (`run-approvo.sh` / `run-agentboard.bat`)** so the new setting takes effect (the app reads
+Then **close every Planarus window and its terminal, open a fresh terminal, and
+relaunch it (`run-planarus.sh` / `run-planarus.bat`)** so the new setting takes effect (the app reads
 these values once at startup).
 
 ---
 
-## Step 3 — Create a read-only key (in the Approvo UI)
+## Step 3 — Create a read-only key (in the Planarus UI)
 
-1. In Approvo (`http://localhost:5173`), open the **Clients** panel
+1. In Planarus (`http://localhost:5173`), open the **Clients** panel
    (left sidebar → *Agents → Clients*).
 2. Click **+ New key** and fill in:
    - **Label:** `chatgpt-private-gpt-readonly`
@@ -152,15 +152,15 @@ docs\guide\set-external-api.ps1 on
 
 It sets the switch, warns you if you forgot the allowlisted host, and reminds you
 to restart. (Manual equivalent, if you prefer:
-`[Environment]::SetEnvironmentVariable("AGENTBOARD_EXTERNAL_API_ENABLED","true","User")`.)
+`[Environment]::SetEnvironmentVariable("PLANARUS_EXTERNAL_API_ENABLED","true","User")`.)
 
-Then **restart Approvo** (close its windows, open a fresh terminal, run
-`run-approvo.sh` / `run-agentboard.bat`).
+Then **restart Planarus** (close its windows, open a fresh terminal, run
+`run-planarus.sh` / `run-planarus.bat`).
 
 ✅ **Verify from the public address** (replace the key):
 
 ```powershell
-curl https://agentboard.example.com/api/external/v1/projects -H "Authorization: Bearer agbk_your_key_here"
+curl https://planarus.example.com/api/external/v1/projects -H "Authorization: Bearer agbk_your_key_here"
 ```
 
 You should get a **200** with your project data. Without the header, or with a
@@ -174,13 +174,13 @@ wrong key, you get an error — that's correct.
 2. Set it to **“Only me.”** *(Never publish or share a GPT that holds a key.)*
 3. Scroll to **Actions → Create new action**.
 4. **Import the read-only contract:** open
-   [`docs/api/agentboard-gpt-actions-readonly.openapi.json`](../api/agentboard-gpt-actions-readonly.openapi.json)
+   [`docs/api/planarus-gpt-actions-readonly.openapi.json`](../api/planarus-gpt-actions-readonly.openapi.json)
    and paste its contents into the schema box.
    **Do not use** the `...read-propose...` file.
-5. In the schema, set the **server URL** to `https://agentboard.example.com`
+5. In the schema, set the **server URL** to `https://planarus.example.com`
    (it ships with a placeholder).
 6. **Authentication → API Key**, **Auth Type: Bearer**, and paste your `agbk_` key.
-7. Save, then in the GPT preview ask something like *“List my Approvo
+7. Save, then in the GPT preview ask something like *“List my Planarus
    projects”* and confirm it returns your data.
 
 🎉 Done. Your private GPT can now read that one project, read-only.
@@ -205,7 +205,7 @@ Never try to edit a live key; a revoked key can never be re-enabled.
 ## Do / Don't
 
 - ✅ Keep it **read-only** and **“Only me.”**
-- ✅ Keep Approvo bound to `127.0.0.1` — the tunnel is the only public listener.
+- ✅ Keep Planarus bound to `127.0.0.1` — the tunnel is the only public listener.
 - ❌ Don't grant `can_propose` on your first key.
 - ❌ Don't import the read-propose contract, and don't share/publish the GPT.
 - ❌ Don't ever bind the app to `0.0.0.0`.
@@ -215,13 +215,13 @@ Never try to edit a live key; a revoked key can never be re-enabled.
 ## If something doesn't work
 
 - **Every request returns 404** → the API isn't enabled, or you didn't restart
-  after setting `AGENTBOARD_EXTERNAL_API_ENABLED=true` in a fresh terminal.
-- **"host not allowed" / 403** → `AGENTBOARD_EXTERNAL_API_ALLOWED_HOSTS` must be the
-  exact hostname (`agentboard.example.com`, no `https://`, no trailing slash), and
+  after setting `PLANARUS_EXTERNAL_API_ENABLED=true` in a fresh terminal.
+- **"host not allowed" / 403** → `PLANARUS_EXTERNAL_API_ALLOWED_HOSTS` must be the
+  exact hostname (`planarus.example.com`, no `https://`, no trailing slash), and
   you must have restarted afterward. Also confirm the `httpHostHeader:` line in your
   `config.yml` is that same hostname — it sets the `Host` the app actually checks.
 - **The GPT can't reach it** → the `cloudflared` window isn't running, the server
-  URL in the action isn't `https://agentboard.example.com`, or the Bearer key is
+  URL in the action isn't `https://planarus.example.com`, or the Bearer key is
   wrong/revoked/expired.
 
 ---

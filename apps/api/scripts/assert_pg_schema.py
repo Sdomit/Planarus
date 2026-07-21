@@ -8,7 +8,7 @@ Guards the three dialect-portability fixes so they cannot silently regress:
 2. ``apiclient.enabled`` has a proper boolean server default.
 3. ``ck_apiclient_at_least_one_perm`` actually rejects a both-false row.
 
-Run with AGENTBOARD_DATABASE_URL (or DATABASE_URL) pointing at a migrated,
+Run with PLANARUS_DATABASE_URL (or DATABASE_URL) pointing at a migrated,
 disposable Postgres database. Exits non-zero on the first failed assertion.
 The inserted probe rows are rolled back.
 """
@@ -47,9 +47,9 @@ REQUIRED_TABLES = {
 
 
 def main() -> int:
-    url = os.environ.get("AGENTBOARD_DATABASE_URL") or os.environ.get("DATABASE_URL")
+    url = os.environ.get("PLANARUS_DATABASE_URL") or os.environ.get("DATABASE_URL")
     if not url:
-        print("set AGENTBOARD_DATABASE_URL (or DATABASE_URL) to a migrated Postgres DB")
+        print("set PLANARUS_DATABASE_URL (or DATABASE_URL) to a migrated Postgres DB")
         return 2
     engine = create_engine(url)
 

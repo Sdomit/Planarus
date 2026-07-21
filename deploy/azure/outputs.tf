@@ -18,6 +18,6 @@ output "dns_action" {
 }
 
 output "shell_in" {
-  value       = "az vm run-command invoke -g ${var.resource_group_name} -n approvo --command-id RunShellScript --scripts 'tail -n 80 /var/log/cloud-init-output.log'"
+  value       = "az vm run-command invoke -g ${var.resource_group_name} -n planarus --command-id RunShellScript --scripts 'tail -n 80 /var/log/cloud-init-output.log'"
   description = "Watch the bootstrap without opening SSH. (Or set admin_cidr and ssh in as the admin user.)"
 }

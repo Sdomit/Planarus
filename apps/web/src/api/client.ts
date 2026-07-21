@@ -831,7 +831,7 @@ export interface BackupResult {
   offsite_error: string | null
 }
 
-// P11.3 (hosted/LAN auth). The auth surface 404s when AGENTBOARD_AUTH_ENABLED
+// P11.3 (hosted/LAN auth). The auth surface 404s when PLANARUS_AUTH_ENABLED
 // is off — the UI treats that as "local single-user mode" and shows nothing.
 export interface AuthUser {
   id: string
@@ -970,7 +970,7 @@ async function controlRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const token = await getLocalToken()
   return request<T>(path, {
     ...init,
-    headers: { ...init?.headers, 'X-Approvo-Local-Token': token },
+    headers: { ...init?.headers, 'X-Planarus-Local-Token': token },
   })
 }
 
@@ -1336,7 +1336,7 @@ export const api = {
     // Phase 12c: read-only, click-triggered (never polled); gh keyring holds the credential.
     prs: (projectId: string) => request<GitPrSummary>(`/projects/${projectId}/git/prs`),
     // Phase 12b: the one outbound action — control-token-gated, so it goes
-    // through controlRequest (attaches X-Approvo-Local-Token).
+    // through controlRequest (attaches X-Planarus-Local-Token).
     fetchNow: (projectId: string) =>
       controlRequest<GitFetchResult>(`/projects/${projectId}/git/fetch`, { method: 'POST' }),
   },

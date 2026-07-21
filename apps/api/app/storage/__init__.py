@@ -6,7 +6,7 @@ straight to the local filesystem via ``atomic_io``. This package puts a ``Storag
 protocol behind that choke point so a hosted deployment can swap in object storage
 (S3/GCS) without touching callers.
 
-**Default is the local filesystem** (`AGENTBOARD_STORAGE_BACKEND=local`), byte-for-
+**Default is the local filesystem** (`PLANARUS_STORAGE_BACKEND=local`), byte-for-
 byte identical to the previous behavior. The in-memory backend is for tests and
 ephemeral/hosted-preview use; a real S3 adapter is a bounded future addition
 (P10.3b) that implements the same protocol.

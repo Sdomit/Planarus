@@ -1,6 +1,6 @@
 @echo off
 REM ============================================================================
-REM  Approvo - local dev launcher (UI/UX testing)
+REM  Planarus - local dev launcher (UI/UX testing)
 REM  Starts the FastAPI backend (:8000) + Vite frontend (:5173) and opens the UI
 REM  once both actually respond. Commands mirror docs/dev/setup.md. Vite proxies
 REM  /api -> :8000, so every UI feature works with no extra config.
@@ -34,22 +34,22 @@ if not exist "%ROOT%apps\web\node_modules" (
   )
 )
 
-echo Starting Approvo  ^|  API :8000   Web :5173
+echo Starting Planarus  ^|  API :8000   Web :5173
 echo.
 
 REM --- backend window: migrate to head, then run with hot reload --------------
 REM  Force the external (ChatGPT) API OFF for local UI testing, regardless of
 REM  any leftover value in your environment. setlocal keeps this out of your
 REM  shell; the started window inherits it.
-set "AGENTBOARD_EXTERNAL_API_ENABLED=false"
+set "PLANARUS_EXTERNAL_API_ENABLED=false"
 cd /d "%ROOT%apps\api"
 REM  --reload-dir app: watch only source; without it the watcher scans .venv
 REM  (thousands of files - minutes on this OneDrive-synced tree).
-start "Approvo API (:8000)" cmd /k "call .venv\Scripts\activate.bat && alembic upgrade head && uvicorn app.main:app --reload --reload-dir app --port 8000"
+start "Planarus API (:8000)" cmd /k "call .venv\Scripts\activate.bat && alembic upgrade head && uvicorn app.main:app --reload --reload-dir app --port 8000"
 
 REM --- frontend window: Vite dev server (root workspace script) ---------------
 cd /d "%ROOT%"
-start "Approvo Web (:5173)" cmd /k "pnpm dev:web"
+start "Planarus Web (:5173)" cmd /k "pnpm dev:web"
 
 REM --- open the UI when both servers actually answer (max ~60s each) ----------
 REM  /health only returns 2xx once migrations ran and the app imported, so this

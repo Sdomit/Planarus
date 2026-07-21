@@ -1,17 +1,17 @@
 ---
-project: approvo
+project: planarus
 kind: guide
 updated_at: 2026-07-19
-source_of_truth: Approvo
+source_of_truth: Planarus
 ---
 
 # Notifications & backups
 
-How to make Approvo chase your deadlines, protect its database, and get that
+How to make Planarus chase your deadlines, protect its database, and get that
 database back. Everything here is **off by default** and local — no data leaves
 your machine unless you point it somewhere that syncs.
 
-Both halves share one idea: **Approvo runs no background scheduler.** It ships a
+Both halves share one idea: **Planarus runs no background scheduler.** It ships a
 command; your operating system decides when to run it. That way a reminder still
 fires when the app is closed, nothing double-fires when the API runs more than
 one worker, and the very same command is what a hosted cron job would call.
@@ -57,7 +57,7 @@ means nothing sent, and the per-project daily cap (20) bounds the worst case.
 Now put it on a schedule. **cron** (Linux/macOS) — every morning at 08:00:
 
 ```cron
-0 8 * * * cd /path/to/approvo/apps/api && /path/to/.venv/bin/python -m app.jobs reminders
+0 8 * * * cd /path/to/planarus/apps/api && /path/to/.venv/bin/python -m app.jobs reminders
 ```
 
 Plain cron does **not** catch up a run it missed while the machine was off. If
@@ -65,7 +65,7 @@ that matters, use a **systemd timer** instead and set `Persistent=true`, which
 runs the job on the next boot after a missed window:
 
 ```ini
-# ~/.config/systemd/user/approvo-reminders.timer
+# ~/.config/systemd/user/planarus-reminders.timer
 [Timer]
 OnCalendar=08:00
 Persistent=true
@@ -110,10 +110,10 @@ Use export to move work. Use backup to survive a bad day.
 1. **Settings → Integrations → Backups**, switch **Enable backups** on (it is off
    by default — a backup writes files outside the database).
 2. Optionally set **Keep last N** (default 7). Older backups beyond N are pruned;
-   only files Approvo generated are ever deleted.
+   only files Planarus generated are ever deleted.
 3. Point the destination where you want it:
    ```bash
-   AGENTBOARD_BACKUP_DIR=/path/to/somewhere   # default ./agentboard-backups
+   PLANARUS_BACKUP_DIR=/path/to/somewhere   # default ./planarus-backups
    ```
 
 > **A backup on the same disk is not a backup strategy.** It protects you from a
@@ -124,11 +124,11 @@ Use export to move work. Use backup to survive a bad day.
 
 Two ways. Pick whichever you already have:
 
-- **A synced folder — simplest, no extra setting.** Point `AGENTBOARD_BACKUP_DIR`
+- **A synced folder — simplest, no extra setting.** Point `PLANARUS_BACKUP_DIR`
   at OneDrive, Dropbox, or an rclone mount. That is the entire change.
 - **Object storage.** Tick **Also copy each backup off-site**. This reuses the
-  storage backend, so it needs `AGENTBOARD_STORAGE_BACKEND=s3` plus the
-  `AGENTBOARD_S3_*` settings and the `[s3]` extra. On the default `local` backend
+  storage backend, so it needs `PLANARUS_STORAGE_BACKEND=s3` plus the
+  `PLANARUS_S3_*` settings and the `[s3]` extra. On the default `local` backend
   the switch is disabled on purpose: pushing there would write the copy beside
   the original, which protects nothing.
 
@@ -158,7 +158,7 @@ exists against the worst case.
 ```bash
 cd apps/api
 python -m app.jobs verify              # the newest backup
-python -m app.jobs verify agentboard-20260719T220501123456Z.db
+python -m app.jobs verify planarus-20260719T220501123456Z.db
 ```
 
 Exit code `0` means it passed. A failing backup is **not** deleted by `verify` —
@@ -172,7 +172,7 @@ app is a corruption path, so:
 ```bash
 # 1. STOP the app first. This is not optional.
 cd apps/api
-python -m app.jobs restore agentboard-20260719T220501123456Z.db --yes
+python -m app.jobs restore planarus-20260719T220501123456Z.db --yes
 # 2. Start the app again.
 ```
 

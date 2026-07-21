@@ -4,7 +4,7 @@ Phase 7A is local-only and single-user, but approve/reject/apply/invalidate
 change canonical state. We defend against *browser cross-site* requests to the
 loopback API with two checks on every state-changing call:
 
-  1. an in-memory, per-process control token (header ``X-Approvo-Local-Token``);
+  1. an in-memory, per-process control token (header ``X-Planarus-Local-Token``);
   2. an Origin allowlist (the packaged/local UI origins only).
 
 This does NOT defend against a malicious *local process* — such a process can
@@ -31,7 +31,7 @@ LOCAL_UI_ORIGINS: tuple[str, ...] = (
 
 def allowed_ui_origins() -> tuple[str, ...]:
     """Local dev origins plus any hosted web origins configured via
-    ``AGENTBOARD_WEB_ORIGINS`` (P10.4). Empty config → just the local origins, so
+    ``PLANARUS_WEB_ORIGINS`` (P10.4). Empty config → just the local origins, so
     local behavior is unchanged.
     """
     extra = tuple(
@@ -60,7 +60,7 @@ def origin_allowed(origin: str | None) -> bool:
 
 def require_local_control(
     request: Request,
-    x_approvo_local_token: str | None = Header(default=None),
+    x_planarus_local_token: str | None = Header(default=None),
 ) -> None:
     """FastAPI dependency guarding state-changing approval endpoints.
 
@@ -69,8 +69,8 @@ def require_local_control(
     """
     if not origin_allowed(request.headers.get("origin")):
         raise HTTPException(status_code=403, detail="origin not allowed")
-    if not x_approvo_local_token or not secrets.compare_digest(
-        x_approvo_local_token, _LOCAL_CONTROL_TOKEN
+    if not x_planarus_local_token or not secrets.compare_digest(
+        x_planarus_local_token, _LOCAL_CONTROL_TOKEN
     ):
         raise HTTPException(
             status_code=401, detail="invalid or missing local control token"

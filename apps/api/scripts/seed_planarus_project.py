@@ -1,17 +1,17 @@
-"""Seed a running Approvo database with the Approvo project itself (dogfooding).
+"""Seed a running Planarus database with the Planarus project itself (dogfooding).
 
-Approvo manages Approvo: this loads the real roadmap — every phase plus the
+Planarus manages Planarus: this loads the real roadmap — every phase plus the
 launch milestones — into a running DB so you can follow progress in the app's
 Roadmap / Task Board instead of only the Markdown context pack. Phase and
 milestone titles + statuses mirror context/NEXT_STEP.md; slice-level detail
 lives in docs/dev/ and docs/plan/, not here.
 
-Idempotent at the project level: if the ``approvo`` project already exists it
+Idempotent at the project level: if the ``planarus`` project already exists it
 does nothing (re-running is safe). Run against a **migrated** DB — the app applies
 migrations on startup, or run ``alembic upgrade head`` first. Honors
-``AGENTBOARD_DATABASE_URL`` / ``DATABASE_URL`` like the rest of the app.
+``PLANARUS_DATABASE_URL`` / ``DATABASE_URL`` like the rest of the app.
 
-    cd apps/api && python scripts/seed_approvo_project.py
+    cd apps/api && python scripts/seed_planarus_project.py
 """
 import sys
 
@@ -31,12 +31,14 @@ from app.services import (
     workspace_service,
 )
 
-WORKSPACE_SLUG = "approvo"
-PROJECT_SLUG = "approvo"
-# Pre-rename slug (AgentBoard → Approvo). The live dogfood project predates the
-# rename and still carries it; the existence guard matches both so re-seeding an
-# already-seeded DB stays a no-op instead of creating a duplicate project.
-LEGACY_PROJECT_SLUG = "agentboard"
+WORKSPACE_SLUG = "planarus"
+PROJECT_SLUG = "planarus"
+# Pre-rename slugs (AgentBoard → Approvo → Planarus), OLDEST LAST. These are live
+# DB values, not brand references — a DB seeded before a rename still carries the
+# old slug, so both lookups below match these too and re-seeding stays a no-op
+# instead of creating a duplicate workspace/project. Do not "clean up" to the
+# current name.
+LEGACY_SLUGS = ("approvo", "agentboard")
 
 # (title, status). Phases 0–18 shipped; 7C2b and 14 remain planned/deferred.
 # Flat phases mirror the live roadmap; per-slice tasks are worked in the app.
@@ -78,15 +80,17 @@ MILESTONES: list[dict] = [
 
 def _seed(session: Session) -> Project:
     ws = session.exec(
-        select(Workspace).where(Workspace.slug == WORKSPACE_SLUG)
+        select(Workspace).where(
+            Workspace.slug.in_((WORKSPACE_SLUG, *LEGACY_SLUGS))
+        )
     ).first()
     if ws is None:
         ws = workspace_service.create_workspace(
             session,
             WorkspaceCreate(
-                name="Approvo",
+                name="Planarus",
                 slug=WORKSPACE_SLUG,
-                description="Approvo dogfoods itself — this is the live project.",
+                description="Planarus dogfoods itself — this is the live project.",
             ),
         )
 
@@ -94,7 +98,7 @@ def _seed(session: Session) -> Project:
         session,
         ProjectCreate(
             workspace_id=ws.id,
-            title="Approvo",
+            title="Planarus",
             slug=PROJECT_SLUG,
             summary="AI agents propose. You approve. — local-first AI project cockpit.",
             status="active",
@@ -119,19 +123,19 @@ def main() -> int:
     with Session(engine) as session:
         existing = session.exec(
             select(Project).where(
-                Project.slug.in_((PROJECT_SLUG, LEGACY_PROJECT_SLUG))
+                Project.slug.in_((PROJECT_SLUG, *LEGACY_SLUGS))
             )
         ).first()
         if existing is not None:
             print(
-                f"Approvo project already seeded (id={existing.id}); nothing to do."
+                f"Planarus project already seeded (id={existing.id}); nothing to do."
             )
             return 0
         project = _seed(session)
         project_id = project.id  # read before the session closes (avoids detach)
 
     print(
-        f"Seeded Approvo project (id={project_id}): "
+        f"Seeded Planarus project (id={project_id}): "
         f"{len(PHASES)} phases, {len(MILESTONES)} milestones. "
         f"Open the app to follow along."
     )

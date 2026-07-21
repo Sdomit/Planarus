@@ -1,5 +1,5 @@
 [project]
-name = "approvo-api"
+name = "planarus-api"
 version = "0.2.0"
 requires-python = ">=3.11"
 dependencies = [
@@ -34,18 +34,18 @@ oauth = [
 ]
 # P15.12b: calendar external sync (Google/Microsoft). httpx for the provider
 # calls + cryptography (Fernet) to encrypt stored OAuth tokens at rest. Inert
-# unless AGENTBOARD_CALENDAR_ENC_KEY + a provider client id are configured.
+# unless PLANARUS_CALENDAR_ENC_KEY + a provider client id are configured.
 calendar-sync = [
     "httpx>=0.28.1",
     "cryptography>=49.0.0",
 ]
 # P17.3: outbound webhooks. cryptography (Fernet) encrypts each subscription's
-# HMAC signing secret at rest. Inert unless AGENTBOARD_WEBHOOK_ENC_KEY is set.
+# HMAC signing secret at rest. Inert unless PLANARUS_WEBHOOK_ENC_KEY is set.
 webhooks = [
     "cryptography>=49.0.0",
 ]
 # P10.3b: AWS SDK for the S3 storage backend. Only needed when
-# AGENTBOARD_STORAGE_BACKEND=s3; local/memory backends never import it.
+# PLANARUS_STORAGE_BACKEND=s3; local/memory backends never import it.
 s3 = [
     "boto3>=1.43.51",
 ]

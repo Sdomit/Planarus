@@ -3,7 +3,7 @@
 The workspace is the tenant boundary (D19). These helpers gate access to
 workspaces, projects, and the approve/apply path by the caller's membership role.
 
-**All enforcement is a no-op when `AGENTBOARD_AUTH_ENABLED` is off** — the local
+**All enforcement is a no-op when `PLANARUS_AUTH_ENABLED` is off** — the local
 single-user tool is unchanged. When auth is on, `tenant_user` requires a valid
 session on the domain routes and the `require_*` helpers 403 a caller whose
 workspace role isn't allowed.

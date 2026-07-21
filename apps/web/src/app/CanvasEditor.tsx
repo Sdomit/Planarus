@@ -66,7 +66,7 @@ interface CanvasApi {
 // `created: 0` keeps the order stable (and deterministic) — Excalidraw only uses
 // it for sorting, and a real clock would shuffle the groups on every reload.
 const SHAPE_LIBRARY = CANVAS_SHAPES.map((shape) => ({
-  id: `approvo-${shape.key}`,
+  id: `planarus-${shape.key}`,
   status: 'published' as const,
   created: 0,
   name: `${shape.group} · ${shape.name}`,
@@ -110,7 +110,7 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
   const lastContentSig = useRef('')
 
   // Entity-binding cards (Phase 13). Cards are ordinary Excalidraw elements whose
-  // customData carries { approvoEntity: { kind, id } } — the binding lives in the
+  // customData carries { planarusEntity: { kind, id } } — the binding lives in the
   // canonical content_json, so it survives autosave/reload with no backend change.
   const apiRef = useRef<CanvasApi | null>(null)
   const projectIdRef = useRef('')
@@ -282,7 +282,7 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
       strokeColor: style.stroke,
       fillStyle: 'solid',
       roundness: { type: 3 },
-      customData: { approvoEntity: { kind: ref.kind, id: ref.id } },
+      customData: { planarusEntity: { kind: ref.kind, id: ref.id } },
       label: { text: cardLabel(ref), fontSize: 16, strokeColor: '#1e1e1e' },
     }
     const created = convertToExcalidrawElements([

@@ -6,7 +6,7 @@ afterEach(cleanup)
 
 const list = vi.fn(async () => [
   {
-    name: 'agentboard-20260719T220501123456Z.db',
+    name: 'planarus-20260719T220501123456Z.db',
     size_bytes: 2048,
     created_at: '2026-07-19T22:05:01Z',
   },
@@ -36,7 +36,7 @@ const props = {
 describe('BackupsCard', () => {
   it('lists existing backups with size and time', async () => {
     render(<BackupsCard {...props} />)
-    expect(await screen.findByText('agentboard-20260719T220501123456Z.db')).toBeTruthy()
+    expect(await screen.findByText('planarus-20260719T220501123456Z.db')).toBeTruthy()
     expect(screen.getByText(/2 KB/)).toBeTruthy()
   })
 
@@ -52,7 +52,7 @@ describe('BackupsCard', () => {
 
   it('reports a failed off-site push without calling the backup a failure', async () => {
     create.mockResolvedValueOnce({
-      backup: { name: 'agentboard-x.db', size_bytes: 10, created_at: 't' },
+      backup: { name: 'planarus-x.db', size_bytes: 10, created_at: 't' },
       pruned: 0,
       offsite: null,
       offsite_error: 'RuntimeError: s3 down',
@@ -62,7 +62,7 @@ describe('BackupsCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back up now' }))
 
     // The verified local snapshot is still reported as made…
-    expect(await screen.findByText(/agentboard-x\.db/)).toBeTruthy()
+    expect(await screen.findByText(/planarus-x\.db/)).toBeTruthy()
     // …and the degraded off-site state is surfaced rather than swallowed.
     expect(screen.getByText(/off-site copy did not happen: RuntimeError: s3 down/)).toBeTruthy()
   })
@@ -72,6 +72,6 @@ describe('BackupsCard', () => {
     await screen.findByText('Backups')
     const box = screen.getByLabelText('Also copy each backup off-site') as HTMLInputElement
     expect(box.disabled).toBe(true)
-    expect(screen.getByText(/AGENTBOARD_STORAGE_BACKEND=s3/)).toBeTruthy()
+    expect(screen.getByText(/PLANARUS_STORAGE_BACKEND=s3/)).toBeTruthy()
   })
 })

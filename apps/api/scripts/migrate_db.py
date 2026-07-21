@@ -1,11 +1,11 @@
-"""CLI: migrate an Approvo database from one URL to another (Phase 10.5).
+"""CLI: migrate an Planarus database from one URL to another (Phase 10.5).
 
 The deliberate SQLite→Postgres path (D23). By default it migrates the target
 schema to head, then copies every table in FK-safe order with verification.
 
     cd apps/api && python scripts/migrate_db.py \\
-        --source sqlite:///./agentboard.db \\
-        --target postgresql+psycopg2://user:pass@host:5432/approvo
+        --source sqlite:///./planarus.db \\
+        --target postgresql+psycopg2://user:pass@host:5432/planarus
 
 Safe by construction: refuses a non-empty target unless --allow-nonempty, and the
 target write is one transaction. Run against a fresh target you control.
@@ -23,13 +23,13 @@ def _upgrade_target(target_url: str) -> None:
     cfg = Config("alembic.ini")
     cfg.set_main_option("script_location", "alembic")
     # Set the URL programmatically; env.py leaves a programmatic URL in place
-    # (it only overrides from AGENTBOARD_DATABASE_URL/DATABASE_URL env vars).
+    # (it only overrides from PLANARUS_DATABASE_URL/DATABASE_URL env vars).
     cfg.set_main_option("sqlalchemy.url", target_url.replace("%", "%%"))
     command.upgrade(cfg, "head")
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Copy an Approvo DB source→target.")
+    ap = argparse.ArgumentParser(description="Copy an Planarus DB source→target.")
     ap.add_argument("--source", required=True, help="source SQLAlchemy URL")
     ap.add_argument("--target", required=True, help="target SQLAlchemy URL")
     ap.add_argument(

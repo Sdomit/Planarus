@@ -2,7 +2,7 @@
 
 This is the ONLY place in the codebase that shells out to the gh binary, and it
 runs nothing but *exact* allowlisted read commands. Zero stored tokens: gh's own
-keyring/config holds the credential — Approvo never reads, stores, or logs it.
+keyring/config holds the credential — Planarus never reads, stores, or logs it.
 
 Safety model (mirrors git_service, stricter):
 - ``_run_gh`` accepts an argv only if it is one of the ``_ALLOWED_GH`` constants
@@ -132,7 +132,7 @@ def _summary(project_id: str, folder_path: Optional[str]) -> GitPrSummary:
         s.status = "no_auth"
         s.message = (
             "gh is not signed in — run `gh auth login` in a terminal. "
-            "Approvo never stores the credential."
+            "Planarus never stores the credential."
         )
         return s
     s.authenticated = True

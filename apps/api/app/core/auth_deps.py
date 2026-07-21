@@ -2,7 +2,7 @@
 
 These sit at the HTTP boundary and enforce *who may call what*. They are only
 reached on the auth/members routes, which are mounted always but gated by
-``require_auth_enabled`` — so when ``AGENTBOARD_AUTH_ENABLED`` is off the whole
+``require_auth_enabled`` — so when ``PLANARUS_AUTH_ENABLED`` is off the whole
 surface returns 404 and the app behaves exactly as the local single-user tool.
 """
 from __future__ import annotations

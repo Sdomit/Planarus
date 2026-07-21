@@ -45,7 +45,7 @@ resource "random_password" "db" {
 resource "aws_ssm_parameter" "database_url" {
   name  = "${var.ssm_prefix}/database_url"
   type  = "SecureString"
-  value = "postgresql+psycopg2://approvo:${random_password.db.result}@${aws_db_instance.this.address}:5432/approvo"
+  value = "postgresql+psycopg2://planarus:${random_password.db.result}@${aws_db_instance.this.address}:5432/planarus"
 }
 
 resource "aws_ssm_parameter" "gh_client_id" {
@@ -71,8 +71,8 @@ resource "aws_ssm_parameter" "repo_token" {
 
 # --- Networking: two SGs, RDS only reachable from the app box -----------------
 resource "aws_security_group" "ec2" {
-  name        = "approvo-ec2"
-  description = "Approvo app box: HTTP/HTTPS in, optional SSH"
+  name        = "planarus-ec2"
+  description = "Planarus app box: HTTP/HTTPS in, optional SSH"
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
@@ -108,7 +108,7 @@ resource "aws_security_group" "ec2" {
 }
 
 resource "aws_security_group" "rds" {
-  name        = "approvo-rds"
+  name        = "planarus-rds"
   description = "Postgres reachable only from the app box"
   vpc_id      = data.aws_vpc.default.id
 
@@ -129,18 +129,18 @@ resource "aws_security_group" "rds" {
 
 # --- Managed Postgres ---------------------------------------------------------
 resource "aws_db_subnet_group" "this" {
-  name       = "approvo"
+  name       = "planarus"
   subnet_ids = data.aws_subnets.default.ids
 }
 
 resource "aws_db_instance" "this" {
-  identifier             = "approvo"
+  identifier             = "planarus"
   engine                 = "postgres"
   instance_class         = "db.t4g.micro"
   allocated_storage      = 20
   storage_encrypted      = true
-  db_name                = "approvo"
-  username               = "approvo"
+  db_name                = "planarus"
+  username               = "planarus"
   password               = random_password.db.result
   db_subnet_group_name   = aws_db_subnet_group.this.name
   vpc_security_group_ids = [aws_security_group.rds.id]
@@ -153,7 +153,7 @@ resource "aws_db_instance" "this" {
 
 # --- IAM: instance role reads the SSM secrets + Session Manager shell ----------
 resource "aws_iam_role" "ec2" {
-  name = "approvo-ec2"
+  name = "planarus-ec2"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -165,7 +165,7 @@ resource "aws_iam_role" "ec2" {
 }
 
 resource "aws_iam_role_policy" "secrets" {
-  name = "approvo-read-secrets"
+  name = "planarus-read-secrets"
   role = aws_iam_role.ec2.id
   policy = jsonencode({
     Version = "2012-10-17"
@@ -191,7 +191,7 @@ resource "aws_iam_role_policy_attachment" "ssm_core" {
 }
 
 resource "aws_iam_instance_profile" "ec2" {
-  name = "approvo-ec2"
+  name = "planarus-ec2"
   role = aws_iam_role.ec2.name
 }
 
@@ -233,7 +233,7 @@ resource "aws_instance" "app" {
     aws_ssm_parameter.repo_token, # empty list when no token — still a valid dependency
   ]
 
-  tags = { Name = "approvo-app" }
+  tags = { Name = "planarus-app" }
 }
 
 resource "aws_eip" "app" {

@@ -7,10 +7,10 @@ def test_mcp_info_serves_launch_and_live_catalog(client):
     r = client.get("/api/v1/integrations/mcp")
     assert r.status_code == 200
     data = r.json()
-    assert data["server_name"] == "agentboard"
+    assert data["server_name"] == "planarus"
     assert data["command"] == "python"
     assert data["args"] == ["-m", "app.mcp.server"]
-    assert data["capability_env"] == "AGENTBOARD_MCP_CAPABILITY"
+    assert data["capability_env"] == "PLANARUS_MCP_CAPABILITY"
     # Local mode (auth off by default in tests) → the real cwd is disclosed.
     assert data["cwd"] and data["cwd"].endswith("api")
     # Catalog mirrors the registry exactly — D37, never drifts from code.
