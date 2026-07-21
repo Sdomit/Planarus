@@ -78,6 +78,21 @@ def dev_login(
     return _me(session, user)
 
 
+@router.get("/auth/status")
+def auth_status(session: Session = Depends(get_session)) -> dict:
+    """First-run probe for the sign-in screen: is this server still unclaimed?
+
+    Unauthenticated by necessity — it is read before anyone can sign in — and
+    only ever true before the first account exists (D29).
+
+    Gated on the password provider too: the setup screen it drives is the
+    register form, and with the provider off that form 404s. An OAuth-only or
+    dev-login server answers false and gets the plain gate instead.
+    """
+    unclaimed = settings.auth_password_enabled and auth_service.needs_setup(session)
+    return {"needs_setup": unclaimed}
+
+
 # --- P11.1: local email+password provider (D25) --------------------------------
 def _require_password_enabled() -> None:
     """404 the password surface unless its flag is on (dev-login precedent)."""

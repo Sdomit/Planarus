@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   api,
   type AdminUser,
+  type MemberCandidate,
   type MemberRead,
   type Workspace,
 } from '../api/client'
@@ -324,6 +325,7 @@ function WorkspaceMembers({
   workspace, myRole, selfId,
 }: { workspace: Workspace; myRole: string; selfId: string }) {
   const [members, setMembers] = useState<MemberRead[] | null>(null)
+  const [candidates, setCandidates] = useState<MemberCandidate[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [email, setEmail] = useState('')
@@ -332,7 +334,11 @@ function WorkspaceMembers({
 
   const load = useCallback(() => {
     api.members.list(workspace.id).then(setMembers).catch((e: Error) => setError(e.message))
-  }, [workspace.id])
+    // Owner-only endpoint; everyone else sees the roster without the add form.
+    // Failure is silent on purpose — the pick-list is a convenience, and typing
+    // the address by hand still works.
+    if (isOwner) api.members.candidates(workspace.id).then(setCandidates).catch(() => setCandidates([]))
+  }, [workspace.id, isOwner])
   useEffect(load, [load])
 
   const run = (fn: () => Promise<unknown>) => {
@@ -368,7 +374,17 @@ function WorkspaceMembers({
           <div className="form-field" style={{ flex: '1 1 200px', margin: 0 }}>
             <label className="form-label" htmlFor={`add-${workspace.id}`}>Add member by email</label>
             <input id={`add-${workspace.id}`} className="input input-sm" type="email" required
+              list={`cand-${workspace.id}`} autoComplete="off"
               value={email} onChange={(e) => setEmail(e.target.value)} />
+            {/* Native datalist: the browser does matching, keyboard nav and the
+                mobile keyboard for free. Typing an address that isn't listed
+                still submits — which is what you want when inviting someone
+                who has an account you can't see, and the 404 explains itself. */}
+            <datalist id={`cand-${workspace.id}`}>
+              {candidates.map((c) => (
+                <option key={c.email} value={c.email}>{c.display_name}</option>
+              ))}
+            </datalist>
           </div>
           <label className="form-label" style={{ display: 'grid', gap: 4 }}>
             Role
@@ -422,6 +438,55 @@ function WorkspaceMembers({
   )
 }
 
+// --- workspaces auth left ownerless (server admin only) -----------------------
+function UnclaimedWorkspaces({ selfEmail, onClaimed }: { selfEmail: string; onClaimed: () => void }) {
+  const [workspaces, setWorkspaces] = useState<Workspace[] | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(() => {
+    api.admin.unclaimedWorkspaces().then(setWorkspaces).catch(() => setWorkspaces([]))
+  }, [])
+  useEffect(load, [load])
+
+  const claim = (ws: Workspace) => {
+    setBusyId(ws.id)
+    setError(null)
+    api.members.add(ws.id, selfEmail, 'owner')
+      .then(() => { load(); onClaimed() })
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setBusyId(null))
+  }
+
+  // Turning auth on for the first time on a server that already had local-mode
+  // data leaves every existing workspace with no members at all — invisible to
+  // its own admin (D30's membership scoping applies uniformly). This is the
+  // only place that gap is surfaced; without it there is no UI path to it.
+  if (!workspaces || workspaces.length === 0) return null
+
+  return (
+    <section className="card" style={{ display: 'grid', gap: 'var(--space-3)' }}>
+      <h3 style={{ margin: 0 }}>Unclaimed workspaces</h3>
+      <p style={{ margin: 0, color: 'var(--text-tertiary)', fontSize: 'var(--text-sm)' }}>
+        These existed before sign-in was turned on and have no owner yet — claim
+        one to see its projects.
+      </p>
+      {error && <p className="form-error" role="alert" style={{ margin: 0 }}>{error}</p>}
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }}>
+        {workspaces.map((ws) => (
+          <li key={ws.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ flex: 1 }}>{ws.name}</span>
+            <button type="button" className="btn btn-solid btn-sm" disabled={busyId === ws.id}
+              onClick={() => claim(ws)}>
+              {busyId === ws.id ? 'Claiming…' : 'Claim as owner'}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 // --- the panel ----------------------------------------------------------------
 export default function TeamPanel() {
   const { me } = useAuthInfo()
@@ -470,6 +535,17 @@ export default function TeamPanel() {
           </div>
         )}
       </section>
+
+      {me.user.is_admin && (
+        <UnclaimedWorkspaces
+          selfEmail={me.user.email}
+          // me.memberships is set once at sign-in — a partial refetch here
+          // would still leave the freshly-claimed workspace missing from it,
+          // so the roster below wouldn't render. Same fix signOut already
+          // uses: reload, and every panel picks up the new /auth/me.
+          onClaimed={() => window.location.reload()}
+        />
+      )}
 
       {me.user.is_admin && (
         <AccountsSection

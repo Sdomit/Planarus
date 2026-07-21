@@ -33,6 +33,8 @@ def create_decision(
         if "project" in str(exc) and "not found" in str(exc):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
 
 @router.patch("/decisions/{decision_id}", response_model=DecisionRead)
@@ -43,6 +45,8 @@ def update_decision(
 ) -> DecisionRead:
     try:
         decision = decision_service.update_decision(session, decision_id, data)
+    except LookupError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if decision is None:

@@ -17,6 +17,49 @@ account, or an admin.
 > the LAN ceiling if you're serving a network). With auth off, every route and
 > screen below returns 404 / is hidden.
 
+## 0. The first ten minutes
+
+```
+run-planarus.bat team          # Windows
+./run-planarus.sh team         # macOS / Linux
+```
+
+That flag is the whole environment — it sets `PLANARUS_AUTH_ENABLED` and
+`PLANARUS_AUTH_PASSWORD_ENABLED` for the two servers it starts and nothing else
+on your machine. A plain run stays the single-user local tool with no sign-in.
+
+1. **Claim the server.** An install with no accounts opens on **Set up
+   Planarus** instead of a sign-in form. The account you create there becomes
+   the server admin (D29) — there is no separate "make me admin" step, and it
+   only happens once.
+2. **Add a teammate.** Account chip (bottom-left) → **Team** → create a user,
+   pick their workspace and role. You get a one-time temporary password to hand
+   over; they must replace it at first sign-in.
+3. **Add a read-only guest.** Same form, role `viewer`. They can see everything
+   in that workspace and change nothing — enforced server-side, not just hidden
+   in the UI. This is the supported "guest access": an invite, not a mode.
+4. **Check it worked.** Sign out, sign in as the viewer, try to edit something.
+   It should refuse.
+
+### If nobody can sign in
+
+There is no self-service password reset (D54 — a reset email has nowhere to go
+until outbound email ships). Two routes back in:
+
+- **Another admin** resets it from Team.
+- **No admin can sign in?** On the machine hosting Planarus:
+
+```
+python -m app.jobs admin --list                        # who owns this server
+python -m app.jobs admin --reset-password you@example  # prints a temp password
+python -m app.jobs admin --grant you@example           # promote to admin
+```
+
+Run these from `apps/api` with the venv active. `--reset-password` prints the
+password once, forces a change at sign-in, and signs that account out
+everywhere. It is a CLI and never an HTTP route (D53): anyone who can run it
+already has your database file, so it adds convenience rather than a new way in.
+
 ## 1. Two kinds of authority
 
 Planarus separates **project authority** from **account authority** — different

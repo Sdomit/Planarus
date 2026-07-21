@@ -4,6 +4,7 @@ from sqlmodel import Session, select
 
 from app.core.utils import new_id, now_utc
 from app.models.decision import Decision
+from app.models.phase import Phase
 from app.models.project import Project
 from app.schemas.decision import DecisionCreate, DecisionUpdate
 from app.services import status_option_service
@@ -31,17 +32,27 @@ def get_decision(session: Session, decision_id: str) -> Optional[Decision]:
     return session.get(Decision, decision_id)
 
 
+def _validate_phase(session: Session, project_id: str, phase_id: Optional[str]) -> None:
+    if phase_id is None:
+        return
+    phase = session.get(Phase, phase_id)
+    if phase is None or phase.project_id != project_id:
+        raise LookupError(f"phase '{phase_id}' not found in project '{project_id}'")
+
+
 def create_decision(
     session: Session, project_id: str, data: DecisionCreate
 ) -> Decision:
     if session.get(Project, project_id) is None:
         raise ValueError(f"project '{project_id}' not found")
     _validate_status(session, project_id, data.status)
+    _validate_phase(session, project_id, data.phase_id)
 
     now = now_utc()
     decision = Decision(
         id=new_id("dec"),
         project_id=project_id,
+        phase_id=data.phase_id,
         title=data.title,
         context=data.context,
         decision=data.decision,
@@ -74,6 +85,8 @@ def update_decision(
     update_data = data.model_dump(exclude_unset=True)
     if update_data.get("status") is not None:
         _validate_status(session, decision.project_id, update_data["status"])
+    if "phase_id" in update_data:
+        _validate_phase(session, decision.project_id, update_data["phase_id"])
     now = now_utc()
     for key, value in update_data.items():
         setattr(decision, key, value)

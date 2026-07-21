@@ -60,6 +60,163 @@ def test_first_user_bootstraps_to_admin(client, auth_on):
     assert me2["is_admin"] is False
 
 
+def test_auth_status_flags_unclaimed_server(client, auth_on):
+    """The first-run signal: true before anyone registers, false after."""
+    assert client.get("/api/v1/auth/status").json() == {"needs_setup": True}
+    _login(client, "root@acme.co")
+    assert client.get("/api/v1/auth/status").json() == {"needs_setup": False}
+
+
+def test_auth_status_404_when_auth_off(client):
+    assert client.get("/api/v1/auth/status").status_code == 404
+
+
+def test_auth_status_false_without_the_password_provider(client, auth_on, monkeypatch):
+    """Setup mode drives the register form, so an OAuth-only/dev-login server
+    must not offer it — the form would 404 with no way back."""
+    monkeypatch.setattr(settings, "auth_password_enabled", False)
+    assert client.get("/api/v1/auth/status").json() == {"needs_setup": False}
+
+
+def test_first_run_to_guest_journey(client, auth_on):
+    """The whole human path, end to end, over the real HTTP surface.
+
+    Setup screen claims the server -> admin invites a guest -> guest signs in
+    with the temp password, rotates it, can read and cannot write. Each half is
+    covered elsewhere; this pins the join, which is what an operator actually
+    walks and what nothing else asserts.
+    """
+    # 1. Unclaimed server: the gate offers setup.
+    assert client.get("/api/v1/auth/status").json() == {"needs_setup": True}
+
+    # 2. The first account claims it (D29) — the setup screen's own call.
+    reg = client.post(
+        "/api/v1/auth/password/register",
+        json={"email": "root@acme.co", "password": "a long enough phrase"},
+    )
+    assert reg.status_code == 201, reg.text
+    assert reg.json()["user"]["is_admin"] is True
+    admin = client.cookies.get(SESSION_COOKIE)
+    client.cookies.clear()
+    # ...and the offer is gone for good.
+    assert client.get("/api/v1/auth/status").json() == {"needs_setup": False}
+
+    # 3. Admin makes something worth guarding.
+    ws = client.post(
+        "/api/v1/workspaces",
+        json={"name": "Acme", "slug": "acme"},
+        cookies=_auth(admin),
+    )
+    assert ws.status_code == 201, ws.text
+    ws_id = ws.json()["id"]
+    pid = client.post(
+        "/api/v1/projects",
+        json={"workspace_id": ws_id, "title": "Roadmap", "slug": "roadmap"},
+        cookies=_auth(admin),
+    ).json()["id"]
+
+    # 4. Invite the guest, with read-only access to that workspace.
+    created = client.post(
+        "/api/v1/admin/users",
+        json={"email": "guest@acme.co", "display_name": "Guest"},
+        headers=_control(client),
+        cookies=_auth(admin),
+    )
+    assert created.status_code == 201, created.text
+    temp = created.json()["temp_password"]
+    member = client.post(
+        f"/api/v1/workspaces/{ws_id}/members",
+        json={"email": "guest@acme.co", "role": "viewer"},
+        cookies=_auth(admin),
+    )
+    assert member.status_code in (200, 201), member.text
+
+    # 5. Guest signs in and is forced to replace the temp password first.
+    code, guest = _pw_login(client, "guest@acme.co", temp)
+    assert code == 200
+    assert client.get("/api/v1/auth/me", cookies=_auth(guest)).json()[
+        "password_must_change"
+    ] is True
+    rotated = client.post(
+        "/api/v1/auth/password/change",
+        json={"current_password": temp, "new_password": "another long phrase"},
+        cookies=_auth(guest),
+    )
+    assert rotated.status_code == 204, rotated.text
+
+    # Rotation signs every session out, including this one — sign back in.
+    code, guest = _pw_login(client, "guest@acme.co", "another long phrase")
+    assert code == 200
+
+    # 6. The point of the whole journey: reads yes, writes no.
+    assert client.get(f"/api/v1/projects/{pid}", cookies=_auth(guest)).status_code == 200
+    denied = client.patch(
+        f"/api/v1/projects/{pid}", json={"title": "guest was here"}, cookies=_auth(guest)
+    )
+    assert denied.status_code == 403, denied.text
+    # ...and the refusal is real, not just a hidden button.
+    assert client.get(f"/api/v1/projects/{pid}", cookies=_auth(admin)).json()[
+        "title"
+    ] == "Roadmap"
+
+
+def _ownerless_workspace(session, name="Default Workspace") -> str:
+    """A workspace with zero members — via the service layer, bypassing the
+    POST /workspaces auto-owner (D-whatever): the exact shape auth-off,
+    pre-existing local-mode data is in the moment auth gets turned on."""
+    from app.schemas.workspace import WorkspaceCreate
+    from app.services import workspace_service
+
+    ws = workspace_service.create_workspace(
+        session, WorkspaceCreate(name=name, slug=name.lower().replace(" ", "-"))
+    )
+    session.commit()
+    return ws.id
+
+
+def test_unclaimed_workspaces_admin_only(client, session, auth_on):
+    _ownerless_workspace(session)
+    admin = _login(client, "root@acme.co")
+    plain = _login(client, "user@acme.co")
+    assert client.get("/api/v1/admin/workspaces/unclaimed", cookies=_auth(plain)).status_code == 403
+    listed = client.get("/api/v1/admin/workspaces/unclaimed", cookies=_auth(admin))
+    assert listed.status_code == 200
+    assert [w["name"] for w in listed.json()] == ["Default Workspace"]
+
+
+def test_claiming_removes_it_from_the_unclaimed_list(client, session, auth_on):
+    ws_id = _ownerless_workspace(session)
+    admin = _login(client, "root@acme.co")
+
+    join = client.post(
+        f"/api/v1/workspaces/{ws_id}/members",
+        json={"email": "root@acme.co", "role": "owner"},
+        cookies=_auth(admin),
+    )
+    assert join.status_code == 201, join.text
+
+    listed = client.get("/api/v1/admin/workspaces/unclaimed", cookies=_auth(admin))
+    assert listed.json() == []
+    # And the whole point: projects in it are now visible.
+    ws_list = client.get("/api/v1/workspaces", cookies=_auth(admin))
+    assert [w["id"] for w in ws_list.json()] == [ws_id]
+
+
+def test_a_workspace_with_any_member_never_appears(client, session, auth_on):
+    """Sanity check the query isn't accidentally "all workspaces"."""
+    ws_id = _ownerless_workspace(session, "Already Owned")
+    admin = _login(client, "root@acme.co")
+    client.post(
+        f"/api/v1/workspaces/{ws_id}/members",
+        json={"email": "root@acme.co", "role": "owner"},
+        cookies=_auth(admin),
+    )
+    other_ws = _ownerless_workspace(session, "Still Unowned")
+
+    listed = client.get("/api/v1/admin/workspaces/unclaimed", cookies=_auth(admin))
+    assert [w["id"] for w in listed.json()] == [other_ws]
+
+
 def test_roster_admin_only(client, auth_on):
     admin = _login(client, "root@acme.co")
     plain = _login(client, "user@acme.co")

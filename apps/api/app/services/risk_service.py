@@ -3,6 +3,7 @@ from typing import Optional
 from sqlmodel import Session, select
 
 from app.core.utils import new_id, now_utc
+from app.models.phase import Phase
 from app.models.project import Project
 from app.models.risk import Risk
 from app.schemas.risk import RiskCreate, RiskUpdate
@@ -33,15 +34,25 @@ def get_risk(session: Session, risk_id: str) -> Optional[Risk]:
     return session.get(Risk, risk_id)
 
 
+def _validate_phase(session: Session, project_id: str, phase_id: Optional[str]) -> None:
+    if phase_id is None:
+        return
+    phase = session.get(Phase, phase_id)
+    if phase is None or phase.project_id != project_id:
+        raise LookupError(f"phase '{phase_id}' not found in project '{project_id}'")
+
+
 def create_risk(session: Session, project_id: str, data: RiskCreate) -> Risk:
     if session.get(Project, project_id) is None:
         raise ValueError(f"project '{project_id}' not found")
     _validate_status(session, project_id, data.status)
+    _validate_phase(session, project_id, data.phase_id)
 
     now = now_utc()
     risk = Risk(
         id=new_id("rsk"),
         project_id=project_id,
+        phase_id=data.phase_id,
         title=data.title,
         description=data.description,
         severity=data.severity,
@@ -73,6 +84,8 @@ def update_risk(session: Session, risk_id: str, data: RiskUpdate) -> Optional[Ri
     update_data = data.model_dump(exclude_unset=True)
     if update_data.get("status") is not None:
         _validate_status(session, risk.project_id, update_data["status"])
+    if "phase_id" in update_data:
+        _validate_phase(session, risk.project_id, update_data["phase_id"])
     now = now_utc()
     for key, value in update_data.items():
         setattr(risk, key, value)

@@ -68,13 +68,13 @@ READ_TOOLS: dict[str, ToolSpec] = {
     ),
     "list_decisions": ToolSpec(
         "list_decisions", "read",
-        "List decisions for one scoped project (bounded rows).",
-        read_tools.ListScopedArgs, read_tools.list_decisions,
+        "List decisions for one scoped project (bounded rows; optional phase filter).",
+        read_tools.ListPhaseScopedArgs, read_tools.list_decisions,
     ),
     "list_risks": ToolSpec(
         "list_risks", "read",
-        "List risks for one scoped project (bounded rows).",
-        read_tools.ListScopedArgs, read_tools.list_risks,
+        "List risks for one scoped project (bounded rows; optional phase filter).",
+        read_tools.ListPhaseScopedArgs, read_tools.list_risks,
     ),
     "list_docs": ToolSpec(
         "list_docs", "read",
