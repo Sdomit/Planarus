@@ -71,6 +71,13 @@ def test_auth_status_404_when_auth_off(client):
     assert client.get("/api/v1/auth/status").status_code == 404
 
 
+def test_auth_status_false_without_the_password_provider(client, auth_on, monkeypatch):
+    """Setup mode drives the register form, so an OAuth-only/dev-login server
+    must not offer it — the form would 404 with no way back."""
+    monkeypatch.setattr(settings, "auth_password_enabled", False)
+    assert client.get("/api/v1/auth/status").json() == {"needs_setup": False}
+
+
 def test_roster_admin_only(client, auth_on):
     admin = _login(client, "root@acme.co")
     plain = _login(client, "user@acme.co")
