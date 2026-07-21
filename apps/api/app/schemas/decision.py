@@ -19,6 +19,7 @@ class DecisionCreate(BaseModel):
     context: Optional[str] = None
     decision: str = Field(min_length=1)
     status: str = "proposed"
+    phase_id: Optional[str] = None
 
     @field_validator("status")
     @classmethod
@@ -31,6 +32,7 @@ class DecisionUpdate(BaseModel):
     context: Optional[str] = None
     decision: Optional[str] = Field(default=None, min_length=1)
     status: Optional[str] = None
+    phase_id: Optional[str] = None
 
     @field_validator("status")
     @classmethod
@@ -41,6 +43,7 @@ class DecisionUpdate(BaseModel):
 class DecisionRead(BaseModel):
     id: str
     project_id: str
+    phase_id: Optional[str]
     title: str
     context: Optional[str]
     decision: str

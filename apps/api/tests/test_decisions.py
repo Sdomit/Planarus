@@ -129,3 +129,87 @@ def test_create_decision_audit_written(client: TestClient, session) -> None:
         ).all()
     )
     assert len(events) == 1
+
+
+# --- Phase 19 (D45): optional phase link ------------------------------------
+
+
+def test_create_decision_with_phase(client: TestClient) -> None:
+    _, pid = _seed(client)
+    phase = client.post(f"/api/v1/projects/{pid}/phases", json={"title": "Ph1"}).json()
+    res = client.post(
+        f"/api/v1/projects/{pid}/decisions",
+        json={"title": "D", "decision": "Decided", "phase_id": phase["id"]},
+    )
+    assert res.status_code == 201
+    assert res.json()["phase_id"] == phase["id"]
+
+
+def test_create_decision_without_phase_is_unphased(client: TestClient) -> None:
+    _, pid = _seed(client)
+    res = client.post(
+        f"/api/v1/projects/{pid}/decisions", json={"title": "D", "decision": "X"}
+    )
+    assert res.status_code == 201
+    assert res.json()["phase_id"] is None
+
+
+def test_create_decision_rejects_phase_from_another_project(client: TestClient) -> None:
+    ws_id, pid = _seed(client)
+    other = client.post(
+        "/api/v1/projects",
+        json={"workspace_id": ws_id, "title": "Other", "slug": "p-dec-other"},
+    ).json()
+    foreign = client.post(
+        f"/api/v1/projects/{other['id']}/phases", json={"title": "Foreign"}
+    ).json()
+    res = client.post(
+        f"/api/v1/projects/{pid}/decisions",
+        json={"title": "D", "decision": "X", "phase_id": foreign["id"]},
+    )
+    assert res.status_code == 404
+
+
+def test_create_decision_rejects_missing_phase(client: TestClient) -> None:
+    _, pid = _seed(client)
+    res = client.post(
+        f"/api/v1/projects/{pid}/decisions",
+        json={"title": "D", "decision": "X", "phase_id": "pha_nope"},
+    )
+    assert res.status_code == 404
+
+
+def test_update_decision_sets_and_clears_phase(client: TestClient) -> None:
+    _, pid = _seed(client)
+    phase = client.post(f"/api/v1/projects/{pid}/phases", json={"title": "Ph1"}).json()
+    dec = client.post(
+        f"/api/v1/projects/{pid}/decisions", json={"title": "D", "decision": "X"}
+    ).json()
+
+    linked = client.patch(
+        f"/api/v1/decisions/{dec['id']}", json={"phase_id": phase["id"]}
+    )
+    assert linked.status_code == 200
+    assert linked.json()["phase_id"] == phase["id"]
+
+    cleared = client.patch(f"/api/v1/decisions/{dec['id']}", json={"phase_id": None})
+    assert cleared.status_code == 200
+    assert cleared.json()["phase_id"] is None
+
+
+def test_update_decision_rejects_foreign_phase(client: TestClient) -> None:
+    ws_id, pid = _seed(client)
+    other = client.post(
+        "/api/v1/projects",
+        json={"workspace_id": ws_id, "title": "Other", "slug": "p-dec-other2"},
+    ).json()
+    foreign = client.post(
+        f"/api/v1/projects/{other['id']}/phases", json={"title": "Foreign"}
+    ).json()
+    dec = client.post(
+        f"/api/v1/projects/{pid}/decisions", json={"title": "D", "decision": "X"}
+    ).json()
+    res = client.patch(
+        f"/api/v1/decisions/{dec['id']}", json={"phase_id": foreign["id"]}
+    )
+    assert res.status_code == 404
