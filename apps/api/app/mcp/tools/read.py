@@ -54,6 +54,14 @@ class ListScopedArgs(StrictArgs):
     limit: int = Field(default=MAX_LIST_ROWS, ge=1, le=MAX_LIST_ROWS)
 
 
+class ListPhaseScopedArgs(ListScopedArgs):
+    """Phase 19 (D46): a project-scoped list that can narrow to one phase.
+    Separate from ListScopedArgs because list_docs shares that class and Doc has
+    no phase link — widening it would advertise a filter that does nothing."""
+
+    phase_id: Optional[str] = None
+
+
 class DocExcerptArgs(StrictArgs):
     doc_id: str
     max_chars: int = Field(default=MAX_DOC_EXCERPT_CHARS, ge=1, le=MAX_DOC_EXCERPT_CHARS)
@@ -176,12 +184,37 @@ def get_active_work(session: Session, cap: Capability, args: ProjectArgs) -> Too
         .order_by(Task.sort_order, Task.id),
         MAX_LIST_ROWS,
     )
+    # Phase 19 (D46): the active phase is only a complete unit if an agent also
+    # sees what was decided for it and what threatens it — not just its tasks.
+    phase_decisions: list[Decision] = []
+    phase_risks: list[Risk] = []
+    if active_phase is not None:
+        phase_decisions, _ = _fetch_capped(
+            session,
+            select(Decision)
+            .where(Decision.phase_id == active_phase.id)
+            .order_by(Decision.created_at.desc(), Decision.id),
+            MAX_LIST_ROWS,
+        )
+        phase_risks, _ = _fetch_capped(
+            session,
+            select(Risk)
+            .where(
+                Risk.phase_id == active_phase.id,
+                Risk.status.in_(["open", "monitoring"]),
+            )
+            .order_by(Risk.created_at.desc(), Risk.id),
+            MAX_LIST_ROWS,
+        )
+
     metadata = {
         "project_id": args.project_id,
         "active_phase_id": active_phase.id if active_phase else None,
         "phase_count": len(phases),
         "active_task_count": len(active_tasks),
         "active_task_truncated": tasks_truncated,
+        "phase_decision_count": len(phase_decisions),
+        "phase_open_risk_count": len(phase_risks),
     }
     blocks: list[Block] = []
     if active_phase is not None:
@@ -200,6 +233,24 @@ def get_active_work(session: Session, cap: Capability, args: ProjectArgs) -> Too
                 "task",
                 [f"id: {t.id}", f"status: {t.status}", f"priority: {t.priority or '(none)'}"],
                 [("title", t.title, MAX_FIELD_CHARS)],
+            )
+        )
+    for d in phase_decisions:
+        blocks.append(
+            wrap_block(
+                f"decision:{d.id}",
+                "decision",
+                [f"id: {d.id}", f"status: {d.status}"],
+                [("title", d.title, MAX_FIELD_CHARS), ("decision", d.decision, MAX_FIELD_CHARS)],
+            )
+        )
+    for r in phase_risks:
+        blocks.append(
+            wrap_block(
+                f"risk:{r.id}",
+                "risk",
+                [f"id: {r.id}", f"severity: {r.severity}", f"status: {r.status}"],
+                [("title", r.title, MAX_FIELD_CHARS)],
             )
         )
     return build_result(metadata, blocks)
@@ -239,16 +290,18 @@ def list_tasks(session: Session, cap: Capability, args: ListTasksArgs) -> ToolRe
     return build_result(metadata, blocks)
 
 
-def list_decisions(session: Session, cap: Capability, args: ListScopedArgs) -> ToolResult:
+def list_decisions(
+    session: Session, cap: Capability, args: ListPhaseScopedArgs
+) -> ToolResult:
     _require_project_scope(cap, args.project_id)
-    stmt = (
-        select(Decision)
-        .where(Decision.project_id == args.project_id)
-        .order_by(Decision.created_at.desc(), Decision.id)
-    )
+    stmt = select(Decision).where(Decision.project_id == args.project_id)
+    if args.phase_id is not None:
+        stmt = stmt.where(Decision.phase_id == args.phase_id)
+    stmt = stmt.order_by(Decision.created_at.desc(), Decision.id)
     rows, truncated = _fetch_capped(session, stmt, args.limit)
     metadata = {
         "project_id": args.project_id,
+        "phase_id": args.phase_id,
         "count": len(rows),
         "limit": args.limit,
         "row_truncated": truncated,
@@ -258,7 +311,7 @@ def list_decisions(session: Session, cap: Capability, args: ListScopedArgs) -> T
         wrap_block(
             f"decision:{d.id}",
             "decision",
-            [f"id: {d.id}", f"status: {d.status}"],
+            [f"id: {d.id}", f"status: {d.status}", f"phase_id: {d.phase_id or '(none)'}"],
             [
                 ("title", d.title, MAX_FIELD_CHARS),
                 ("decision", d.decision, MAX_FIELD_CHARS),
@@ -270,16 +323,18 @@ def list_decisions(session: Session, cap: Capability, args: ListScopedArgs) -> T
     return build_result(metadata, blocks)
 
 
-def list_risks(session: Session, cap: Capability, args: ListScopedArgs) -> ToolResult:
+def list_risks(
+    session: Session, cap: Capability, args: ListPhaseScopedArgs
+) -> ToolResult:
     _require_project_scope(cap, args.project_id)
-    stmt = (
-        select(Risk)
-        .where(Risk.project_id == args.project_id)
-        .order_by(Risk.created_at.desc(), Risk.id)
-    )
+    stmt = select(Risk).where(Risk.project_id == args.project_id)
+    if args.phase_id is not None:
+        stmt = stmt.where(Risk.phase_id == args.phase_id)
+    stmt = stmt.order_by(Risk.created_at.desc(), Risk.id)
     rows, truncated = _fetch_capped(session, stmt, args.limit)
     metadata = {
         "project_id": args.project_id,
+        "phase_id": args.phase_id,
         "count": len(rows),
         "limit": args.limit,
         "row_truncated": truncated,
@@ -290,7 +345,12 @@ def list_risks(session: Session, cap: Capability, args: ListScopedArgs) -> ToolR
         wrap_block(
             f"risk:{r.id}",
             "risk",
-            [f"id: {r.id}", f"severity: {r.severity}", f"status: {r.status}"],
+            [
+                f"id: {r.id}",
+                f"severity: {r.severity}",
+                f"status: {r.status}",
+                f"phase_id: {r.phase_id or '(none)'}",
+            ],
             [("title", r.title, MAX_FIELD_CHARS), ("description", r.description, MAX_FIELD_CHARS)],
         )
         for r in rows
