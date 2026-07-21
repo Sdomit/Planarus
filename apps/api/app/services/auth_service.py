@@ -127,6 +127,16 @@ def _bootstrap_admin(session: Session) -> bool:
     return session.exec(select(User.id).limit(1)).first() is None
 
 
+def needs_setup(session: Session) -> bool:
+    """Whether this server is still unclaimed — the next account becomes admin.
+
+    Public read of the same D29 check, for the first-run sign-in screen. It does
+    leak "no accounts yet", unlike D30's deliberately opaque closed-registration
+    404, but only until someone registers: after that it is false forever.
+    """
+    return _bootstrap_admin(session)
+
+
 def login_with_identity(
     session: Session,
     provider: str,

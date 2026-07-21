@@ -78,6 +78,16 @@ def dev_login(
     return _me(session, user)
 
 
+@router.get("/auth/status")
+def auth_status(session: Session = Depends(get_session)) -> dict:
+    """First-run probe for the sign-in screen: is this server still unclaimed?
+
+    Unauthenticated by necessity — it is read before anyone can sign in — and
+    only ever true before the first account exists (D29).
+    """
+    return {"needs_setup": auth_service.needs_setup(session)}
+
+
 # --- P11.1: local email+password provider (D25) --------------------------------
 def _require_password_enabled() -> None:
     """404 the password surface unless its flag is on (dev-login precedent)."""
