@@ -109,7 +109,9 @@
   --ab-sidebar-panel-hover: #EEF5FD;
   --ab-sidebar-text-primary: #0B1226;
   --ab-sidebar-text-secondary: #52617B;
-  --ab-sidebar-text-muted: #7C8AA2;
+  /* 4.67:1 on the white sidebar — the lighter #7C8AA2 the palette suggests
+     lands at 3.49:1, under AA for the 10px nav labels that use it. */
+  --ab-sidebar-text-muted: #65758F;
 }
 
 [data-theme="dark-cosmo"] {
@@ -200,11 +202,9 @@ body {
   color: var(--ab-brand-cool-strong);
 }
 .ab-sidebar .sidebar-nav-item.active .nav-icon { color: var(--ab-brand-cool); }
-.ab-sidebar .sidebar-nav-item { color: var(--ab-sidebar-text-secondary); }
-.ab-sidebar .sidebar-nav-item:hover { background: var(--ab-sidebar-panel-hover); color: var(--ab-sidebar-text-primary); }
-.ab-sidebar .sidebar-nav-label,
-.ab-sidebar .nav-icon { color: var(--ab-sidebar-text-muted); }
-.ab-sidebar .sidebar-nav-item:hover .nav-icon { color: var(--ab-sidebar-text-secondary); }
+/* The nav item / label / icon colours live in planarus.css, which defines them
+   at the same specificity and later in the cascade. Setting them again here
+   would look authoritative and do nothing. */
 
 /* ── Sidebar todos (project-scoped, self-nesting checklist) ─────────────── */
 .ab-todos { margin-top: var(--space-4); border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: var(--space-2); }
