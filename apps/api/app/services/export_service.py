@@ -107,7 +107,13 @@ def import_project(session: Session, workspace_id: str, data: dict) -> Project:
             d["project_id"] = new_proj.id
             for field, src_type in fk_remap.items():
                 if d.get(field) is not None:
-                    d[field] = idmap.get(src_type, {}).get(d[field], d[field])
+                    # Resolve-or-NULL. The payload is caller-supplied, so an id
+                    # that isn't in this import's own idmap must NOT be written
+                    # through: on another instance it's a dangling FK (enforced
+                    # → IntegrityError), and on this one it would point the copy
+                    # at a FOREIGN project's row. Every remapped field is
+                    # nullable, so dropping the link is the safe resolution.
+                    d[field] = idmap.get(src_type, {}).get(d[field])
             for field in drop:  # cross-instance attribution FKs won't resolve here
                 d[field] = None
             for ts in ("created_at", "updated_at"):
@@ -135,8 +141,10 @@ def import_project(session: Session, workspace_id: str, data: dict) -> Project:
         session.add(ChecklistItem(**d))
     session.flush()
 
-    load("decisions", Decision, "decision", {})
-    load("risks", Risk, "risk", {})
+    # Phase 19: phase_id must be remapped here exactly as milestones do below —
+    # this walk is separate from duplicate_project's, so fixing one misses this.
+    load("decisions", Decision, "decision", {"phase_id": "phase"})
+    load("risks", Risk, "risk", {"phase_id": "phase"})
     load("blockers", Blocker, "blocker", {"task_id": "task"})
     load("milestones", Milestone, "milestone", {"phase_id": "phase"})
 

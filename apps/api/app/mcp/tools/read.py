@@ -189,10 +189,17 @@ def get_active_work(session: Session, cap: Capability, args: ProjectArgs) -> Too
     phase_decisions: list[Decision] = []
     phase_risks: list[Risk] = []
     if active_phase is not None:
+        # project_id is not redundant with phase_id: the FK only requires that
+        # the phase exist, not that it belong to this project. Scope every row
+        # to the capability's project like every other handler here, so a
+        # cross-project link can never splice foreign text into this brief.
         phase_decisions, _ = _fetch_capped(
             session,
             select(Decision)
-            .where(Decision.phase_id == active_phase.id)
+            .where(
+                Decision.project_id == args.project_id,
+                Decision.phase_id == active_phase.id,
+            )
             .order_by(Decision.created_at.desc(), Decision.id),
             MAX_LIST_ROWS,
         )
@@ -200,6 +207,7 @@ def get_active_work(session: Session, cap: Capability, args: ProjectArgs) -> Too
             session,
             select(Risk)
             .where(
+                Risk.project_id == args.project_id,
                 Risk.phase_id == active_phase.id,
                 Risk.status.in_(["open", "monitoring"]),
             )
