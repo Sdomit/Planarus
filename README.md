@@ -1,17 +1,17 @@
-# Approvo
+# Planarus
 
 **AI agents propose. You approve.**
 
 A local-first project cockpit that gives AI coding agents real project context —
 and puts a human approval gate in front of every write they attempt.
 
-[![CI](https://github.com/Sdomit/AgentBoard/actions/workflows/ci.yml/badge.svg)](https://github.com/Sdomit/AgentBoard/actions/workflows/ci.yml)
+[![CI](https://github.com/Sdomit/Planarus/actions/workflows/ci.yml/badge.svg)](https://github.com/Sdomit/Planarus/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Local-first](https://img.shields.io/badge/local--first-no%20cloud%20required-green.svg)](#your-data-stays-yours)
 
 <!-- TODO(screenshots): drop 2-3 current captures in docs/images/ and link them
      here — Cockpit, Approvals, Context Pack. The old marketing shots predate
-     the Approvo rename and are no longer accurate. -->
+     the Planarus rename and are no longer accurate. -->
 
 ---
 
@@ -25,7 +25,7 @@ session, the same two things go wrong:
 2. **The agent acts, then you find out.** It edits, commits, and rewrites — and
    your review happens after the fact, if at all.
 
-## What Approvo does
+## What Planarus does
 
 **Gives agents structured context.** Projects, phases, tasks, decisions, risks,
 docs, and Git state live in a real database mirrored to Markdown folders you
@@ -46,14 +46,14 @@ bound to loopback; exposing it is an explicit, documented opt-in.
 Docker — no Python, Node, or pnpm toolchain needed:
 
 ```bash
-git clone https://github.com/Sdomit/AgentBoard.git
-cd AgentBoard
+git clone https://github.com/Sdomit/Planarus.git
+cd Planarus
 docker compose up --build
 # → http://localhost:5173
 ```
 
-Data persists on the host in `./agentboard-data`. Port already taken? Use
-`APPROVO_PORT=5174 docker compose up`. Stop with `docker compose down`.
+Data persists on the host in `./planarus-data`. Port already taken? Use
+`PLANARUS_PORT=5174 docker compose up`. Stop with `docker compose down`.
 
 > Creating a project folder in Docker? Put it under `/data` — that's the only
 > path that survives `docker compose down`.
@@ -61,8 +61,8 @@ Data persists on the host in `./agentboard-data`. Port already taken? Use
 **Native, with hot reload:**
 
 ```bash
-./run-approvo.sh        # macOS / Linux
-run-agentboard.bat      # Windows
+./run-planarus.sh        # macOS / Linux
+run-planarus.bat      # Windows
 ```
 
 Both check your setup, pick free ports if the defaults are taken, wait until
@@ -104,7 +104,7 @@ tool. Longer version: [docs/plan/01-product-and-scope.md](docs/plan/01-product-a
 
 ## Documentation
 
-- **Using Approvo** → [docs/guide/](docs/guide/) — connect ChatGPT, connect a
+- **Using Planarus** → [docs/guide/](docs/guide/) — connect ChatGPT, connect a
   calendar, LAN team mode, team administration.
 - **Running it locally** → [docs/dev/setup.md](docs/dev/setup.md)
 - **How it's designed** → [docs/plan/00-OVERVIEW.md](docs/plan/00-OVERVIEW.md)
@@ -112,7 +112,7 @@ tool. Longer version: [docs/plan/01-product-and-scope.md](docs/plan/01-product-a
 
 ### For AI agents
 
-This repo is itself managed as an Approvo project, so `context/` is a live
+This repo is itself managed as an Planarus project, so `context/` is a live
 context pack. If you're an agent working here, start at
 [CLAUDE.md](CLAUDE.md) → [context/AGENT_RULES.md](context/AGENT_RULES.md) →
 [context/NEXT_STEP.md](context/NEXT_STEP.md). Don't scan the whole repo.

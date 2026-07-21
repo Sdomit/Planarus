@@ -7,7 +7,7 @@ write. On PostgreSQL (READ COMMITTED) nothing holds unless the target row is
 explicitly locked, and a human edit landing in that window is silently
 overwritten.
 
-Skipped unless ``AGENTBOARD_DATABASE_URL`` points at PostgreSQL — that is how CI
+Skipped unless ``PLANARUS_DATABASE_URL`` points at PostgreSQL — that is how CI
 runs it (see the api-postgres job). Locally it collects and skips.
 """
 import os
@@ -26,11 +26,11 @@ from app.policy import handlers
 from app.schemas.task import TaskUpdate
 from app.services import approval_service, task_service
 
-DSN = os.environ.get("AGENTBOARD_DATABASE_URL", "")
+DSN = os.environ.get("PLANARUS_DATABASE_URL", "")
 
 pytestmark = pytest.mark.skipif(
     not DSN.startswith("postgresql"),
-    reason="needs a PostgreSQL AGENTBOARD_DATABASE_URL (see the api-postgres CI job)",
+    reason="needs a PostgreSQL PLANARUS_DATABASE_URL (see the api-postgres CI job)",
 )
 
 # How long the human's UPDATE is given to prove it is *not* blocked. Only an

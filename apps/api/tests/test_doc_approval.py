@@ -30,7 +30,7 @@ def _seed(client: TestClient, suffix: str = "docapr") -> str:
 
 def _hdr(client: TestClient) -> dict:
     token = client.get("/api/v1/local-session").json()["token"]
-    return {"X-Approvo-Local-Token": token}
+    return {"X-Planarus-Local-Token": token}
 
 
 def _canvas(client: TestClient, pid: str) -> dict:

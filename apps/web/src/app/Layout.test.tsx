@@ -9,8 +9,8 @@ vi.mock('../api/client', () => {
   return {
     api: {
       projects: {
-        list: () => Promise.resolve([{ id: 'p1', title: 'Approvo', slug: 'approvo' }, { id: 'p2', title: 'Other', slug: 'other' }]),
-        get: (id: string) => id === 'gone' ? Promise.reject(new Error('404')) : Promise.resolve({ id, title: 'Approvo', slug: 'approvo' }),
+        list: () => Promise.resolve([{ id: 'p1', title: 'Planarus', slug: 'planarus' }, { id: 'p2', title: 'Other', slug: 'other' }]),
+        get: (id: string) => id === 'gone' ? Promise.reject(new Error('404')) : Promise.resolve({ id, title: 'Planarus', slug: 'planarus' }),
       },
       workspaces: { list: () => Promise.resolve([]) },
       approvals: { list: never },
@@ -19,7 +19,7 @@ vi.mock('../api/client', () => {
       settings: { get: never },
       todos: { list: never },
       notifications: { feed: () => Promise.resolve({ items: [] }) },
-      info: { get: () => Promise.resolve({ name: 'Approvo', version: '0.1.0', phase: 'x', lan_ip: '192.168.1.42' }) },
+      info: { get: () => Promise.resolve({ name: 'Planarus', version: '0.1.0', phase: 'x', lan_ip: '192.168.1.42' }) },
     },
   }
 })
@@ -34,7 +34,7 @@ vi.mock('./auth', () => ({ useAuthInfo: () => auth }))
 beforeEach(() => { auth = { me: null, signOut: vi.fn() }; localStorage.clear() })
 afterEach(cleanup)
 
-const NAV_KEY = 'approvo.nav'
+const NAV_KEY = 'planarus.nav'
 
 const openAccountMenu = () =>
   fireEvent.click(screen.getByLabelText('Account and workspace settings'))
@@ -81,7 +81,7 @@ describe('about', () => {
     openAccountMenu()
     fireEvent.click(screen.getByText('About'))
 
-    const dialog = screen.getByRole('dialog', { name: 'About Approvo' })
+    const dialog = screen.getByRole('dialog', { name: 'About Planarus' })
     expect(await within(dialog).findByText('0.1.0')).toBeTruthy() // from the API, not a constant
     expect(within(dialog).getByText('Sarmad Domit')).toBeTruthy()
     expect(within(dialog).getByText('www.sarmaddomit.com').getAttribute('href'))
@@ -90,7 +90,7 @@ describe('about', () => {
       .toBe('mailto:sarmad.domit@gmail.com')
 
     fireEvent.keyDown(document, { key: 'Escape' })
-    expect(screen.queryByRole('dialog', { name: 'About Approvo' })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: 'About Planarus' })).toBeNull()
   })
 })
 

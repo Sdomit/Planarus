@@ -1,6 +1,6 @@
-"""Project folder provisioning: the directory tree and `.agentboard/` mirrors.
+"""Project folder provisioning: the directory tree and `.planarus/` mirrors.
 
-The DB is authoritative; the `.agentboard/*.json` files are portable mirrors and
+The DB is authoritative; the `.planarus/*.json` files are portable mirrors and
 the reserved directories are empty working space. JSON mirrors are written only
 when their content changes, so provisioning is idempotent.
 """
@@ -11,7 +11,7 @@ import os
 
 from app.fsmemory import atomic_io
 from app.fsmemory.path_safety import resolve_root, safe_makedirs
-from app.fsmemory.spec import AGENTBOARD_DIR, AUDIT_LOG_RELPATH, CONTEXT_DIR, RESERVED_DIRS
+from app.fsmemory.spec import PLANARUS_DIR, AUDIT_LOG_RELPATH, CONTEXT_DIR, RESERVED_DIRS
 from app.models.project import Project
 from app.models.workspace import Workspace
 
@@ -60,22 +60,22 @@ def _settings() -> dict:
 
 
 def provision_tree(root: str, project: Project, workspace: Workspace) -> None:
-    """Create the folder tree and write/refresh the `.agentboard/` mirrors."""
+    """Create the folder tree and write/refresh the `.planarus/` mirrors."""
     root_real = resolve_root(root)
     os.makedirs(root_real, exist_ok=True)
 
-    safe_makedirs(root, AGENTBOARD_DIR)
+    safe_makedirs(root, PLANARUS_DIR)
     safe_makedirs(root, CONTEXT_DIR)
     for rel_dir in RESERVED_DIRS:
         safe_makedirs(root, rel_dir)
 
     atomic_io.write_text_if_changed(
-        root, f"{AGENTBOARD_DIR}/project.json", _json_text(_project_mirror(project))
+        root, f"{PLANARUS_DIR}/project.json", _json_text(_project_mirror(project))
     )
     atomic_io.write_text_if_changed(
-        root, f"{AGENTBOARD_DIR}/workspace-link.json", _json_text(_workspace_link(workspace))
+        root, f"{PLANARUS_DIR}/workspace-link.json", _json_text(_workspace_link(workspace))
     )
     atomic_io.write_text_if_changed(
-        root, f"{AGENTBOARD_DIR}/settings.json", _json_text(_settings())
+        root, f"{PLANARUS_DIR}/settings.json", _json_text(_settings())
     )
     atomic_io.ensure_file(root, AUDIT_LOG_RELPATH)

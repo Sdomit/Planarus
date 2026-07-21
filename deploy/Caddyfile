@@ -1,4 +1,4 @@
-# Approvo — single-origin front. Caddy auto-provisions TLS (Let's Encrypt) as long
+# Planarus — single-origin front. Caddy auto-provisions TLS (Let's Encrypt) as long
 # as app.yourdomain.com resolves to this box and ports 80+443 are open.
 # The browser only ever sees this one origin; nginx (web) serves the SPA and
 # proxies /api to the api container over the private compose network.

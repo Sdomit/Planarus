@@ -4,7 +4,7 @@ One entrypoint carries two kinds of subcommand, so there is exactly one thing to
 schedule and one thing to run by hand:
 
 * **scheduled** — ``reminders`` and ``backup``, invoked by the OS scheduler
-  (cron, Task Scheduler, a systemd timer). Per D41 Approvo deliberately has no
+  (cron, Task Scheduler, a systemd timer). Per D41 Planarus deliberately has no
   in-process scheduler: the cadence belongs to the platform, and this module is
   what the platform calls. The same command is what a hosted CronJob would
   invoke. Both are safe to run repeatedly — ``reminders`` skips what is not due
@@ -149,7 +149,7 @@ def _cmd_restore(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m app.jobs",
-        description="Approvo operational commands (scheduled jobs + operator tools).",
+        description="Planarus operational commands (scheduled jobs + operator tools).",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

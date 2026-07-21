@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Approvo</title>
+    <title>Planarus</title>
     <script>
       // Resolve the theme before first paint, otherwise a dark-OS user gets a
       // white flash on every load. Inline and synchronous on purpose — the app
@@ -11,7 +11,7 @@
       // localStorage throws in some privacy modes, so fall back to the OS.
       (function () {
         var stored = null
-        try { stored = localStorage.getItem('approvo.theme') } catch (e) {}
+        try { stored = localStorage.getItem('planarus.theme') } catch (e) {}
         var prefersDark =
           window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
         document.documentElement.setAttribute(

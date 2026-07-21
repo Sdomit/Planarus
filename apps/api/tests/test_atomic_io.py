@@ -60,7 +60,7 @@ def test_temp_cleanup_on_replace_failure(tmp_path, monkeypatch):
 
 def test_append_jsonl(tmp_path):
     root = str(tmp_path)
-    atomic_io.append_jsonl(root, ".agentboard/audit-log.jsonl", {"a": 1})
-    atomic_io.append_jsonl(root, ".agentboard/audit-log.jsonl", {"b": 2})
-    lines = atomic_io.read_text(root, ".agentboard/audit-log.jsonl").splitlines()
+    atomic_io.append_jsonl(root, ".planarus/audit-log.jsonl", {"a": 1})
+    atomic_io.append_jsonl(root, ".planarus/audit-log.jsonl", {"b": 2})
+    lines = atomic_io.read_text(root, ".planarus/audit-log.jsonl").splitlines()
     assert len(lines) == 2

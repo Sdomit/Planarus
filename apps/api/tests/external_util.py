@@ -11,7 +11,7 @@ LOOPBACK = {"Host": "127.0.0.1"}
 
 def local_hdr(client: TestClient) -> dict:
     token = client.get("/api/v1/local-session").json()["token"]
-    return {"X-Approvo-Local-Token": token}
+    return {"X-Planarus-Local-Token": token}
 
 
 def seed(client: TestClient, suffix: str) -> tuple[str, str]:

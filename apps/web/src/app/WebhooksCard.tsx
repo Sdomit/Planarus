@@ -5,7 +5,7 @@ import CopyButton from './CopyButton'
 
 // P17.3b: Webhooks card for the Integrations tab. Create/list/delete signed
 // outbound subscriptions, send a test event, and browse the delivery log with
-// redeliver. Inert (404 → a config note) until AGENTBOARD_WEBHOOK_ENC_KEY is set.
+// redeliver. Inert (404 → a config note) until PLANARUS_WEBHOOK_ENC_KEY is set.
 
 type Fmt = 'json' | 'slack' | 'discord'
 const FORMATS: Fmt[] = ['json', 'slack', 'discord']
@@ -34,7 +34,7 @@ function SecretModal({ secret, onClose }: { secret: string; onClose: () => void 
         <div className="modal-body">
           <p style={{ color: 'var(--status-warning-fg)', fontSize: 'var(--text-sm)', marginTop: 0 }}>
             Copy this now — it is shown <strong>only once</strong>. Your receiver verifies each
-            delivery's <code>X-Approvo-Signature</code> header with it (HMAC-SHA256).
+            delivery's <code>X-Planarus-Signature</code> header with it (HMAC-SHA256).
           </p>
           <code style={codeBox}>{secret}</code>
         </div>
@@ -112,7 +112,7 @@ export default function WebhooksCard() {
 
       {inert ? (
         <p style={{ color: 'var(--status-warning-fg, var(--text-tertiary))', fontSize: 'var(--text-sm)', margin: 0 }}>
-          Inert until <code>AGENTBOARD_WEBHOOK_ENC_KEY</code> (a Fernet key) is set in the environment — the
+          Inert until <code>PLANARUS_WEBHOOK_ENC_KEY</code> (a Fernet key) is set in the environment — the
           per-webhook signing secret is encrypted at rest with it. Install the <code>[webhooks]</code> extra.
         </p>
       ) : (

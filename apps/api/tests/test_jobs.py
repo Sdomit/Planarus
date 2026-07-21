@@ -57,7 +57,7 @@ class _FakeSMTP:
 def file_session_fixture(tmp_path):
     """A real on-disk SQLite database — what `backup` actually snapshots."""
     engine = create_engine(
-        f"sqlite:///{tmp_path / 'agentboard.db'}",
+        f"sqlite:///{tmp_path / 'planarus.db'}",
         connect_args={"check_same_thread": False},
     )
     configure_sqlite_pragmas(engine)

@@ -56,7 +56,7 @@ class S3Storage:
         client=None,
     ) -> None:
         if not bucket:
-            raise StorageError("s3 backend requires AGENTBOARD_S3_BUCKET")
+            raise StorageError("s3 backend requires PLANARUS_S3_BUCKET")
         self._bucket = bucket
         self._prefix = prefix.strip("/")
         self._client = client or _boto3().client(

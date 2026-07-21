@@ -1,16 +1,16 @@
-"""Seed a running Approvo database with the Approvo project itself (dogfooding).
+"""Seed a running Planarus database with the Planarus project itself (dogfooding).
 
-Approvo manages Approvo: this loads the real roadmap — phases, the Phase 10
+Planarus manages Planarus: this loads the real roadmap — phases, the Phase 10
 slices as stages, follow-up tasks, and launch milestones — into a running DB so
 you can follow progress in the app's Roadmap / Task Board instead of only the
 Markdown context pack. Kept in sync with context/NEXT_STEP.md each slice.
 
-Idempotent at the project level: if the ``approvo`` project already exists it
+Idempotent at the project level: if the ``planarus`` project already exists it
 does nothing (re-running is safe). Run against a **migrated** DB — the app applies
 migrations on startup, or run ``alembic upgrade head`` first. Honors
-``AGENTBOARD_DATABASE_URL`` / ``DATABASE_URL`` like the rest of the app.
+``PLANARUS_DATABASE_URL`` / ``DATABASE_URL`` like the rest of the app.
 
-    cd apps/api && python scripts/seed_approvo_project.py
+    cd apps/api && python scripts/seed_planarus_project.py
 """
 import sys
 
@@ -34,8 +34,8 @@ from app.services import (
     workspace_service,
 )
 
-WORKSPACE_SLUG = "approvo"
-PROJECT_SLUG = "approvo"
+WORKSPACE_SLUG = "planarus"
+PROJECT_SLUG = "planarus"
 
 # (title, status). Phases 1–10 + 4b are done; Phase 11 (LAN team mode) is active.
 PHASES: list[dict] = [
@@ -121,9 +121,9 @@ def _seed(session: Session) -> Project:
         ws = workspace_service.create_workspace(
             session,
             WorkspaceCreate(
-                name="Approvo",
+                name="Planarus",
                 slug=WORKSPACE_SLUG,
-                description="Approvo dogfoods itself — this is the live project.",
+                description="Planarus dogfoods itself — this is the live project.",
             ),
         )
 
@@ -131,7 +131,7 @@ def _seed(session: Session) -> Project:
         session,
         ProjectCreate(
             workspace_id=ws.id,
-            title="Approvo",
+            title="Planarus",
             slug=PROJECT_SLUG,
             summary="AI agents propose. You approve. — local-first AI project cockpit.",
             status="active",
@@ -176,7 +176,7 @@ def main() -> int:
         ).first()
         if existing is not None:
             print(
-                f"Approvo project already seeded (id={existing.id}); nothing to do."
+                f"Planarus project already seeded (id={existing.id}); nothing to do."
             )
             return 0
         project = _seed(session)
@@ -188,7 +188,7 @@ def main() -> int:
         len(s.get("tasks", [])) for p in PHASES for s in p.get("stages", [])
     )
     print(
-        f"Seeded Approvo project (id={project_id}): "
+        f"Seeded Planarus project (id={project_id}): "
         f"{n_phases} phases, {n_stages} stages, {n_tasks} tasks, "
         f"{len(MILESTONES)} milestones. Open the app to follow along."
     )

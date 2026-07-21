@@ -26,7 +26,7 @@ class LinkCreate(BaseModel):
     @classmethod
     def validate_url(cls, v: str) -> str:
         # ponytail: shape check only, not a full URL parser. Blocks the obvious
-        # javascript:/data: injection vectors; http(s)/file/agentboard pass.
+        # javascript:/data: injection vectors; http(s)/file/planarus pass.
         lowered = v.strip().lower()
         if lowered.startswith(("javascript:", "data:", "vbscript:")):
             raise ValueError("url scheme is not allowed")

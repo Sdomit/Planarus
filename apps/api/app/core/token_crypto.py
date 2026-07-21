@@ -2,7 +2,7 @@
 
 Calendar-sync refresh/access tokens are long-lived credentials to the user's
 external calendar, so they are encrypted at rest with Fernet (AES-128-CBC +
-HMAC). The key comes from `AGENTBOARD_CALENDAR_ENC_KEY` in the environment — a
+HMAC). The key comes from `PLANARUS_CALENDAR_ENC_KEY` in the environment — a
 forbidden path the user configures; it is never logged, returned, or persisted
 anywhere but the process env.
 
@@ -33,7 +33,7 @@ def _fernet():
     if not settings.calendar_enc_key:
         raise RuntimeError(
             "calendar token encryption is not configured "
-            "(set AGENTBOARD_CALENDAR_ENC_KEY)"
+            "(set PLANARUS_CALENDAR_ENC_KEY)"
         )
     return Fernet(settings.calendar_enc_key.encode())
 

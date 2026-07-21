@@ -1,4 +1,4 @@
-# Approvo — hosted deploy on AWS & Azure (your own domain)
+# Planarus — hosted deploy on AWS & Azure (your own domain)
 
 Team-facing instance on `app.yourdomain.com`, reachable in-office **and** remote from
 one deployment. Everything below is infra + config; the only code change is one line.
@@ -27,13 +27,13 @@ Harmless to the local/SQLite quickstart (the extra drivers just sit unused).
 `hosted.env` (load via the platform secret store; **never commit**):
 
 ```
-AGENTBOARD_DATABASE_URL=postgresql+psycopg2://USER:PASS@<pg-host>:5432/approvo
-AGENTBOARD_AUTH_ENABLED=true
-AGENTBOARD_WEB_ORIGINS=https://app.yourdomain.com
-AGENTBOARD_OAUTH_GITHUB_CLIENT_ID=...
-AGENTBOARD_OAUTH_GITHUB_CLIENT_SECRET=...
-AGENTBOARD_STORAGE_BACKEND=local          # S3 optional; local disk is fine for one node
-AGENTBOARD_EXTERNAL_API_ENABLED=false     # AI-agent API stays OFF — separate later step
+PLANARUS_DATABASE_URL=postgresql+psycopg2://USER:PASS@<pg-host>:5432/planarus
+PLANARUS_AUTH_ENABLED=true
+PLANARUS_WEB_ORIGINS=https://app.yourdomain.com
+PLANARUS_OAUTH_GITHUB_CLIENT_ID=...
+PLANARUS_OAUTH_GITHUB_CLIENT_SECRET=...
+PLANARUS_STORAGE_BACKEND=local          # S3 optional; local disk is fine for one node
+PLANARUS_EXTERNAL_API_ENABLED=false     # AI-agent API stays OFF — separate later step
 ```
 
 - **OAuth callback** (register on the provider, single origin):
@@ -41,7 +41,7 @@ AGENTBOARD_EXTERNAL_API_ENABLED=false     # AI-agent API stays OFF — separate 
   GitHub is the quickest (Settings → Developer settings → OAuth Apps). Google works
   the same way. One provider is enough.
 - **Migrations** run themselves: the api container's start command does `alembic
-  upgrade head`, and `alembic/env.py` picks up `AGENTBOARD_DATABASE_URL`, so it
+  upgrade head`, and `alembic/env.py` picks up `PLANARUS_DATABASE_URL`, so it
   targets Postgres.
 - **Preflight gate** — before announcing go-live, run the doctor from the api box and
   require exit 0 (checks DB migrated, auth sane, OAuth complete, S3 writable):
@@ -59,7 +59,7 @@ The lazy-correct AWS shape. Reuses the CI-proven compose (`docker-compose.hosted
 + `Caddyfile`, attached), so single-origin + `/api` proxy + auto-TLS come for free and
 you avoid the App Runner↔CloudFront cookie/host glue.
 
-1. **RDS PostgreSQL** — `db.t4g.micro`, private subnets, DB name `approvo`. SG: allow
+1. **RDS PostgreSQL** — `db.t4g.micro`, private subnets, DB name `planarus`. SG: allow
    `5432` from the EC2 instance's SG only. Put the endpoint in `hosted.env`.
 2. **EC2** — `t3.small`, Amazon Linux 2023 or Ubuntu, in the same VPC. Install Docker
    + the compose plugin. Attach an Elastic IP.
@@ -87,7 +87,7 @@ Azure has a purpose-built single-origin path, so no VM to patch. Static Web Apps
 serves the SPA and **reserves `/api`** as a proxy to a linked backend — which is
 exactly the app's `/api/v1` base. No CORS, one domain, free managed TLS.
 
-1. **Postgres Flexible Server** — Burstable `B1ms`, DB `approvo`. Networking: private
+1. **Postgres Flexible Server** — Burstable `B1ms`, DB `planarus`. Networking: private
    (VNet-integrated) is best; "public + firewall allow Azure services" is the quick
    start. Endpoint → `hosted.env`.
 2. **Container Apps** — create an environment; build the api image (Step 0) and push
@@ -114,11 +114,11 @@ if you'd rather not wire SWA ↔ Container Apps.
 
 - [ ] Step 0 image extras done, or psycopg2/httpx import fails at boot.
 - [ ] Postgres reachable from the API (SG / VNet / firewall) — the #1 hang.
-- [ ] `AGENTBOARD_WEB_ORIGINS` = the exact `https://app.yourdomain.com`.
+- [ ] `PLANARUS_WEB_ORIGINS` = the exact `https://app.yourdomain.com`.
 - [ ] OAuth callback registered on the provider, exact match.
 - [ ] `STORAGE_BACKEND=local` is per-node ephemeral on serverless runners → use S3 if
       generated artifacts must survive redeploys (SQLite would be ephemeral too — this
       is why Postgres).
 - [ ] `doctor.py` exits 0 before you tell the team.
-- [ ] `AGENTBOARD_EXTERNAL_API_ENABLED=false` — exposing the AI-agent API is its own
+- [ ] `PLANARUS_EXTERNAL_API_ENABLED=false` — exposing the AI-agent API is its own
       deliberate, separately-gated step.

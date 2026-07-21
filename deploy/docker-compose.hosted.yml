@@ -1,4 +1,4 @@
-# Approvo — hosted single-origin stack: caddy (TLS) -> web (nginx+SPA) -> api.
+# Planarus — hosted single-origin stack: caddy (TLS) -> web (nginx+SPA) -> api.
 # Postgres is EXTERNAL (managed RDS / Azure Flexible Server) via hosted.env.
 #
 #   docker compose -f docker-compose.hosted.yml up -d --build
@@ -11,9 +11,9 @@ services:
   api:
     build:
       context: ./apps/api
-    env_file: hosted.env            # AGENTBOARD_DATABASE_URL + auth + oauth + origins
+    env_file: hosted.env            # PLANARUS_DATABASE_URL + auth + oauth + origins
     volumes:
-      - approvo-data:/data          # generated artifacts (STORAGE_BACKEND=local); DB lives in Postgres
+      - planarus-data:/data          # generated artifacts (STORAGE_BACKEND=local); DB lives in Postgres
     expose:
       - "8000"                      # private only — never published to the host
     restart: unless-stopped
@@ -42,6 +42,6 @@ services:
     restart: unless-stopped
 
 volumes:
-  approvo-data:
+  planarus-data:
   caddy-data:
   caddy-config:

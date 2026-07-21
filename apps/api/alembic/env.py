@@ -13,14 +13,14 @@ from app.core.config import settings
 config = context.config
 
 # P10.0: apply the app settings' DB URL only when it was explicitly set via
-# environment (AGENTBOARD_DATABASE_URL / DATABASE_URL). Detection must use the
+# environment (PLANARUS_DATABASE_URL / DATABASE_URL). Detection must use the
 # environment, not the Config: set_main_option writes into the same parser the
 # ini loads into, so a URL set programmatically (the migration tests set one per
 # tmp DB) is indistinguishable from the ini value — an unconditional override
 # would stomp it. With no env override, whatever the Config already holds (the
 # ini default, or a test's URL) stays authoritative. '%' is escaped because
 # set_main_option values pass through configparser interpolation.
-if os.environ.get("AGENTBOARD_DATABASE_URL") or os.environ.get("DATABASE_URL"):
+if os.environ.get("PLANARUS_DATABASE_URL") or os.environ.get("DATABASE_URL"):
     config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 
 if config.config_file_name is not None:

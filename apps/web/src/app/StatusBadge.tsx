@@ -1,4 +1,4 @@
-// Maps Approvo status/priority/severity values to forma badge "tones".
+// Maps Planarus status/priority/severity values to forma badge "tones".
 export type ToneKind =
   | 'project' | 'phase' | 'task' | 'priority'
   | 'decision' | 'severity' | 'riskstatus' | 'milestone'

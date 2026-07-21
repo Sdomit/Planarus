@@ -7,7 +7,7 @@ afterEach(cleanup)
 // vi.hoisted so the factory can reference these directly (no spread wrapper —
 // spreading into a vi.fn's inferred signature trips tsc -b's TS2556).
 const { exportFn, importFn } = vi.hoisted(() => ({
-  exportFn: vi.fn(async (_id: string) => ({ approvo_export: 1, project: { title: 'Demo' } })),
+  exportFn: vi.fn(async (_id: string) => ({ planarus_export: 1, project: { title: 'Demo' } })),
   importFn: vi.fn(async (_ws: string, _data: unknown) => ({ id: 'p2', title: 'Imported Demo' })),
 }))
 
@@ -52,11 +52,11 @@ describe('ExportCard', () => {
   it('imports an uploaded JSON file into the selected workspace', async () => {
     render(<ExportCard />)
     await screen.findByRole('option', { name: 'Main' })
-    const file = jsonFile(JSON.stringify({ approvo_export: 1 }), 'demo.json', 'application/json')
+    const file = jsonFile(JSON.stringify({ planarus_export: 1 }), 'demo.json', 'application/json')
     fireEvent.change(screen.getByLabelText('Export file'), { target: { files: [file] } })
     fireEvent.click(screen.getByRole('button', { name: 'Import' }))
 
-    await waitFor(() => expect(importFn).toHaveBeenCalledWith('w1', { approvo_export: 1 }))
+    await waitFor(() => expect(importFn).toHaveBeenCalledWith('w1', { planarus_export: 1 }))
     expect(await screen.findByText(/Imported .* as a new project/)).toBeTruthy()
   })
 

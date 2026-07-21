@@ -29,7 +29,7 @@ from app.services import settings_service
 def live_db_fixture(tmp_path, monkeypatch):
     """A real database + backup directory wired through *config*, which is how the
     CLI reads them — during a restore the app is stopped, so there is no engine."""
-    db = tmp_path / "agentboard.db"
+    db = tmp_path / "planarus.db"
     monkeypatch.setattr(env, "database_url", f"sqlite:///{db}")
     monkeypatch.setattr(env, "backup_dir", str(tmp_path / "backups"))
     return db
@@ -141,12 +141,12 @@ def test_verify_does_not_delete_a_failing_backup(live_db):
 
 
 def test_resolve_backup_rejects_traversal_and_unknown_names(live_db):
-    for bad in ("../../etc/passwd", "agentboard.db", "..", "sub/dir.db"):
+    for bad in ("../../etc/passwd", "planarus.db", "..", "sub/dir.db"):
         with pytest.raises(ConflictError):
             svc.resolve_backup(bad)
     # Well-formed but absent is a miss, not a traversal.
     with pytest.raises(ConflictError, match="not found"):
-        svc.resolve_backup("agentboard-20260719T220501123456Z.db")
+        svc.resolve_backup("planarus-20260719T220501123456Z.db")
 
 
 # --- the CLI ------------------------------------------------------------------

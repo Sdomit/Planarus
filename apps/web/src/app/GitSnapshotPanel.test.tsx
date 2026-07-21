@@ -59,7 +59,7 @@ describe('GitSnapshotPanel — Phase 12b fetch', () => {
   })
 
   it('shows the disabled (409) error as a message', async () => {
-    vi.mocked(api.git.fetchNow).mockRejectedValue(new Error('git fetch is disabled — set AGENTBOARD_GIT_FETCH_ENABLED=true'))
+    vi.mocked(api.git.fetchNow).mockRejectedValue(new Error('git fetch is disabled — set PLANARUS_GIT_FETCH_ENABLED=true'))
     render(<GitSnapshotPanel projectId="proj_1" />)
     fireEvent.click(await screen.findByRole('button', { name: /fetch now/i }))
     await waitFor(() => expect(screen.getByText(/disabled/i)).toBeTruthy())
@@ -121,7 +121,7 @@ describe('GitSnapshotPanel — Phase 12c pull requests', () => {
   it('surfaces the signed-out state without breaking the cockpit', async () => {
     vi.mocked(api.git.prs).mockResolvedValue({
       project_id: 'proj_1', status: 'no_auth', authenticated: false,
-      message: 'gh is not signed in — run `gh auth login` in a terminal. Approvo never stores the credential.',
+      message: 'gh is not signed in — run `gh auth login` in a terminal. Planarus never stores the credential.',
       prs: [], checked_at: 't',
     })
     render(<GitSnapshotPanel projectId="proj_1" />)

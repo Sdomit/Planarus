@@ -39,7 +39,7 @@ _TYPE_SUBFOLDER: dict[str, str] = {
 _EMPTY_CONTENT_JSON = '{"type": "doc", "content": [{"type": "paragraph"}]}'
 # Phase 13: an empty Excalidraw scene. The frontend hydrates initialData from it.
 _EMPTY_CANVAS_JSON = (
-    '{"type": "excalidraw", "version": 2, "source": "approvo",'
+    '{"type": "excalidraw", "version": 2, "source": "planarus",'
     ' "elements": [], "appState": {}, "files": {}}'
 )
 
@@ -307,7 +307,7 @@ def export_doc_markdown(session: Session, doc_id: str) -> DocExportResponse:
 
         if drift_detected:
             raise LookupError(
-                "The exported Markdown file was changed outside Approvo. "
+                "The exported Markdown file was changed outside Planarus. "
                 "Review it before exporting again."
             )
 

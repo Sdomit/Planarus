@@ -13,8 +13,8 @@ the on-disk bytes, then decide.
 | new / changed / missing file                | atomic write + upsert row     |
 
 Each call writes one `context_regen` AuditEvent and appends one line to
-`.agentboard/audit-log.jsonl`. The idempotency guarantee covers the `context/*`
-files and `.agentboard/*.json` mirrors; the audit log is append-only by design.
+`.planarus/audit-log.jsonl`. The idempotency guarantee covers the `context/*`
+files and `.planarus/*.json` mirrors; the audit log is append-only by design.
 """
 from __future__ import annotations
 

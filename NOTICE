@@ -1,4 +1,4 @@
-Approvo
+Planarus
 Copyright 2026 Sarmad Domit
 
 This product is licensed under the Apache License, Version 2.0.
@@ -8,7 +8,7 @@ See the LICENSE file for the full text.
 BUNDLED THIRD-PARTY FONTS
 ================================================================================
 
-Approvo redistributes font binaries under apps/web/public/fonts/. They are
+Planarus redistributes font binaries under apps/web/public/fonts/. They are
 self-hosted so the app renders fully offline, with no third-party CDN request.
 All are shipped UNMODIFIED, byte-identical to their upstream releases.
 
@@ -17,7 +17,7 @@ Versions only. If anyone ever subsets, re-hints, or renames these files, OFL
 clause 3 activates and this analysis must be redone.
 
 The fonts remain under their own licenses, reproduced in full below. They are
-not covered by Approvo's Apache-2.0 license.
+not covered by Planarus's Apache-2.0 license.
 
 --------------------------------------------------------------------------------
 1. SIL OPEN FONT LICENSE 1.1
