@@ -1044,6 +1044,7 @@ export const api = {
   // shown once and never persisted by the client.
   admin: {
     users: () => request<AdminUser[]>('/admin/users'),
+    unclaimedWorkspaces: () => request<Workspace[]>('/admin/workspaces/unclaimed'),
     createUser: (email: string, displayName?: string) =>
       controlRequest<AdminUserCreated>('/admin/users', {
         method: 'POST',
