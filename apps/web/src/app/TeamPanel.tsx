@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   api,
   type AdminUser,
+  type MemberCandidate,
   type MemberRead,
   type Workspace,
 } from '../api/client'
@@ -324,6 +325,7 @@ function WorkspaceMembers({
   workspace, myRole, selfId,
 }: { workspace: Workspace; myRole: string; selfId: string }) {
   const [members, setMembers] = useState<MemberRead[] | null>(null)
+  const [candidates, setCandidates] = useState<MemberCandidate[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [email, setEmail] = useState('')
@@ -332,7 +334,11 @@ function WorkspaceMembers({
 
   const load = useCallback(() => {
     api.members.list(workspace.id).then(setMembers).catch((e: Error) => setError(e.message))
-  }, [workspace.id])
+    // Owner-only endpoint; everyone else sees the roster without the add form.
+    // Failure is silent on purpose — the pick-list is a convenience, and typing
+    // the address by hand still works.
+    if (isOwner) api.members.candidates(workspace.id).then(setCandidates).catch(() => setCandidates([]))
+  }, [workspace.id, isOwner])
   useEffect(load, [load])
 
   const run = (fn: () => Promise<unknown>) => {
@@ -368,7 +374,17 @@ function WorkspaceMembers({
           <div className="form-field" style={{ flex: '1 1 200px', margin: 0 }}>
             <label className="form-label" htmlFor={`add-${workspace.id}`}>Add member by email</label>
             <input id={`add-${workspace.id}`} className="input input-sm" type="email" required
+              list={`cand-${workspace.id}`} autoComplete="off"
               value={email} onChange={(e) => setEmail(e.target.value)} />
+            {/* Native datalist: the browser does matching, keyboard nav and the
+                mobile keyboard for free. Typing an address that isn't listed
+                still submits — which is what you want when inviting someone
+                who has an account you can't see, and the 404 explains itself. */}
+            <datalist id={`cand-${workspace.id}`}>
+              {candidates.map((c) => (
+                <option key={c.email} value={c.email}>{c.display_name}</option>
+              ))}
+            </datalist>
           </div>
           <label className="form-label" style={{ display: 'grid', gap: 4 }}>
             Role

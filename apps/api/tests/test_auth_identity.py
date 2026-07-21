@@ -177,6 +177,49 @@ def test_owner_manages_members_and_editor_cannot(client, session, auth_on):
     assert client.get(f"/api/v1/workspaces/{ws}/members", cookies=_auth(third)).status_code == 403
 
 
+def test_member_candidates_are_owner_only_and_exclude_existing(client, session, auth_on):
+    ws = _mk_workspace(session)
+    owner = _login(client, "owner@acme.co", "Owner")
+    editor = _login(client, "editor@acme.co", "Editor")
+    outsider = _login(client, "nobody@acme.co", "Nobody")
+    client.post(
+        f"/api/v1/workspaces/{ws}/members",
+        json={"email": "owner@acme.co", "role": "owner"},
+        cookies=_auth(owner),
+    )
+
+    listed = client.get(f"/api/v1/workspaces/{ws}/member-candidates", cookies=_auth(owner))
+    assert listed.status_code == 200
+    emails = [c["email"] for c in listed.json()]
+    # The owner is already a member, so they are not their own candidate.
+    assert "owner@acme.co" not in emails
+    assert {"editor@acme.co", "nobody@acme.co"} <= set(emails)
+    # display_name comes along so the pick-list can show who the address is.
+    assert {c["display_name"] for c in listed.json()} >= {"Editor", "Nobody"}
+
+    # Adding someone removes them from the list — no offering a 409.
+    client.post(
+        f"/api/v1/workspaces/{ws}/members",
+        json={"email": "editor@acme.co", "role": "editor"},
+        cookies=_auth(owner),
+    )
+    after = client.get(f"/api/v1/workspaces/{ws}/member-candidates", cookies=_auth(owner))
+    assert "editor@acme.co" not in [c["email"] for c in after.json()]
+
+    # An editor may read the roster but not the directory of who else exists.
+    assert client.get(
+        f"/api/v1/workspaces/{ws}/member-candidates", cookies=_auth(editor)
+    ).status_code == 403
+    assert client.get(
+        f"/api/v1/workspaces/{ws}/member-candidates", cookies=_auth(outsider)
+    ).status_code == 403
+
+
+def test_member_candidates_404_when_auth_off(client, session):
+    ws = _mk_workspace(session)
+    assert client.get(f"/api/v1/workspaces/{ws}/member-candidates").status_code == 404
+
+
 def test_add_unknown_email_404(client, session, auth_on):
     ws = _mk_workspace(session)
     owner = _login(client, "owner@acme.co")
