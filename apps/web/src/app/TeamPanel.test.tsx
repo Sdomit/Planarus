@@ -14,7 +14,7 @@ vi.mock('../api/client', () => ({
       reactivate: vi.fn(),
       setAdmin: vi.fn(),
     },
-    members: { list: vi.fn(), add: vi.fn(), setRole: vi.fn(), remove: vi.fn() },
+    members: { list: vi.fn(), candidates: vi.fn(), add: vi.fn(), setRole: vi.fn(), remove: vi.fn() },
     workspaces: { list: vi.fn() },
     auth: { passwordChange: vi.fn() },
   },
@@ -70,6 +70,7 @@ beforeEach(() => {
   vi.mocked(api.members.list).mockResolvedValue(MEMBERS)
   vi.mocked(api.admin.users).mockResolvedValue(ROSTER)
   vi.mocked(api.admin.unclaimedWorkspaces).mockResolvedValue([])
+  vi.mocked(api.members.candidates).mockResolvedValue([])
 })
 
 afterEach(cleanup)
@@ -144,6 +145,50 @@ describe('TeamPanel', () => {
 
     expect(await screen.findByText('one-time-secret-pw')).toBeTruthy()
     expect(screen.getByText(/grant failed \(409 already a member\)/)).toBeTruthy()
+  })
+
+  it('offers existing accounts on the add-member field, and only asks as an owner', async () => {
+    currentMe = ADMIN_ME // owner of ws_1
+    vi.mocked(api.members.candidates).mockResolvedValue([
+      { email: 'sam@team.lan', display_name: 'Sam' },
+      { email: 'kim@team.lan', display_name: 'Kim' },
+    ])
+    render(<TeamPanel />)
+
+    const field = await screen.findByLabelText('Add member by email')
+    // The input is wired to a datalist holding one option per candidate, so the
+    // browser does the searching — nothing custom to keyboard-navigate.
+    const listId = field.getAttribute('list')
+    expect(listId).toBeTruthy()
+    const options = document.querySelectorAll(`#${listId} option`)
+    expect(Array.from(options, (o) => o.getAttribute('value')))
+      .toEqual(['sam@team.lan', 'kim@team.lan'])
+    cleanup()
+
+    // A viewer has no add form, so it must not even ask (the API 403s).
+    currentMe = PLAIN_ME
+    vi.mocked(api.members.candidates).mockClear()
+    render(<TeamPanel />)
+    await screen.findByText(/members · your role: viewer/)
+    expect(api.members.candidates).not.toHaveBeenCalled()
+  })
+
+  it('still lets an owner type an address that is not in the list', async () => {
+    currentMe = ADMIN_ME
+    vi.mocked(api.members.candidates).mockResolvedValue([
+      { email: 'sam@team.lan', display_name: 'Sam' },
+    ])
+    vi.mocked(api.members.add).mockResolvedValue(MEMBERS[0])
+    render(<TeamPanel />)
+
+    const field = await screen.findByLabelText('Add member by email')
+    fireEvent.change(field, { target: { value: 'brand-new@team.lan' } })
+    fireEvent.click(within(field.closest('form') as HTMLFormElement).getByRole('button', { name: 'Add' }))
+
+    // datalist is a suggestion, never a whitelist — the free-typed value submits.
+    await waitFor(() =>
+      expect(api.members.add).toHaveBeenCalledWith('ws_1', 'brand-new@team.lan', 'editor'),
+    )
   })
 
   it('hides account administration from non-admins', async () => {

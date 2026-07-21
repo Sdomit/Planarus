@@ -859,6 +859,12 @@ export interface AuthMe {
 
 // P16.2 — Team surface: workspace members (P10.1 API, first UI here) and the
 // server-admin account roster (P16.1 admin plane).
+/** An account a workspace owner could add — no membership row exists yet. */
+export interface MemberCandidate {
+  email: string
+  display_name: string
+}
+
 export interface MemberRead {
   id: string
   workspace_id: string
@@ -1024,6 +1030,8 @@ export const api = {
   members: {
     list: (workspaceId: string) =>
       request<MemberRead[]>(`/workspaces/${workspaceId}/members`),
+    candidates: (workspaceId: string) =>
+      request<MemberCandidate[]>(`/workspaces/${workspaceId}/member-candidates`),
     add: (workspaceId: string, email: string, role: string) =>
       request<MemberRead>(`/workspaces/${workspaceId}/members`, {
         method: 'POST',
