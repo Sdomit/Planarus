@@ -130,3 +130,74 @@ def test_create_risk_audit_written(client: TestClient, session) -> None:
         ).all()
     )
     assert len(events) == 1
+
+
+# --- Phase 19 (D45): optional phase link ------------------------------------
+
+
+def test_create_risk_with_phase(client: TestClient) -> None:
+    _, pid = _seed(client)
+    phase = client.post(f"/api/v1/projects/{pid}/phases", json={"title": "Ph1"}).json()
+    res = client.post(
+        f"/api/v1/projects/{pid}/risks",
+        json={"title": "R", "severity": "high", "phase_id": phase["id"]},
+    )
+    assert res.status_code == 201
+    assert res.json()["phase_id"] == phase["id"]
+
+
+def test_create_risk_without_phase_is_unphased(client: TestClient) -> None:
+    _, pid = _seed(client)
+    res = client.post(
+        f"/api/v1/projects/{pid}/risks", json={"title": "R", "severity": "low"}
+    )
+    assert res.status_code == 201
+    assert res.json()["phase_id"] is None
+
+
+def test_create_risk_rejects_phase_from_another_project(client: TestClient) -> None:
+    ws_id, pid = _seed(client)
+    other = client.post(
+        "/api/v1/projects",
+        json={"workspace_id": ws_id, "title": "Other", "slug": "p-rsk-other"},
+    ).json()
+    foreign = client.post(
+        f"/api/v1/projects/{other['id']}/phases", json={"title": "Foreign"}
+    ).json()
+    res = client.post(
+        f"/api/v1/projects/{pid}/risks",
+        json={"title": "R", "severity": "high", "phase_id": foreign["id"]},
+    )
+    assert res.status_code == 404
+
+
+def test_update_risk_sets_and_clears_phase(client: TestClient) -> None:
+    _, pid = _seed(client)
+    phase = client.post(f"/api/v1/projects/{pid}/phases", json={"title": "Ph1"}).json()
+    risk = client.post(
+        f"/api/v1/projects/{pid}/risks", json={"title": "R", "severity": "medium"}
+    ).json()
+
+    linked = client.patch(f"/api/v1/risks/{risk['id']}", json={"phase_id": phase["id"]})
+    assert linked.status_code == 200
+    assert linked.json()["phase_id"] == phase["id"]
+
+    cleared = client.patch(f"/api/v1/risks/{risk['id']}", json={"phase_id": None})
+    assert cleared.status_code == 200
+    assert cleared.json()["phase_id"] is None
+
+
+def test_update_risk_rejects_foreign_phase(client: TestClient) -> None:
+    ws_id, pid = _seed(client)
+    other = client.post(
+        "/api/v1/projects",
+        json={"workspace_id": ws_id, "title": "Other", "slug": "p-rsk-other2"},
+    ).json()
+    foreign = client.post(
+        f"/api/v1/projects/{other['id']}/phases", json={"title": "Foreign"}
+    ).json()
+    risk = client.post(
+        f"/api/v1/projects/{pid}/risks", json={"title": "R", "severity": "low"}
+    ).json()
+    res = client.patch(f"/api/v1/risks/{risk['id']}", json={"phase_id": foreign["id"]})
+    assert res.status_code == 404

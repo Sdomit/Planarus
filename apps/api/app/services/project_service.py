@@ -272,8 +272,8 @@ def duplicate_project(session: Session, project_id: str) -> Optional[Project]:
             session.add(ChecklistItem(**data))
         session.flush()
 
-    clone(Decision, "decision", {})
-    clone(Risk, "risk", {})
+    clone(Decision, "decision", {"phase_id": "phase"})
+    clone(Risk, "risk", {"phase_id": "phase"})
     clone(Blocker, "blocker", {"task_id": "task"})
     clone(Milestone, "milestone", {"phase_id": "phase"})
 

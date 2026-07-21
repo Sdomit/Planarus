@@ -285,3 +285,34 @@ def test_audit_event_created_on_project_update(client: TestClient, session) -> N
     assert events[0].entity_id == created["id"]
     assert events[0].payload_json is not None
     assert "active" in events[0].payload_json
+
+
+def test_duplicate_remaps_decision_and_risk_phase(client: TestClient) -> None:
+    """Phase 19 (D45): the new phase_id FK must be remapped on copy, never left
+    pointing at the source project's phase."""
+    ws_id = _create_workspace(client)
+    pid = _create_project(client, ws_id, "orig-graph")
+    phase = client.post(f"/api/v1/projects/{pid}/phases", json={"title": "P1"}).json()
+    client.post(
+        f"/api/v1/projects/{pid}/decisions",
+        json={"title": "D", "decision": "X", "phase_id": phase["id"]},
+    )
+    client.post(
+        f"/api/v1/projects/{pid}/risks",
+        json={"title": "R", "severity": "high", "phase_id": phase["id"]},
+    )
+    # An unphased pair must survive as unphased.
+    client.post(f"/api/v1/projects/{pid}/decisions", json={"title": "D2", "decision": "Y"})
+    client.post(f"/api/v1/projects/{pid}/risks", json={"title": "R2", "severity": "low"})
+
+    new = client.post(f"/api/v1/projects/{pid}/duplicate").json()
+    new_phase_id = client.get(f"/api/v1/projects/{new['id']}/phases").json()[0]["id"]
+    assert new_phase_id != phase["id"]
+
+    new_decisions = client.get(f"/api/v1/projects/{new['id']}/decisions").json()
+    new_risks = client.get(f"/api/v1/projects/{new['id']}/risks").json()
+    dec_phases = {d["title"]: d["phase_id"] for d in new_decisions}
+    risk_phases = {r["title"]: r["phase_id"] for r in new_risks}
+
+    assert dec_phases == {"D": new_phase_id, "D2": None}
+    assert risk_phases == {"R": new_phase_id, "R2": None}
