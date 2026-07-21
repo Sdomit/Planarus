@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import PlanningPanel, { nextStatusForColumn } from './PlanningPanel'
+import PlanningPanel, { nextStatusForColumn, phaseRollups } from './PlanningPanel'
 
 describe('nextStatusForColumn', () => {
   const review = { statuses: ['waiting', 'needs_review', 'blocked'] }
@@ -40,8 +40,8 @@ const mockApi = api as unknown as {
   stages: { list: Fn }
   tasks: { list: Fn; create: Fn; update: Fn }
   milestones: { list: Fn; create: Fn }
-  decisions: { list: Fn; create: Fn }
-  risks: { list: Fn; create: Fn }
+  decisions: { list: Fn; create: Fn; update: Fn }
+  risks: { list: Fn; create: Fn; update: Fn }
   blockers: { list: Fn; create: Fn }
   comments: { list: Fn; create: Fn }
   links: { list: Fn; create: Fn }
@@ -464,5 +464,89 @@ describe('StatusManager (manage statuses)', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete On Hold' }))
     expect(await within(dialog).findByRole('alert')).toBeTruthy()
     expect(within(dialog).getByText(/still in use/)).toBeTruthy()
+  })
+})
+
+// --- Phase 19 (D45): the phase spine in the UI -------------------------------
+
+describe('phaseRollups', () => {
+  const phased = (over: Record<string, unknown> = {}) => ({ phase_id: 'pha_1', status: 'open', ...over })
+
+  it('counts done/total tasks, decisions and only OPEN risks per phase', () => {
+    const rollups = phaseRollups(
+      [
+        phased({ status: 'done' }), phased({ status: 'done' }), phased({ status: 'in_progress' }),
+        { phase_id: null, status: 'done' },            // unphased: excluded
+      ] as never,
+      [phased(), phased(), { phase_id: null }] as never,
+      [
+        phased({ status: 'open' }),
+        phased({ status: 'monitoring' }),
+        phased({ status: 'mitigated' }),               // closed: excluded
+        phased({ status: 'accepted' }),                // closed: excluded
+      ] as never,
+    )
+    expect(rollups.get('pha_1')).toEqual({
+      tasksDone: 2, tasksTotal: 3, decisions: 2, openRisks: 2,
+    })
+  })
+
+  it('leaves a phase with nothing attached out of the map entirely', () => {
+    expect(phaseRollups([], [], []).get('pha_1')).toBeUndefined()
+  })
+})
+
+describe('phase spine UI', () => {
+  const PHASE = {
+    id: 'pha_1', project_id: 'proj_1', title: 'Auth phase', description: null,
+    status: 'active', sort_order: 0, created_at: 'x', updated_at: 'x',
+  }
+  const DECISION = {
+    id: 'dec_1', project_id: 'proj_1', phase_id: 'pha_1', title: 'Use OAuth',
+    decision: 'OAuth 2.1', context: null, status: 'accepted', sort_order: 0,
+    created_at: 'x', updated_at: 'x',
+  }
+  const RISK = {
+    id: 'rsk_1', project_id: 'proj_1', phase_id: 'pha_1', title: 'Token leak',
+    description: null, severity: 'high', status: 'open', mitigation: null,
+    sort_order: 0, created_at: 'x', updated_at: 'x',
+  }
+
+  function setupPhased() {
+    setupEmpty()
+    mockApi.phases.list.mockResolvedValue([PHASE])
+    mockApi.decisions.list.mockResolvedValue([DECISION])
+    mockApi.risks.list.mockResolvedValue([RISK])
+  }
+
+  it('shows the roll-up on the phase row', async () => {
+    setupPhased()
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    expect(await screen.findByText('1 decision · 1 open risk')).toBeTruthy()
+  })
+
+  it('shows the phase chip on a decision and lets it be re-assigned', async () => {
+    setupPhased()
+    mockApi.decisions.update.mockResolvedValue({ ...DECISION, phase_id: null })
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    fireEvent.click(screen.getByRole('tab', { name: 'Decisions' }))
+
+    expect(await screen.findByText('Auth phase')).toBeTruthy()   // chip
+    fireEvent.click(screen.getByRole('button', { name: 'Use OAuth' }))
+    const picker = await screen.findByLabelText('Phase for Use OAuth')
+    fireEvent.change(picker, { target: { value: '' } })
+    // Clearing sends null, not undefined — otherwise the field is omitted and
+    // the PATCH silently keeps the old phase.
+    await waitFor(() => expect(mockApi.decisions.update).toHaveBeenCalledWith('dec_1', { phase_id: null }))
+  })
+
+  it('shows the phase chip on a risk', async () => {
+    setupPhased()
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    fireEvent.click(screen.getByRole('tab', { name: 'Risks' }))
+    expect(await screen.findByText('Auth phase')).toBeTruthy()
   })
 })
