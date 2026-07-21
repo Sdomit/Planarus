@@ -102,6 +102,25 @@
   --status-info-fg:#0369A1;    --status-info-bg:#F0F9FF;    --status-info-border:#E0F2FE;
 }
 
+/* ── LIGHT COSMO ────────────────────────────────────────── */
+[data-theme="light-cosmo"] {
+  --bg-canvas:   #F2F4F8; --bg-surface:  #FFFFFF;
+  --bg-subtle:   #F8FAFC; --bg-muted:    #E7ECF4;
+  --bg-inverse:  #0B1226;
+  --text-primary:#0B1226; --text-secondary:#2A334D;
+  --text-tertiary:#71809A; --text-inverse:#FFFFFF;
+  --text-accent: #2D77FF;
+  --border-subtle:#E7ECF4; --border-default:#D6E0EC;
+  --border-strong:#9AABC0; --border-accent:#5EC3FF;
+  --accent:#2D77FF;       --accent-hover:#1F63DB;
+  --accent-active:#174FBA; --accent-subtle:#EEF6FF;
+  --accent-muted:#DDEEFF;
+  --status-success-fg:#047857; --status-success-bg:#ECFDF5; --status-success-border:#D1FAE5;
+  --status-danger-fg:#D12672;  --status-danger-bg:#FFF2F8; --status-danger-border:#FFD6E8;
+  --status-warning-fg:#A16207; --status-warning-bg:#FFFBEB; --status-warning-border:#FEF3C7;
+  --status-info-fg:#2D77FF;    --status-info-bg:#EEF6FF; --status-info-border:#CFE4FF;
+}
+
 /* ── LIGHT TEAL ──────────────────────────────────────────── */
 [data-theme="light-teal"] {
   --bg-canvas:   #F3FAFA; --bg-surface:  #FFFFFF;
@@ -248,6 +267,27 @@
   --accent:#A78BFA;       --accent-hover:#8B5CF6;
   --accent-active:#7C3AED; --accent-subtle:rgba(167,139,250,0.10);
   --accent-muted:rgba(167,139,250,0.18);
+}
+
+/* ── DARK COSMO ─────────────────────────────────────────── */
+[data-theme="dark-cosmo"] {
+  --bg-canvas:   #0B1226; --bg-surface:  #111B34;
+  --bg-subtle:   #172440; --bg-muted:    #263653;
+  --bg-inverse:  #F2F4F8;
+  --text-primary:#F2F6FF; --text-secondary:#B2C0D8;
+  --text-tertiary:#7F91AF; --text-inverse:#0B1226;
+  --text-accent: #5EC3FF;
+  --border-subtle:rgba(205,221,248,0.10);
+  --border-default:rgba(205,221,248,0.16);
+  --border-strong:rgba(205,221,248,0.30);
+  --border-accent:#5EC3FF;
+  --accent:#5EC3FF;       --accent-hover:#43B1F1;
+  --accent-active:#2D77FF; --accent-subtle:rgba(94,195,255,0.13);
+  --accent-muted:rgba(94,195,255,0.24);
+  --status-success-fg:#6EE7B7; --status-success-bg:rgba(16,185,129,0.13); --status-success-border:rgba(16,185,129,0.24);
+  --status-danger-fg:#FF9DCB;  --status-danger-bg:rgba(244,114,182,0.13); --status-danger-border:rgba(244,114,182,0.28);
+  --status-warning-fg:#FDE68A; --status-warning-bg:rgba(245,158,11,0.13); --status-warning-border:rgba(245,158,11,0.25);
+  --status-info-fg:#9CDBFF;    --status-info-bg:rgba(94,195,255,0.13); --status-info-border:rgba(94,195,255,0.24);
 }
 
 /* ── DARK TEAL ───────────────────────────────────────────── */

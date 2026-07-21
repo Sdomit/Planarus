@@ -1,142 +1,243 @@
-# Planarus
+<p align="center">
+  <img src="apps/web/public/planarus-icon.png" width="112" alt="Planarus" />
+</p>
 
-**AI agents propose. You approve.**
+<h1 align="center">Planarus</h1>
 
-A local-first project cockpit that gives AI coding agents real project context —
-and puts a human approval gate in front of every write they attempt.
+<p align="center">
+  <strong>Plan clearly. Navigate safely. Achieve with control.</strong><br />
+  A local-first project cockpit where AI agents propose and people approve.
+</p>
 
-[![CI](https://github.com/Sdomit/Planarus/actions/workflows/ci.yml/badge.svg)](https://github.com/Sdomit/Planarus/actions/workflows/ci.yml)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Local-first](https://img.shields.io/badge/local--first-no%20cloud%20required-green.svg)](#your-data-stays-yours)
-
-<!-- TODO(screenshots): drop 2-3 current captures in docs/images/ and link them
-     here — Cockpit, Approvals, Context Pack. The old marketing shots predate
-     the Planarus rename and are no longer accurate. -->
+<p align="center">
+  <a href="https://github.com/Sdomit/Planarus/actions/workflows/ci.yml"><img src="https://github.com/Sdomit/Planarus/actions/workflows/ci.yml/badge.svg" alt="Continuous integration" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2D77FF.svg" alt="Apache-2.0 license" /></a>
+  <img src="https://img.shields.io/badge/local--first-no%20cloud%20required-7B61FF.svg" alt="Local-first" />
+  <img src="https://img.shields.io/badge/AI%20writes-human%20approved-0B1226.svg" alt="Human-approved AI writes" />
+</p>
 
 ---
 
-## The problem
+## What is Planarus?
 
-You use ChatGPT, Claude, Codex, or Cursor to build something real. And every
-session, the same two things go wrong:
+Planarus is the operating surface around an AI-assisted project. It keeps the
+plan, decisions, risks, work, documentation, context files, and execution
+signals together on your machine—then gives coding agents a narrow, useful view
+of that context.
 
-1. **The agent starts cold.** Your plan lives in a chat transcript it can't see.
-   You re-paste context until you run out of patience or tokens.
-2. **The agent acts, then you find out.** It edits, commits, and rewrites — and
-   your review happens after the fact, if at all.
+Its central rule is simple:
 
-## What Planarus does
+> **AI agents can read and propose. Humans approve and apply.**
 
-**Gives agents structured context.** Projects, phases, tasks, decisions, risks,
-docs, and Git state live in a real database mirrored to Markdown folders you
-own. Agents read a *context pack* — a minimal, ordered, token-efficient slice —
-instead of your entire repo.
+An agent never receives a direct path to mutate canonical project state through
+the MCP or external API. Instead, it creates a reviewable proposal. You inspect
+the proposed change in Planarus, approve it, and the same internal path applies
+and audits it.
 
-**Puts a gate in front of every agent write.** An agent connected over MCP or
-the HTTP API can *read* and can *propose*. It cannot apply. Proposals land in an
-approval queue as a preview; a human approves; only then does canonical state
-change. This is enforced in one code path, not by convention.
+| Planarus helps you | Without asking you to give up |
+| --- | --- |
+| Keep a living project plan beside the work | Your local files, database, and control |
+| Give agents the right context at the right time | An approval boundary for agent-originated changes |
+| Track tasks, decisions, risks, docs, and milestones together | A cloud account or per-seat subscription |
+| Connect agents through MCP, REST, or guided integrations | An always-open remote API |
 
-**Runs on your machine.** SQLite, your filesystem, `localhost`. No account, no
-cloud, no per-seat pricing. The external API ships **disabled by default** and
-bound to loopback; exposing it is an explicit, documented opt-in.
+## Why it is different
 
-## Quickstart
+Most project tools organize human work. Most AI tools organize a conversation.
+Planarus organizes the boundary between the two:
 
-Docker — no Python, Node, or pnpm toolchain needed:
+1. **Local-first by default** — SQLite, project folders, Markdown context, and
+   loopback services stay on your machine.
+2. **Context that agents can actually use** — a generated, ordered context pack
+   gives an agent scoped project memory instead of a large, unstructured dump.
+3. **Approval-first execution** — proposed agent writes wait in an approval
+   queue; external agents do not approve, apply, or delete canonical data.
+4. **Power is opt-in** — LAN team mode, calendar sync, webhooks, scheduled
+   reminders/backups, and remote agent access all start disabled.
+
+## Product surfaces
+
+| Area | What you can do |
+| --- | --- |
+| **Plan** | Projects, phases, milestones, tasks, sub-tasks, boards, roadmap, timeline, calendar, decisions, risks, and checklists |
+| **Context** | Rich documents, Markdown preview, context-pack generation, context files, and an offline canvas |
+| **Agents** | Review approval proposals, inspect agent runs, view notifications/reminders, and use the read-only Git cockpit |
+| **Control** | Manage team access, integrations, MCP/API configuration, webhooks, export/import, and local backups |
+
+## Run Planarus
+
+### Fastest path: Docker
+
+Docker is the simplest way to evaluate Planarus. You do not need Python, Node,
+or pnpm on the host.
 
 ```bash
 git clone https://github.com/Sdomit/Planarus.git
 cd Planarus
 docker compose up --build
-# → http://localhost:5173
 ```
 
-Data persists on the host in `./planarus-data`. Port already taken? Use
-`PLANARUS_PORT=5174 docker compose up`. Stop with `docker compose down`.
+Open [http://localhost:5173](http://localhost:5173).
 
-> Creating a project folder in Docker? Put it under `/data` — that's the only
-> path that survives `docker compose down`.
+- Data persists in `./planarus-data` on the host.
+- Project folders created in the container must live under `/data` to persist.
+- The Docker web port binds to `127.0.0.1` by default; it is not exposed to your
+  LAN.
+- If port 5173 is busy, use `PLANARUS_PORT=5174 docker compose up --build`.
+- Stop the stack with `docker compose down`.
 
-**Native, with hot reload:**
+### Native development with hot reload
+
+For development, Planarus includes launchers that migrate the database, start
+the API and Vite app, wait for both services, and open the UI. They keep the
+external API disabled.
+
+**Prerequisites:** Python 3.11, Node.js 20+, and the pnpm version pinned by the
+repository (`corepack enable` is the recommended installation route).
 
 ```bash
-./run-planarus.sh        # macOS / Linux
-run-planarus.bat      # Windows
+# From the repository root, once per checkout
+corepack enable
+pnpm install
+
+# Create the API environment and install its development dependencies
+cd apps/api
+python3 -m venv .venv
+
+# macOS / Linux
+source .venv/bin/activate
+
+# Windows PowerShell (run this instead of the line above)
+# .venv\Scripts\Activate.ps1
+
+pip install -e ".[dev]"
+alembic upgrade head
+cd ../..
 ```
 
-Both check your setup, pick free ports if the defaults are taken, wait until
-each server actually answers, then open the UI. First-time toolchain setup is in
-[docs/dev/setup.md](docs/dev/setup.md).
+Then launch both services:
 
-## What's in it
+```bash
+./run-planarus.sh   # macOS / Linux
+run-planarus.bat    # Windows
+```
 
-Sixteen surfaces over a FastAPI + React stack:
+The launcher chooses free loopback ports when necessary. In the usual case:
 
-| | |
-|---|---|
-| **Plan** | Dashboard · Planning (phases, tasks, milestones, decisions, risks, sub-tasks, checklists, custom statuses, board + list views) · Roadmap · Timeline · Calendar |
-| **Context** | Docs (rich text) · Context Pack builder · Context Files · Markdown Preview · Canvas (Excalidraw, works offline) |
-| **Agents** | Approvals queue · Agent Runs · Reminders · Cockpit (read-only Git + PR view) |
-| **Admin** | Team (roles, attribution) · Settings (integrations, webhooks, MCP config, export/import) |
+| Service | Address |
+| --- | --- |
+| Web app | `http://localhost:5173` |
+| API health | `http://localhost:8000/health` |
+| Interactive API docs | `http://localhost:8000/docs` |
 
-**Connect your agent:** an approval-gated MCP server (STDIO and remote HTTP), a
-REST API, and a ChatGPT Actions contract. Configuration is generated for you in
-Settings → Integrations.
+> **Important:** run backend commands from `apps/api`. The local SQLite path is
+> relative to the working directory; starting it elsewhere can create an empty,
+> separate database.
 
-## Your data stays yours
+For the full developer reference—including Windows details, alternate frontend
+ports, and troubleshooting—see [Developer setup](docs/dev/setup.md).
 
-- Everything is local: SQLite plus Markdown folders you can read, grep, and
-  commit yourself.
-- **Zero third-party network requests.** Fonts are self-hosted; nothing phones
-  home.
-- Calendar sync, LAN team mode, outbound webhooks, and the external API all ship
-  **off by default** and require explicit configuration.
-- Apache-2.0. Fork it, self-host it, no strings.
+## Technical architecture
 
-## How it compares
+```mermaid
+flowchart LR
+  Human[Human] -->|plans and approves| UI[React + TypeScript + Vite]
+  Agent[Agent or integration] -->|reads and proposes| Gate[Approval boundary]
+  UI --> API[FastAPI]
+  Gate --> API
+  API --> DB[(SQLite in WAL mode)]
+  API --> Files[Project folders and Markdown context]
+  API --> MCP[MCP and REST surfaces]
+```
 
-Notion, ClickUp, and Coda are broad and cloud-first. Linear, Jira, and Height
-are product-engineering trackers. Obsidian and Anytype own local knowledge but
-aren't agent control planes. None are built around **agent access with an
-approval boundary** and **token-efficient context packs** in one local-first
-tool. Longer version: [docs/plan/01-product-and-scope.md](docs/plan/01-product-and-scope.md).
+| Layer | Technology | Responsibility |
+| --- | --- | --- |
+| Web | React 19, TypeScript, Vite | Responsive product UI, planning surfaces, rich documents, canvas, and approvals |
+| API | FastAPI, Python 3.11 | Typed REST endpoints, OpenAPI docs, business rules, and internal approval engine |
+| Data | SQLModel, Alembic, SQLite/WAL | Local canonical state with schema migration discipline |
+| Context | Project folders + generated Markdown | Portable, Git-friendly context packs for humans and agents |
+| Agent access | STDIO MCP, opt-in remote HTTP MCP, REST | Narrow read/propose contracts that share the same approval rules |
 
-## Documentation
+The project is an `apps/web` + `apps/api` monorepo. Tauri desktop packaging is
+planned but not yet shipped; today Planarus runs as a local web UI backed by a
+local FastAPI service.
 
-- **Using Planarus** → [docs/guide/](docs/guide/) — connect ChatGPT, connect a
-  calendar, LAN team mode, team administration.
-- **Running it locally** → [docs/dev/setup.md](docs/dev/setup.md)
-- **How it's designed** → [docs/plan/00-OVERVIEW.md](docs/plan/00-OVERVIEW.md)
-- **Contributing** → [CONTRIBUTING.md](CONTRIBUTING.md)
+## Connect an agent safely
 
-### For AI agents
+Planarus supports several agent-facing paths. They are intentionally distinct:
 
-This repo is itself managed as an Planarus project, so `context/` is a live
-context pack. If you're an agent working here, start at
-[CLAUDE.md](CLAUDE.md) → [context/AGENT_RULES.md](context/AGENT_RULES.md) →
-[context/NEXT_STEP.md](context/NEXT_STEP.md). Don't scan the whole repo.
+| Path | Default posture | Start here |
+| --- | --- | --- |
+| Local MCP (STDIO) | Private to the local machine; read/propose only | Settings → Integrations in the app |
+| REST / external API | Disabled and loopback-only until explicitly configured | [ChatGPT connection guide](docs/guide/connect-planarus-to-chatgpt.md) |
+| Remote HTTP MCP | Opt-in advanced integration | Settings → Integrations and the integration documentation |
 
-## Status
+For a private ChatGPT connection, follow the
+[step-by-step guide](docs/guide/connect-planarus-to-chatgpt.md). It keeps the
+local application private by default and exposes only a deliberately scoped,
+read-only integration path when you choose to configure one.
 
-Working local-first app, pre-1.0, built and used daily by its author. Phases
-1–17 are merged: planning entities, rich docs, the approval engine, MCP, the
-external API, LAN team mode, the repo cockpit, canvas, the 15.x planning line,
-team administration, and the integration hub.
+## Optional capabilities
 
-Every PR is gated by CI: backend tests, frontend tests, typecheck, production
-build, a Postgres migration round-trip, and a Docker Compose build + smoke test.
+Nothing in this table is enabled by the quickstart.
 
-Not done yet: hosted/SaaS mode is code-complete groundwork but not turned on,
-and desktop packaging (Tauri) is not started.
+| Capability | What it adds | Guide |
+| --- | --- | --- |
+| LAN team mode | Local accounts, attribution, and soft edit locks for a small trusted network | [LAN team mode](docs/guide/lan-team-mode.md) |
+| Calendar sync | Explicit Google/Microsoft connections | [Connect a calendar](docs/guide/connect-your-calendar.md) |
+| Notifications & backups | OS-scheduled reminders and verified local database snapshots | [Notifications & backups](docs/guide/notifications-and-backup.md) |
+| Hosted go-live | The documented path for deliberately enabling a hosted deployment | [Hosted go-live](docs/guide/hosted-go-live.md) |
 
-## Contributing & security
+## Validate a checkout
 
-Contributions welcome — start with [CONTRIBUTING.md](CONTRIBUTING.md). Please
-report security issues privately per [SECURITY.md](SECURITY.md), never as a
-public issue.
+Run these before opening a pull request:
+
+```bash
+# Backend — from apps/api
+python -m pytest
+
+# Frontend — from the repository root
+pnpm test:web
+pnpm typecheck:web
+pnpm build:web
+```
+
+CI additionally verifies the Postgres migration path and a Docker Compose smoke
+test. See [Contributing](CONTRIBUTING.md) for the focused pull-request workflow.
+
+## Project status
+
+Planarus is a working, local-first pre-1.0 application used daily by its
+author. Phases 1–18 are built: planning, structured docs, approval workflows,
+MCP/API boundaries, LAN team mode, Git cockpit, offline canvas, integrations,
+notifications, and verified backups.
+
+The hosted/SaaS groundwork exists but is not enabled by default. Desktop
+packaging has not started. Those boundaries are deliberate: the current product
+is designed to be useful and safe on one local machine first.
+
+## Documentation map
+
+- [Developer setup](docs/dev/setup.md) — prerequisites, hot reload, API, tests
+- [Product and architecture plan](docs/plan/00-OVERVIEW.md) — product scope,
+  design decisions, and technical architecture
+- [User guides](docs/guide/) — ChatGPT, calendar, LAN team mode, notifications,
+  backups, and hosted go-live
+- [Contributing](CONTRIBUTING.md) — contribution workflow and non-negotiable
+  safety invariants
+- [Security policy](SECURITY.md) — private vulnerability reporting and scope
+
+## Contributing and security
+
+Contributions are welcome. Please keep the product’s trust model intact:
+external AI clients may read data and create pending proposals, but they must
+never directly approve or apply canonical changes. Read
+[CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+
+For vulnerabilities, **do not open a public issue**. Use
+[private vulnerability reporting](SECURITY.md) instead.
 
 ## License
 
-[Apache License 2.0](LICENSE). Bundled fonts keep their own licenses — see
-[NOTICE](NOTICE).
+Planarus is released under the [Apache License 2.0](LICENSE). Bundled fonts keep
+their own licenses; see [NOTICE](NOTICE).

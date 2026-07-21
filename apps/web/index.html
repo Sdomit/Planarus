@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" type="image/png" href="/planarus-icon.png" />
+    <link rel="apple-touch-icon" href="/planarus-icon.png" />
     <title>Planarus</title>
     <script>
       // Resolve the theme before first paint, otherwise a dark-OS user gets a
@@ -13,11 +14,16 @@
       (function () {
         var stored = null
         try { stored = localStorage.getItem('planarus.theme') } catch (e) {}
+        // Blue was the old fixed default rather than a user-selectable choice.
+        // Move it forward before first paint so returning local users see the
+        // Cosmo brand immediately instead of a flash of the retired palette.
+        if (stored === 'light-blue') stored = 'light-cosmo'
+        if (stored === 'dark-blue') stored = 'dark-cosmo'
         var prefersDark =
           window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
         document.documentElement.setAttribute(
           'data-theme',
-          stored || (prefersDark ? 'dark-blue' : 'light-blue'),
+          stored || (prefersDark ? 'dark-cosmo' : 'light-cosmo'),
         )
       })()
     </script>
@@ -27,4 +33,3 @@
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

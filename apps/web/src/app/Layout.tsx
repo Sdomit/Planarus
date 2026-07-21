@@ -168,7 +168,7 @@ export default function Layout() {
   const [mainView, setMainView] = useState<MainView>(() => loadNav().view ?? 'dashboard')
   const [project, setProject] = useState<SelectedProject | null>(() => loadNav().project ?? null)
   const [theme, setTheme] = useState<string>(
-    () => document.documentElement.getAttribute('data-theme') || 'light-blue',
+    () => document.documentElement.getAttribute('data-theme') || 'light-cosmo',
   )
   const [aboutOpen, setAboutOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -187,7 +187,7 @@ export default function Layout() {
 
   const isDark = theme.startsWith('dark')
   const toggleTheme = () => {
-    const next = isDark ? 'light-blue' : 'dark-blue'
+    const next = isDark ? 'light-cosmo' : 'dark-cosmo'
     document.documentElement.setAttribute('data-theme', next)
     // Persist, or the choice silently reverts on the next load. The inline
     // script in index.html reads this key before first paint.
@@ -335,11 +335,10 @@ export default function Layout() {
         ref={sidebarRef}
         id="ab-sidebar"
         className={`ab-sidebar${mobileMenuOpen ? ' ab-sidebar--open' : ''}`}
-        data-theme="dark-blue"
         aria-hidden={mobileNavMode && !mobileMenuOpen ? true : undefined}
       >
         <div className="ab-brand">
-          <div className="ab-brand-mark">P</div>
+          <img className="ab-brand-mark" src="/planarus-icon.png" alt="" aria-hidden="true" />
           <div>
             <div className="ab-brand-name">Planarus</div>
             <div className="ab-brand-env">local · :{window.location.port || '80'}<LanAddress /></div>

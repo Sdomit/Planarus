@@ -10,9 +10,9 @@ import './styles/planarus.css'
 import './styles/index.css'
 import App from './App'
 
-// Default theme (the topbar toggles light-blue <-> dark-blue at runtime).
+// Default theme (the topbar toggles light-cosmo <-> dark-cosmo at runtime).
 if (!document.documentElement.getAttribute('data-theme')) {
-  document.documentElement.setAttribute('data-theme', 'light-blue')
+  document.documentElement.setAttribute('data-theme', 'light-cosmo')
 }
 
 createRoot(document.getElementById('root')!).render(
