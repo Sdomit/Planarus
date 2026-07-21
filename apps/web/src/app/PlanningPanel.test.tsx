@@ -23,7 +23,7 @@ vi.mock('../api/client', () => ({
     decisions: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(), reorder: vi.fn() },
     risks: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(), reorder: vi.fn() },
     blockers: { list: vi.fn(), create: vi.fn() },
-    comments: { list: vi.fn(), create: vi.fn() },
+    comments: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
     links: { list: vi.fn(), create: vi.fn() },
     checklistItems: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
     statusOptions: { list: vi.fn(async () => []), create: vi.fn(), update: vi.fn(), reorder: vi.fn(), remove: vi.fn() },
@@ -43,7 +43,7 @@ const mockApi = api as unknown as {
   decisions: { list: Fn; create: Fn; update: Fn }
   risks: { list: Fn; create: Fn; update: Fn }
   blockers: { list: Fn; create: Fn }
-  comments: { list: Fn; create: Fn }
+  comments: { list: Fn; create: Fn; update: Fn; remove: Fn }
   links: { list: Fn; create: Fn }
   checklistItems: { list: Fn; create: Fn; update: Fn; remove: Fn }
   statusOptions: { list: Fn; create: Fn; update: Fn; reorder: Fn; remove: Fn }
@@ -548,5 +548,97 @@ describe('phase spine UI', () => {
     await screen.findByText('Test Project')
     fireEvent.click(screen.getByRole('tab', { name: 'Risks' }))
     expect(await screen.findByText('Auth phase')).toBeTruthy()
+  })
+})
+
+// --- Phase 22 (D56): attachments on any entity ------------------------------
+
+describe('entity attachments', () => {
+  const PHASE = {
+    id: 'pha_1', project_id: 'proj_1', title: 'Auth phase', description: null,
+    status: 'active', sort_order: 0, created_at: 'x', updated_at: 'x',
+  }
+  const DECISION = {
+    id: 'dec_1', project_id: 'proj_1', phase_id: null, title: 'Use OAuth',
+    decision: 'OAuth 2.1', context: null, status: 'accepted', sort_order: 0,
+    created_at: 'x', updated_at: 'x',
+  }
+  const note = (id: string, entity_type: string, entity_id: string, body: string) => ({
+    id, project_id: 'proj_1', entity_type, entity_id, body,
+    author_type: 'human', author_id: null, author_display: null,
+    status: 'active', created_at: '2026-07-21T00:00:00+00:00', updated_at: null,
+  })
+  const link = (id: string, entity_type: string, entity_id: string, title: string) => ({
+    id, project_id: 'proj_1', entity_type, entity_id,
+    url: `https://example.com/${id}`, title, created_at: 'x',
+  })
+
+  function setupAttachments() {
+    setupEmpty()
+    mockApi.phases.list.mockResolvedValue([PHASE])
+    mockApi.decisions.list.mockResolvedValue([DECISION])
+    mockApi.comments.list.mockResolvedValue([
+      note('cmt_p', 'phase', 'pha_1', 'note on the phase'),
+      note('cmt_d', 'decision', 'dec_1', 'note on the decision'),
+      note('cmt_other', 'task', 'tsk_9', 'note on someone else'),
+    ])
+    mockApi.links.list.mockResolvedValue([
+      link('lnk_d', 'decision', 'dec_1', 'RFC 9700'),
+      link('lnk_other', 'task', 'tsk_9', 'unrelated link'),
+    ])
+  }
+
+  it('shows only the notes and links belonging to the expanded entity', async () => {
+    setupAttachments()
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    fireEvent.click(screen.getByRole('tab', { name: 'Decisions' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Use OAuth' }))
+
+    expect(await screen.findByText('note on the decision')).toBeTruthy()
+    expect(screen.getByText('RFC 9700')).toBeTruthy()
+    // Attachments on other entities must not leak into this row.
+    expect(screen.queryByText('note on someone else')).toBeNull()
+    expect(screen.queryByText('unrelated link')).toBeNull()
+    expect(screen.queryByText('note on the phase')).toBeNull()
+  })
+
+  it('adds a note to a phase with the right entity_type and entity_id', async () => {
+    setupAttachments()
+    mockApi.comments.create.mockResolvedValue(note('cmt_new', 'phase', 'pha_1', 'fresh'))
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    fireEvent.click(await screen.findByRole('button', { name: 'Auth phase' }))
+
+    const box = await screen.findByLabelText('Add a note on Auth phase')
+    fireEvent.change(box, { target: { value: 'fresh' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Note' }))
+
+    await waitFor(() => expect(mockApi.comments.create).toHaveBeenCalledWith('proj_1', {
+      entity_type: 'phase', entity_id: 'pha_1', body: 'fresh',
+    }))
+  })
+
+  it('adds a link to a decision, and never refetches to do it', async () => {
+    setupAttachments()
+    mockApi.links.create.mockResolvedValue(link('lnk_new', 'decision', 'dec_1', 'Spec'))
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    fireEvent.click(screen.getByRole('tab', { name: 'Decisions' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Use OAuth' }))
+
+    const listCallsBefore = mockApi.links.list.mock.calls.length
+    fireEvent.click(screen.getByRole('button', { name: 'Link' }))
+    fireEvent.change(await screen.findByLabelText('Link URL for Use OAuth'), {
+      target: { value: 'https://example.com/spec' },
+    })
+    fireEvent.change(screen.getByLabelText('Link title for Use OAuth'), { target: { value: 'Spec' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save link' }))
+
+    await waitFor(() => expect(mockApi.links.create).toHaveBeenCalledWith('proj_1', {
+      entity_type: 'decision', entity_id: 'dec_1', url: 'https://example.com/spec', title: 'Spec',
+    }))
+    // The whole point of reading from shared state: no per-row list call.
+    expect(mockApi.links.list.mock.calls.length).toBe(listCallsBefore)
   })
 })
