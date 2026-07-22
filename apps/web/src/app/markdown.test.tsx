@@ -64,3 +64,40 @@ describe('Markdown renderer', () => {
     expect(container.textContent).toContain('<img src=x onerror=alert(1)>')
   })
 })
+
+describe('bare URL autolinking', () => {
+  const hrefOf = (t: string) => {
+    render(<Markdown markdown={t} />)
+    return screen.queryByRole('link')?.getAttribute('href') ?? null
+  }
+
+  it('links a URL pasted straight into a note', () => {
+    expect(hrefOf('see https://example.com for context')).toBe('https://example.com')
+  })
+
+  it('leaves sentence punctuation out of the href', () => {
+    expect(hrefOf('read https://example.com/docs.')).toBe('https://example.com/docs')
+    expect(screen.getByRole('link').textContent).toBe('https://example.com/docs')
+  })
+
+  it('does not double-handle a markdown link', () => {
+    render(<Markdown markdown={'[the docs](https://example.com/a)'} />)
+    const links = screen.getAllByRole('link')
+    expect(links).toHaveLength(1)
+    expect(links[0].getAttribute('href')).toBe('https://example.com/a')
+    expect(links[0].textContent).toBe('the docs')
+  })
+
+  it('never autolinks a dangerous scheme', () => {
+    // Only http(s) is matched at all, so this stays inert text.
+    render(<Markdown markdown={'javascript:alert(1)'} />)
+    expect(screen.queryByRole('link')).toBeNull()
+  })
+
+  it('opens autolinks safely in a new tab', () => {
+    render(<Markdown markdown={'https://example.com'} />)
+    const a = screen.getByRole('link')
+    expect(a.getAttribute('rel')).toBe('noreferrer noopener')
+    expect(a.getAttribute('target')).toBe('_blank')
+  })
+})

@@ -1,5 +1,26 @@
 import { useState } from 'react'
 import { api, Comment, Link } from '../api/client'
+import { Markdown } from './markdown'
+
+/** Accept what people actually paste. `www.example.com` has no scheme, so
+ *  `<input type="url">` rejects it outright — the browser blocks submit before
+ *  any of our code runs, and the user just sees "Please enter a URL" with no
+ *  way forward. Assume https when the scheme is missing, and reject only what
+ *  genuinely isn't a web address. Returns null if it can't be salvaged. */
+export function normalizeUrl(raw: string): string | null {
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+  try {
+    const u = new URL(withScheme)
+    // Only web schemes — a javascript: or data: "link" is an injection vector.
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null
+    if (!u.hostname.includes('.')) return null // "foo" is a typo, not a host
+    return u.href
+  } catch {
+    return null
+  }
+}
 
 /** Phase 22 (D56): notes + links on ANY entity the backend allows.
  *
@@ -59,8 +80,11 @@ export function EntityNotes({
 
   async function addLink(e: React.FormEvent) {
     e.preventDefault()
-    const url = linkUrl.trim()
-    if (!url) return
+    const url = normalizeUrl(linkUrl)
+    if (!url) {
+      setError(linkUrl.trim() ? 'That does not look like a web address.' : null)
+      return
+    }
     setSaving(true); setError(null)
     try {
       const l = await api.links.create(projectId, {
@@ -86,7 +110,10 @@ export function EntityNotes({
           <p className="pp-section-lbl">Notes</p>
           {myNotes.map(c => (
             <div key={c.id} className="pp-comment">
-              <span className="pp-comment-body">{c.body}</span>
+              {/* Markdown, matching the Comments tab — and since the renderer
+                  autolinks bare URLs, a note someone pasted a link into is
+                  clickable without having to file it as a separate Link. */}
+              <div className="pp-comment-body ab-prose"><Markdown markdown={c.body} /></div>
               <span className="pp-comment-meta">
                 {c.author_display ?? c.author_type} · {c.created_at.slice(0, 10)}
               </span>
@@ -121,7 +148,7 @@ export function EntityNotes({
 
       {showLink && (
         <form className="pp-comment-add" onSubmit={addLink}>
-          <input className="input" type="url" required placeholder="https://…"
+          <input className="input" type="text" inputMode="url" required placeholder="example.com or https://…"
             aria-label={`Link URL for ${label}`}
             value={linkUrl} onChange={e => setLinkUrl(e.target.value)} />
           <input className="input" placeholder="Title (optional)"
