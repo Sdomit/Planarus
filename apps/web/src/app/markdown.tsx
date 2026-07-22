@@ -7,8 +7,14 @@ import type { CSSProperties, JSX, ReactNode } from 'react'
 // footnotes/images/raw HTML.
 
 const SAFE_HREF = /^(https?:|mailto:|#|\.{0,2}\/)/i
+// The bare-URL alternative is LAST on purpose: at a given position the earlier
+// `[label](href)` alternative wins, so a URL inside markdown link syntax is
+// still consumed as a link and never double-matched.
 const INLINE_RE =
-  /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*\s][^*]*\*)|(~~[^~]+~~)|(\[[^\]]+\]\([^)\s]+\))/g
+  /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*\s][^*]*\*)|(~~[^~]+~~)|(\[[^\]]+\]\([^)\s]+\))|(https?:\/\/[^\s<>]+)/g
+// Sentence punctuation that trails a pasted URL belongs to the prose, not the
+// href — "see https://x.com." must not link the full stop.
+const TRAILING_PUNCT = /[.,;:!?)\]}'"]+$/
 
 export function parseInline(text: string): ReactNode[] {
   const nodes: ReactNode[] = []
@@ -36,6 +42,17 @@ export function parseInline(text: string): ReactNode[] {
       } else {
         nodes.push(label) // unsafe scheme → text only
       }
+    } else if (m[6]) {
+      // A bare URL someone pasted into a note. Rendered as a link so notes and
+      // links stop being two places to put the same thing.
+      const href = tok.replace(TRAILING_PUNCT, '')
+      const trailing = tok.slice(href.length)
+      nodes.push(
+        <a key={key++} href={href} target="_blank" rel="noreferrer noopener">
+          {href}
+        </a>,
+      )
+      if (trailing) nodes.push(trailing)
     }
     last = idx + tok.length
   }

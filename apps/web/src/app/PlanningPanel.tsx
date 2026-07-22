@@ -5,7 +5,7 @@ import {
 import { StatusBadge, type ToneKind } from './StatusBadge'
 import { InlineStatusSelect } from './InlineStatusSelect'
 import { RowActions } from './RowActions'
-import { EntityNotes } from './EntityNotes'
+import { EntityNotes, normalizeUrl } from './EntityNotes'
 import { useListReorder } from './useListReorder'
 import { EntityBoard, nextStatusForColumn as nextStatusForCol } from './EntityBoard'
 import { StatusManager } from './StatusManager'
@@ -320,7 +320,9 @@ export default function PlanningPanel({
         const cmt = await api.comments.create(project.id, { entity_type: 'project', entity_id: project.id, body: commentForm.body })
         setComments(prev => [...prev, cmt]); setCommentForm({ body: '' })
       } else if (tab === 'links') {
-        const lnk = await api.links.create(project.id, { entity_type: 'project', entity_id: project.id, url: linkForm.url, title: linkForm.title || undefined })
+        const url = normalizeUrl(linkForm.url)
+        if (!url) throw new Error('That does not look like a web address.')
+        const lnk = await api.links.create(project.id, { entity_type: 'project', entity_id: project.id, url, title: linkForm.title || undefined })
         setLinks(prev => [...prev, lnk]); setLinkForm({ url: '', title: '' })
       }
       setShowCreate(false)
@@ -534,7 +536,7 @@ export default function PlanningPanel({
             )}
             {tab === 'links' && (
               <>
-                <input className="input" required type="url" placeholder="https://…" aria-label="Link URL"
+                <input className="input" required type="text" inputMode="url" placeholder="example.com or https://…" aria-label="Link URL"
                   value={linkForm.url} onChange={e => setLinkForm(f => ({ ...f, url: e.target.value }))} />
                 <input className="input" placeholder="Title (optional)" aria-label="Link title"
                   value={linkForm.title} onChange={e => setLinkForm(f => ({ ...f, title: e.target.value }))} />
