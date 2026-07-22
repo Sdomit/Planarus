@@ -5,6 +5,7 @@ import {
 import { StatusBadge, type ToneKind } from './StatusBadge'
 import { InlineStatusSelect } from './InlineStatusSelect'
 import { RowActions } from './RowActions'
+import { EntityNotes } from './EntityNotes'
 import { useListReorder } from './useListReorder'
 import { EntityBoard, nextStatusForColumn as nextStatusForCol } from './EntityBoard'
 import { StatusManager } from './StatusManager'
@@ -19,6 +20,31 @@ import './planning-panel.css'
 const TeamContext = createContext<{ members: MemberRead[]; myId: string | null }>({
   members: [], myId: null,
 })
+
+// Phase 22 (D56): the project's comments + links, already loaded once at the
+// panel root. Same reason as TeamContext — five different row types need them,
+// and threading four props through every section→row signature to reach a
+// collapsed detail body is worse than one provider. Rows filter by their own
+// (entity_type, entity_id); writes push back here so the tabs stay in sync.
+const AttachContext = createContext<{
+  comments: Comment[]
+  setComments: React.Dispatch<React.SetStateAction<Comment[]>>
+  links: Link[]
+  setLinks: React.Dispatch<React.SetStateAction<Link[]>>
+} | null>(null)
+
+/** Renders nothing outside a provider, so a row can mount it unconditionally. */
+function Attachments({ entityType, entityId, projectId, label }: {
+  entityType: string; entityId: string; projectId: string; label: string
+}) {
+  const ctx = useContext(AttachContext)
+  if (!ctx) return null
+  return (
+    <EntityNotes projectId={projectId} entityType={entityType} entityId={entityId} label={label}
+      comments={ctx.comments} setComments={ctx.setComments}
+      links={ctx.links} setLinks={ctx.setLinks} />
+  )
+}
 
 function personInitials(s: string): string {
   return (
@@ -341,6 +367,7 @@ export default function PlanningPanel({
 
   return (
    <TeamContext.Provider value={{ members, myId: me?.user.id ?? null }}>
+   <AttachContext.Provider value={{ comments, setComments, links, setLinks }}>
     <div className="pp-panel">
       <div className="pp-header">
         <span className="pp-project-name">{project.title}</span>
@@ -532,6 +559,7 @@ export default function PlanningPanel({
         {tab === 'links' && <LinksList links={links} />}
       </div>
     </div>
+   </AttachContext.Provider>
    </TeamContext.Provider>
   )
 }
@@ -712,6 +740,7 @@ function PhaseListRow({ phase, rollup, update, remove, dragProps, move, statusKe
       {open && (
         <div className="pp-task-details">
           {phase.description && <p className="pp-row-desc">{phase.description}</p>}
+          <Attachments entityType="phase" entityId={phase.id} projectId={phase.project_id} label={phase.title} />
         </div>
       )}
     </li>
@@ -1130,52 +1159,11 @@ function TaskDetailBody({ task, phases, stages, projectId, onTaskUpdated, status
           <button type="submit" className="btn btn-outline btn-sm">Add</button>
         </form>
       </div>
-      <TaskComments projectId={projectId} taskId={task.id} />
+      <Attachments entityType="task" entityId={task.id} projectId={projectId} label={task.title} />
     </div>
   )
 }
 
-/** Task-scoped comment thread (reuses the project comments API with entity_type='task'). */
-function TaskComments({ projectId, taskId }: { projectId: string; taskId: string }) {
-  const [comments, setComments] = useState<Comment[]>([])
-  const [body, setBody] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    void api.comments.list(projectId, { entity_type: 'task', entity_id: taskId }).then(setComments)
-  }, [projectId, taskId])
-
-  async function add(e: React.FormEvent) {
-    e.preventDefault()
-    if (!body.trim()) return
-    setSaving(true)
-    try {
-      const c = await api.comments.create(projectId, { entity_type: 'task', entity_id: taskId, body: body.trim() })
-      setComments(prev => [...prev, c]); setBody('')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="pp-comments">
-      <p className="pp-section-lbl">Comments</p>
-      {comments.map(c => (
-        <div key={c.id} className="pp-comment">
-          <span className="pp-comment-body">{c.body}</span>
-          <span className="pp-comment-meta">{c.author_display ?? c.author_type} · {c.created_at.slice(0, 10)}</span>
-        </div>
-      ))}
-      <form className="pp-comment-add" onSubmit={add}>
-        <textarea className="input" placeholder="Add a comment…" aria-label="Add a comment"
-          value={body} onChange={e => setBody(e.target.value)} />
-        <button type="submit" className="btn btn-outline btn-sm" disabled={saving} style={{ alignSelf: 'flex-start' }}>
-          {saving ? 'Saving…' : 'Comment'}
-        </button>
-      </form>
-    </div>
-  )
-}
 
 /** A task row: inline status/title edit + delete/drag in the header, expands to
  *  the shared task detail; renders its sub-tasks nested beneath. */
@@ -1337,6 +1325,7 @@ function MilestoneListRow({ milestone, update, remove, dragProps, move, statusKe
                 onChange={e => update(milestone.id, { target_date: e.target.value || null })} />
             </label>
           </div>
+          <Attachments entityType="milestone" entityId={milestone.id} projectId={milestone.project_id} label={milestone.title} />
         </div>
       )}
     </li>
@@ -1422,6 +1411,7 @@ function DecisionListRow({ decision, phases = [], update, remove, dragProps, mov
           {decision.context && <p className="pp-row-desc">{decision.context}</p>}
           <PhasePicker phaseId={decision.phase_id} phases={phases} label={`Phase for ${decision.title}`}
             onChange={phase_id => update(decision.id, { phase_id })} />
+          <Attachments entityType="decision" entityId={decision.id} projectId={decision.project_id} label={decision.title} />
         </div>
       )}
     </li>
@@ -1523,6 +1513,7 @@ function RiskListRow({ risk, phases = [], update, remove, dragProps, move, statu
           {risk.mitigation && <p className="pp-row-desc"><strong>Mitigation:</strong> {risk.mitigation}</p>}
           <PhasePicker phaseId={risk.phase_id} phases={phases} label={`Phase for ${risk.title}`}
             onChange={phase_id => update(risk.id, { phase_id })} />
+          <Attachments entityType="risk" entityId={risk.id} projectId={risk.project_id} label={risk.title} />
         </div>
       )}
     </li>
