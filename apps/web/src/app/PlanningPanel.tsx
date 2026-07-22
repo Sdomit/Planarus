@@ -204,6 +204,9 @@ export default function PlanningPanel({
   const [members, setMembers] = useState<MemberRead[]>([])
 
   const [showCreate, setShowCreate] = useState(false)
+  // Phase 22.1: which phase the type tabs are narrowed to. Set by clicking a
+  // phase roll-up count; cleared by the chip. null = the whole project.
+  const [phaseFilter, setPhaseFilter] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
@@ -211,7 +214,7 @@ export default function PlanningPanel({
   const [taskForm, setTaskForm] = useState({
     title: '', status: 'backlog', priority: '', phase_id: '', stage_id: '',
   })
-  const [milestoneForm, setMilestoneForm] = useState({ title: '', status: 'planned', target_date: '' })
+  const [milestoneForm, setMilestoneForm] = useState({ title: '', status: 'planned', target_date: '', phase_id: '' })
   const [decisionForm, setDecisionForm] = useState({ title: '', decision: '', status: 'proposed', phase_id: '' })
   const [riskForm, setRiskForm] = useState({ title: '', severity: 'medium', status: 'open', phase_id: '' })
   const [commentForm, setCommentForm] = useState({ body: '' })
@@ -295,8 +298,12 @@ export default function PlanningPanel({
         setTasks(prev => [...prev, tk])
         setTaskForm({ title: '', status: 'backlog', priority: '', phase_id: '', stage_id: '' })
       } else if (tab === 'milestones') {
-        const mil = await api.milestones.create(project.id, { title: milestoneForm.title, status: milestoneForm.status, target_date: milestoneForm.target_date || undefined })
-        setMilestones(prev => [...prev, mil]); setMilestoneForm({ title: '', status: 'planned', target_date: '' })
+        const mil = await api.milestones.create(project.id, {
+          title: milestoneForm.title, status: milestoneForm.status,
+          target_date: milestoneForm.target_date || undefined,
+          phase_id: milestoneForm.phase_id || undefined,
+        })
+        setMilestones(prev => [...prev, mil]); setMilestoneForm({ title: '', status: 'planned', target_date: '', phase_id: '' })
       } else if (tab === 'decisions') {
         const dec = await api.decisions.create(project.id, {
           title: decisionForm.title, decision: decisionForm.decision, status: decisionForm.status,
@@ -335,6 +342,22 @@ export default function PlanningPanel({
 
   const openBlockers = blockers.filter(b => b.status === 'open')
   const taskStages = stages.filter(stage => stage.phase_id === taskForm.phase_id)
+
+  // Phase 22.1: narrow a type tab to one phase. Unphased rows drop out on
+  // purpose — the filter answers "what is in this phase", and project-level
+  // items are not in any phase.
+  const inPhase = <T extends { phase_id: string | null }>(rows: T[]): T[] =>
+    phaseFilter ? rows.filter(r => r.phase_id === phaseFilter) : rows
+  const filteredPhase = phaseFilter ? phases.find(p => p.id === phaseFilter) : null
+
+  // Blockers carry no phase_id — they reach a phase through their task. Without
+  // this they ignored the filter entirely and project-wide blockers showed up
+  // under "Showing <phase> only", which flatly contradicts the chip.
+  const blockersInPhase = (rows: Blocker[]): Blocker[] => {
+    if (!phaseFilter) return rows
+    const taskPhase = new Map(tasks.map(t => [t.id, t.phase_id]))
+    return rows.filter(b => b.task_id != null && taskPhase.get(b.task_id) === phaseFilter)
+  }
 
   // Refresh one entity type's status options after the manager (or the quick
   // "+ Add status") mutates them.
@@ -462,6 +485,11 @@ export default function PlanningPanel({
                   onChange={e => setMilestoneForm(f => ({ ...f, status: e.target.value }))}>
                   {(milestoneStatuses.length ? milestoneStatuses.map(o => o.key) : MILESTONE_STATUSES).map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
                 </select>
+                <select className="input select" value={milestoneForm.phase_id} aria-label="Milestone phase"
+                  onChange={e => setMilestoneForm(f => ({ ...f, phase_id: e.target.value }))}>
+                  <option value="">No phase (project-wide)</option>
+                  {phases.map(ph => <option key={ph.id} value={ph.id}>{ph.title}</option>)}
+                </select>
               </>
             )}
             {tab === 'decisions' && (
@@ -519,14 +547,34 @@ export default function PlanningPanel({
           </form>
         )}
 
+        {filteredPhase && tab !== 'phases' && (
+          <div className="pp-phase-filter">
+            <span>Showing <strong>{filteredPhase.title}</strong> only</span>
+            <button type="button" className="btn btn-ghost btn-xs"
+              onClick={() => setPhaseFilter(null)}>Show all</button>
+          </div>
+        )}
+
         {tab === 'phases' && (
           <PhasesSection phases={phases} tasks={tasks} decisions={decisions} risks={risks}
             projectId={project.id} setPhases={setPhases}
             statuses={phaseStatuses} reloadStatuses={reloadStatuses.phase}
-            addStatus={addStatusFor('phase')} />
+            addStatus={addStatusFor('phase')}
+            onOpenInPhase={(nextTab, phaseId) => { setPhaseFilter(phaseId); setTab(nextTab) }}
+            onAddInPhase={(nextTab, phaseId) => {
+              setPhaseFilter(phaseId)
+              setTab(nextTab)
+              // Pre-fill the phase so the create form opens already scoped —
+              // the whole point is not having to re-find the phase you were in.
+              if (nextTab === 'tasks') setTaskForm(f => ({ ...f, phase_id: phaseId, stage_id: '' }))
+              if (nextTab === 'milestones') setMilestoneForm(f => ({ ...f, phase_id: phaseId }))
+              if (nextTab === 'decisions') setDecisionForm(f => ({ ...f, phase_id: phaseId }))
+              if (nextTab === 'risks') setRiskForm(f => ({ ...f, phase_id: phaseId }))
+              setShowCreate(true)
+            }} />
         )}
         {tab === 'tasks' && (
-          <TasksList tasks={tasks} phases={phases} stages={stages} projectId={project.id} setTasks={setTasks}
+          <TasksList tasks={inPhase(tasks)} phases={phases} stages={stages} projectId={project.id} setTasks={setTasks}
             taskStatuses={taskStatuses} reloadStatuses={reloadStatuses.task}
             addTaskStatus={addStatusFor('task')}
             onTaskUpdated={updated =>
@@ -534,20 +582,20 @@ export default function PlanningPanel({
             } />
         )}
         {tab === 'milestones' && (
-          <MilestonesSection milestones={milestones} projectId={project.id} setMilestones={setMilestones}
+          <MilestonesSection milestones={inPhase(milestones)} projectId={project.id} setMilestones={setMilestones}
             statuses={milestoneStatuses} reloadStatuses={reloadStatuses.milestone}
             addStatus={addStatusFor('milestone')} />
         )}
         {tab === 'decisions' && (
-          <DecisionsSection decisions={decisions} phases={phases} projectId={project.id} setDecisions={setDecisions}
+          <DecisionsSection decisions={inPhase(decisions)} phases={phases} projectId={project.id} setDecisions={setDecisions}
             statuses={decisionStatuses} reloadStatuses={reloadStatuses.decision}
             addStatus={addStatusFor('decision')} />
         )}
         {tab === 'risks' && (
           <RisksSection
-            risks={risks}
+            risks={inPhase(risks)}
             phases={phases}
-            blockers={openBlockers}
+            blockers={blockersInPhase(openBlockers)}
             projectId={project.id}
             setRisks={setRisks}
             statuses={riskStatuses} reloadStatuses={reloadStatuses.risk}
@@ -661,10 +709,15 @@ export function phaseRollups(
   return out
 }
 
-function PhasesSection({ phases, tasks = [], decisions = [], risks = [], projectId, setPhases, statuses, addStatus, reloadStatuses }: {
+/** Phase 22.1: the tabs a phase can send you to, pre-scoped to itself. */
+export type PhaseScopedTab = 'tasks' | 'milestones' | 'decisions' | 'risks'
+
+function PhasesSection({ phases, tasks = [], decisions = [], risks = [], projectId, setPhases, statuses, addStatus, reloadStatuses, onOpenInPhase, onAddInPhase }: {
   phases: Phase[]; projectId: string; setPhases: React.Dispatch<React.SetStateAction<Phase[]>>
   tasks?: Task[]; decisions?: Decision[]; risks?: Risk[]
   statuses?: StatusOption[]; addStatus?: (label: string) => Promise<void>; reloadStatuses?: () => Promise<void>
+  onOpenInPhase?: (tab: PhaseScopedTab, phaseId: string) => void
+  onAddInPhase?: (tab: PhaseScopedTab, phaseId: string) => void
 }) {
   const rollups = phaseRollups(tasks, decisions, risks)
   const [view, setView] = useState<'list' | 'board'>('list')
@@ -701,7 +754,8 @@ function PhasesSection({ phases, tasks = [], decisions = [], risks = [], project
         <ul className="pp-rows">
           {phases.map(ph => (
             <PhaseListRow key={ph.id} phase={ph} rollup={rollups.get(ph.id)} update={update} remove={remove} dragProps={itemProps(ph.id)} move={delta => void moveBy(ph.id, delta)}
-              statusKeys={statusKeys} onAddNew={onAddNew} colorOf={colorOf} />
+              statusKeys={statusKeys} onAddNew={onAddNew} colorOf={colorOf}
+              onOpenInPhase={onOpenInPhase} onAddInPhase={onAddInPhase} />
           ))}
         </ul>
       )}
@@ -710,9 +764,11 @@ function PhasesSection({ phases, tasks = [], decisions = [], risks = [], project
   )
 }
 
-function PhaseListRow({ phase, rollup, update, remove, dragProps, move, statusKeys = PHASE_STATUSES, onAddNew, colorOf }: {
+function PhaseListRow({ phase, rollup, update, remove, dragProps, move, statusKeys = PHASE_STATUSES, onAddNew, colorOf, onOpenInPhase, onAddInPhase }: {
   phase: Phase
   rollup?: PhaseRollup
+  onOpenInPhase?: (tab: PhaseScopedTab, phaseId: string) => void
+  onAddInPhase?: (tab: PhaseScopedTab, phaseId: string) => void
   update: (id: string, patch: Parameters<typeof api.phases.update>[1]) => void
   statusKeys?: string[]
   onAddNew?: () => void
@@ -731,7 +787,7 @@ function PhaseListRow({ phase, rollup, update, remove, dragProps, move, statusKe
           <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
           {editable.node ?? <span className="pp-row-title">{phase.title}</span>}
         </button>
-        {rollup && <PhaseRollupChips rollup={rollup} />}
+        {rollup && <PhaseRollupChips rollup={rollup} phaseId={phase.id} onOpenInPhase={onOpenInPhase} />}
         <InlineStatusSelect kind="phase" value={phase.status} options={statusKeys}
           onChange={s => update(phase.id, { status: s })} label={`Change status of ${phase.title}`} onAddNew={onAddNew} colorOf={colorOf} />
         <RowActions title={phase.title} onEdit={editable.start} onDelete={() => remove(phase.id)} dragHandle
@@ -740,6 +796,16 @@ function PhaseListRow({ phase, rollup, update, remove, dragProps, move, statusKe
       {open && (
         <div className="pp-task-details">
           {phase.description && <p className="pp-row-desc">{phase.description}</p>}
+          {onAddInPhase && (
+            <div className="pp-phase-add" role="group" aria-label={`Add to ${phase.title}`}>
+              {(['tasks', 'milestones', 'decisions', 'risks'] as PhaseScopedTab[]).map(t => (
+                <button key={t} type="button" className="btn btn-outline btn-xs"
+                  onClick={() => onAddInPhase(t, phase.id)}>
+                  Add {t.replace(/s$/, '')} here
+                </button>
+              ))}
+            </div>
+          )}
           <Attachments entityType="phase" entityId={phase.id} projectId={phase.project_id} label={phase.title} />
         </div>
       )}
@@ -749,13 +815,36 @@ function PhaseListRow({ phase, rollup, update, remove, dragProps, move, statusKe
 
 /** The phase's contents at a glance. Zero-valued parts are omitted rather than
  *  shown as "0", so a phase only carries the signal it actually has. */
-function PhaseRollupChips({ rollup }: { rollup: PhaseRollup }) {
-  const parts: string[] = []
-  if (rollup.tasksTotal) parts.push(`${rollup.tasksDone}/${rollup.tasksTotal} tasks`)
-  if (rollup.decisions) parts.push(`${rollup.decisions} decision${rollup.decisions === 1 ? '' : 's'}`)
-  if (rollup.openRisks) parts.push(`${rollup.openRisks} open risk${rollup.openRisks === 1 ? '' : 's'}`)
+function PhaseRollupChips({ rollup, phaseId, onOpenInPhase }: {
+  rollup: PhaseRollup
+  phaseId?: string
+  onOpenInPhase?: (tab: PhaseScopedTab, phaseId: string) => void
+}) {
+  const parts: { tab: PhaseScopedTab; text: string }[] = []
+  if (rollup.tasksTotal) parts.push({ tab: 'tasks', text: `${rollup.tasksDone}/${rollup.tasksTotal} tasks` })
+  if (rollup.decisions) parts.push({ tab: 'decisions', text: `${rollup.decisions} decision${rollup.decisions === 1 ? '' : 's'}` })
+  if (rollup.openRisks) parts.push({ tab: 'risks', text: `${rollup.openRisks} open risk${rollup.openRisks === 1 ? '' : 's'}` })
   if (!parts.length) return null
-  return <span className="pp-card-phase" title="Tasks, decisions and open risks in this phase">{parts.join(' · ')}</span>
+
+  // Phase 22.1: each count opens its tab narrowed to this phase. Without a
+  // handler it stays plain text — a count that looks clickable but isn't is
+  // worse than one that doesn't.
+  if (!onOpenInPhase || !phaseId) {
+    return <span className="pp-card-phase">{parts.map(p => p.text).join(' · ')}</span>
+  }
+  return (
+    <span className="pp-card-phase pp-rollup">
+      {parts.map((p, i) => (
+        <span key={p.tab}>
+          {i > 0 && <span aria-hidden="true"> · </span>}
+          <button type="button" className="pp-rollup-link"
+            onClick={e => { e.stopPropagation(); onOpenInPhase(p.tab, phaseId) }}>
+            {p.text}
+          </button>
+        </span>
+      ))}
+    </span>
+  )
 }
 
 /** Phase 19: which phase an item belongs to. Renders nothing when unphased —
