@@ -86,6 +86,18 @@
 .pp-comment-add { display: flex; flex-direction: column; gap: var(--space-2); }
 .pp-dialog .pp-comments { padding-left: 0; }
 
+/* Phase 22: notes + links attached to any entity (EntityNotes) */
+.pp-attach {
+  display: flex; flex-direction: column; gap: var(--space-2);
+  margin-top: var(--space-3); padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+.pp-attach .pp-comment { flex-direction: row; align-items: flex-start; justify-content: space-between; gap: var(--space-2); }
+.pp-attach .pp-comment-body { flex: 1; }
+.pp-attach-link { display: block; font-size: var(--text-sm); }
+.pp-attach-actions { display: flex; gap: var(--space-2); }
+.pp-attach-error { color: var(--status-danger-fg); font-size: var(--text-xs); margin: 0; }
+
 /* Meta text (dates, entity refs) */
 .pp-meta { font-size: var(--text-xs); color: var(--text-tertiary); white-space: nowrap; }
 
