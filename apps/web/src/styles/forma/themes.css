@@ -108,8 +108,13 @@
   --bg-subtle:   #F8FAFC; --bg-muted:    #E7ECF4;
   --bg-inverse:  #0B1226;
   --text-primary:#0B1226; --text-secondary:#2A334D;
-  --text-tertiary:#71809A; --text-inverse:#FFFFFF;
-  --text-accent: #2D77FF;
+  /* Text tokens are a step darker than the brand fill on purpose: #2D77FF is
+     the right accent for a filled control, but as TEXT on white it measures
+     ~3.7:1, under the 4.5:1 AA bar. --accent-hover is the same hue already in
+     this palette and clears it, so accent text stays on-brand and legible.
+     The fills (--accent*) are untouched — white-on-accent is a separate axis. */
+  --text-tertiary:#5C6A85; --text-inverse:#FFFFFF;
+  --text-accent: #1F63DB;
   --border-subtle:#E7ECF4; --border-default:#D6E0EC;
   --border-strong:#9AABC0; --border-accent:#5EC3FF;
   --accent:#2D77FF;       --accent-hover:#1F63DB;
@@ -118,7 +123,7 @@
   --status-success-fg:#047857; --status-success-bg:#ECFDF5; --status-success-border:#D1FAE5;
   --status-danger-fg:#D12672;  --status-danger-bg:#FFF2F8; --status-danger-border:#FFD6E8;
   --status-warning-fg:#A16207; --status-warning-bg:#FFFBEB; --status-warning-border:#FEF3C7;
-  --status-info-fg:#2D77FF;    --status-info-bg:#EEF6FF; --status-info-border:#CFE4FF;
+  --status-info-fg:#1F63DB;    --status-info-bg:#EEF6FF; --status-info-border:#CFE4FF;
 }
 
 /* ── LIGHT TEAL ──────────────────────────────────────────── */
