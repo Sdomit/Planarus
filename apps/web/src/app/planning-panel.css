@@ -98,6 +98,21 @@
 .pp-attach-actions { display: flex; gap: var(--space-2); }
 .pp-attach-error { color: var(--status-danger-fg); font-size: var(--text-xs); margin: 0; }
 
+/* Phase 22.1: the phase as a workspace — drill-down counts + scoped add */
+.pp-rollup { display: inline-flex; align-items: center; gap: 0; }
+.pp-rollup-link {
+  background: none; border: 0; padding: 0; cursor: pointer; font: inherit;
+  color: inherit; text-decoration: underline; text-underline-offset: 2px;
+}
+.pp-rollup-link:hover { color: var(--text-primary); }
+.pp-phase-add { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+.pp-phase-filter {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  background: var(--bg-subtle); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md); padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3); font-size: var(--text-sm); color: var(--text-secondary);
+}
+
 /* Meta text (dates, entity refs) */
 .pp-meta { font-size: var(--text-xs); color: var(--text-tertiary); white-space: nowrap; }
 
