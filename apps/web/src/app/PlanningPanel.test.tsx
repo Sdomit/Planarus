@@ -523,7 +523,10 @@ describe('phase spine UI', () => {
     setupPhased()
     render(<PlanningPanel projectId="proj_1" />)
     await screen.findByText('Test Project')
-    expect(await screen.findByText('1 decision · 1 open risk')).toBeTruthy()
+    // Phase 22.1 split the roll-up into one button per count, so the summary is
+    // no longer a single text node — assert the parts.
+    expect(await screen.findByRole('button', { name: '1 decision' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '1 open risk' })).toBeTruthy()
   })
 
   it('shows the phase chip on a decision and lets it be re-assigned', async () => {
@@ -640,5 +643,110 @@ describe('entity attachments', () => {
     }))
     // The whole point of reading from shared state: no per-row list call.
     expect(mockApi.links.list.mock.calls.length).toBe(listCallsBefore)
+  })
+})
+
+// --- Phase 22.1: the phase as a workspace -----------------------------------
+
+describe('phase workspace', () => {
+  const PHASE = {
+    id: 'pha_1', project_id: 'proj_1', title: 'Build', description: null,
+    status: 'active', sort_order: 0, created_at: 'x', updated_at: 'x',
+  }
+  const mkRisk = (id: string, title: string, phase_id: string | null) => ({
+    id, project_id: 'proj_1', phase_id, title, description: null,
+    severity: 'high', status: 'open', mitigation: null, sort_order: 0,
+    created_at: 'x', updated_at: 'x',
+  })
+
+  function setupWorkspace() {
+    setupEmpty()
+    mockApi.phases.list.mockResolvedValue([PHASE])
+    mockApi.risks.list.mockResolvedValue([
+      mkRisk('rsk_in', 'inside the phase', 'pha_1'),
+      mkRisk('rsk_out', 'project wide', null),
+    ])
+  }
+
+  it('clicking a roll-up count opens that tab narrowed to the phase', async () => {
+    setupWorkspace()
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+
+    fireEvent.click(await screen.findByRole('button', { name: '1 open risk' }))
+
+    expect(await screen.findByText('inside the phase')).toBeTruthy()
+    // The unphased risk is not in this phase, so it drops out of the view.
+    expect(screen.queryByText('project wide')).toBeNull()
+    expect(screen.getByRole('tab', { name: 'Risks' }).getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('the filter is visible and clearable, never a silent narrowing', async () => {
+    setupWorkspace()
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    fireEvent.click(await screen.findByRole('button', { name: '1 open risk' }))
+    await screen.findByText('inside the phase')
+
+    expect(screen.getByText(/Showing/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Show all' }))
+
+    expect(await screen.findByText('project wide')).toBeTruthy()
+    expect(screen.queryByText(/Showing/)).toBeNull()
+  })
+
+
+  it('filters blockers by the phase of their task, not just risks', async () => {
+    // Blockers have no phase_id — they reach a phase through their task. A
+    // browser check caught them ignoring the filter while the chip claimed
+    // "Showing <phase> only".
+    setupWorkspace()
+    mockApi.tasks.list.mockResolvedValue([
+      { id: 'tsk_in', project_id: 'proj_1', phase_id: 'pha_1', stage_id: null, parent_task_id: null,
+        title: 'in phase', description: null, status: 'backlog', priority: null, due_at: null,
+        sort_order: 0, assignee_id: null, assignee_display: null, created_at: 'x', updated_at: 'x' },
+    ])
+    mockApi.blockers.list.mockResolvedValue([
+      { id: 'blk_in', project_id: 'proj_1', task_id: 'tsk_in', title: 'blocker in phase',
+        description: null, status: 'open', created_at: 'x', updated_at: 'x' },
+      { id: 'blk_out', project_id: 'proj_1', task_id: null, title: 'blocker project wide',
+        description: null, status: 'open', created_at: 'x', updated_at: 'x' },
+    ])
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    fireEvent.click(await screen.findByRole('button', { name: '1 open risk' }))
+
+    expect(await screen.findByText('blocker in phase')).toBeTruthy()
+    expect(screen.queryByText('blocker project wide')).toBeNull()
+  })
+
+  it('"add risk here" opens the create form already scoped to the phase', async () => {
+    setupWorkspace()
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    fireEvent.click(await screen.findByRole('button', { name: 'Build' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add risk here' }))
+
+    const select = await screen.findByLabelText('Risk phase') as HTMLSelectElement
+    expect(select.value).toBe('pha_1')
+  })
+
+  it('creates a milestone with its phase — the form used to drop it', async () => {
+    setupWorkspace()
+    mockApi.milestones.create.mockResolvedValue({
+      id: 'mil_1', project_id: 'proj_1', phase_id: 'pha_1', title: 'Beta',
+      description: null, status: 'planned', target_date: null, sort_order: 0,
+      created_at: 'x', updated_at: 'x',
+    })
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    fireEvent.click(await screen.findByRole('button', { name: 'Build' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add milestone here' }))
+
+    fireEvent.change(await screen.findByLabelText('Milestone title'), { target: { value: 'Beta' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(mockApi.milestones.create).toHaveBeenCalledWith('proj_1',
+      expect.objectContaining({ title: 'Beta', phase_id: 'pha_1' })))
   })
 })
