@@ -1,0 +1,17 @@
+# Solo-maintainer ownership baseline. Configure required CODEOWNER review only
+# after a separate trusted reviewer is available; authors cannot approve their
+# own pull requests.
+* @Sdomit
+
+/.github/ @Sdomit
+/LICENSE @Sdomit
+/NOTICE @Sdomit
+/SECURITY.md @Sdomit
+/CONTRIBUTING.md @Sdomit
+/SUPPORT.md @Sdomit
+/TRADEMARKS.md @Sdomit
+/CHANGELOG.md @Sdomit
+/package.json @Sdomit
+/pnpm-lock.yaml @Sdomit
+/apps/api/pyproject.toml @Sdomit
+/apps/web/package.json @Sdomit
