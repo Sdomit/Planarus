@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy import func
 from sqlmodel import Session, select
 
-from app.core.constants import BUILTIN_STATUS_KEYS
+from app.core.constants import BUILTIN_STATUS_KEYS, builtin_status_category
 from app.core.utils import new_id, now_utc
 from app.models.decision import Decision
 from app.models.milestone import Milestone
@@ -43,12 +43,49 @@ def _builtin_reads(entity_type: str) -> list[StatusOptionRead]:
             id=None,
             key=k,
             label=k.replace("_", " ").capitalize(),
+            category=builtin_status_category(k),
             color=None,
             sort_order=i,
             builtin=True,
         )
         for i, k in enumerate(keys)
     ]
+
+
+def status_categories(
+    session: Session, project_id: str, entity_type: str
+) -> dict[str, str]:
+    """Every status key this project can use, mapped to its category (#88).
+
+    Built-ins take their intrinsic category; custom options take the one their
+    project chose. This is the single place any summarizing surface should ask
+    what a status *means* — comparing `status == "done"` is the bug this closes.
+    """
+    out = {
+        key: builtin_status_category(key)
+        for key in BUILTIN_STATUS_KEYS.get(entity_type, ())
+    }
+    for opt in list_custom(session, project_id, entity_type):
+        out[opt.key] = opt.category
+    return out
+
+
+def status_keys_in(
+    session: Session, project_id: str, entity_type: str, *categories: str
+) -> set[str]:
+    """The status keys belonging to any of ``categories``.
+
+    An unknown status — one whose option row was deleted while cards still carry
+    it — is in no category and therefore in no set, so it is treated as open by
+    every consumer that asks for closed keys. Open is the safe default: it keeps
+    a card visible rather than silently retiring it.
+    """
+    wanted = set(categories)
+    return {
+        key
+        for key, category in status_categories(session, project_id, entity_type).items()
+        if category in wanted
+    }
 
 
 def list_custom(session: Session, project_id: str, entity_type: str) -> list[StatusOption]:
@@ -75,6 +112,7 @@ def list_status_options(
                 id=opt.id,
                 key=opt.key,
                 label=opt.label,
+                category=opt.category,
                 color=opt.color,
                 sort_order=base + opt.sort_order,
                 builtin=False,
@@ -114,6 +152,7 @@ def create_status_option(
         entity_type=data.entity_type,
         key=key,
         label=data.label,
+        category=data.category,
         color=data.color,
         sort_order=(max_order or 0) + 1,
         created_at=now,

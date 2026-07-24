@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, StatusOption } from '../api/client'
+import { api, StatusCategory, StatusOption } from '../api/client'
 import { StatusBadge, type ToneKind } from './StatusBadge'
 
 const DEFAULT_COLOR = '#8b5cf6'
+
+// What a column means, in the user's words. The roadmap %, the due-date
+// reminders and the agent brief all read this — a column named "Shipped" only
+// counts as finished once it is marked Done here.
+const CATEGORIES: { value: StatusCategory; label: string }[] = [
+  { value: 'open', label: 'In progress' },
+  { value: 'done', label: 'Done' },
+  { value: 'canceled', label: 'Canceled' },
+]
 
 /**
  * Modal for managing a project's custom statuses for one entity type: rename,
@@ -33,6 +42,7 @@ export function StatusManager({
   const [error, setError] = useState<string | null>(null)
   const [newLabel, setNewLabel] = useState('')
   const [newColor, setNewColor] = useState(DEFAULT_COLOR)
+  const [newCategory, setNewCategory] = useState<StatusCategory>('open')
 
   const builtins = options.filter(o => o.builtin)
   const custom = options.filter(o => !o.builtin && o.id)
@@ -56,6 +66,8 @@ export function StatusManager({
   }
   const recolor = (o: StatusOption, color: string) =>
     void run(() => api.statusOptions.update(o.id!, { color }))
+  const recategorize = (o: StatusOption, category: StatusCategory) =>
+    void run(() => api.statusOptions.update(o.id!, { category }))
   const remove = (o: StatusOption) => void run(() => api.statusOptions.remove(o.id!))
 
   const move = (index: number, delta: number) => {
@@ -70,8 +82,11 @@ export function StatusManager({
     const t = newLabel.trim()
     if (!t) return
     void run(async () => {
-      await api.statusOptions.create(projectId, { entity_type: entityType, label: t, color: newColor })
+      await api.statusOptions.create(projectId, {
+        entity_type: entityType, label: t, color: newColor, category: newCategory,
+      })
       setNewLabel('')
+      setNewCategory('open')
     })
   }
 
@@ -120,6 +135,15 @@ export function StatusManager({
                     if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur() }
                   }}
                 />
+                <select
+                  className="input input-sm sm-category" aria-label={`Meaning of ${o.label}`}
+                  value={o.category} disabled={busy}
+                  onChange={e => recategorize(o, e.target.value as StatusCategory)}
+                >
+                  {CATEGORIES.map(c => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
+                  ))}
+                </select>
                 <div className="sm-actions">
                   <button type="button" className="sm-icon" aria-label={`Move ${o.label} up`}
                     disabled={busy || i === 0} onClick={() => move(i, -1)}>↑</button>
@@ -145,6 +169,15 @@ export function StatusManager({
             className="input input-sm sm-label" placeholder="New status name" aria-label="New status name"
             value={newLabel} onChange={e => setNewLabel(e.target.value)} disabled={busy}
           />
+          <select
+            className="input input-sm sm-category" aria-label="New status meaning"
+            value={newCategory} onChange={e => setNewCategory(e.target.value as StatusCategory)}
+            disabled={busy}
+          >
+            {CATEGORIES.map(c => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </select>
           <button type="submit" className="btn btn-solid btn-sm" disabled={busy || !newLabel.trim()}>Add</button>
         </form>
       </div>

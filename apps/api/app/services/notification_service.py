@@ -21,12 +21,15 @@ from app.schemas.notifications import (
     NotificationRuleCreate,
     NotificationRuleUpdate,
 )
+from app.services import status_option_service
 from app.services.audit_service import create_audit_event
 
 # Fixed feed window for "due soon" (email rules carry their own threshold).
 DUE_SOON_WINDOW_HOURS = 48
 
-_TASK_OPEN = ("done", "canceled")  # statuses excluded from due reminders
+# #88: which statuses are excluded from due-date nagging is now a per-project
+# question — a custom column marked done or canceled is finished work, and
+# nagging about it forever was the bug.
 _SEVERITY_RANK = {"action": 0, "warn": 1, "info": 2}
 
 
@@ -58,11 +61,14 @@ def due_task_buckets(
     now = _parse_ts(now_utc())
     horizon = _parse_ts(now_utc_plus_hours(window_hours))
     assert now is not None and horizon is not None
+    closed = status_option_service.status_keys_in(
+        session, project_id, "task", "done", "canceled"
+    )
     tasks = session.exec(
         select(Task)
         .where(Task.project_id == project_id)
         .where(Task.due_at.is_not(None))  # type: ignore[union-attr]
-        .where(Task.status.not_in(_TASK_OPEN))  # type: ignore[attr-defined]
+        .where(Task.status.not_in(closed))  # type: ignore[attr-defined]
         .order_by(Task.due_at)
     ).all()
     overdue: list[Task] = []
