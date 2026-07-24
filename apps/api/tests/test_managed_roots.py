@@ -34,8 +34,10 @@ def _auth(token):
     return {COOKIE: token}
 
 
-# --- auth mode: root is server-derived, tenant path ignored -------------------
-def test_auth_mode_derives_root_and_ignores_tenant_path(client, auth_on):
+# --- auth mode: root is server-derived, tenant path ignored, path not leaked --
+def test_auth_mode_derives_root_and_ignores_tenant_path(client, auth_on, session):
+    from app.models.project import Project
+
     token = _login(client, "alice@acme.co")
     ws = client.post(
         "/api/v1/workspaces", json={"name": "acme", "slug": "acme"}, cookies=_auth(token)
@@ -49,9 +51,12 @@ def test_auth_mode_derives_root_and_ignores_tenant_path(client, auth_on):
     )
     assert r.status_code == 201, r.text
     proj = r.json()
+    # The absolute server root is redacted from the response (issue point 6).
+    assert proj["folder_path"] is None
+    # But on disk it is the derived, non-tenant-chosen path under the base.
     base = os.path.realpath(settings.projects_root)
-    # The malicious path is ignored; the root is derived under the managed base.
-    assert proj["folder_path"] == os.path.join(base, ws, proj["id"])
+    stored = session.get(Project, proj["id"]).folder_path
+    assert stored == os.path.join(base, ws, proj["id"])
 
 
 # --- local mode: escape hatch works, but guards apply -------------------------
