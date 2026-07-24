@@ -113,6 +113,14 @@ class Settings(BaseSettings):
     oauth_github_client_secret: str = Field(
         default="", validation_alias="PLANARUS_OAUTH_GITHUB_CLIENT_SECRET"
     )
+    # #113: the exact callback URLs an OAuth flow may be started with,
+    # comma-separated. Fail-closed — empty (the default) means no OAuth or
+    # calendar-connect flow can start at all, so a caller-supplied redirect_uri
+    # can never be trusted through the state. Compared verbatim after stripping
+    # whitespace; no prefix or wildcard matching.
+    oauth_redirect_uris: str = Field(
+        default="", validation_alias="PLANARUS_OAUTH_REDIRECT_URIS"
+    )
 
     # Phase 15.12b — calendar external sync (Google/Microsoft). Fully inert unless
     # BOTH an encryption key AND a provider client id are set: no key → tokens can't
