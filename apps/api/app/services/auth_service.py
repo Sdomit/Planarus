@@ -14,6 +14,7 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from app.core.exceptions import ConflictError
 from app.core.utils import new_id, now_utc, now_utc_plus_hours, sha256_hex
+from app.models.setting import Setting
 from app.models.user import User
 from app.models.user_identity import UserIdentity
 from app.models.user_session import UserSession
@@ -117,14 +118,43 @@ def _normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
-def _bootstrap_admin(session: Session) -> bool:
-    """D29: the very first account on a server becomes its admin.
+# #114: the row whose primary key decides who bootstraps. Written once, in the
+# same transaction as the winning account, and never read for its value.
+BOOTSTRAP_CLAIM_KEY = "admin_bootstrap_claimed"
 
-    ponytail: unguarded existence check — two racing first registrations could
-    both win admin; LAN-scale accepted, and the last-active-admin guard keeps
-    the system recoverable either way.
-    """
+
+def _no_accounts_yet(session: Session) -> bool:
     return session.exec(select(User.id).limit(1)).first() is None
+
+
+def _claim_bootstrap_admin(session: Session) -> bool:
+    """D29: the very first account on a server becomes its admin — exactly one (#114).
+
+    The existence check alone is a check-then-act race: two registrations
+    arriving together both see an empty table and both become admin. The claim is
+    therefore an INSERT of a fixed primary key, so the database decides the
+    winner — no locking, and identical semantics on SQLite and Postgres. It runs
+    inside a SAVEPOINT because the loser's ``IntegrityError`` must not roll back
+    the account being created around it: losing the claim means "register
+    normally, without admin", not "fail".
+
+    ponytail: a server whose accounts were all removed by hand keeps its claim
+    row and will not re-bootstrap. There is no account-deletion path in the
+    product, so that state can only be reached with a SQL client; re-open it by
+    deleting the claim row.
+    """
+    if not _no_accounts_yet(session):
+        return False
+    try:
+        with session.begin_nested():
+            session.add(
+                Setting(
+                    key=BOOTSTRAP_CLAIM_KEY, value="true", updated_at=now_utc()
+                )
+            )
+    except IntegrityError:
+        return False
+    return True
 
 
 def needs_setup(session: Session) -> bool:
@@ -132,9 +162,10 @@ def needs_setup(session: Session) -> bool:
 
     Public read of the same D29 check, for the first-run sign-in screen. It does
     leak "no accounts yet", unlike D30's deliberately opaque closed-registration
-    404, but only until someone registers: after that it is false forever.
+    404, but only until someone registers: after that it is false forever. A
+    read, never a claim — claiming is ``_claim_bootstrap_admin``.
     """
-    return _bootstrap_admin(session)
+    return _no_accounts_yet(session)
 
 
 def login_with_identity(
@@ -184,7 +215,7 @@ def login_with_identity(
             id=new_id("usr"),
             email=norm,
             display_name=(display_name or norm.split("@")[0]).strip()[:200] or norm,
-            is_admin=_bootstrap_admin(session),
+            is_admin=_claim_bootstrap_admin(session),
             created_at=now,
             updated_at=now,
         )
@@ -279,7 +310,7 @@ def register_password_user(
         id=new_id("usr"),
         email=norm,
         display_name=(display_name or norm.split("@")[0]).strip()[:200] or norm,
-        is_admin=_bootstrap_admin(session),
+        is_admin=_claim_bootstrap_admin(session),
         created_at=now,
         updated_at=now,
     )
