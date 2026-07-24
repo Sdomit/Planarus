@@ -319,6 +319,36 @@ def status_option_entity_type_check_sql(column: str = "entity_type") -> str:
     return _check_sql(column, STATUS_OPTION_ENTITY_TYPES)
 
 
+# #88: what a status *means*, independent of what it is called. Summarizing
+# surfaces (roadmap %, due-date nagging, the agents' active-work brief) ask for
+# the category instead of comparing status strings, so a custom column named
+# "Shipped" can count as finished work.
+STATUS_CATEGORIES: tuple[str, ...] = ("open", "done", "canceled")
+DEFAULT_STATUS_CATEGORY = "open"
+
+
+def status_category_check_sql(column: str = "category") -> str:
+    return _check_sql(column, STATUS_CATEGORIES)
+
+
+def builtin_status_category(key: str) -> str:
+    """The category of a canonical built-in key.
+
+    Deliberately literal: `done` is done, `canceled` is canceled, everything else
+    is open. That is exactly what the three consumers hardcoded before #88, so
+    built-in behavior is unchanged — the categories exist so *custom* statuses
+    can say the same thing. Enum values whose finality is a judgement call
+    (`risk.mitigated`, `decision.superseded`, `milestone.achieved`) are left open
+    on purpose: nothing reads their category today, and inventing an answer here
+    would silently change those surfaces.
+    """
+    if key == "done":
+        return "done"
+    if key == "canceled":
+        return "canceled"
+    return DEFAULT_STATUS_CATEGORY
+
+
 # Comment/Link are polymorphic: they attach to any project-scoped entity via
 # (entity_type, entity_id). This is the target-kind allowlist (03-data-model.md).
 REF_ENTITY_TYPES: tuple[str, ...] = (

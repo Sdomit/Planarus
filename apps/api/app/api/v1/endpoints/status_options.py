@@ -16,8 +16,8 @@ router = APIRouter()
 
 def _to_read(opt: StatusOption) -> StatusOptionRead:
     return StatusOptionRead(
-        id=opt.id, key=opt.key, label=opt.label, color=opt.color,
-        sort_order=opt.sort_order, builtin=False,
+        id=opt.id, key=opt.key, label=opt.label, category=opt.category,
+        color=opt.color, sort_order=opt.sort_order, builtin=False,
     )
 
 

@@ -2,6 +2,10 @@ import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-li
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import PlanningPanel, { nextStatusForColumn, phaseRollups } from './PlanningPanel'
 
+// #88: built-ins report their own category; only `done`/`canceled` are special.
+const STATUS_CATEGORY = (key: string) =>
+  key === 'done' ? 'done' as const : key === 'canceled' ? 'canceled' as const : 'open' as const
+
 describe('nextStatusForColumn', () => {
   const review = { statuses: ['waiting', 'needs_review', 'blocked'] }
   it('returns the column primary status when the task is elsewhere', () => {
@@ -266,8 +270,8 @@ describe('PlanningPanel', () => {
   it('shows a custom status as a board column and offers Add column', async () => {
     setupEmpty()
     const builtins = ['backlog', 'ready', 'in_progress', 'waiting', 'needs_review', 'blocked', 'done', 'canceled']
-      .map((k, i) => ({ id: null, key: k, label: k, color: null, sort_order: i, builtin: true }))
-    const custom = { id: 'sto_1', key: 'in_review', label: 'In Review', color: null, sort_order: 8, builtin: false }
+      .map((k, i) => ({ id: null, key: k, label: k, category: STATUS_CATEGORY(k), color: null, sort_order: i, builtin: true }))
+    const custom = { id: 'sto_1', key: 'in_review', label: 'In Review', category: 'open' as const, color: null, sort_order: 8, builtin: false }
     mockApi.statusOptions.list.mockResolvedValue([...builtins, custom])
     mockApi.tasks.list.mockResolvedValue([{
       id: 'tsk_1', project_id: 'proj_1', phase_id: null, stage_id: null, parent_task_id: null,
@@ -289,8 +293,8 @@ describe('PlanningPanel', () => {
   it('shows a custom phase status as a board column', async () => {
     setupEmpty()
     const builtins = ['planned', 'active', 'blocked', 'done', 'canceled']
-      .map((k, i) => ({ id: null, key: k, label: k, color: null, sort_order: i, builtin: true }))
-    const custom = { id: 'sto_p', key: 'on_hold', label: 'On Hold', color: null, sort_order: 5, builtin: false }
+      .map((k, i) => ({ id: null, key: k, label: k, category: STATUS_CATEGORY(k), color: null, sort_order: i, builtin: true }))
+    const custom = { id: 'sto_p', key: 'on_hold', label: 'On Hold', category: 'open' as const, color: null, sort_order: 5, builtin: false }
     // Only phase requests get the custom option (task/risk stay default []).
     mockApi.statusOptions.list.mockImplementation(async (_pid: string, entity = 'task') =>
       entity === 'phase' ? [...builtins, custom] : [])
@@ -400,9 +404,9 @@ describe('PlanningPanel', () => {
 
 describe('StatusManager (manage statuses)', () => {
   const BUILTINS = ['backlog', 'ready', 'in_progress', 'waiting', 'needs_review', 'blocked', 'done', 'canceled']
-    .map((k, i) => ({ id: null, key: k, label: k, color: null, sort_order: i, builtin: true }))
-  const CUSTOM_A = { id: 'sto_a', key: 'in_review', label: 'In Review', color: '#8b5cf6', sort_order: 8, builtin: false }
-  const CUSTOM_B = { id: 'sto_b', key: 'on_hold', label: 'On Hold', color: null, sort_order: 9, builtin: false }
+    .map((k, i) => ({ id: null, key: k, label: k, category: STATUS_CATEGORY(k), color: null, sort_order: i, builtin: true }))
+  const CUSTOM_A = { id: 'sto_a', key: 'in_review', label: 'In Review', category: 'open' as const, color: '#8b5cf6', sort_order: 8, builtin: false }
+  const CUSTOM_B = { id: 'sto_b', key: 'on_hold', label: 'On Hold', category: 'open' as const, color: null, sort_order: 9, builtin: false }
 
   async function openTaskManager() {
     setupEmpty()
@@ -456,6 +460,24 @@ describe('StatusManager (manage statuses)', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
     await waitFor(() => expect(mockApi.statusOptions.create).toHaveBeenCalledWith(
       'proj_1', expect.objectContaining({ entity_type: 'task', label: 'Verifying' })))
+  })
+
+  // #88: a column's meaning drives the roadmap %, the reminders and the agent
+  // brief, so it has to be settable from the same dialog that creates it.
+  it('marks a custom status as done', async () => {
+    const dialog = await openTaskManager()
+    fireEvent.change(within(dialog).getByLabelText('Meaning of In Review'), { target: { value: 'done' } })
+    await waitFor(() =>
+      expect(mockApi.statusOptions.update).toHaveBeenCalledWith('sto_a', { category: 'done' }))
+  })
+
+  it('adds a new status with a chosen meaning', async () => {
+    const dialog = await openTaskManager()
+    fireEvent.change(within(dialog).getByLabelText('New status name'), { target: { value: 'Shipped' } })
+    fireEvent.change(within(dialog).getByLabelText('New status meaning'), { target: { value: 'done' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
+    await waitFor(() => expect(mockApi.statusOptions.create).toHaveBeenCalledWith(
+      'proj_1', expect.objectContaining({ label: 'Shipped', category: 'done' })))
   })
 
   it('surfaces a delete-in-use error without crashing', async () => {
