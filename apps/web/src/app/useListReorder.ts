@@ -35,8 +35,13 @@ export function useListReorder<T extends { id: string }>(
     try {
       const saved = await persist(next.map(i => i.id))
       if (Array.isArray(saved)) apply(saved)
-    } catch {
+    } catch (err) {
+      // Roll the optimistic move back. Reorder persists the whole id set, so a
+      // failure here means the set changed under us (a concurrent add/remove) or
+      // the request was rejected — don't leave it silent. Callers must pass the
+      // full list, never a filtered subset (that would persist a partial set). #86
       apply(prev)
+      console.error('reorder failed to persist; order reverted', err)
     }
   }
 
