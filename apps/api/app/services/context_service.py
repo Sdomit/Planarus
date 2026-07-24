@@ -15,6 +15,7 @@ from sqlmodel import Session, select
 
 from app.core.utils import now_utc
 from app.fsmemory import atomic_io, regenerate
+from app.fsmemory.project_root import resolve_project_root_or_none
 from app.fsmemory.regenerator import RegenReport, build_render_context
 from app.fsmemory.renderers import render
 from app.fsmemory.spec import CONTEXT_FILES, ContextFileSpec
@@ -72,9 +73,12 @@ def read_content(
 ) -> tuple[Optional[str], bool]:
     """Return (on-disk content, drifted). Content is None if the file is absent."""
     project = session.get(Project, context_file.project_id)
-    if project is None or not project.folder_path:
+    if project is None:
         return None, False
-    content = atomic_io.read_text(project.folder_path, context_file.relative_path)
+    root = resolve_project_root_or_none(project)  # recheck-before-op (#115)
+    if root is None:
+        return None, False
+    content = atomic_io.read_text(root, context_file.relative_path)
     if content is None:
         return None, False
     on_disk_sum = hashlib.sha256(content.encode("utf-8")).hexdigest()
@@ -84,7 +88,10 @@ def read_content(
 def compute_diff(session: Session, context_file: ContextFile) -> str:
     """Unified diff of on-disk content vs. what regeneration would render now."""
     project = session.get(Project, context_file.project_id)
-    if project is None or not project.folder_path:
+    if project is None:
+        return ""
+    root = resolve_project_root_or_none(project)  # recheck-before-op (#115)
+    if root is None:
         return ""
     workspace = session.get(Workspace, project.workspace_id)
     spec = _spec_for(context_file.relative_path)
@@ -92,7 +99,7 @@ def compute_diff(session: Session, context_file: ContextFile) -> str:
         return ""
     ctx = build_render_context(session, project, workspace)
     rendered = render(spec, ctx)
-    on_disk = atomic_io.read_text(project.folder_path, context_file.relative_path) or ""
+    on_disk = atomic_io.read_text(root, context_file.relative_path) or ""
     rel = context_file.relative_path
     diff = difflib.unified_diff(
         on_disk.splitlines(keepends=True),

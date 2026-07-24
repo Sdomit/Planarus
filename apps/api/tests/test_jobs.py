@@ -12,6 +12,7 @@ so each case below pins one code:
 The SMTP client is faked at the ``email_service`` seam (no socket is opened) and
 the database seam is the CLI's own ``_session``, pointed at a throwaway file DB.
 """
+import os
 from contextlib import contextmanager
 from email.message import EmailMessage
 
@@ -320,3 +321,76 @@ def test_a_missing_or_unknown_command_is_a_usage_error() -> None:
         jobs.main([])
     with pytest.raises(SystemExit):
         jobs.main(["definitely-not-a-command"])
+
+
+# --- adopt-roots (#115, 115.4) ------------------------------------------------
+
+
+def _seed_project_with_folder(session, folder: str) -> str:
+    now = now_utc()
+    ws = Workspace(
+        id=new_id("ws"), name="WS", slug="ws-adopt", created_at=now, updated_at=now
+    )
+    session.add(ws)
+    session.flush()
+    proj = Project(
+        id=new_id("proj"), workspace_id=ws.id, title="Legacy", slug="p-legacy",
+        status="idea", folder_path=folder, created_at=now, updated_at=now,
+    )
+    session.add(proj)
+    session.commit()
+    return proj.id
+
+
+def test_adopt_roots_refuses_without_base(cli, monkeypatch):
+    monkeypatch.setattr(env, "projects_root", "")
+    assert jobs.main(["adopt-roots"]) == jobs.EXIT_REFUSED
+
+
+def test_adopt_roots_dry_run_changes_nothing(cli, tmp_path, capsys):
+    src = tmp_path / "legacy"
+    src.mkdir()
+    (src / "note.txt").write_text("hi", encoding="utf-8")
+    pid = _seed_project_with_folder(cli, str(src))
+
+    assert jobs.main(["adopt-roots"]) == jobs.EXIT_OK
+    out = capsys.readouterr().out
+    assert "dry-run" in out and pid in out
+    cli.expire_all()
+    assert cli.get(Project, pid).folder_path == str(src)  # untouched
+
+
+def test_adopt_roots_apply_copies_and_repoints(cli, tmp_path):
+    from app.fsmemory.project_root import managed_root_for
+
+    src = tmp_path / "legacy"
+    src.mkdir()
+    (src / "note.txt").write_text("hi", encoding="utf-8")
+    pid = _seed_project_with_folder(cli, str(src))
+    proj = cli.get(Project, pid)
+    target = managed_root_for(proj.workspace_id, proj.id)
+
+    assert jobs.main(["adopt-roots", "--apply"]) == jobs.EXIT_OK
+    cli.expire_all()
+    assert os.path.isfile(os.path.join(target, "note.txt"))  # copied
+    assert cli.get(Project, pid).folder_path == target       # repointed
+    assert (src / "note.txt").exists()                       # original kept
+
+
+def test_adopt_roots_skips_already_managed(cli, capsys):
+    from app.fsmemory.project_root import managed_root_for
+
+    now = now_utc()
+    ws = Workspace(id=new_id("ws"), name="W", slug="ws-ok", created_at=now, updated_at=now)
+    cli.add(ws)
+    cli.flush()
+    proj = Project(
+        id=new_id("proj"), workspace_id=ws.id, title="OK", slug="p-ok",
+        status="idea", created_at=now, updated_at=now,
+    )
+    proj.folder_path = managed_root_for(ws.id, proj.id)
+    cli.add(proj)
+    cli.commit()
+
+    assert jobs.main(["adopt-roots", "--apply"]) == jobs.EXIT_OK
+    assert "nothing to do" in capsys.readouterr().out

@@ -25,6 +25,7 @@ from sqlmodel import Session, select
 from app.core.utils import estimate_tokens, sha256_hex
 from app.fsmemory import atomic_io
 from app.fsmemory.path_safety import PathSafetyError
+from app.fsmemory.project_root import resolve_project_root_or_none
 from app.fsmemory.regenerator import build_render_context
 from app.fsmemory.renderers import RenderContext
 from app.models.audit_event import AuditEvent
@@ -183,7 +184,8 @@ def _read_governance(session: Session, project: Project) -> list[_Governance]:
     drifted files are excluded with a status the caller turns into a warning.
     """
     results: list[_Governance] = []
-    if not project.folder_path:
+    root = resolve_project_root_or_none(project)  # recheck-before-op (#115)
+    if root is None:
         return [_Governance(p, None, "unavailable") for p in GOVERNANCE_PATHS]
     rows = {
         cf.relative_path: cf
@@ -197,7 +199,7 @@ def _read_governance(session: Session, project: Project) -> list[_Governance]:
             results.append(_Governance(rel, None, "no-record"))
             continue
         try:
-            content = atomic_io.read_text(project.folder_path, rel)
+            content = atomic_io.read_text(root, rel)
         except PathSafetyError:
             results.append(_Governance(rel, None, "unavailable"))
             continue
