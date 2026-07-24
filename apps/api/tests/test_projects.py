@@ -234,6 +234,32 @@ def test_duplicate_deep_copies_children_with_remapped_ids(client: TestClient) ->
     assert new_comments[0]["entity_id"] == new_tasks[0]["id"]
 
 
+def test_duplicate_remaps_parent_task_id(client: TestClient) -> None:
+    """A copied sub-task must point at the COPIED parent, never the source
+    project's task — an unremapped self-FK is a silent cross-project reference
+    that later 500s an export/import round-trip (#87)."""
+    ws_id = _create_workspace(client)
+    pid = _create_project(client, ws_id, "orig-subtasks")
+    parent = client.post(f"/api/v1/projects/{pid}/tasks", json={"title": "Parent"}).json()
+    child = client.post(
+        f"/api/v1/projects/{pid}/tasks",
+        json={"title": "Child", "parent_task_id": parent["id"]},
+    ).json()
+
+    dup = client.post(f"/api/v1/projects/{pid}/duplicate")
+    assert dup.status_code == 201
+    new_id = dup.json()["id"]
+
+    new_tasks = client.get(f"/api/v1/projects/{new_id}/tasks").json()
+    by_title = {t["title"]: t for t in new_tasks}
+    new_parent, new_child = by_title["Parent"], by_title["Child"]
+    # The copied child references the copied parent, and neither id leaks in from
+    # the source project.
+    assert new_parent["parent_task_id"] is None
+    assert new_child["parent_task_id"] == new_parent["id"]
+    assert new_child["parent_task_id"] not in {parent["id"], child["id"]}
+
+
 def test_delete_requires_archive_first(client: TestClient) -> None:
     ws_id = _create_workspace(client)
     pid = _create_project(client, ws_id, "live")

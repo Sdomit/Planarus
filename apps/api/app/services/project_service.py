@@ -258,8 +258,21 @@ def duplicate_project(session: Session, project_id: str) -> Optional[Project]:
     clone(Stage, "stage", {"phase_id": "phase"})
     clone(Task, "task", {"phase_id": "phase", "stage_id": "stage"})
 
-    # Checklist items carry no project_id — copy via their parent tasks.
+    # parent_task_id is a self-reference, so `clone` can't remap it in one pass:
+    # a child may be cloned before its parent, and idmap["task"] only exists once
+    # the loop finishes. Same two-pass shape as docs below. Left unremapped, the
+    # copy's sub-tasks point at the ORIGINAL project's parent tasks — a silent
+    # cross-project FK that later 500s an export/import round-trip (#87).
     task_map = idmap["task"]
+    for src_task in session.exec(
+        select(Task).where(Task.project_id == project_id, Task.parent_task_id.is_not(None))
+    ).all():
+        new_child = session.get(Task, task_map[src_task.id])
+        new_child.parent_task_id = task_map.get(src_task.parent_task_id)
+        session.add(new_child)
+    session.flush()
+
+    # Checklist items carry no project_id — copy via their parent tasks.
     if task_map:
         for row in session.exec(
             select(ChecklistItem).where(ChecklistItem.task_id.in_(list(task_map.keys())))
