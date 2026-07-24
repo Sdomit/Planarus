@@ -10,22 +10,12 @@ entities differ, without reading their full contents.
 from __future__ import annotations
 
 import json
-from typing import Optional
 
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.core.utils import sha256_hex
-from app.models.blocker import Blocker
-from app.models.comment import Comment
-from app.models.decision import Decision
-from app.models.doc import Doc
-from app.models.link import Link
-from app.models.milestone import Milestone
-from app.models.phase import Phase
 from app.models.project import Project
-from app.models.risk import Risk
-from app.models.stage import Stage
-from app.models.task import Task
+from app.services import project_graph
 
 # Key: (entity_type, entity_id). Value: content signature.
 Manifest = dict[tuple[str, str], str]
@@ -33,21 +23,12 @@ Manifest = dict[tuple[str, str], str]
 # Fields that change on every write and must not affect the content signature.
 _VOLATILE = {"created_at", "updated_at"}
 
-# Project-scoped models synced by this engine (each carries ``project_id``). The
-# project row itself is added separately. checklist items (task-scoped) are a
-# documented follow-on.
-_SYNC_MODELS = (
-    Phase,
-    Stage,
-    Task,
-    Decision,
-    Risk,
-    Blocker,
-    Milestone,
-    Doc,
-    Comment,
-    Link,
-)
+# The models this engine syncs, parents first — read from the one graph
+# description shared with duplicate and export/import (#87), rather than a third
+# hand-maintained list that drifts from them. The project row itself is added
+# separately. Task-scoped rows (checklist items) reach the project through their
+# parent tasks, which ``project_graph.manifest_rows`` handles.
+_SYNC_MODELS = tuple(e.model for e in project_graph.entities_for("manifest"))
 
 
 def entity_signature(row) -> str:
@@ -66,10 +47,6 @@ def build_manifest(session: Session, project_id: str) -> Manifest:
     project = session.get(Project, project_id)
     if project is not None:
         manifest[("project", project.id)] = entity_signature(project)
-    for model in _SYNC_MODELS:
-        rows = session.exec(
-            select(model).where(model.project_id == project_id)
-        ).all()
-        for row in rows:
-            manifest[(model.__tablename__, row.id)] = entity_signature(row)
+    for table, row in project_graph.manifest_rows(session, project_id):
+        manifest[(table, row.id)] = entity_signature(row)
     return manifest

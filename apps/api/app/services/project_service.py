@@ -9,20 +9,11 @@ from sqlmodel import Session, SQLModel, select
 from app.core.exceptions import ConflictError
 from app.core.utils import new_id, now_utc
 from app.fsmemory.path_safety import PathSafetyError
-from app.models.blocker import Blocker
 from app.models.checklist_item import ChecklistItem
-from app.models.comment import Comment
-from app.models.decision import Decision
-from app.models.doc import Doc
-from app.models.link import Link
-from app.models.milestone import Milestone
-from app.models.phase import Phase
 from app.models.project import Project
-from app.models.risk import Risk
-from app.models.stage import Stage
 from app.models.task import Task
 from app.schemas.project import ProjectCreate, ProjectUpdate
-from app.services import context_service
+from app.services import context_service, project_graph
 from app.services.audit_service import create_audit_event
 
 logger = logging.getLogger(__name__)
@@ -201,13 +192,13 @@ def _unique_slug(session: Session, workspace_id: str, base: str) -> str:
 
 
 def duplicate_project(session: Session, project_id: str) -> Optional[Project]:
-    """Deep-copy a project and its *planning* graph into a new project.
+    """Deep-copy a project and its graph into a new project.
 
-    Copied: phases, stages, tasks (+ checklist items), decisions, risks,
-    blockers, milestones, docs, and their comments/links — with every internal
-    id remapped. Deliberately NOT copied (ponytail: they belong to the original,
-    not a fresh clone): audit history, approval requests, email logs, context
-    files, notification rules, agent runs. The copy starts folderless and at
+    What travels, in what order, and which references get remapped is declared
+    once in ``project_graph.ENTITIES`` and shared with export/import and the sync
+    manifest (#87) — this function no longer keeps its own list, which is how
+    `parent_task_id` came to be remapped by none of the three. What deliberately
+    stays behind is ``project_graph.EXCLUDED``. The copy starts folderless and at
     status 'idea'.
     """
     src = session.get(Project, project_id)
@@ -230,109 +221,19 @@ def duplicate_project(session: Session, project_id: str) -> Optional[Project]:
     session.add(new_proj)
     session.flush()
 
-    # entity_type -> {old_id: new_id}; seeds the polymorphic comment/link remap.
+    # entity key -> {old_id: new_id}; seeds the polymorphic comment/link remap.
     idmap: dict[str, dict[str, str]] = {"project": {project_id: new_proj.id}}
-
-    def clone(model, entity_type: str, fk_remap: dict[str, str]) -> None:
-        rows = session.exec(select(model).where(model.project_id == project_id)).all()
-        m: dict[str, str] = {}
-        for row in rows:
-            data = row.model_dump()
-            old = data["id"]
-            data["id"] = new_id(old.split("_", 1)[0])
-            data["project_id"] = new_proj.id
-            for field, src_type in fk_remap.items():
-                cur = data.get(field)
-                if cur is not None:
-                    data[field] = idmap.get(src_type, {}).get(cur, cur)
-            if "created_at" in data:
-                data["created_at"] = now
-            if "updated_at" in data:
-                data["updated_at"] = now
-            session.add(model(**data))
-            m[old] = data["id"]
-        session.flush()
-        idmap[entity_type] = m
-
-    clone(Phase, "phase", {})
-    clone(Stage, "stage", {"phase_id": "phase"})
-    clone(Task, "task", {"phase_id": "phase", "stage_id": "stage"})
-
-    # parent_task_id is a self-reference, so `clone` can't remap it in one pass:
-    # a child may be cloned before its parent, and idmap["task"] only exists once
-    # the loop finishes. Same two-pass shape as docs below. Left unremapped, the
-    # copy's sub-tasks point at the ORIGINAL project's parent tasks — a silent
-    # cross-project FK that later 500s an export/import round-trip (#87).
-    task_map = idmap["task"]
-    for src_task in session.exec(
-        select(Task).where(Task.project_id == project_id, Task.parent_task_id.is_not(None))
-    ).all():
-        new_child = session.get(Task, task_map[src_task.id])
-        new_child.parent_task_id = task_map.get(src_task.parent_task_id)
-        session.add(new_child)
-    session.flush()
-
-    # Checklist items carry no project_id — copy via their parent tasks.
-    if task_map:
-        for row in session.exec(
-            select(ChecklistItem).where(ChecklistItem.task_id.in_(list(task_map.keys())))
-        ).all():
-            data = row.model_dump()
-            data["id"] = new_id(data["id"].split("_", 1)[0])
-            data["task_id"] = task_map[data["task_id"]]
-            data["created_at"] = now
-            data["updated_at"] = now
-            session.add(ChecklistItem(**data))
-        session.flush()
-
-    clone(Decision, "decision", {"phase_id": "phase"})
-    clone(Risk, "risk", {"phase_id": "phase"})
-    clone(Blocker, "blocker", {"task_id": "task"})
-    clone(Milestone, "milestone", {"phase_id": "phase"})
-
-    # Docs: self-referential parent_doc_id → two-pass so a parent needn't precede
-    # its child. Export refs are folder-bound, so they're dropped on the copy.
-    docmap: dict[str, str] = {}
-    doc_parents: dict[str, Optional[str]] = {}
-    for row in session.exec(select(Doc).where(Doc.project_id == project_id)).all():
-        data = row.model_dump()
-        old = data["id"]
-        new = new_id("doc")
-        doc_parents[new] = data.get("parent_doc_id")
-        data.update(
-            id=new,
-            project_id=new_proj.id,
-            parent_doc_id=None,
-            export_relative_path=None,
-            export_checksum=None,
-            exported_at=None,
-            created_at=now,
-            updated_at=now,
-        )
-        session.add(Doc(**data))
-        docmap[old] = new
-    session.flush()
-    idmap["doc"] = docmap
-    for new_doc_id, old_parent in doc_parents.items():
-        if old_parent is not None:
-            child = session.get(Doc, new_doc_id)
-            child.parent_doc_id = docmap.get(old_parent)
-            session.add(child)
-    session.flush()
-
-    # Comments/links: entity_id is polymorphic — remap through idmap[entity_type].
-    for model in (Comment, Link):
-        for row in session.exec(
-            select(model).where(model.project_id == project_id)
-        ).all():
-            data = row.model_dump()
-            data["id"] = new_id(data["id"].split("_", 1)[0])
-            data["project_id"] = new_proj.id
-            eid = data["entity_id"]
-            data["entity_id"] = idmap.get(data["entity_type"], {}).get(eid, eid)
-            data["created_at"] = now
-            session.add(model(**data))
-    session.flush()
+    project_graph.copy_graph(
+        session,
+        surface="duplicate",
+        new_project_id=new_proj.id,
+        now=now,
+        idmap=idmap,
+        rows_for=lambda entity: [
+            row.model_dump()
+            for row in project_graph.rows_of(session, entity, project_id, idmap)
+        ],
+    )
 
     create_audit_event(
         session,
