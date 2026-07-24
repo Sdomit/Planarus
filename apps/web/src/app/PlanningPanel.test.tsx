@@ -38,7 +38,7 @@ const mockApi = api as unknown as {
   projects: { get: Fn }
   phases: { list: Fn; create: Fn; update: Fn }
   stages: { list: Fn }
-  tasks: { list: Fn; create: Fn; update: Fn }
+  tasks: { list: Fn; create: Fn; update: Fn; reorder: Fn }
   milestones: { list: Fn; create: Fn }
   decisions: { list: Fn; create: Fn; update: Fn }
   risks: { list: Fn; create: Fn; update: Fn }
@@ -551,6 +551,50 @@ describe('phase spine UI', () => {
     await screen.findByText('Test Project')
     fireEvent.click(screen.getByRole('tab', { name: 'Risks' }))
     expect(await screen.findByText('Auth phase')).toBeTruthy()
+  })
+})
+
+// --- #86: filtered phase drill-down must not corrupt the list ---------------
+
+describe('reorder in a phase drill-down (#86)', () => {
+  const PHASE = {
+    id: 'pha_1', project_id: 'proj_1', title: 'Auth phase', description: null,
+    status: 'active', sort_order: 0, created_at: 'x', updated_at: 'x',
+  }
+  const task = (id: string, title: string, sort_order: number) => ({
+    id, project_id: 'proj_1', phase_id: 'pha_1', stage_id: null, parent_task_id: null,
+    title, description: null, status: 'backlog', priority: null,
+    due_at: null, sort_order, assignee_id: null, assignee_display: null,
+    created_at: 'x', updated_at: 'x',
+  })
+
+  function setupTwoPhasedTasks() {
+    setupEmpty()
+    mockApi.phases.list.mockResolvedValue([PHASE])
+    mockApi.tasks.list.mockResolvedValue([task('tsk_a', 'Alpha task', 0), task('tsk_b', 'Beta task', 1)])
+  }
+
+  it('shows the move controls in the unfiltered task list', async () => {
+    setupTwoPhasedTasks()
+    render(<PlanningPanel projectId="proj_1" initialTab="tasks" />)
+    expect(await screen.findByText('Beta task')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Move Beta task up' })).toBeTruthy()
+  })
+
+  it('hides the move controls after drilling into a phase, so a filtered reorder cannot corrupt the list', async () => {
+    setupTwoPhasedTasks()
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    // Drill into the phase's tasks via its roll-up chip (sets the phase filter).
+    fireEvent.click(await screen.findByRole('button', { name: '0/2 tasks' }))
+    // Both in-phase tasks are shown...
+    expect(await screen.findByText('Beta task')).toBeTruthy()
+    expect(screen.getByText('Alpha task')).toBeTruthy()
+    // ...but reorder is disabled while filtered: no move buttons, so
+    // useListReorder can never persist a filtered subset. (#86)
+    expect(screen.queryByRole('button', { name: 'Move Beta task up' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Move Alpha task up' })).toBeNull()
+    expect(mockApi.tasks.reorder).not.toHaveBeenCalled()
   })
 })
 

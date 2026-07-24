@@ -578,7 +578,7 @@ export default function PlanningPanel({
         {tab === 'tasks' && (
           <TasksList tasks={inPhase(tasks)} phases={phases} stages={stages} projectId={project.id} setTasks={setTasks}
             taskStatuses={taskStatuses} reloadStatuses={reloadStatuses.task}
-            addTaskStatus={addStatusFor('task')}
+            addTaskStatus={addStatusFor('task')} reorderable={!phaseFilter}
             onTaskUpdated={updated =>
               setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))
             } />
@@ -586,12 +586,12 @@ export default function PlanningPanel({
         {tab === 'milestones' && (
           <MilestonesSection milestones={inPhase(milestones)} projectId={project.id} setMilestones={setMilestones}
             statuses={milestoneStatuses} reloadStatuses={reloadStatuses.milestone}
-            addStatus={addStatusFor('milestone')} />
+            addStatus={addStatusFor('milestone')} reorderable={!phaseFilter} />
         )}
         {tab === 'decisions' && (
           <DecisionsSection decisions={inPhase(decisions)} phases={phases} projectId={project.id} setDecisions={setDecisions}
             statuses={decisionStatuses} reloadStatuses={reloadStatuses.decision}
-            addStatus={addStatusFor('decision')} />
+            addStatus={addStatusFor('decision')} reorderable={!phaseFilter} />
         )}
         {tab === 'risks' && (
           <RisksSection
@@ -601,7 +601,7 @@ export default function PlanningPanel({
             projectId={project.id}
             setRisks={setRisks}
             statuses={riskStatuses} reloadStatuses={reloadStatuses.risk}
-            addStatus={addStatusFor('risk')}
+            addStatus={addStatusFor('risk')} reorderable={!phaseFilter}
             onBlockerUpdated={updated => setBlockers(prev => prev.map(b => b.id === updated.id ? updated : b))}
           />
         )}
@@ -884,6 +884,9 @@ interface TasksListProps {
   taskStatuses?: StatusOption[]
   addTaskStatus?: (label: string) => Promise<void>
   reloadStatuses?: () => Promise<void>
+  /** Off while a phase filter narrows the rows: sort_order is project-global,
+   *  so reordering a filtered subset would persist a partial set. See #86. */
+  reorderable?: boolean
 }
 
 /** The task status keys in effect — the project's options (built-in ∪ custom)
@@ -898,7 +901,7 @@ function promptNewStatus(add: (label: string) => Promise<void>): void {
   if (label) void add(label)
 }
 
-function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, taskStatuses, addTaskStatus, reloadStatuses }: TasksListProps) {
+function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, taskStatuses, addTaskStatus, reloadStatuses, reorderable = true }: TasksListProps) {
   const statusKeys = statusKeysOf(taskStatuses)
   const colorOf = colorMapOf(taskStatuses)
   const mgr = useStatusManager({ projectId, entityType: 'task', kind: 'task', statuses: taskStatuses, reload: reloadStatuses })
@@ -909,8 +912,10 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
   const { myId } = useContext(TeamContext)  // P16.3: "assigned to me" (team mode)
   const done = tasks.filter(t => t.status === 'done' || t.status === 'canceled').length
   const remove = (id: string) => void api.tasks.remove(id).then(() => setTasks?.(prev => prev.filter(t => t.id !== id)))
-  // Reorder operates on the FULL task list (both drag + target are always in it),
-  // so it stays valid even while a filter narrows the visible rows.
+  // Reorder persists the full id set, so it is only valid when `tasks` is the
+  // full project list. The in-component filters below (status/mine) narrow only
+  // `shown`, not `tasks`, so they stay safe — but a phase filter applied by the
+  // parent narrows `tasks` itself, so it passes reorderable=false (#86).
   const { itemProps, moveBy } = useListReorder(tasks, next => setTasks?.(next), ids => api.tasks.reorder(projectId, ids))
 
   if (tasks.length === 0)
@@ -952,7 +957,7 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
 
       {view === 'board' ? (
         <TaskBoard tasks={tasks} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated}
-          setTasks={setTasks} taskStatuses={taskStatuses} addTaskStatus={addTaskStatus} />
+          setTasks={setTasks} taskStatuses={taskStatuses} addTaskStatus={addTaskStatus} reorderable={reorderable} />
       ) : shown.length === 0 ? (
         <p style={EMPTY}>No tasks match this filter.</p>
       ) : (() => {
@@ -974,8 +979,8 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
             {top.map(t => (
               <TaskRow key={t.id} task={t} phases={phases} stages={stages} projectId={projectId}
                 onTaskUpdated={onTaskUpdated} onDelete={setTasks ? () => remove(t.id) : undefined}
-                dragProps={setTasks && !t.parent_task_id ? itemProps(t.id) : undefined}
-                move={setTasks && !t.parent_task_id ? delta => void moveBy(t.id, delta) : undefined}
+                dragProps={setTasks && reorderable && !t.parent_task_id ? itemProps(t.id) : undefined}
+                move={setTasks && reorderable && !t.parent_task_id ? delta => void moveBy(t.id, delta) : undefined}
                 subtasks={childrenOf.get(t.id) ?? []} setTasks={setTasks}
                 statusKeys={statusKeys} addTaskStatus={addTaskStatus} colorOf={colorOf} />
             ))}
@@ -987,7 +992,7 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
 }
 
 /** Kanban board with two groupings (Flow buckets / per-status), drag-to-restatus, and click-to-open. */
-function TaskBoard({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, taskStatuses, addTaskStatus }: TasksListProps) {
+function TaskBoard({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, taskStatuses, addTaskStatus, reorderable = true }: TasksListProps) {
   const [group, setGroup] = useState<'flow' | 'status'>('flow')
   const [openId, setOpenId] = useState<string | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
@@ -1026,7 +1031,7 @@ function TaskBoard({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
     const dragTask = tasks.find(t => t.id === id)
     const targetTask = tasks.find(t => t.id === targetId)
     if (!dragTask || !targetTask) return
-    if (dragTask.status === targetTask.status) reorder(id, targetId)
+    if (dragTask.status === targetTask.status) { if (reorderable) reorder(id, targetId) }
     else void restatus(id, targetTask.status)
   }
 
@@ -1334,9 +1339,10 @@ function TaskRow({ task, phases, stages, projectId, onTaskUpdated, onDelete, dra
   )
 }
 
-function MilestonesSection({ milestones, projectId, setMilestones, statuses, addStatus, reloadStatuses }: {
+function MilestonesSection({ milestones, projectId, setMilestones, statuses, addStatus, reloadStatuses, reorderable = true }: {
   milestones: Milestone[]; projectId: string; setMilestones: React.Dispatch<React.SetStateAction<Milestone[]>>
   statuses?: StatusOption[]; addStatus?: (label: string) => Promise<void>; reloadStatuses?: () => Promise<void>
+  reorderable?: boolean
 }) {
   const [view, setView] = useState<'list' | 'board'>('list')
   const statusKeys = statuses && statuses.length ? statuses.map(o => o.key) : MILESTONE_STATUSES
@@ -1358,7 +1364,7 @@ function MilestonesSection({ milestones, projectId, setMilestones, statuses, add
         <EntityBoard
           labelOf={m => m.title} items={milestones} columns={statusCols(statusKeys, statusDots(MILESTONE_DOT, statuses))} statusOf={m => m.status}
           onRestatus={(m, status) => update(m.id, { status })}
-          onReorder={reorder}
+          onReorder={reorderable ? reorder : undefined}
           onAddColumn={onAddNew}
           renderCard={m => (
             <div className="ab-task-foot" style={{ justifyContent: 'space-between' }}>
@@ -1370,7 +1376,8 @@ function MilestonesSection({ milestones, projectId, setMilestones, statuses, add
       ) : (
         <ul className="pp-rows">
           {milestones.map(m => (
-            <MilestoneListRow key={m.id} milestone={m} update={update} remove={remove} dragProps={itemProps(m.id)} move={delta => void moveBy(m.id, delta)}
+            <MilestoneListRow key={m.id} milestone={m} update={update} remove={remove}
+              dragProps={reorderable ? itemProps(m.id) : undefined} move={reorderable ? delta => void moveBy(m.id, delta) : undefined}
               statusKeys={statusKeys} onAddNew={onAddNew} colorOf={colorOf} />
           ))}
         </ul>
@@ -1384,7 +1391,7 @@ function MilestoneListRow({ milestone, update, remove, dragProps, move, statusKe
   milestone: Milestone
   update: (id: string, patch: Parameters<typeof api.milestones.update>[1]) => void
   remove: (id: string) => void
-  dragProps: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
+  dragProps?: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
   /** Touch/keyboard reorder — dragging is mouse-only. */
   move?: (delta: -1 | 1) => void
   statusKeys?: string[]
@@ -1403,7 +1410,7 @@ function MilestoneListRow({ milestone, update, remove, dragProps, move, statusKe
         </button>
         <InlineStatusSelect kind="milestone" value={milestone.status} options={statusKeys}
           onChange={s => update(milestone.id, { status: s })} label={`Change status of ${milestone.title}`} onAddNew={onAddNew} colorOf={colorOf} />
-        <RowActions title={milestone.title} onEdit={editable.start} onDelete={() => remove(milestone.id)} dragHandle
+        <RowActions title={milestone.title} onEdit={editable.start} onDelete={() => remove(milestone.id)} dragHandle={Boolean(dragProps)}
           onMoveUp={move && (() => move(-1))} onMoveDown={move && (() => move(1))} />
       </div>
       {open && (
@@ -1423,9 +1430,9 @@ function MilestoneListRow({ milestone, update, remove, dragProps, move, statusKe
   )
 }
 
-function DecisionsSection({ decisions, phases = [], projectId, setDecisions, statuses, addStatus, reloadStatuses }: {
+function DecisionsSection({ decisions, phases = [], projectId, setDecisions, statuses, addStatus, reloadStatuses, reorderable = true }: {
   decisions: Decision[]; phases?: Phase[]; projectId: string; setDecisions: React.Dispatch<React.SetStateAction<Decision[]>>
-  statuses?: StatusOption[]; addStatus?: (label: string) => Promise<void>; reloadStatuses?: () => Promise<void>
+  statuses?: StatusOption[]; addStatus?: (label: string) => Promise<void>; reloadStatuses?: () => Promise<void>; reorderable?: boolean
 }) {
   const [view, setView] = useState<'list' | 'board'>('list')
   const statusKeys = statuses && statuses.length ? statuses.map(o => o.key) : DECISION_STATUSES
@@ -1447,7 +1454,7 @@ function DecisionsSection({ decisions, phases = [], projectId, setDecisions, sta
         <EntityBoard
           labelOf={d => d.title} items={decisions} columns={statusCols(statusKeys, statusDots(DECISION_DOT, statuses))} statusOf={d => d.status}
           onRestatus={(d, status) => update(d.id, { status })}
-          onReorder={reorder}
+          onReorder={reorderable ? reorder : undefined}
           onAddColumn={onAddNew}
           renderCard={d => (
             <div className="ab-task-foot" style={{ justifyContent: 'space-between' }}>
@@ -1459,7 +1466,8 @@ function DecisionsSection({ decisions, phases = [], projectId, setDecisions, sta
       ) : (
         <ul className="pp-rows">
           {decisions.map(d => (
-            <DecisionListRow key={d.id} decision={d} phases={phases} update={update} remove={remove} dragProps={itemProps(d.id)} move={delta => void moveBy(d.id, delta)}
+            <DecisionListRow key={d.id} decision={d} phases={phases} update={update} remove={remove}
+              dragProps={reorderable ? itemProps(d.id) : undefined} move={reorderable ? delta => void moveBy(d.id, delta) : undefined}
               statusKeys={statusKeys} onAddNew={onAddNew} colorOf={colorOf} />
           ))}
         </ul>
@@ -1474,7 +1482,7 @@ function DecisionListRow({ decision, phases = [], update, remove, dragProps, mov
   phases?: Phase[]
   update: (id: string, patch: Parameters<typeof api.decisions.update>[1]) => void
   remove: (id: string) => void
-  dragProps: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
+  dragProps?: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
   /** Touch/keyboard reorder — dragging is mouse-only. */
   move?: (delta: -1 | 1) => void
   statusKeys?: string[]
@@ -1493,7 +1501,7 @@ function DecisionListRow({ decision, phases = [], update, remove, dragProps, mov
         <PhaseChip phaseId={decision.phase_id} phases={phases} />
         <InlineStatusSelect kind="decision" value={decision.status} options={statusKeys}
           onChange={s => update(decision.id, { status: s })} label={`Change status of ${decision.title}`} onAddNew={onAddNew} colorOf={colorOf} />
-        <RowActions title={decision.title} onEdit={editable.start} onDelete={() => remove(decision.id)} dragHandle
+        <RowActions title={decision.title} onEdit={editable.start} onDelete={() => remove(decision.id)} dragHandle={Boolean(dragProps)}
           onMoveUp={move && (() => move(-1))} onMoveDown={move && (() => move(1))} />
       </div>
       {open && (
@@ -1510,11 +1518,11 @@ function DecisionListRow({ decision, phases = [], update, remove, dragProps, mov
 }
 
 function RisksSection({
-  risks, phases = [], blockers, projectId, setRisks, onBlockerUpdated, statuses, addStatus, reloadStatuses,
+  risks, phases = [], blockers, projectId, setRisks, onBlockerUpdated, statuses, addStatus, reloadStatuses, reorderable = true,
 }: {
   risks: Risk[]; phases?: Phase[]; blockers: Blocker[]; projectId: string
   setRisks: React.Dispatch<React.SetStateAction<Risk[]>>; onBlockerUpdated: (b: Blocker) => void
-  statuses?: StatusOption[]; addStatus?: (label: string) => Promise<void>; reloadStatuses?: () => Promise<void>
+  statuses?: StatusOption[]; addStatus?: (label: string) => Promise<void>; reloadStatuses?: () => Promise<void>; reorderable?: boolean
 }) {
   const [view, setView] = useState<'list' | 'board'>('list')
   const statusKeys = statuses && statuses.length ? statuses.map(o => o.key) : RISK_STATUSES
@@ -1536,7 +1544,7 @@ function RisksSection({
         <EntityBoard
           labelOf={r => r.title} items={risks} columns={statusCols(statusKeys, statusDots(RISK_STATUS_DOT, statuses))} statusOf={r => r.status}
           onRestatus={(r, status) => update(r.id, { status })}
-          onReorder={reorder}
+          onReorder={reorderable ? reorder : undefined}
           onAddColumn={onAddNew}
           renderCard={r => (
             <div className="ab-task-foot" style={{ justifyContent: 'space-between' }}>
@@ -1549,7 +1557,8 @@ function RisksSection({
       ) : (
         <ul className="pp-rows">
           {risks.map(r => (
-            <RiskListRow key={r.id} risk={r} phases={phases} update={update} remove={remove} dragProps={itemProps(r.id)} move={delta => void moveBy(r.id, delta)}
+            <RiskListRow key={r.id} risk={r} phases={phases} update={update} remove={remove}
+              dragProps={reorderable ? itemProps(r.id) : undefined} move={reorderable ? delta => void moveBy(r.id, delta) : undefined}
               statusKeys={statusKeys} onAddNew={onAddNew} colorOf={colorOf} />
           ))}
         </ul>
@@ -1574,7 +1583,7 @@ function RiskListRow({ risk, phases = [], update, remove, dragProps, move, statu
   phases?: Phase[]
   update: (id: string, patch: Parameters<typeof api.risks.update>[1]) => void
   remove: (id: string) => void
-  dragProps: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
+  dragProps?: React.HTMLAttributes<HTMLLIElement> & { draggable?: boolean }
   /** Touch/keyboard reorder — dragging is mouse-only. */
   move?: (delta: -1 | 1) => void
   statusKeys?: string[]
@@ -1595,7 +1604,7 @@ function RiskListRow({ risk, phases = [], update, remove, dragProps, move, statu
           onChange={s => update(risk.id, { severity: s })} label={`Change severity of ${risk.title}`} />
         <InlineStatusSelect kind="riskstatus" value={risk.status} options={statusKeys}
           onChange={s => update(risk.id, { status: s })} label={`Change status of ${risk.title}`} onAddNew={onAddNew} colorOf={colorOf} />
-        <RowActions title={risk.title} onEdit={editable.start} onDelete={() => remove(risk.id)} dragHandle
+        <RowActions title={risk.title} onEdit={editable.start} onDelete={() => remove(risk.id)} dragHandle={Boolean(dragProps)}
           onMoveUp={move && (() => move(-1))} onMoveDown={move && (() => move(1))} />
       </div>
       {open && (
