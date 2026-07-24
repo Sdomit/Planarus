@@ -2,7 +2,7 @@ import os
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import String, engine_from_config, pool
 from sqlmodel import SQLModel
 
 # Import all models so they register in SQLModel.metadata
@@ -29,6 +29,23 @@ if config.config_file_name is not None:
 target_metadata = SQLModel.metadata
 
 
+def _compare_type(context, inspected_column, metadata_column, inspected_type, metadata_type):
+    """Treat String-family columns as unchanged during autogenerate/`check`.
+
+    SQLModel maps ``str`` to ``AutoString`` (a ``TypeDecorator`` over VARCHAR);
+    SQLite reflects those as ``TEXT`` and both dialects treat unbounded
+    VARCHAR/TEXT identically. Without this, every text column reports a spurious
+    TEXT->AutoString ``modify_type``, burying real drift. ``_type_affinity``
+    collapses AutoString/VARCHAR/TEXT to the same ``String`` base (plain
+    ``isinstance`` does not, since AutoString is a decorator, not a subclass).
+    Returning ``None`` for any non-String pair defers to alembic's default
+    comparison, so genuine type changes are still detected.
+    """
+    if inspected_type._type_affinity is String and metadata_type._type_affinity is String:
+        return False
+    return None
+
+
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -48,7 +65,11 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            compare_type=_compare_type,
+        )
         with context.begin_transaction():
             context.run_migrations()
 
