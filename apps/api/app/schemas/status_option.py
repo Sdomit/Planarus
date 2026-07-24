@@ -3,10 +3,23 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.constants import STATUS_OPTION_ENTITY_TYPES
+from app.core.constants import (
+    DEFAULT_STATUS_CATEGORY,
+    STATUS_CATEGORIES,
+    STATUS_OPTION_ENTITY_TYPES,
+)
 
 _ENTITY_TYPES = frozenset(STATUS_OPTION_ENTITY_TYPES)
+_CATEGORIES = frozenset(STATUS_CATEGORIES)
 _HEX_COLOR = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+
+def _validate_category(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return None
+    if v not in _CATEGORIES:
+        raise ValueError(f"category must be one of: {', '.join(sorted(_CATEGORIES))}")
+    return v
 
 
 def _validate_color(v: Optional[str]) -> Optional[str]:
@@ -20,7 +33,14 @@ def _validate_color(v: Optional[str]) -> Optional[str]:
 class StatusOptionCreate(BaseModel):
     entity_type: str
     label: str = Field(min_length=1, max_length=60)
+    # #88: what this column means. Omitted → `open`, the pre-#88 behavior.
+    category: str = DEFAULT_STATUS_CATEGORY
     color: Optional[str] = None
+
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, v: str) -> str:
+        return _validate_category(v)  # type: ignore[return-value]
 
     @field_validator("entity_type")
     @classmethod
@@ -39,7 +59,13 @@ class StatusOptionCreate(BaseModel):
 
 class StatusOptionUpdate(BaseModel):
     label: Optional[str] = Field(default=None, min_length=1, max_length=60)
+    category: Optional[str] = None
     color: Optional[str] = None
+
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_category(v)
 
     @field_validator("color")
     @classmethod
@@ -55,6 +81,9 @@ class StatusOptionRead(BaseModel):
     id: Optional[str]
     key: str
     label: str
+    # open | done | canceled — the built-ins report theirs too, so a client never
+    # has to know which keys are special (#88).
+    category: str
     color: Optional[str]
     sort_order: int
     builtin: bool
