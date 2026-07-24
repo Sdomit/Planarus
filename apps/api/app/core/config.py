@@ -76,6 +76,13 @@ class Settings(BaseSettings):
     storage_backend: str = Field(
         default="local", validation_alias="PLANARUS_STORAGE_BACKEND"
     )
+    # Issue #115 — server-owned base directory for managed project roots. When
+    # auth is enabled, a project's on-disk root is derived as
+    # <projects_root>/<workspace_id>/<project_id> and a tenant may NOT choose an
+    # arbitrary absolute path. Empty (default) preserves local single-user
+    # behaviour; auth-enabled mode requires it (enforced by a fail-closed startup
+    # check, not here).
+    projects_root: str = Field(default="", validation_alias="PLANARUS_PROJECTS_ROOT")
     # P10.3b — S3 backend config (used only when storage_backend == "s3").
     storage_s3_bucket: str = Field(default="", validation_alias="PLANARUS_S3_BUCKET")
     storage_s3_prefix: str = Field(default="", validation_alias="PLANARUS_S3_PREFIX")

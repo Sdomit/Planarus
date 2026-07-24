@@ -17,6 +17,25 @@ fill-in-the-blanks template.
 PLANARUS_AUTH_ENABLED=true
 # do NOT set PLANARUS_AUTH_DEV_LOGIN in production (it's an unauthenticated backdoor)
 PLANARUS_WEB_ORIGINS=https://app.yourdomain.com   # your frontend origin(s), CSV
+PLANARUS_PROJECTS_ROOT=/srv/planarus/projects      # REQUIRED in auth mode (#115)
+```
+
+`PLANARUS_PROJECTS_ROOT` is the server-owned base under which every project's
+on-disk folder lives. In auth mode the root is **derived** as
+`<PLANARUS_PROJECTS_ROOT>/<workspace_id>/<project_id>` and a tenant can never
+choose an arbitrary absolute path — this is the tenant/filesystem isolation
+boundary. The app **refuses to start** if auth is on and this is unset (or not
+absolute). It must be an absolute path on a writable volume the API process
+owns; do not point it at application code, a home directory, or a shared mount.
+
+### Migrating existing project folders
+
+If you enabled auth on a server that already had projects with hand-picked
+folders, bring them under the managed base (copy, then repoint — the original is
+left in place, so it is reversible):
+```
+python -m app.jobs adopt-roots            # dry run: prints what would move
+python -m app.jobs adopt-roots --apply    # copy + rewrite folder_path
 ```
 
 ## 3. OAuth — register an app per provider
@@ -74,7 +93,10 @@ non-zero on any hard failure, so you can gate your deploy on it.
 - **Frontend:** build `apps/web` to static assets → Cloudflare Pages / Vercel.
 - **API:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT` behind the platform's
   TLS/ingress (Render, Railway, Fly, …); run `alembic upgrade head` on release.
-  The existing `apps/api/Dockerfile` builds a runnable image.
+  The existing `apps/api/Dockerfile` builds a runnable image — it runs as a
+  non-root `planarus` user (#115) and needs its `/data` volume and
+  `PLANARUS_PROJECTS_ROOT` writable by that user; its entrypoint fixes the
+  bind-mount ownership on start.
 
 The app still binds loopback by default and never manages its own TLS/tunnel — the
 platform fronts it. Rate limiting, the app-wide Host guard, and RFC 9457 errors are

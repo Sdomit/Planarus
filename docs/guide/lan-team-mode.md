@@ -37,7 +37,16 @@ PLANARUS_AUTH_ENABLED=true            # per-person sign-in (required — fail-cl
 PLANARUS_AUTH_PASSWORD_ENABLED=true   # the email+password provider (D25)
 PLANARUS_LAN_MODE_ENABLED=true        # the LAN ceiling
 PLANARUS_LAN_ALLOWED_HOSTS=192.168.1.50,studio-pc.local
+PLANARUS_PROJECTS_ROOT=/srv/planarus/projects   # server-owned project folders (#115, required)
 ```
+
+Because auth is on, `PLANARUS_PROJECTS_ROOT` is **required** — it is the
+server-owned base under which each project's folder lives
+(`<base>/<workspace_id>/<project_id>`), so a teammate can never point a project
+at another project's files or a server path. The app refuses to start without an
+absolute value. Already had projects with hand-picked folders? Bring them under
+the base with `python -m app.jobs adopt-roots --apply` (copies then repoints;
+the original is left in place).
 
 `PLANARUS_LAN_ALLOWED_HOSTS` is the exact Host names/IPs teammates will type
 into their browser (ports are ignored when matching; IPv6 literals use the
@@ -119,6 +128,7 @@ is your LAN on/off switch at the OS level.
 | Symptom | Cause / fix |
 |---|---|
 | `RuntimeError: PLANARUS_LAN_MODE_ENABLED requires PLANARUS_AUTH_ENABLED` | The D25 fail-closed check. Turn auth on (step 1). |
+| `RuntimeError: PLANARUS_AUTH_ENABLED=true requires an absolute PLANARUS_PROJECTS_ROOT` | The #115 fail-closed check. Set `PLANARUS_PROJECTS_ROOT` to an absolute, writable path (step 1). |
 | Teammate gets **403** on every request | Their Host isn't in `PLANARUS_LAN_ALLOWED_HOSTS` (exact name/IP they typed, port ignored), or the Settings LAN switch is unchecked. |
 | Sign-in succeeds but immediately forgets the session | You're fronting Planarus with TLS-terminating proxy while LAN mode is off, or accessing over plain HTTP in a mode that requires Secure cookies. Under LAN mode the session cookie deliberately drops the `Secure` flag (D26) so plain HTTP works. |
 | "Password sign-in is not enabled on this server" | `PLANARUS_AUTH_PASSWORD_ENABLED` is unset. |
