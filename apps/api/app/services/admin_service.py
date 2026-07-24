@@ -12,7 +12,8 @@ import json
 import secrets
 from typing import Optional
 
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
+from sqlalchemy import update as sa_update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -60,15 +61,56 @@ def _password_identity(session: Session, user_id: str) -> Optional[UserIdentity]
     ).first()
 
 
-def _other_active_admins(session: Session, user_id: str) -> int:
-    rows = session.exec(
-        select(User).where(
-            User.is_admin == True,  # noqa: E712
-            User.is_active == True,  # noqa: E712
-            User.id != user_id,
+def _lock_admin_set(session: Session, user_id: str) -> None:
+    """Serialize every operation that can change the active-admin count (#114).
+
+    "At least one active admin" cannot be written as a portable constraint, so it
+    is held by serializing the writers instead. This locks the target row *and*
+    every active admin in one ordered statement: ordered so two transactions
+    always take the same rows in the same order (no deadlock), and one statement
+    so there is no window between the two sets.
+
+    On PostgreSQL this is a real ``FOR UPDATE`` — the second self-demotion blocks
+    until the first commits and then re-reads a world where it is the last admin.
+    On SQLite the clause is a no-op (the dialect has no row locks); there the
+    guarantee comes from the conditional UPDATE below, which SQLite evaluates
+    atomically under its single writer lock. Both engines need both halves.
+    """
+    session.exec(
+        select(User)
+        .where(
+            or_(
+                User.id == user_id,
+                and_(
+                    User.is_admin == True,  # noqa: E712
+                    User.is_active == True,  # noqa: E712
+                ),
+            )
         )
+        .order_by(User.id)
+        .with_for_update()
     ).all()
-    return len(rows)
+
+
+def _demote_or_deactivate(session: Session, user_id: str, *, column, value) -> bool:
+    """Flip ``column`` on an admin only while another active admin survives.
+
+    The invariant travels *inside* the UPDATE as an EXISTS, so the check and the
+    write are one statement and cannot be interleaved. Returns False (rowcount 0)
+    when the account is the last active admin — or when a racing transaction has
+    already changed it, which is the same answer for the caller.
+    """
+    other = select(User.id).where(
+        User.is_admin == True,  # noqa: E712
+        User.is_active == True,  # noqa: E712
+        User.id != user_id,
+    )
+    result = session.execute(
+        sa_update(User)
+        .where(User.id == user_id, other.exists())
+        .values(**{column: value, "updated_at": now_utc()})
+    )
+    return result.rowcount == 1
 
 
 def list_users(session: Session) -> list[tuple[User, Optional[str], list[WorkspaceMember]]]:
@@ -179,12 +221,21 @@ def reset_password(session: Session, user: User) -> str:
 
 
 def set_active(session: Session, user: User, active: bool) -> User:
-    """Deactivate (revoking every session) or reactivate an account (D34)."""
-    if not active and user.is_admin and _other_active_admins(session, user.id) == 0:
-        raise ConflictError("cannot deactivate the last active admin")
-    user.is_active = active
-    user.updated_at = now_utc()
-    session.add(user)
+    """Deactivate (revoking every session) or reactivate an account (D34).
+
+    Deactivating an admin goes through the serialized last-admin path (#114);
+    everything else is an ordinary write.
+    """
+    if not active and user.is_admin:
+        _lock_admin_set(session, user.id)
+        if not _demote_or_deactivate(session, user.id, column="is_active", value=False):
+            session.rollback()
+            raise ConflictError("cannot deactivate the last active admin")
+        session.refresh(user)
+    else:
+        user.is_active = active
+        user.updated_at = now_utc()
+        session.add(user)
     if not active:
         auth_service.revoke_all_sessions(session, user.id)
     _audit(session, user, "deactivate" if not active else "reactivate")
@@ -195,11 +246,16 @@ def set_active(session: Session, user: User, active: bool) -> User:
 
 def set_admin(session: Session, user: User, is_admin: bool) -> User:
     """Grant or revoke the server-admin flag, guarding the last active admin."""
-    if not is_admin and user.is_admin and _other_active_admins(session, user.id) == 0:
-        raise ConflictError("cannot demote the last active admin")
-    user.is_admin = is_admin
-    user.updated_at = now_utc()
-    session.add(user)
+    if not is_admin and user.is_admin:
+        _lock_admin_set(session, user.id)
+        if not _demote_or_deactivate(session, user.id, column="is_admin", value=False):
+            session.rollback()
+            raise ConflictError("cannot demote the last active admin")
+        session.refresh(user)
+    else:
+        user.is_admin = is_admin
+        user.updated_at = now_utc()
+        session.add(user)
     _audit(session, user, "admin_granted" if is_admin else "admin_revoked")
     session.commit()
     session.refresh(user)
