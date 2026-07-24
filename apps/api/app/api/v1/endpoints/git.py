@@ -5,6 +5,7 @@ from sqlmodel import Session
 
 from app.core.security import require_local_control
 from app.db.session import get_session
+from app.fsmemory.project_root import resolve_project_root_or_none
 from app.schemas.git import GitFetchResult, GitPrSummary, GitRepoLink, GitSnapshot
 from app.services import gh_service, git_service, project_service
 from app.services.audit_service import create_audit_event
@@ -21,7 +22,7 @@ def get_project_git(
     project = project_service.get_project(session, project_id)
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-    return git_service.collect(project.id, project.folder_path)
+    return git_service.collect(project.id, resolve_project_root_or_none(project))
 
 
 @router.get("/projects/{project_id}/git/snapshot", response_model=GitSnapshot)
@@ -36,7 +37,7 @@ def get_project_git_snapshot(
     project = project_service.get_project(session, project_id)
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-    return git_service.snapshot(project.id, project.folder_path)
+    return git_service.snapshot(project.id, resolve_project_root_or_none(project))
 
 
 @router.get("/projects/{project_id}/git/prs", response_model=GitPrSummary)
@@ -52,7 +53,7 @@ def get_project_git_prs(
     project = project_service.get_project(session, project_id)
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-    return gh_service.pr_summary(project.id, project.folder_path)
+    return gh_service.pr_summary(project.id, resolve_project_root_or_none(project))
 
 
 @router.post(
@@ -74,7 +75,7 @@ def fetch_project_git(
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
-    result = git_service.fetch(project.id, project.folder_path)
+    result = git_service.fetch(project.id, resolve_project_root_or_none(project))
 
     # Audit only real outbound attempts (a fetch ran or was tried), not the
     # rate-limited/no-remote no-ops. This is the record a Local Truth Bar renders.

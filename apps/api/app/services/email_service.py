@@ -28,7 +28,8 @@ from app.models.project import Project
 from app.models.task import Task
 from app.prompt.secrets import scan
 from app.services.audit_service import create_audit_event
-from app.services.notification_service import _TASK_OPEN, due_task_buckets
+from app.services import status_option_service
+from app.services.notification_service import due_task_buckets
 from app.services.settings_service import get_setting
 from app.schemas.notifications import ReminderOutcome, ReminderSendResult
 
@@ -70,8 +71,12 @@ def _due_soon_body(session: Session, project: Project, rule: NotificationRule) -
 
 def _digest_body(session: Session, project: Project, rule: NotificationRule) -> str:
     tasks = session.exec(select(Task).where(Task.project_id == project.id)).all()
-    open_tasks = [t for t in tasks if t.status not in _TASK_OPEN]
-    done = sum(1 for t in tasks if t.status == "done")
+    # #88: the digest's counts follow the project's own status categories, so a
+    # board with a custom "Shipped" column doesn't report its finished work as
+    # still open (and as zero done).
+    categories = status_option_service.status_categories(session, project.id, "task")
+    open_tasks = [t for t in tasks if categories.get(t.status, "open") == "open"]
+    done = sum(1 for t in tasks if categories.get(t.status) == "done")
     blockers = session.exec(
         select(Blocker)
         .where(Blocker.project_id == project.id)

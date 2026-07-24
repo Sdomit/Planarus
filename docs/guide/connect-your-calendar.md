@@ -93,6 +93,9 @@ PLANARUS_CALENDAR_GOOGLE_CLIENT_SECRET=<Google client secret>
 
 PLANARUS_CALENDAR_MICROSOFT_CLIENT_ID=<Microsoft client id>
 PLANARUS_CALENDAR_MICROSOFT_CLIENT_SECRET=<Microsoft client secret>
+
+# Required: the exact callback URL(s) you registered above, comma-separated.
+PLANARUS_OAUTH_REDIRECT_URIS=http://localhost:5173/api/v1/calendar-sync/google/callback
 ```
 
 Install the extra and restart the API (from `apps/api`):
@@ -106,6 +109,13 @@ Then relaunch (`run-planarus.sh` on macOS/Linux, `run-planarus.bat` on Windows).
 > **Both are required.** With no encryption key, or no client id, sync stays
 > off — the button below simply shows "not configured". A provider only appears
 > once **both** its client id and the encryption key are set.
+
+> **Third thing required (#113):** `PLANARUS_OAUTH_REDIRECT_URIS` must contain
+> the callback URL, character for character, including the port. Connect refuses
+> with **400 redirect_uri is not allowlisted** otherwise. The connect→callback
+> round trip is also one-time and tied to the browser that started it, so finish
+> it in the window it opened; in team mode the callback must land in the same
+> signed-in account, which needs an editor or owner role on the project.
 
 ## Step 4 — Connect from the app
 

@@ -12,12 +12,6 @@ backend and never touch the network, exactly like `oauth.py`.
 """
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
-import json
-import secrets
-import time
 from dataclasses import dataclass
 from typing import Optional, Protocol
 from urllib.parse import urlencode
@@ -25,35 +19,9 @@ from urllib.parse import urlencode
 from app.core import token_crypto
 from app.core.config import settings
 
-# Signed, short-lived CSRF state carrying the flow context (project_id, provider,
-# redirect_uri) so the callback needs no server-side session. Per-process key,
-# like oauth.py — a connect→callback round-trip lives within one process.
-_STATE_SECRET = secrets.token_urlsafe(32)
-_STATE_TTL_SECONDS = 600
-
-
-def make_state(data: dict) -> str:
-    payload = {**data, "nonce": secrets.token_urlsafe(8), "exp": int(time.time()) + _STATE_TTL_SECONDS}
-    raw = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
-    sig = hmac.new(_STATE_SECRET.encode(), raw.encode(), hashlib.sha256).hexdigest()
-    return f"{raw}.{sig}"
-
-
-def verify_state(state: str) -> Optional[dict]:
-    try:
-        raw, sig = state.rsplit(".", 1)
-    except ValueError:
-        return None
-    expected = hmac.new(_STATE_SECRET.encode(), raw.encode(), hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(sig, expected):
-        return None
-    try:
-        payload = json.loads(base64.urlsafe_b64decode(raw.encode()))
-    except (ValueError, json.JSONDecodeError):
-        return None
-    if int(payload.get("exp", 0)) < int(time.time()):
-        return None
-    return payload
+# The connect→callback flow state used to be a per-process HMAC blob defined
+# here; it is now a server-side one-time transaction row shared with the login
+# flow (#113) — see `app/services/oauth.py`.
 
 
 @dataclass(frozen=True)

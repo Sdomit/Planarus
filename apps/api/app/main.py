@@ -1,4 +1,5 @@
 import logging
+import os
 
 from fastapi import FastAPI, Request
 from fastapi.exception_handlers import (
@@ -85,6 +86,19 @@ def create_app() -> FastAPI:
             "PLANARUS_LAN_MODE_ENABLED requires PLANARUS_AUTH_ENABLED=true "
             "(D25): LAN mode without per-user auth would expose the whole "
             "database to the local network. Refusing to start."
+        )
+    # Issue #115 fail-closed precondition: in auth-enabled (multi-user) mode a
+    # project's filesystem root is server-owned and derived under a configured
+    # base. Without that base there is nowhere safe to place managed roots, and
+    # the only fallback would be tenant-chosen absolute paths — the exact hole
+    # #115 closes. Refuse to start.
+    if settings.auth_enabled and not (
+        settings.projects_root and os.path.isabs(settings.projects_root)
+    ):
+        raise RuntimeError(
+            "PLANARUS_AUTH_ENABLED=true requires an absolute PLANARUS_PROJECTS_ROOT "
+            "(#115): in team mode a project's on-disk root is server-owned and "
+            "derived under this base, never chosen by a tenant. Refusing to start."
         )
     if settings.lan_mode_enabled:
         lan_hosts = ", ".join(

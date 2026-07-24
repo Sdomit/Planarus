@@ -9,6 +9,7 @@ from pydantic import Field
 from sqlalchemy import func
 from sqlmodel import Session, select
 
+from app.core.constants import BUILTIN_STATUS_KEYS
 from app.mcp.capabilities import Capability
 from app.mcp.errors import CODE_FORBIDDEN, CODE_NOT_FOUND, MCPToolError
 from app.mcp.serializers import (
@@ -29,6 +30,14 @@ from app.models.phase import Phase
 from app.models.project import Project
 from app.models.risk import Risk
 from app.models.task import Task
+from app.services import status_option_service
+
+# The built-in task statuses that count as work in flight. Deliberately narrower
+# than "everything open": `backlog` and `blocked` are open but are not what an
+# agent is being handed. Custom statuses in the open category are added to this
+# per project (#88) — before that, a project whose board said "In review" was
+# invisible here no matter how much work sat in it.
+_ACTIVE_BUILTIN_TASK_STATUSES = ("in_progress", "ready", "needs_review", "waiting")
 
 
 # --- input schemas -----------------------------------------------------------
@@ -171,15 +180,24 @@ def get_active_work(session: Session, cap: Capability, args: ProjectArgs) -> Too
             .order_by(Phase.sort_order, Phase.id)
         ).all()
     )
+    finished_phases = status_option_service.status_keys_in(
+        session, args.project_id, "phase", "done", "canceled"
+    )
     active_phase = next((p for p in phases if p.status == "active"), None) or next(
-        (p for p in phases if p.status not in ("done", "canceled")), None
+        (p for p in phases if p.status not in finished_phases), None
+    )
+    open_tasks = status_option_service.status_keys_in(
+        session, args.project_id, "task", "open"
+    )
+    active_task_statuses = set(_ACTIVE_BUILTIN_TASK_STATUSES) | (
+        open_tasks - set(BUILTIN_STATUS_KEYS["task"])
     )
     active_tasks, tasks_truncated = _fetch_capped(
         session,
         select(Task)
         .where(
             Task.project_id == args.project_id,
-            Task.status.in_(["in_progress", "ready", "needs_review", "waiting"]),
+            Task.status.in_(active_task_statuses),
         )
         .order_by(Task.sort_order, Task.id),
         MAX_LIST_ROWS,

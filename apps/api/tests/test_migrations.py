@@ -226,3 +226,19 @@ def test_0029_adds_phase_link_to_decision_and_risk(tmp_path):
             assert "phase_id" not in cols
     finally:
         con.close()
+
+
+def test_no_model_migration_drift(tmp_path):
+    """`alembic check`: a fresh upgrade-to-head schema matches the models (#89).
+
+    The API suite builds its schema from the models via create_all, so nothing
+    else notices when a migration and its model diverge — a renamed index, a
+    constraint the migration wrote as an index, an index the model forgot to
+    declare. command.check reflects the migrated DB and raises if autogenerate
+    would emit any operation. The AutoString/TEXT comparator is silenced in
+    alembic/env.py, so a failure here is real drift, not type noise.
+    """
+    db_path = tmp_path / "drift.db"
+    cfg = _config(db_path)
+    command.upgrade(cfg, "head")
+    command.check(cfg)

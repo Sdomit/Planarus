@@ -17,6 +17,25 @@ fill-in-the-blanks template.
 PLANARUS_AUTH_ENABLED=true
 # do NOT set PLANARUS_AUTH_DEV_LOGIN in production (it's an unauthenticated backdoor)
 PLANARUS_WEB_ORIGINS=https://app.yourdomain.com   # your frontend origin(s), CSV
+PLANARUS_PROJECTS_ROOT=/srv/planarus/projects      # REQUIRED in auth mode (#115)
+```
+
+`PLANARUS_PROJECTS_ROOT` is the server-owned base under which every project's
+on-disk folder lives. In auth mode the root is **derived** as
+`<PLANARUS_PROJECTS_ROOT>/<workspace_id>/<project_id>` and a tenant can never
+choose an arbitrary absolute path — this is the tenant/filesystem isolation
+boundary. The app **refuses to start** if auth is on and this is unset (or not
+absolute). It must be an absolute path on a writable volume the API process
+owns; do not point it at application code, a home directory, or a shared mount.
+
+### Migrating existing project folders
+
+If you enabled auth on a server that already had projects with hand-picked
+folders, bring them under the managed base (copy, then repoint — the original is
+left in place, so it is reversible):
+```
+python -m app.jobs adopt-roots            # dry run: prints what would move
+python -m app.jobs adopt-roots --apply    # copy + rewrite folder_path
 ```
 
 ## 3. OAuth — register an app per provider
@@ -44,8 +63,30 @@ https://<your-api-host>/api/v1/auth/oauth/<provider>/callback
    PLANARUS_OAUTH_GITHUB_CLIENT_SECRET=...
    ```
 
+### Allowlist the callback URLs (required)
+Planarus refuses to start any OAuth or calendar-connect flow whose `redirect_uri`
+is not in a server-side allowlist (#113) — the URL cannot be taken from the
+caller. Set it to every callback you registered above, comma-separated and
+matched verbatim:
+```
+PLANARUS_OAUTH_REDIRECT_URIS=https://<your-api-host>/api/v1/auth/oauth/google/callback,https://<your-api-host>/api/v1/auth/oauth/github/callback
+```
+Leaving it unset is fail-closed: `…/start` answers **400 redirect_uri is not
+allowlisted** and no one can sign in with OAuth. The same variable covers the
+calendar connect flow — add those callbacks to the same list.
+
 Install the extra: `pip install -e ".[oauth]"`. A provider that isn't fully
 configured simply 404s — you can ship with just one.
+
+### What a sign-in is bound to
+Each flow is one server-side, single-use transaction row: it is consumed
+atomically by the callback (a replayed or concurrent callback loses), and it is
+tied to a short-lived `planarus_oauth_binder` cookie, so a `state` copied out of a
+URL or log is useless in another browser. Identity is resolved by the provider's
+*subject*, never by email — an account is never linked to a new provider just
+because the addresses match. To attach a second provider, sign in first and use
+`/api/v1/auth/oauth/<provider>/link/start`. Only a provider-verified email is
+accepted (an unverified GitHub address is refused rather than trusted).
 
 ## 4. Storage (optional — S3 for generated artifacts)
 Local disk is the default and fine for a single API node. For object storage:
@@ -74,7 +115,10 @@ non-zero on any hard failure, so you can gate your deploy on it.
 - **Frontend:** build `apps/web` to static assets → Cloudflare Pages / Vercel.
 - **API:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT` behind the platform's
   TLS/ingress (Render, Railway, Fly, …); run `alembic upgrade head` on release.
-  The existing `apps/api/Dockerfile` builds a runnable image.
+  The existing `apps/api/Dockerfile` builds a runnable image — it runs as a
+  non-root `planarus` user (#115) and needs its `/data` volume and
+  `PLANARUS_PROJECTS_ROOT` writable by that user; its entrypoint fixes the
+  bind-mount ownership on start.
 
 The app still binds loopback by default and never manages its own TLS/tunnel — the
 platform fronts it. Rate limiting, the app-wide Host guard, and RFC 9457 errors are

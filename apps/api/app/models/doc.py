@@ -1,6 +1,6 @@
 from typing import Optional
 
-from sqlalchemy import CheckConstraint, Index, UniqueConstraint
+from sqlalchemy import CheckConstraint, Index
 from sqlmodel import Field, SQLModel
 
 from app.core.constants import doc_format_check_sql, doc_status_check_sql, doc_type_check_sql
@@ -14,7 +14,9 @@ class Doc(SQLModel, table=True):
         CheckConstraint(doc_status_check_sql(), name="ck_doc_status"),
         Index("ix_doc_project_id", "project_id"),
         Index("ix_doc_parent_doc_id", "parent_doc_id"),
-        UniqueConstraint("project_id", "slug", name="uq_doc_project_slug"),
+        # Migration 0004 built this as a unique Index, not a UniqueConstraint;
+        # declared the same way here so autogenerate does not swap one for the other.
+        Index("uq_doc_project_slug", "project_id", "slug", unique=True),
         Index("ix_doc_project_type", "project_id", "doc_type"),
         Index("ix_doc_project_status", "project_id", "status"),
         Index("ix_doc_project_sort", "project_id", "sort_order"),
