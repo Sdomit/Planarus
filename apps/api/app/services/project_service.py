@@ -1,14 +1,22 @@
 import json
 import logging
+import os
 from typing import Optional
 
 from sqlalchemy import delete as sa_delete
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, SQLModel, select
 
-from app.core.exceptions import ConflictError
+from app.core.config import settings
+from app.core.exceptions import ConflictError, PolicyError
 from app.core.utils import new_id, now_utc
 from app.fsmemory.path_safety import PathSafetyError
+from app.fsmemory.project_root import (
+    ProjectRootError,
+    managed_root_for,
+    roots_overlap,
+    validate_local_root,
+)
 from app.models.blocker import Blocker
 from app.models.checklist_item import ChecklistItem
 from app.models.comment import Comment
@@ -74,16 +82,63 @@ def list_projects(
     return list(session.exec(stmt).all())
 
 
+def _assert_no_overlap(session: Session, self_id: str, root_real: str) -> None:
+    """Reject a local root that equals/contains/is-contained-by another project's
+    root (#115). Cross-workspace: two projects must never share a directory."""
+    others = session.exec(
+        select(Project).where(
+            Project.id != self_id, Project.folder_path.is_not(None)
+        )
+    ).all()
+    for other in others:
+        if roots_overlap(root_real, os.path.realpath(other.folder_path)):
+            raise ConflictError(
+                "folder_path overlaps another project's root; "
+                "choose a separate directory"
+            )
+
+
+def _validated_local_folder(
+    session: Session, self_id: str, requested: Optional[str]
+) -> Optional[str]:
+    """Local escape hatch: canonicalise + vet an operator-supplied root, or None."""
+    if not requested:
+        return None
+    try:
+        root = validate_local_root(requested)
+    except (PathSafetyError, ProjectRootError) as exc:
+        raise PolicyError(f"invalid folder_path: {exc}") from exc
+    _assert_no_overlap(session, self_id, root)
+    return root
+
+
+def _folder_for_create(
+    session: Session, workspace_id: str, project_id: str, requested: Optional[str]
+) -> Optional[str]:
+    """Resolve the on-disk root for a new project (#115).
+
+    Auth-enabled mode: server-owned, derived from ids — any tenant-supplied path
+    is ignored. Local mode: the vetted escape-hatch path (or None = folderless).
+    """
+    if settings.auth_enabled:
+        return managed_root_for(workspace_id, project_id)
+    return _validated_local_folder(session, project_id, requested)
+
+
 def create_project(session: Session, data: ProjectCreate) -> Project:
     now = now_utc()
+    project_id = new_id("proj")
+    folder_path = _folder_for_create(
+        session, data.workspace_id, project_id, data.folder_path
+    )
     project = Project(
-        id=new_id("proj"),
+        id=project_id,
         workspace_id=data.workspace_id,
         title=data.title,
         slug=data.slug,
         summary=data.summary,
         status=data.status,
-        folder_path=data.folder_path,
+        folder_path=folder_path,
         created_at=now,
         updated_at=now,
     )
@@ -124,9 +179,19 @@ def update_project(
         return None
 
     update_data = data.model_dump(exclude_unset=True)
+    # folder_path is handled out of band and kept out of the audit payload — it
+    # is server-managed in auth mode, and we never log absolute host paths (#115).
+    folder_in_patch = "folder_path" in update_data
+    requested_folder = update_data.pop("folder_path", None)
     now = now_utc()
     for key, value in update_data.items():
         setattr(project, key, value)
+    if folder_in_patch and not settings.auth_enabled:
+        # Local escape hatch may repoint or clear the root; auth mode ignores the
+        # client value entirely (the root is fixed by ids).
+        project.folder_path = _validated_local_folder(
+            session, project.id, requested_folder
+        )
     project.updated_at = now
     session.add(project)
 
