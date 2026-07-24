@@ -50,8 +50,19 @@ def test_oauth_fully_configured_ok(monkeypatch):
     monkeypatch.setattr(settings, "oauth_github_client_secret", "secret")
     monkeypatch.setattr(settings, "oauth_google_client_id", "")
     monkeypatch.setattr(settings, "oauth_google_client_secret", "")
+    monkeypatch.setattr(settings, "oauth_redirect_uris", "https://app/cb")
     doctor.check_oauth()
     assert doctor._fails == 0
+
+
+def test_oauth_without_redirect_allowlist_fails(monkeypatch):
+    """#113: a provider configured but no allowlist → nobody can sign in."""
+    doctor = _load_doctor()
+    monkeypatch.setattr(settings, "oauth_github_client_id", "id")
+    monkeypatch.setattr(settings, "oauth_github_client_secret", "secret")
+    monkeypatch.setattr(settings, "oauth_redirect_uris", "")
+    doctor.check_oauth()
+    assert doctor._fails >= 1
 
 
 def test_storage_local_ok_s3_missing_bucket_fails(monkeypatch):

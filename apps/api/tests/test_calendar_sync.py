@@ -5,7 +5,8 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 from app.core.config import settings
-from app.services import calendar_sync
+from app.services import calendar_sync, oauth
+from app.services.auth_service import SESSION_COOKIE
 from app.services.calendar_sync import CalendarTokens, RemoteEvent
 
 
@@ -47,22 +48,29 @@ class FakeBackend:
         pass
 
 
+CALLBACK_URI = "http://localhost:8000/cb"
+
+
 @pytest.fixture
 def sync_enabled():
     """Turn on encryption + register a fake 'google' backend for the test."""
     prev = settings.calendar_enc_key
+    prev_uris = settings.oauth_redirect_uris
     settings.calendar_enc_key = Fernet.generate_key().decode()
+    # #113: connect refuses any redirect_uri outside the configured allowlist.
+    settings.oauth_redirect_uris = CALLBACK_URI
     fake = FakeBackend()
     calendar_sync.register_test_backend("google", fake)
     yield fake
     calendar_sync.reset_test_backends()
     settings.calendar_enc_key = prev
+    settings.oauth_redirect_uris = prev_uris
 
 
 def _connect(client: TestClient, pid: str) -> str:
     """Drive connect→callback with the fake, returning the new connection id."""
     r = client.get("/api/v1/calendar-sync/google/connect",
-                   params={"project_id": pid, "redirect_uri": "http://localhost:8000/cb"})
+                   params={"project_id": pid, "redirect_uri": CALLBACK_URI})
     assert r.status_code == 200
     state = parse_qs(urlparse(r.json()["authorize_url"]).query)["state"][0]
     cb = client.get("/api/v1/calendar-sync/google/callback", params={"code": "abc", "state": state})
@@ -116,6 +124,116 @@ def test_callback_rejects_tampered_state(client: TestClient, sync_enabled) -> No
     cb = client.get("/api/v1/calendar-sync/google/callback",
                     params={"code": "abc", "state": "not-a-valid-state"})
     assert cb.status_code == 400
+
+
+def test_connect_refuses_unallowlisted_redirect_uri(client: TestClient, sync_enabled) -> None:
+    _, pid = _seed(client)
+    r = client.get("/api/v1/calendar-sync/google/connect",
+                   params={"project_id": pid, "redirect_uri": "https://evil.test/cb"})
+    assert r.status_code == 400
+
+
+def test_callback_state_is_one_time(client: TestClient, sync_enabled) -> None:
+    """#113: a replayed callback cannot attach a second connection."""
+    _, pid = _seed(client)
+    r = client.get("/api/v1/calendar-sync/google/connect",
+                   params={"project_id": pid, "redirect_uri": CALLBACK_URI})
+    state = parse_qs(urlparse(r.json()["authorize_url"]).query)["state"][0]
+    assert client.get("/api/v1/calendar-sync/google/callback",
+                      params={"code": "abc", "state": state}).status_code == 200
+    assert client.get("/api/v1/calendar-sync/google/callback",
+                      params={"code": "abc", "state": state}).status_code == 400
+    assert len(client.get(f"/api/v1/projects/{pid}/calendar-connections").json()) == 1
+
+
+def test_callback_without_the_binder_cookie_is_refused(client: TestClient, sync_enabled) -> None:
+    _, pid = _seed(client)
+    r = client.get("/api/v1/calendar-sync/google/connect",
+                   params={"project_id": pid, "redirect_uri": CALLBACK_URI})
+    state = parse_qs(urlparse(r.json()["authorize_url"]).query)["state"][0]
+    client.cookies.delete(oauth.BINDER_COOKIE)
+    cb = client.get("/api/v1/calendar-sync/google/callback",
+                    params={"code": "abc", "state": state})
+    assert cb.status_code == 400
+    assert client.get(f"/api/v1/projects/{pid}/calendar-connections").json() == []
+
+
+# ── #113: the callback re-authorizes (tenant_guard cannot see it) ───────────
+@pytest.fixture(name="auth_on")
+def auth_on_fixture(monkeypatch):
+    monkeypatch.setattr(settings, "auth_enabled", True)
+    monkeypatch.setattr(settings, "auth_dev_login_enabled", True)
+    yield
+
+
+def _login(client: TestClient, email: str) -> str:
+    assert client.post("/api/v1/auth/dev-login", json={"email": email}).status_code == 200
+    token = client.cookies.get(SESSION_COOKIE)
+    client.cookies.clear()
+    return token
+
+
+def _owned_project(client: TestClient, token: str) -> tuple[str, str]:
+    ws = client.post("/api/v1/workspaces", json={"name": "WS", "slug": "ws-auth"},
+                     cookies={SESSION_COOKIE: token}).json()["id"]
+    pid = client.post("/api/v1/projects",
+                      json={"workspace_id": ws, "title": "P", "slug": "p-auth"},
+                      cookies={SESSION_COOKIE: token}).json()["id"]
+    return ws, pid
+
+
+def _start_connect(client: TestClient, pid: str, token: str) -> tuple[str, str]:
+    r = client.get("/api/v1/calendar-sync/google/connect",
+                   params={"project_id": pid, "redirect_uri": CALLBACK_URI},
+                   cookies={SESSION_COOKIE: token})
+    assert r.status_code == 200, r.text
+    state = parse_qs(urlparse(r.json()["authorize_url"]).query)["state"][0]
+    binder = client.cookies.get(oauth.BINDER_COOKIE)
+    client.cookies.clear()
+    return state, binder
+
+
+def test_callback_refuses_a_different_user(client: TestClient, sync_enabled, auth_on) -> None:
+    """The audit's cross-tenant token attachment: another account finishing the
+    flow must not bind the provider's calendar to the opener's project."""
+    alice = _login(client, "alice@acme.co")
+    mallory = _login(client, "mallory@evil.test")
+    _, pid = _owned_project(client, alice)
+    state, binder = _start_connect(client, pid, alice)
+    cb = client.get("/api/v1/calendar-sync/google/callback",
+                    params={"code": "abc", "state": state},
+                    cookies={SESSION_COOKIE: mallory, oauth.BINDER_COOKIE: binder})
+    assert cb.status_code == 403
+    lst = client.get(f"/api/v1/projects/{pid}/calendar-connections",
+                     cookies={SESSION_COOKIE: alice})
+    assert lst.json() == []
+
+
+def test_callback_accepts_the_opener(client: TestClient, sync_enabled, auth_on) -> None:
+    alice = _login(client, "alice@acme.co")
+    _, pid = _owned_project(client, alice)
+    state, binder = _start_connect(client, pid, alice)
+    cb = client.get("/api/v1/calendar-sync/google/callback",
+                    params={"code": "abc", "state": state},
+                    cookies={SESSION_COOKIE: alice, oauth.BINDER_COOKIE: binder})
+    assert cb.status_code == 200, cb.text
+    lst = client.get(f"/api/v1/projects/{pid}/calendar-connections",
+                     cookies={SESSION_COOKIE: alice})
+    assert len(lst.json()) == 1
+
+
+def test_connect_requires_a_write_role(client: TestClient, sync_enabled, auth_on) -> None:
+    """Connect is a GET, so tenant_guard only enforced the READ roles."""
+    alice = _login(client, "alice@acme.co")
+    bob = _login(client, "bob@acme.co")
+    ws, pid = _owned_project(client, alice)
+    client.post(f"/api/v1/workspaces/{ws}/members",
+                json={"email": "bob@acme.co", "role": "viewer"},
+                cookies={SESSION_COOKIE: alice})
+    r = client.get("/api/v1/calendar-sync/google/connect",
+                   params={"project_id": pid, "redirect_uri": CALLBACK_URI},
+                   cookies={SESSION_COOKIE: bob})
+    assert r.status_code == 403
 
 
 def test_disconnect_removes_connection(client: TestClient, sync_enabled) -> None:

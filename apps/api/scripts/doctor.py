@@ -78,6 +78,10 @@ def check_oauth() -> None:
         else:
             missing = "client secret" if cid else "client id"
             _report(_FAIL, f"oauth.{name}", f"{missing} is missing")
+    if any_configured and not settings.oauth_redirect_uris.strip():
+        # #113: the allowlist is fail-closed, so a configured provider without it
+        # is a deployment that cannot sign anyone in.
+        _report(_FAIL, "oauth.redirect_uris", "PLANARUS_OAUTH_REDIRECT_URIS is empty — every OAuth start is refused; list the exact callback URLs you registered")
     if settings.auth_enabled and not any_configured and not settings.auth_dev_login_enabled:
         _report(_WARN, "oauth", "no OAuth provider configured and dev-login off — no way to sign in")
 
