@@ -14,6 +14,7 @@ from sqlmodel import Session, select
 from app.core.config import settings
 from app.core.exceptions import ConflictError
 from app.core.utils import new_id, now_utc, now_utc_plus_hours, sha256_hex
+from app.models.setting import Setting
 from app.models.user import User
 from app.models.user_identity import UserIdentity
 from app.models.user_session import UserSession
@@ -117,14 +118,43 @@ def _normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
-def _bootstrap_admin(session: Session) -> bool:
-    """D29: the very first account on a server becomes its admin.
+# #114: the row whose primary key decides who bootstraps. Written once, in the
+# same transaction as the winning account, and never read for its value.
+BOOTSTRAP_CLAIM_KEY = "admin_bootstrap_claimed"
 
-    ponytail: unguarded existence check — two racing first registrations could
-    both win admin; LAN-scale accepted, and the last-active-admin guard keeps
-    the system recoverable either way.
-    """
+
+def _no_accounts_yet(session: Session) -> bool:
     return session.exec(select(User.id).limit(1)).first() is None
+
+
+def _claim_bootstrap_admin(session: Session) -> bool:
+    """D29: the very first account on a server becomes its admin — exactly one (#114).
+
+    The existence check alone is a check-then-act race: two registrations
+    arriving together both see an empty table and both become admin. The claim is
+    therefore an INSERT of a fixed primary key, so the database decides the
+    winner — no locking, and identical semantics on SQLite and Postgres. It runs
+    inside a SAVEPOINT because the loser's ``IntegrityError`` must not roll back
+    the account being created around it: losing the claim means "register
+    normally, without admin", not "fail".
+
+    ponytail: a server whose accounts were all removed by hand keeps its claim
+    row and will not re-bootstrap. There is no account-deletion path in the
+    product, so that state can only be reached with a SQL client; re-open it by
+    deleting the claim row.
+    """
+    if not _no_accounts_yet(session):
+        return False
+    try:
+        with session.begin_nested():
+            session.add(
+                Setting(
+                    key=BOOTSTRAP_CLAIM_KEY, value="true", updated_at=now_utc()
+                )
+            )
+    except IntegrityError:
+        return False
+    return True
 
 
 def needs_setup(session: Session) -> bool:
@@ -132,9 +162,10 @@ def needs_setup(session: Session) -> bool:
 
     Public read of the same D29 check, for the first-run sign-in screen. It does
     leak "no accounts yet", unlike D30's deliberately opaque closed-registration
-    404, but only until someone registers: after that it is false forever.
+    404, but only until someone registers: after that it is false forever. A
+    read, never a claim — claiming is ``_claim_bootstrap_admin``.
     """
-    return _bootstrap_admin(session)
+    return _no_accounts_yet(session)
 
 
 def login_with_identity(
@@ -144,22 +175,47 @@ def login_with_identity(
     email: str,
     display_name: Optional[str],
 ) -> tuple[User, str]:
-    """Get-or-create a user for a ``(provider, subject)`` identity and open a session.
+    """Resolve a ``(provider, subject)`` identity to a session, subject-first (#113).
 
-    The account key is the normalized email — a user who already exists (e.g. via a
-    different provider) gets the new identity linked rather than a duplicate account.
-    Shared by the dev provider and the real OAuth providers (P10.1b). Returns the
-    user plus a fresh raw session token.
+    The provider *subject* is the account key, never the email:
+
+    1. a stored identity for this ``(provider, subject)`` wins outright — the user
+       it points at is the user who logs in, whatever email the provider now
+       reports, so a changed or re-registered provider email cannot move a login
+       onto a different account;
+    2. no stored identity but an account already owns that email → refused. The
+       old behavior silently attached the new identity to that account, which
+       turned "control an email at any provider" into account takeover. Linking a
+       second provider is now an explicit, authenticated act (``link_identity``);
+    3. otherwise the identity is new and unclaimed → create the account.
+
+    Callers must have verified the email with the provider first. Shared by the
+    dev provider and the real OAuth providers (P10.1b). Returns the user plus a
+    fresh raw session token.
     """
     norm = _normalize_email(email)
-    user = session.exec(select(User).where(User.email == norm)).first()
-    if user is None:
+    identity = session.exec(
+        select(UserIdentity).where(
+            UserIdentity.provider == provider,
+            UserIdentity.provider_subject == subject,
+        )
+    ).first()
+    if identity is not None:
+        user = session.get(User, identity.user_id)
+        if user is None or not user.is_active:
+            raise ConflictError("this account is not active")
+    else:
+        if session.exec(select(User).where(User.email == norm)).first() is not None:
+            raise ConflictError(
+                "an account with this email already exists; sign in with that "
+                "account and link this provider from your profile"
+            )
         now = now_utc()
         user = User(
             id=new_id("usr"),
             email=norm,
             display_name=(display_name or norm.split("@")[0]).strip()[:200] or norm,
-            is_admin=_bootstrap_admin(session),
+            is_admin=_claim_bootstrap_admin(session),
             created_at=now,
             updated_at=now,
         )
@@ -172,13 +228,6 @@ def login_with_identity(
             entity_type="user",
             entity_id=user.id,
         )
-    identity = session.exec(
-        select(UserIdentity).where(
-            UserIdentity.provider == provider,
-            UserIdentity.provider_subject == subject,
-        )
-    ).first()
-    if identity is None:
         session.add(
             UserIdentity(
                 id=new_id("uid"),
@@ -192,6 +241,37 @@ def login_with_identity(
     session.commit()
     session.refresh(user)
     return user, raw_token
+
+
+def link_identity(
+    session: Session, user_id: str, provider: str, subject: str
+) -> None:
+    """Attach a ``(provider, subject)`` identity to an already-authenticated user.
+
+    The explicit half of the #113 no-silent-linking rule. Idempotent when the
+    identity is already this user's; ``ConflictError`` when it belongs to someone
+    else, so a provider account can never be shared between two Planarus users.
+    """
+    existing = session.exec(
+        select(UserIdentity).where(
+            UserIdentity.provider == provider,
+            UserIdentity.provider_subject == subject,
+        )
+    ).first()
+    if existing is not None:
+        if existing.user_id != user_id:
+            raise ConflictError("this provider account is already linked elsewhere")
+        return
+    session.add(
+        UserIdentity(
+            id=new_id("uid"),
+            user_id=user_id,
+            provider=provider,
+            provider_subject=subject,
+            created_at=now_utc(),
+        )
+    )
+    session.commit()
 
 
 def dev_login(
@@ -230,7 +310,7 @@ def register_password_user(
         id=new_id("usr"),
         email=norm,
         display_name=(display_name or norm.split("@")[0]).strip()[:200] or norm,
-        is_admin=_bootstrap_admin(session),
+        is_admin=_claim_bootstrap_admin(session),
         created_at=now,
         updated_at=now,
     )

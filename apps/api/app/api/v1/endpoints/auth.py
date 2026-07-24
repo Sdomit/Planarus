@@ -35,17 +35,27 @@ router = APIRouter(dependencies=[Depends(require_auth_enabled)])
 _pw_limiter = RateLimiter(read_per_min=10)
 
 
+def _cookie_secure() -> bool:
+    """Whether auth cookies may carry the ``Secure`` attribute.
+
+    Relaxed when the dev-login provider is on (local/tests over http), when LAN
+    mode is on — D26 ratified plain HTTP on the LAN — or when auth is off
+    entirely (the local single-user tool, always http://localhost). A Secure
+    cookie over http:// is silently dropped by browsers, which would brick the
+    flow that set it. A real hosted deployment gets Secure cookies.
+    """
+    return settings.auth_enabled and not (
+        settings.auth_dev_login_enabled or settings.lan_mode_enabled
+    )
+
+
 def _set_session_cookie(response: Response, raw_token: str) -> None:
-    # `secure` is relaxed when the dev-login provider is on (local/tests over
-    # http) or when LAN mode is on — D26 ratified plain HTTP on the LAN, and a
-    # Secure cookie over http:// would be silently dropped by browsers, bricking
-    # login. A real hosted deployment (both off) always gets Secure cookies.
     response.set_cookie(
         key=auth_service.SESSION_COOKIE,
         value=raw_token,
         httponly=True,
         samesite="lax",
-        secure=not (settings.auth_dev_login_enabled or settings.lan_mode_enabled),
+        secure=_cookie_secure(),
         path="/",
     )
 
@@ -207,37 +217,144 @@ def oauth_providers() -> dict:
     return {"providers": oauth.available_providers()}
 
 
+def _begin_oauth(
+    session: Session,
+    response: Response,
+    *,
+    kind: str,
+    provider: str,
+    redirect_uri: str,
+    user_id: str | None = None,
+) -> dict:
+    """Open a one-time transaction, bind it to this browser, and hand back the
+    provider's authorization URL (#113)."""
+    prov = oauth.get_provider(provider)
+    if prov is None:
+        raise HTTPException(status_code=404, detail="unknown or unconfigured provider")
+    if not oauth.is_allowed_redirect_uri(redirect_uri):
+        raise HTTPException(status_code=400, detail="redirect_uri is not allowlisted")
+    oauth.purge_expired_transactions(session)
+    state, binder = oauth.start_transaction(
+        session, kind=kind, provider=provider, redirect_uri=redirect_uri, user_id=user_id
+    )
+    session.commit()
+    set_binder_cookie(response, binder)
+    return {"authorize_url": prov.authorize_url(state, redirect_uri)}
+
+
+def set_binder_cookie(response: Response, binder: str) -> None:
+    """The browser half of an OAuth transaction (#113).
+
+    Scoped to ``/api/v1`` so both the login and the calendar callback see it, and
+    to the transaction's own lifetime. ``samesite=lax`` is required, not
+    cosmetic: the callback arrives as a top-level cross-site navigation from the
+    provider, which ``strict`` would strip. ``secure`` follows the session
+    cookie's rule so local/LAN plain HTTP still works.
+    """
+    response.set_cookie(
+        key=oauth.BINDER_COOKIE,
+        value=binder,
+        httponly=True,
+        samesite="lax",
+        secure=_cookie_secure(),
+        path="/api/v1",
+        max_age=oauth.STATE_TTL_SECONDS,
+    )
+
+
+def clear_binder_cookie(response: Response) -> None:
+    response.delete_cookie(oauth.BINDER_COOKIE, path="/api/v1")
+
+
 @router.get("/auth/oauth/{provider}/start")
 def oauth_start(
     provider: str,
+    response: Response,
     redirect_uri: str = Query(..., description="the callback URL registered with the provider"),
+    session: Session = Depends(get_session),
 ) -> dict:
-    """Return the provider authorization URL (with a signed CSRF state) to redirect
-    the browser to. 404 if the provider isn't configured."""
-    if oauth.get_provider(provider) is None:
-        raise HTTPException(status_code=404, detail="unknown or unconfigured provider")
-    state = oauth.make_state(redirect_uri)
-    return {"authorize_url": oauth.get_provider(provider).authorize_url(state, redirect_uri)}
+    """Return the provider authorization URL to redirect the browser to, and set
+    the binder cookie that ties the resulting callback to this browser. 404 if the
+    provider isn't configured; 400 if the redirect_uri isn't allowlisted."""
+    return _begin_oauth(
+        session, response, kind="login", provider=provider, redirect_uri=redirect_uri
+    )
+
+
+@router.get("/auth/oauth/{provider}/link/start")
+def oauth_link_start(
+    provider: str,
+    response: Response,
+    redirect_uri: str = Query(..., description="the callback URL registered with the provider"),
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Begin linking another provider to the signed-in account (#113).
+
+    The authenticated half of "no silent email-based linking": the transaction
+    records who asked, and the callback only attaches the identity if the same
+    account is still signed in.
+    """
+    return _begin_oauth(
+        session,
+        response,
+        kind="link",
+        provider=provider,
+        redirect_uri=redirect_uri,
+        user_id=user.id,
+    )
 
 
 @router.get("/auth/oauth/{provider}/callback", response_model=AuthMeRead)
 def oauth_callback(
+    request: Request,
     provider: str,
     response: Response,
     code: str = Query(...),
     state: str = Query(...),
     session: Session = Depends(get_session),
 ) -> AuthMeRead:
-    """Exchange the auth code, get-or-create the user, and open a session."""
+    """Exchange the auth code and either open a session or link the identity.
+
+    The transaction is claimed once, atomically, before the code is exchanged, so
+    a replayed callback never reaches the provider at all.
+    """
     prov = oauth.get_provider(provider)
     if prov is None:
         raise HTTPException(status_code=404, detail="unknown or unconfigured provider")
-    redirect_uri = oauth.verify_state(state)
-    if redirect_uri is None:
-        raise HTTPException(status_code=400, detail="invalid or expired state")
-    identity = prov.exchange_code(code, redirect_uri)
+    binder = request.cookies.get(oauth.BINDER_COOKIE)
+    txn = oauth.consume_transaction(
+        session, state=state, binder=binder, kinds=("login", "link"), provider=provider
+    )
+    session.commit()
+    if txn is None:
+        raise HTTPException(status_code=400, detail="invalid, expired, or already-used state")
+    linking = txn.kind == "link"
+    clear_binder_cookie(response)
+
+    identity = prov.exchange_code(code, txn.redirect_uri)
     if not identity.email:
         raise HTTPException(status_code=400, detail="provider did not return an email")
+    if not identity.email_verified:
+        raise HTTPException(
+            status_code=400, detail="provider did not report a verified email"
+        )
+
+    if linking:
+        # Re-authorize at the callback: the transaction's opener must still be the
+        # signed-in user, so a link started in one account cannot land in another.
+        current = auth_service.resolve_user(
+            session, request.cookies.get(auth_service.SESSION_COOKIE)
+        )
+        if current is None or current.id != txn.user_id:
+            raise HTTPException(status_code=403, detail="sign in again to link this provider")
+        # A subject already linked elsewhere raises ConflictError → 409 via the
+        # app-wide handler.
+        auth_service.link_identity(
+            session, current.id, identity.provider, identity.subject
+        )
+        return _me(session, current)
+
     user, raw_token = auth_service.login_with_identity(
         session, identity.provider, identity.subject, identity.email, identity.display_name
     )

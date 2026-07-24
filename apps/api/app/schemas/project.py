@@ -2,7 +2,7 @@ import os
 import re
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.core.constants import PROJECT_STATUSES
 
@@ -99,3 +99,14 @@ class ProjectRead(BaseModel):
     archived_at: Optional[str]
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def _redact_managed_root(self) -> "ProjectRead":
+        """#115: never return the absolute server-owned root in auth (multi-user)
+        mode — it is derived and internal. Local single-user mode keeps it (the
+        one operator owns the machine)."""
+        from app.core.config import settings
+
+        if settings.auth_enabled:
+            self.folder_path = None
+        return self

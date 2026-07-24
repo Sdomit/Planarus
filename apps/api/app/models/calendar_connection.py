@@ -26,7 +26,10 @@ class CalendarConnection(SQLModel, table=True):
     )
 
     id: str = Field(primary_key=True)
-    project_id: str = Field(foreign_key="project.id", index=True)
+    # No index=True: the ix_calendar_connection_project index in __table_args__
+    # (migration 0017) already covers project_id. index=True would emit a second,
+    # migration-less ix_calendar_connection_project_id and drift.
+    project_id: str = Field(foreign_key="project.id")
     provider: str  # google | microsoft
     account_email: str
     access_token_enc: str

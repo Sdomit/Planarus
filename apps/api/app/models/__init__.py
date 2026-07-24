@@ -22,6 +22,7 @@ from app.models.user import User  # noqa: F401
 from app.models.user_identity import UserIdentity  # noqa: F401
 from app.models.workspace_member import WorkspaceMember  # noqa: F401
 from app.models.user_session import UserSession  # noqa: F401
+from app.models.oauth_transaction import OAuthTransaction  # noqa: F401
 from app.models.sync_baseline import SyncBaseline  # noqa: F401
 from app.models.setting import Setting  # noqa: F401
 from app.models.calendar_event import CalendarEvent  # noqa: F401
@@ -56,6 +57,7 @@ __all__ = [
     "UserIdentity",
     "WorkspaceMember",
     "UserSession",
+    "OAuthTransaction",
     "SyncBaseline",
     "Setting",
     "CalendarEvent",

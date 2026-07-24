@@ -152,6 +152,10 @@ EXCLUDED: dict[str, str] = {
     "notificationrule": "addressed to the source instance's recipients",
     "agentrun": "run history of the source instance",
     "calendar_connection": "holds encrypted provider tokens — never copied",
+    "oauthtransaction": (
+        "a one-time, browser-bound handshake that expires in minutes (#113); it "
+        "is meaningless to a copy and carries the initiating user"
+    ),
     "syncbaseline": "replica-pair state, meaningless to a copy",
 }
 

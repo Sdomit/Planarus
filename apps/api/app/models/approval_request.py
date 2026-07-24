@@ -39,6 +39,12 @@ class ApprovalRequest(SQLModel, table=True):
         Index("ix_approval_status", "status"),
         Index("ix_approval_expires_at", "expires_at"),
         Index("ix_approval_origin", "origin"),
+        # Single-column indexes authored by migration 0005 under ix_approval_*
+        # names. Declared explicitly (not via Field index=True, which would emit
+        # ix_approvalrequest_* and drift from the DB) so autogenerate stays quiet.
+        Index("ix_approval_workspace_id", "workspace_id"),
+        Index("ix_approval_project_id", "project_id"),
+        Index("ix_approval_applied_audit_event_id", "applied_audit_event_id"),
         # Phase 7B: idempotency is unique only among *active* proposals, so an
         # identical request is allowed again once the earlier one is truly terminal
         # (rejected/expired/invalidated/applied). "failed" is treated as active
@@ -54,12 +60,16 @@ class ApprovalRequest(SQLModel, table=True):
             "idempotency_key",
             unique=True,
             sqlite_where=text("status IN ('pending', 'approved', 'applying', 'failed')"),
+            # Migrations 0006/0007 build this partial index with BOTH predicates;
+            # declaring only sqlite_where here would read as a full unique index on
+            # Postgres and drift under `alembic check`.
+            postgresql_where=text("status IN ('pending', 'approved', 'applying', 'failed')"),
         ),
     )
 
     id: str = Field(primary_key=True)
-    workspace_id: str = Field(foreign_key="workspace.id", index=True)
-    project_id: str = Field(foreign_key="project.id", index=True)
+    workspace_id: str = Field(foreign_key="workspace.id")
+    project_id: str = Field(foreign_key="project.id")
 
     # --- immutable binding (set once at creation) ---
     origin: str = Field(default="local")
@@ -85,5 +95,5 @@ class ApprovalRequest(SQLModel, table=True):
     decided_by: Optional[str] = None
     applied_at: Optional[str] = None
     applied_audit_event_id: Optional[str] = Field(
-        default=None, foreign_key="auditevent.id", index=True
+        default=None, foreign_key="auditevent.id"
     )

@@ -2,6 +2,10 @@ import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-li
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import PlanningPanel, { nextStatusForColumn, phaseRollups } from './PlanningPanel'
 
+// #88: built-ins report their own category; only `done`/`canceled` are special.
+const STATUS_CATEGORY = (key: string) =>
+  key === 'done' ? 'done' as const : key === 'canceled' ? 'canceled' as const : 'open' as const
+
 describe('nextStatusForColumn', () => {
   const review = { statuses: ['waiting', 'needs_review', 'blocked'] }
   it('returns the column primary status when the task is elsewhere', () => {
@@ -38,7 +42,7 @@ const mockApi = api as unknown as {
   projects: { get: Fn }
   phases: { list: Fn; create: Fn; update: Fn }
   stages: { list: Fn }
-  tasks: { list: Fn; create: Fn; update: Fn }
+  tasks: { list: Fn; create: Fn; update: Fn; reorder: Fn }
   milestones: { list: Fn; create: Fn }
   decisions: { list: Fn; create: Fn; update: Fn }
   risks: { list: Fn; create: Fn; update: Fn }
@@ -266,8 +270,8 @@ describe('PlanningPanel', () => {
   it('shows a custom status as a board column and offers Add column', async () => {
     setupEmpty()
     const builtins = ['backlog', 'ready', 'in_progress', 'waiting', 'needs_review', 'blocked', 'done', 'canceled']
-      .map((k, i) => ({ id: null, key: k, label: k, color: null, sort_order: i, builtin: true }))
-    const custom = { id: 'sto_1', key: 'in_review', label: 'In Review', color: null, sort_order: 8, builtin: false }
+      .map((k, i) => ({ id: null, key: k, label: k, category: STATUS_CATEGORY(k), color: null, sort_order: i, builtin: true }))
+    const custom = { id: 'sto_1', key: 'in_review', label: 'In Review', category: 'open' as const, color: null, sort_order: 8, builtin: false }
     mockApi.statusOptions.list.mockResolvedValue([...builtins, custom])
     mockApi.tasks.list.mockResolvedValue([{
       id: 'tsk_1', project_id: 'proj_1', phase_id: null, stage_id: null, parent_task_id: null,
@@ -289,8 +293,8 @@ describe('PlanningPanel', () => {
   it('shows a custom phase status as a board column', async () => {
     setupEmpty()
     const builtins = ['planned', 'active', 'blocked', 'done', 'canceled']
-      .map((k, i) => ({ id: null, key: k, label: k, color: null, sort_order: i, builtin: true }))
-    const custom = { id: 'sto_p', key: 'on_hold', label: 'On Hold', color: null, sort_order: 5, builtin: false }
+      .map((k, i) => ({ id: null, key: k, label: k, category: STATUS_CATEGORY(k), color: null, sort_order: i, builtin: true }))
+    const custom = { id: 'sto_p', key: 'on_hold', label: 'On Hold', category: 'open' as const, color: null, sort_order: 5, builtin: false }
     // Only phase requests get the custom option (task/risk stay default []).
     mockApi.statusOptions.list.mockImplementation(async (_pid: string, entity = 'task') =>
       entity === 'phase' ? [...builtins, custom] : [])
@@ -400,9 +404,9 @@ describe('PlanningPanel', () => {
 
 describe('StatusManager (manage statuses)', () => {
   const BUILTINS = ['backlog', 'ready', 'in_progress', 'waiting', 'needs_review', 'blocked', 'done', 'canceled']
-    .map((k, i) => ({ id: null, key: k, label: k, color: null, sort_order: i, builtin: true }))
-  const CUSTOM_A = { id: 'sto_a', key: 'in_review', label: 'In Review', color: '#8b5cf6', sort_order: 8, builtin: false }
-  const CUSTOM_B = { id: 'sto_b', key: 'on_hold', label: 'On Hold', color: null, sort_order: 9, builtin: false }
+    .map((k, i) => ({ id: null, key: k, label: k, category: STATUS_CATEGORY(k), color: null, sort_order: i, builtin: true }))
+  const CUSTOM_A = { id: 'sto_a', key: 'in_review', label: 'In Review', category: 'open' as const, color: '#8b5cf6', sort_order: 8, builtin: false }
+  const CUSTOM_B = { id: 'sto_b', key: 'on_hold', label: 'On Hold', category: 'open' as const, color: null, sort_order: 9, builtin: false }
 
   async function openTaskManager() {
     setupEmpty()
@@ -456,6 +460,24 @@ describe('StatusManager (manage statuses)', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
     await waitFor(() => expect(mockApi.statusOptions.create).toHaveBeenCalledWith(
       'proj_1', expect.objectContaining({ entity_type: 'task', label: 'Verifying' })))
+  })
+
+  // #88: a column's meaning drives the roadmap %, the reminders and the agent
+  // brief, so it has to be settable from the same dialog that creates it.
+  it('marks a custom status as done', async () => {
+    const dialog = await openTaskManager()
+    fireEvent.change(within(dialog).getByLabelText('Meaning of In Review'), { target: { value: 'done' } })
+    await waitFor(() =>
+      expect(mockApi.statusOptions.update).toHaveBeenCalledWith('sto_a', { category: 'done' }))
+  })
+
+  it('adds a new status with a chosen meaning', async () => {
+    const dialog = await openTaskManager()
+    fireEvent.change(within(dialog).getByLabelText('New status name'), { target: { value: 'Shipped' } })
+    fireEvent.change(within(dialog).getByLabelText('New status meaning'), { target: { value: 'done' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
+    await waitFor(() => expect(mockApi.statusOptions.create).toHaveBeenCalledWith(
+      'proj_1', expect.objectContaining({ label: 'Shipped', category: 'done' })))
   })
 
   it('surfaces a delete-in-use error without crashing', async () => {
@@ -551,6 +573,50 @@ describe('phase spine UI', () => {
     await screen.findByText('Test Project')
     fireEvent.click(screen.getByRole('tab', { name: 'Risks' }))
     expect(await screen.findByText('Auth phase')).toBeTruthy()
+  })
+})
+
+// --- #86: filtered phase drill-down must not corrupt the list ---------------
+
+describe('reorder in a phase drill-down (#86)', () => {
+  const PHASE = {
+    id: 'pha_1', project_id: 'proj_1', title: 'Auth phase', description: null,
+    status: 'active', sort_order: 0, created_at: 'x', updated_at: 'x',
+  }
+  const task = (id: string, title: string, sort_order: number) => ({
+    id, project_id: 'proj_1', phase_id: 'pha_1', stage_id: null, parent_task_id: null,
+    title, description: null, status: 'backlog', priority: null,
+    due_at: null, sort_order, assignee_id: null, assignee_display: null,
+    created_at: 'x', updated_at: 'x',
+  })
+
+  function setupTwoPhasedTasks() {
+    setupEmpty()
+    mockApi.phases.list.mockResolvedValue([PHASE])
+    mockApi.tasks.list.mockResolvedValue([task('tsk_a', 'Alpha task', 0), task('tsk_b', 'Beta task', 1)])
+  }
+
+  it('shows the move controls in the unfiltered task list', async () => {
+    setupTwoPhasedTasks()
+    render(<PlanningPanel projectId="proj_1" initialTab="tasks" />)
+    expect(await screen.findByText('Beta task')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Move Beta task up' })).toBeTruthy()
+  })
+
+  it('hides the move controls after drilling into a phase, so a filtered reorder cannot corrupt the list', async () => {
+    setupTwoPhasedTasks()
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    // Drill into the phase's tasks via its roll-up chip (sets the phase filter).
+    fireEvent.click(await screen.findByRole('button', { name: '0/2 tasks' }))
+    // Both in-phase tasks are shown...
+    expect(await screen.findByText('Beta task')).toBeTruthy()
+    expect(screen.getByText('Alpha task')).toBeTruthy()
+    // ...but reorder is disabled while filtered: no move buttons, so
+    // useListReorder can never persist a filtered subset. (#86)
+    expect(screen.queryByRole('button', { name: 'Move Beta task up' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Move Alpha task up' })).toBeNull()
+    expect(mockApi.tasks.reorder).not.toHaveBeenCalled()
   })
 })
 
