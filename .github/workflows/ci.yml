@@ -77,6 +77,12 @@ jobs:
           python scripts/assert_pg_schema.py
           alembic downgrade base
           alembic upgrade head
+      # Fail if the models and the migrated schema have drifted (issue #89).
+      # Runs on Postgres here to also catch dialect-specific drift (e.g. a
+      # partial index missing its postgresql_where); test_migrations.py runs the
+      # same check on SQLite in the default job.
+      - name: No model/migration drift (alembic check)
+        run: alembic check
       # The rest of the suite runs on SQLite, whose single writer masks the
       # approval apply race entirely. This is the only place that exercises
       # concurrent writers on the dialect we actually deploy on.
