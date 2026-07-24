@@ -78,10 +78,13 @@ export interface Stage {
   updated_at: string
 }
 
+export type StatusCategory = 'open' | 'done' | 'canceled'
+
 export interface StatusOption {
   id: string | null       // null for built-in canonical statuses
   key: string
   label: string
+  category: StatusCategory  // what the column means: roadmap %, reminders, agents
   color: string | null
   sort_order: number
   builtin: boolean
@@ -1150,9 +1153,9 @@ export const api = {
   statusOptions: {
     list: (projectId: string, entityType = 'task') =>
       request<StatusOption[]>(`/projects/${projectId}/status-options?entity_type=${entityType}`),
-    create: (projectId: string, data: { entity_type: string; label: string; color?: string }) =>
+    create: (projectId: string, data: { entity_type: string; label: string; category?: StatusCategory; color?: string }) =>
       request<StatusOption>(`/projects/${projectId}/status-options`, { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: { label?: string; color?: string | null }) =>
+    update: (id: string, data: { label?: string; category?: StatusCategory; color?: string | null }) =>
       request<StatusOption>(`/status-options/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     reorder: (projectId: string, entityType: string, ids: string[]) =>
       request<StatusOption[]>(`/projects/${projectId}/status-options/reorder?entity_type=${entityType}`, {
