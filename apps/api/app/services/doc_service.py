@@ -19,6 +19,7 @@ from app.core import actor
 from app.core.utils import new_id, now_utc
 from app.fsmemory import atomic_io
 from app.fsmemory.locks import project_lock
+from app.fsmemory.project_root import resolve_project_root_or_none
 from app.models.comment import Comment
 from app.models.doc import Doc
 from app.models.link import Link
@@ -284,10 +285,11 @@ def export_doc_markdown(session: Session, doc_id: str) -> DocExportResponse:
         raise ValueError(f"Doc {doc_id!r} not found")
 
     project = session.get(Project, doc.project_id)
-    if project is None or not project.folder_path:
+    if project is None:
+        raise TypeError("Project not found; cannot export")
+    root = resolve_project_root_or_none(project)  # recheck-before-op (#115)
+    if root is None:
         raise TypeError("Project folder_path is not set; cannot export")
-
-    root = project.folder_path
     subfolder = _TYPE_SUBFOLDER.get(doc.doc_type, "docs")
     rel_path = f"{subfolder}/{doc.slug}.md"
 

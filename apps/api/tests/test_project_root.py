@@ -12,6 +12,7 @@ from app.fsmemory.project_root import (
     managed_base,
     managed_root_for,
     resolve_project_root,
+    resolve_project_root_or_none,
     roots_overlap,
     validate_local_root,
 )
@@ -105,3 +106,30 @@ def test_resolve_project_root_local_missing_folder_raises(monkeypatch):
     monkeypatch.setattr(settings, "auth_enabled", False)
     with pytest.raises(ProjectRootError):
         resolve_project_root(_proj(folder_path=None))
+
+
+def test_resolve_or_none_returns_none_on_invalid_or_folderless(monkeypatch):
+    monkeypatch.setattr(settings, "auth_enabled", False)
+    # A stored root that is now dangerous must not be operated on.
+    assert resolve_project_root_or_none(_proj(folder_path=os.path.abspath(os.sep))) is None
+    # Folderless -> None (consumers treat as "no data").
+    assert resolve_project_root_or_none(_proj(folder_path=None)) is None
+
+
+def test_resolve_or_none_returns_path_when_valid(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "auth_enabled", False)
+    d = str(tmp_path / "ok")
+    os.makedirs(d)
+    assert resolve_project_root_or_none(_proj(folder_path=d)) == os.path.realpath(d)
+
+
+def test_project_md_folder_label_redacted_in_auth_mode(monkeypatch):
+    import types
+
+    from app.fsmemory.renderers import _folder_root_label
+
+    p = types.SimpleNamespace(folder_path="/srv/managed/ws_1/proj_1")
+    monkeypatch.setattr(settings, "auth_enabled", True)
+    assert _folder_root_label(p) == "managed (server-owned)"
+    monkeypatch.setattr(settings, "auth_enabled", False)
+    assert _folder_root_label(p) == "/srv/managed/ws_1/proj_1"

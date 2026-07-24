@@ -19,8 +19,10 @@ from __future__ import annotations
 
 import os
 
+from typing import Optional
+
 from app.core.config import settings
-from app.fsmemory.path_safety import resolve_root
+from app.fsmemory.path_safety import PathSafetyError, resolve_root
 
 
 class ProjectRootError(ValueError):
@@ -130,3 +132,16 @@ def resolve_project_root(project) -> str:
     if not project.folder_path:
         raise ProjectRootError(f"project {project.id} has no folder_path")
     return validate_local_root(project.folder_path)
+
+
+def resolve_project_root_or_none(project) -> Optional[str]:
+    """Like ``resolve_project_root`` but returns ``None`` instead of raising.
+
+    For read-only consumers (git/gh cockpit, context reads) that treat a
+    missing, folderless, or newly-invalid root as "no data" rather than an
+    error — and so must never run against a root that no longer validates.
+    """
+    try:
+        return resolve_project_root(project)
+    except (ProjectRootError, PathSafetyError):
+        return None
