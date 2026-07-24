@@ -23,10 +23,13 @@ recording success, and can tell "switched off on purpose" apart from "broken".
     python -m app.jobs verify [NAME]
     python -m app.jobs restore NAME --yes
     python -m app.jobs admin --list | --grant EMAIL | --reset-password EMAIL
+    python -m app.jobs adopt-roots [--apply]
 """
 from __future__ import annotations
 
 import argparse
+import os
+import shutil
 import sys
 from contextlib import contextmanager
 from collections.abc import Iterator
@@ -35,6 +38,7 @@ from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.core.exceptions import ConflictError
+from app.fsmemory.project_root import ProjectRootError, managed_base, managed_root_for
 from app.models.project import Project
 from app.models.user import User
 from app.services import admin_service, backup_service, email_service, settings_service
@@ -204,6 +208,82 @@ def _cmd_admin(args: argparse.Namespace) -> int:
         return EXIT_OK
 
 
+# --- operator: adopt existing folders under the managed base (#115, 115.4) -----
+
+
+def _cmd_adopt_roots(args: argparse.Namespace) -> int:
+    """Bring pre-existing project folders under PLANARUS_PROJECTS_ROOT.
+
+    Auth-enabled deployments derive each project root as
+    ``<base>/<workspace_id>/<project_id>`` (#115). Projects created before that,
+    or imported, may still point elsewhere. For each such project this copies the
+    folder to the managed location, verifies it, and rewrites ``folder_path``.
+
+    Copy, not move — the original is left in place, so a run is reversible. Prints
+    a plan and changes nothing unless ``--apply`` is given.
+    """
+    try:
+        base = managed_base()  # raises if PLANARUS_PROJECTS_ROOT is unset/relative
+    except ProjectRootError as exc:
+        print(
+            f"adopt-roots: {exc}. Set PLANARUS_PROJECTS_ROOT to the server-owned "
+            "projects base first.",
+            file=sys.stderr,
+        )
+        return EXIT_REFUSED
+
+    with _session() as session:
+        projects = list(
+            session.exec(
+                select(Project).where(Project.folder_path.is_not(None))  # type: ignore[union-attr]
+            ).all()
+        )
+        pending = []
+        for project in projects:
+            target = managed_root_for(project.workspace_id, project.id)
+            if os.path.realpath(project.folder_path) != target:
+                pending.append((project, os.path.realpath(project.folder_path), target))
+
+        if not pending:
+            print(f"adopt-roots: nothing to do — every project root is already under {base}")
+            return EXIT_OK
+
+        if not args.apply:
+            for project, src, target in pending:
+                print(f"[dry-run] {project.id}: {src} -> {target}")
+            print(f"adopt-roots: {len(pending)} project(s) would be adopted "
+                  "(dry run; pass --apply to make changes)")
+            return EXIT_OK
+
+        adopted = failed = 0
+        for project, src, target in pending:
+            if os.path.exists(target):
+                print(f"adopt-roots: {project.id}: target already exists, skipping: {target}",
+                      file=sys.stderr)
+                failed += 1
+                continue
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            if os.path.isdir(src):
+                shutil.copytree(src, target)
+                if not os.path.isdir(target):
+                    print(f"adopt-roots: {project.id}: copy did not produce {target}",
+                          file=sys.stderr)
+                    failed += 1
+                    continue
+                note = f"copied {src} -> {target} (original kept)"
+            else:
+                note = f"source folder missing; repointed to {target}"
+            project.folder_path = target
+            session.add(project)
+            adopted += 1
+            print(f"[adopt] {project.id}: {note}")
+
+        session.commit()
+        print(f"adopt-roots: {adopted} adopted, {failed} skipped/failed, "
+              f"{len(pending)} needed adoption")
+        return EXIT_FAILED if failed else EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m app.jobs",
@@ -250,6 +330,15 @@ def main(argv: list[str] | None = None) -> int:
         help="issue a one-time temp password and sign that account out everywhere",
     )
     admin.set_defaults(func=_cmd_admin)
+
+    adopt = sub.add_parser(
+        "adopt-roots",
+        help="copy existing project folders under PLANARUS_PROJECTS_ROOT (#115)",
+    )
+    adopt.add_argument(
+        "--apply", action="store_true", help="make changes (default: dry run)"
+    )
+    adopt.set_defaults(func=_cmd_adopt_roots)
 
     args = parser.parse_args(argv)
     try:
