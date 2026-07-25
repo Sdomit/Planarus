@@ -3,6 +3,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.constants import DOC_COLORS, DOC_FORMATS, DOC_STATUSES, DOC_TYPES
+from app.core.uri_policy import check_rich_content
 
 _DOC_TYPES = frozenset(DOC_TYPES)
 _DOC_STATUSES = frozenset(DOC_STATUSES)
@@ -132,6 +133,12 @@ class DocUpdate(BaseModel):
         # — the Markdown serializer, the editor, a future exporter — recurses
         # with it.
         _check_json_shape(parsed, "content_json")
+        # #118: shape says nothing about what the document *points at*. Stored
+        # JSON goes straight back into the editor and is rendered as anchors and
+        # images, so its href/src attributes are checked before it is stored,
+        # not before it is displayed. Order matters: the shape bound runs first
+        # so the URI walk is over an already-bounded tree.
+        check_rich_content(parsed, "content_json")
         return v
 
     @field_validator("markdown_cache")

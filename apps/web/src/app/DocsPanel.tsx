@@ -13,6 +13,7 @@ import { api, type Doc, type DocSummary } from '../api/client'
 import { StatusBadge } from './StatusBadge'
 import { usePresence } from './usePresence'
 import { agoLabel } from './date'
+import { isAllowedImageSrc, isAllowedLink, markdownTitle, markdownUrl } from './uri-policy'
 import './docs-panel.css'
 
 // Excalidraw is heavy (~1MB) and pulls in browser-only modules that crash under
@@ -61,13 +62,15 @@ const _docSerializer = new MarkdownSerializer(
     horizontalRule(state, node) {
       state.write((node.attrs.markup as string) || '---'); state.closeBlock(node)
     },
-    // Block image → ![alt](src "title"). alt is escaped so a "]" can't break the
-    // syntax; src is left raw (matches the link handler). ponytail: a src with
-    // a literal ")" would need <angle-bracket> wrapping — rare, deferred.
+    // Block image → ![alt](src "title"). #118: alt is escaped so a "]" can't
+    // break the syntax, and src/title go through the shared encoders — a src
+    // holding a space or an unbalanced ")" would otherwise close the link early
+    // and spill the rest of the URL into the exported document as prose.
     image(state, node) {
       const alt = state.esc((node.attrs.alt as string) || '')
-      const title = node.attrs.title ? ` "${node.attrs.title as string}"` : ''
-      state.write(`![${alt}](${node.attrs.src as string}${title})`); state.closeBlock(node)
+      const title = node.attrs.title ? ` "${markdownTitle(node.attrs.title as string)}"` : ''
+      state.write(`![${alt}](${markdownUrl(node.attrs.src as string)}${title})`)
+      state.closeBlock(node)
     },
   },
   {
@@ -91,7 +94,8 @@ const _docSerializer = new MarkdownSerializer(
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       open: (_state, _mark, _parent, _index) => '[',
       close: (_state, mark) =>
-        `](${mark.attrs.href as string}${mark.attrs.title ? ` "${mark.attrs.title as string}"` : ''})`,
+        `](${markdownUrl(mark.attrs.href as string)}` +
+        `${mark.attrs.title ? ` "${markdownTitle(mark.attrs.title as string)}"` : ''})`,
     },
   },
 )
@@ -99,6 +103,26 @@ const _docSerializer = new MarkdownSerializer(
 export function serializeToMarkdown(doc: any): string { // eslint-disable-line @typescript-eslint/no-explicit-any
   return _docSerializer.serialize(doc)
 }
+
+/** #118: the image node has no `isAllowedUri` equivalent, so the policy is
+ *  applied where the attribute becomes an actual `src`. A document stored before
+ *  the policy existed still loads and still shows its alt text — it just does not
+ *  get to make the browser fetch whatever it points at. */
+const SafeImage = Image.extend({
+  addAttributes() {
+    const parent = this.parent?.() ?? {}
+    return {
+      ...parent,
+      src: {
+        ...(parent as Record<string, object>).src,
+        renderHTML: (attrs: Record<string, unknown>) => {
+          const src = typeof attrs.src === 'string' ? attrs.src : ''
+          return isAllowedImageSrc(src) ? { src } : {}
+        },
+      },
+    }
+  },
+})
 
 const DOC_TYPES = ['note', 'spec', 'research', 'plan', 'reference', 'canvas', 'other'] as const
 
@@ -383,14 +407,25 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
     const url = window.prompt('Link URL', prev ?? 'https://')
     if (url === null) return // cancelled
     const chain = editor.chain().focus().extendMarkRange('link')
-    if (url.trim() === '') chain.unsetLink().run()
-    else chain.setLink({ href: url.trim() }).run()
+    if (url.trim() === '') { chain.unsetLink().run(); return }
+    // #118: the same rule the server enforces, applied while the author is still
+    // here to fix it — otherwise the refusal arrives as a 422 on the next save,
+    // long after they typed it.
+    if (!isAllowedLink(url.trim(), { allowRelative: true })) {
+      window.alert('Links must be http(s), mailto:, or a path within this app.')
+      return
+    }
+    chain.setLink({ href: url.trim() }).run()
   }
 
   // Insert an image by URL; prompt for alt text (accessibility).
   const addImage = () => {
     const url = window.prompt('Image URL')
     if (!url || !url.trim()) return
+    if (!isAllowedImageSrc(url.trim())) {
+      window.alert('Image sources must be http(s) or a base64 data URI (png, jpeg, gif, webp, avif).')
+      return
+    }
     const alt = window.prompt('Alt text (describe the image)') ?? ''
     editor.chain().focus().setImage({ src: url.trim(), alt }).run()
   }
@@ -513,8 +548,13 @@ async function imageToDataUrl(file: File): Promise<string> {
   return out
 }
 
+// #118: an SVG is a document, not a raster — it would be inlined as a data URI
+// and become a markup surface we then have to sanitize. The server refuses one,
+// so accepting it here would only produce a save that fails.
 const imageFilesOf = (dt: DataTransfer | null | undefined): File[] =>
-  Array.from(dt?.files ?? []).filter(f => f.type.startsWith('image/'))
+  Array.from(dt?.files ?? []).filter(
+    f => f.type.startsWith('image/') && f.type !== 'image/svg+xml',
+  )
 
 interface DocEditorProps { docId: string; onBack: () => void }
 type SaveState = 'saved' | 'unsaved' | 'saving' | 'conflict' | 'error'
@@ -546,6 +586,11 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
           openOnClick: false,
           autolink: true,
           HTMLAttributes: { rel: 'noopener noreferrer nofollow', target: '_blank' },
+          // #118: an explicit policy rather than the extension's default. Tiptap
+          // 3.28 fixed its own URI validation, but a library default is not
+          // something to depend on for a security property — and this must agree
+          // with what the server stores, which the default knows nothing about.
+          isAllowedUri: (url: string) => isAllowedLink(url, { allowRelative: true }),
         },
       }),
       TextStyle,
@@ -555,7 +600,7 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
       Superscript,
       TaskList,
       TaskItem.configure({ nested: true }),
-      Image,
+      SafeImage,
     ],
     content: '',
     onUpdate: () => setSaveState('unsaved'),

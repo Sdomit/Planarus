@@ -1,4 +1,5 @@
 import type { CSSProperties, JSX, ReactNode } from 'react'
+import { isAllowedLink } from './uri-policy'
 
 // ponytail: a small renderer for the Markdown subset Planarus itself
 // generates (headings, lists, tables, fenced code, quotes, inline marks,
@@ -6,7 +7,11 @@ import type { CSSProperties, JSX, ReactNode } from 'react'
 // content can't inject markup. Upgrade to a real parser lib if authors need
 // footnotes/images/raw HTML.
 
-const SAFE_HREF = /^(https?:|mailto:|#|\.{0,2}\/)/i
+// #118: this used to be a fourth, private idea of which URLs are safe. It is now
+// the same rule the server enforces and the editor applies — `markdown_cache` is
+// authored elsewhere and stored verbatim, so what renders it must not be the one
+// surface with its own opinion.
+const safeHref = (href: string) => isAllowedLink(href, { allowRelative: true })
 // The bare-URL alternative is LAST on purpose: at a given position the earlier
 // `[label](href)` alternative wins, so a URL inside markdown link syntax is
 // still consumed as a link and never double-matched.
@@ -33,7 +38,7 @@ export function parseInline(text: string): ReactNode[] {
       const split = inner.indexOf('](')
       const label = inner.slice(0, split)
       const href = inner.slice(split + 2)
-      if (SAFE_HREF.test(href)) {
+      if (safeHref(href)) {
         nodes.push(
           <a key={key++} href={href} target="_blank" rel="noreferrer noopener">
             {parseInline(label)}
@@ -48,9 +53,9 @@ export function parseInline(text: string): ReactNode[] {
       const href = tok.replace(TRAILING_PUNCT, '')
       const trailing = tok.slice(href.length)
       nodes.push(
-        <a key={key++} href={href} target="_blank" rel="noreferrer noopener">
-          {href}
-        </a>,
+        safeHref(href)
+          ? <a key={key++} href={href} target="_blank" rel="noreferrer noopener">{href}</a>
+          : href,
       )
       if (trailing) nodes.push(trailing)
     }
