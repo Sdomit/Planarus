@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { api, Project, Workspace, Task, Risk } from '../api/client'
 import { StatusBadge } from './StatusBadge'
 import { Icon } from './Icon'
@@ -50,9 +50,7 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
   const [delFor, setDelFor] = useState<Project | null>(null)
   const [delText, setDelText] = useState('')
 
-  useEffect(() => { loadData() }, [showArchived])
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -82,7 +80,9 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [showArchived])
+
+  useEffect(() => { void loadData() }, [loadData])
 
   async function initWorkspace() {
     try {

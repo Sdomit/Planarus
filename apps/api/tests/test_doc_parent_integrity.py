@@ -7,7 +7,6 @@ parent then cleared the project-A child's `parent_doc_id` and bumped its
 `updated_at`, a write across the tenant boundary inside the victim's transaction.
 """
 import pytest
-
 from app.core.hierarchy import MAX_DEPTH, validate_parent
 from app.models.doc import Doc
 from app.services import doc_service

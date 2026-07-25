@@ -2,14 +2,14 @@
 from types import SimpleNamespace
 
 import pytest
-from sqlmodel import func, select
-
 from app.core.utils import new_id, now_utc
+from app.mcp.tools.propose import REVIEW_HINT
 from app.models.approval_request import ApprovalRequest
 from app.models.audit_event import AuditEvent
 from app.models.task import Task
-from app.mcp.tools.propose import REVIEW_HINT
 from app.services import approval_service
+from sqlmodel import func, select
+
 from tests.external_util import auth, issue_key, seed
 
 T_CREATE = "/api/external/v1/proposals/task"

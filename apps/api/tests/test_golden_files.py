@@ -8,7 +8,6 @@ import os
 from pathlib import Path
 
 import pytest
-
 from app.fsmemory.renderers import RenderContext, render
 from app.fsmemory.spec import CONTEXT_FILES
 from app.models.project import Project

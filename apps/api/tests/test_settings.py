@@ -5,10 +5,10 @@ GET never discloses a secret or raw host, and the external-API DB switch turns t
 external surface off (indistinguishably from disabled) while the ceiling permits it.
 """
 import pytest
-
 from app.models.setting import Setting
 from app.schemas.settings import SettingsUpdate
 from app.services import settings_service as svc
+
 from tests.external_util import auth, issue_key, local_hdr, seed
 
 

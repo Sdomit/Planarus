@@ -1,12 +1,11 @@
 """DB-behaviour guards: WAL, foreign-key enforcement, and status CHECK."""
 import pytest
-from sqlalchemy import create_engine, text
-from sqlalchemy.exc import IntegrityError
-
 from app.core.utils import new_id, now_utc
 from app.db.session import configure_sqlite_pragmas
 from app.models.project import Project
 from app.models.workspace import Workspace
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import IntegrityError
 
 
 def test_wal_enabled_for_file_backed_sqlite(tmp_path) -> None:

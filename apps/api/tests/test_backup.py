@@ -11,16 +11,16 @@ one in conftest) because that is what the production path snapshots.
 import sqlite3
 
 import pytest
-from sqlmodel import Session, SQLModel, create_engine
-
 from app.core.config import settings as env
 from app.core.exceptions import ConflictError
+from app.core.utils import new_id, now_utc
 from app.db.session import configure_sqlite_pragmas
 from app.models.project import Project
 from app.models.workspace import Workspace
-from app.core.utils import new_id, now_utc
 from app.services import backup_service as svc
 from app.services import settings_service
+from sqlmodel import Session, SQLModel, create_engine
+
 from tests.external_util import local_hdr
 
 

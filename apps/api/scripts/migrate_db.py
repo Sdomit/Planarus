@@ -15,7 +15,6 @@ import sys
 
 from alembic import command
 from alembic.config import Config
-
 from app.etl import EtlError, copy_all
 
 

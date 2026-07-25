@@ -11,7 +11,7 @@ import os
 
 from app.fsmemory import atomic_io
 from app.fsmemory.path_safety import resolve_root, safe_makedirs
-from app.fsmemory.spec import PLANARUS_DIR, AUDIT_LOG_RELPATH, CONTEXT_DIR, RESERVED_DIRS
+from app.fsmemory.spec import AUDIT_LOG_RELPATH, CONTEXT_DIR, PLANARUS_DIR, RESERVED_DIRS
 from app.models.project import Project
 from app.models.workspace import Workspace
 

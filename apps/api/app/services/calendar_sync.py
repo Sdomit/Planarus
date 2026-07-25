@@ -137,7 +137,8 @@ class GoogleCalendarBackend:
         )
 
     def _to_remote(self, it: dict) -> RemoteEvent:  # pragma: no cover - network
-        start = it.get("start", {}); end = it.get("end", {})
+        start = it.get("start", {})
+        end = it.get("end", {})
         all_day = "date" in start
         return RemoteEvent(
             external_uid=it["id"], etag=it.get("etag"), title=it.get("summary", "(no title)"),
@@ -214,7 +215,8 @@ class MicrosoftCalendarBackend:
         )
 
     def _to_remote(self, it: dict) -> RemoteEvent:  # pragma: no cover - network
-        start = it.get("start", {}); end = it.get("end", {})
+        start = it.get("start", {})
+        end = it.get("end", {})
         all_day = bool(it.get("isAllDay"))
         return RemoteEvent(
             external_uid=it["id"], etag=it.get("@odata.etag"), title=it.get("subject", "(no title)"),

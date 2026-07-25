@@ -23,9 +23,8 @@ from app.core.tenant import WRITE_ROLES, require_project_access
 from app.db.session import get_session
 from app.models.project import Project
 from app.schemas.calendar_connection import CalendarConnectionRead, SyncResult
-from app.services import auth_service, calendar_sync, calendar_sync_service
+from app.services import auth_service, calendar_sync, calendar_sync_service, oauth
 from app.services import calendar_connection_service as conns
-from app.services import oauth
 
 router = APIRouter()
 

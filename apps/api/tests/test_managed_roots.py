@@ -8,7 +8,6 @@ startup precondition.
 import os
 
 import pytest
-
 from app.core.config import settings
 from app.services.auth_service import SESSION_COOKIE
 

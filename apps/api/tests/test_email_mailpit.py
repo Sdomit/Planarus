@@ -10,9 +10,8 @@ import urllib.request
 import uuid
 
 import pytest
-from fastapi.testclient import TestClient
-
 from app.core.config import settings
+from fastapi.testclient import TestClient
 
 _PAST = "2000-01-01T00:00:00+00:00"
 

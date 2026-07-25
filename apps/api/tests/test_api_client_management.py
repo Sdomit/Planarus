@@ -1,9 +1,9 @@
 """Phase 7C1: local-human-only ApiClient management endpoints."""
 from datetime import datetime
 
+from app.models.audit_event import AuditEvent
 from sqlmodel import select
 
-from app.models.audit_event import AuditEvent
 from tests.external_util import auth, create_api_client, issue_key, local_hdr, seed
 
 CLIENTS = "/api/v1/api-clients"

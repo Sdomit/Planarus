@@ -8,12 +8,11 @@ test_email_mailpit.py (skipped when Mailpit is not running).
 from email.message import EmailMessage
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlmodel import Session, select
-
 from app.core.config import settings
 from app.models.audit_event import AuditEvent
 from app.services import email_service
+from fastapi.testclient import TestClient
+from sqlmodel import Session, select
 
 _PAST = "2000-01-01T00:00:00+00:00"
 

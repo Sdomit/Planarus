@@ -2,8 +2,8 @@
 from types import SimpleNamespace
 
 import pytest
-
 from app.api.external.middleware import _read_capped_body
+
 from tests.external_util import auth, issue_key, seed
 
 PROJECTS = "/api/external/v1/projects"

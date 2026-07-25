@@ -1,12 +1,11 @@
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine
-
 import app.models  # noqa: F401 — registers all tables in SQLModel.metadata
+import pytest
 from app.core.config import settings
 from app.db.session import configure_sqlite_pragmas, get_session
 from app.main import app
+from fastapi.testclient import TestClient
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine
 
 
 @pytest.fixture(autouse=True)

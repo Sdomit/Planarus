@@ -6,7 +6,6 @@ auth (the default) none of it changes behavior. Membership RBAC internals are
 covered in test_auth_identity.py; here we focus on the domain-route enforcement.
 """
 import pytest
-
 from app.core.config import settings
 from app.services.auth_service import SESSION_COOKIE
 
@@ -194,7 +193,7 @@ def test_approver_gate_requires_owner(client, session, auth_on):
     assert r.status_code == 403
 
     # Editor is not an approver — owner-only.
-    ug = client.get("/api/v1/auth/me", cookies=_auth(bob)).json()["user"]["id"]
+    client.get("/api/v1/auth/me", cookies=_auth(bob))
     client.post(
         f"/api/v1/workspaces/{ws}/members",
         json={"email": "bob@acme.co", "role": "editor"},

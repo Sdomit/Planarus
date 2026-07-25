@@ -100,7 +100,7 @@ export default function CalendarPanel({ projectId, onOpenPlanning }: {
     } finally {
       setLoading(false)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [projectId, range.from, range.to])
 
   useEffect(() => { void load() }, [load])

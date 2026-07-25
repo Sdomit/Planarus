@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import {
   api, Project, Task, Risk, Milestone, Decision,
   type ProjectRoadmap, type TimelineEvent,
@@ -32,9 +32,7 @@ export default function CockpitPanel({ projectId, onOpenCanvas }: CockpitPanelPr
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => { load() }, [projectId])
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -63,7 +61,9 @@ export default function CockpitPanel({ projectId, onOpenCanvas }: CockpitPanelPr
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
+
+  useEffect(() => { void load() }, [load])
 
   if (loading) return <div className="ab-state"><span className="spinner spinner-sm" /> Loading cockpit…</div>
   if (error) {

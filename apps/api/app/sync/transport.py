@@ -22,7 +22,7 @@ from __future__ import annotations
 from sqlmodel import Session
 
 from app.sync.apply import _ORDER, _TYPE_MODEL, _row_values
-from app.sync.diff import Change, ChangeKind
+from app.sync.diff import Change
 from app.sync.manifest import Manifest, build_manifest
 
 EntityKey = tuple[str, str]

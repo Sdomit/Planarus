@@ -5,9 +5,8 @@ enforcement + the cross-tenant push guard), and an end-to-end round where a
 "local" replica (a separate session) diverges and pushes to the "remote" (the
 TestClient app's DB), converging both.
 """
-import pytest
-
 import app.models  # noqa: F401
+import pytest
 from app.core.config import settings
 from app.models.task import Task
 from app.schemas.project import ProjectCreate

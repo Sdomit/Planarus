@@ -15,8 +15,6 @@ migrations on startup, or run ``alembic upgrade head`` first. Honors
 """
 import sys
 
-from sqlmodel import Session, select
-
 from app.db.session import engine
 from app.models.project import Project
 from app.models.workspace import Workspace
@@ -30,6 +28,7 @@ from app.services import (
     project_service,
     workspace_service,
 )
+from sqlmodel import Session, select
 
 WORKSPACE_SLUG = "planarus"
 PROJECT_SLUG = "planarus"

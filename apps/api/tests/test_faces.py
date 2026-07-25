@@ -5,7 +5,6 @@ actor context (or an explicit assignee) and resolved to display names on read.
 Auth off (the default) leaves every new field null — byte-identical to before.
 """
 import pytest
-
 from app.core.config import settings
 from app.services.auth_service import SESSION_COOKIE
 

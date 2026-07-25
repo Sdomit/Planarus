@@ -17,8 +17,6 @@ from contextlib import contextmanager
 from email.message import EmailMessage
 
 import pytest
-from sqlmodel import Session, SQLModel, create_engine
-
 from app import jobs
 from app.core.config import settings as env
 from app.core.utils import new_id, now_utc
@@ -28,6 +26,7 @@ from app.models.project import Project
 from app.models.task import Task
 from app.models.workspace import Workspace
 from app.services import auth_service, email_service, settings_service
+from sqlmodel import Session, SQLModel, create_engine
 
 _PAST = "2000-01-01T00:00:00+00:00"
 
