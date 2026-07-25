@@ -11,6 +11,11 @@ services:
   api:
     build:
       context: ./apps/api
+    # Exactly ONE api container, ONE uvicorn process (#120). Do not add
+    # `deploy.replicas`, `--scale api=N`, or WEB_CONCURRENCY/UVICORN_WORKERS to
+    # hosted.env — process-local OAuth state, rate limits, control token, LAN
+    # switch and presence make a second instance divergent, not redundant.
+    # See docs/guide/hosted-go-live.md §0.
     env_file: hosted.env            # PLANARUS_DATABASE_URL + auth + oauth + origins
     volumes:
       - planarus-data:/data          # generated artifacts (STORAGE_BACKEND=local); DB lives in Postgres

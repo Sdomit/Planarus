@@ -1,9 +1,10 @@
 """Preflight config check for a hosted Planarus deployment (Phase 10.6 turnkey).
 
-Validates the environment BEFORE you boot the app — database reachable and
-migrated, auth/tenancy configured sanely, each OAuth provider fully configured,
-and (for the s3 backend) the bucket actually writable. Prints an OK/WARN/FAIL
-checklist and exits non-zero if anything is a hard FAIL.
+Validates the environment BEFORE you boot the app — the single-instance runtime
+contract (#120), database reachable and migrated, auth/tenancy configured
+sanely, each OAuth provider fully configured, and (for the s3 backend) the
+bucket actually writable. Prints an OK/WARN/FAIL checklist and exits non-zero if
+anything is a hard FAIL.
 
     cd apps/api && python scripts/doctor.py
 
@@ -25,6 +26,24 @@ def _report(level: str, name: str, detail: str = "") -> None:
     elif level == _WARN:
         _warns += 1
     print(f"[{level}] {name}" + (f" — {detail}" if detail else ""))
+
+
+def check_runtime() -> None:
+    """#120: the supported topology is one API process, one replica.
+
+    The worker count is enforceable when it came from the environment; replica
+    count, autoscaling and rolling-deploy overlap are platform-side, so they are
+    printed as loud operator obligations rather than silently assumed.
+    """
+    from app.core.runtime import shared_state_warnings, worker_count_violation
+
+    violation = worker_count_violation()
+    if violation:
+        _report(_FAIL, "runtime.workers", violation)
+    else:
+        _report(_OK, "runtime.workers", "single worker process (WEB_CONCURRENCY/UVICORN_WORKERS unset or 1)")
+    for note in shared_state_warnings(settings.storage_backend):
+        _report(_WARN, "runtime.topology", note)
 
 
 def check_database() -> None:
@@ -128,6 +147,7 @@ def check_storage() -> None:
 
 def main() -> int:
     print("Planarus hosted preflight\n" + "=" * 24)
+    check_runtime()
     check_database()
     check_auth()
     check_oauth()
