@@ -507,6 +507,61 @@ describe('serializeToMarkdown', () => {
     expect(serializeToMarkdown(editor.state.doc)).toContain('![a pic](https://ex.com/a.png)')
   })
 
+  // #118: `markdown_cache` is serialized from whatever JSON is stored, and a
+  // stored document can predate the URI policy or arrive by import. A crafted
+  // href used to be written raw, so an unbalanced ")" closed the link early and
+  // the rest of the URL landed in the exported file as prose — or as a second,
+  // attacker-chosen link. Content is injected as JSON on purpose: HTML would go
+  // through the link mark's own parse-time validation and never reach the
+  // serializer, which is the code under test.
+  it('cannot have its link syntax broken by a crafted href', () => {
+    act(() => {
+      editor.commands.setContent({
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [{
+            type: 'text', text: 'click',
+            marks: [{ type: 'link', attrs: { href: 'https://x.test/a)](javascript:alert(1)' } }],
+          }],
+        }],
+      })
+    })
+    const md = serializeToMarkdown(editor.state.doc)
+    expect(md).toContain('[click](<https://x.test/a)](javascript:alert(1)>)')
+    // The whole destination sits inside one angle-bracket pair, which is the
+    // Markdown form that may hold a ")". The injected "](" is therefore part of
+    // one URL rather than the start of a second, attacker-chosen link — and
+    // markdownUrl percent-encodes "<"/">" so nothing can close the pair early.
+    expect(md).toMatch(/^\[click\]\(<[^<>]*>\)/m)
+  })
+
+  it('cannot have its link title broken by a crafted title', () => {
+    act(() => {
+      editor.commands.setContent({
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [{
+            type: 'text', text: 'click',
+            marks: [{ type: 'link', attrs: { href: 'https://x.test/', title: 'a") [x](evil:' } }],
+          }],
+        }],
+      })
+    })
+    expect(serializeToMarkdown(editor.state.doc)).toContain('"a\\") [x](evil:"')
+  })
+
+  it('cannot have its image syntax broken by a crafted src', () => {
+    act(() => {
+      editor.commands.setContent({
+        type: 'doc',
+        content: [{ type: 'image', attrs: { src: 'https://x.test/a b).png', alt: 'x' } }],
+      })
+    })
+    expect(serializeToMarkdown(editor.state.doc)).toContain('![x](<https://x.test/a b).png>)')
+  })
+
   it('serializes task list as GFM checkboxes', () => {
     act(() => {
       editor.commands.setContent(

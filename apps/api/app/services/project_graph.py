@@ -77,6 +77,14 @@ class GraphEntity:
     drop_on_import: tuple[str, ...] = ()
     #: rows whose target is (entity_type, entity_id) rather than a typed FK.
     polymorphic: bool = False
+    #: columns holding a single hyperlink, checked against the #118 URI policy on
+    #: import. Declared here rather than in the importer for the same reason the
+    #: FK remaps are: a new entity with a URL column gets the check the day it is
+    #: added, instead of the day someone remembers.
+    uri_fields: tuple[str, ...] = ()
+    #: columns holding a rich-document JSON string whose href/src attributes are
+    #: swept by the same policy.
+    rich_fields: tuple[str, ...] = ()
     in_duplicate: bool = True
     in_export: bool = True
     in_manifest: bool = True
@@ -134,9 +142,10 @@ ENTITIES: tuple[GraphEntity, ...] = (
         self_ref="parent_doc_id",
         reset=("export_relative_path", "export_checksum", "exported_at"),
         drop_on_import=("updated_by",),
+        rich_fields=("content_json",),
     ),
     GraphEntity("comment", Comment, polymorphic=True, drop_on_import=("author_id",)),
-    GraphEntity("link", Link, polymorphic=True),
+    GraphEntity("link", Link, polymorphic=True, uri_fields=("url",)),
 )
 
 _BY_KEY = {e.key: e for e in ENTITIES}

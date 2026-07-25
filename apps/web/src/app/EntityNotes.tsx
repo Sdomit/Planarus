@@ -1,26 +1,12 @@
 import { useState } from 'react'
 import { api, Comment, Link } from '../api/client'
 import { Markdown } from './markdown'
+import { isAllowedLink, normalizeUrl } from './uri-policy'
 
-/** Accept what people actually paste. `www.example.com` has no scheme, so
- *  `<input type="url">` rejects it outright — the browser blocks submit before
- *  any of our code runs, and the user just sees "Please enter a URL" with no
- *  way forward. Assume https when the scheme is missing, and reject only what
- *  genuinely isn't a web address. Returns null if it can't be salvaged. */
-export function normalizeUrl(raw: string): string | null {
-  const trimmed = raw.trim()
-  if (!trimmed) return null
-  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
-  try {
-    const u = new URL(withScheme)
-    // Only web schemes — a javascript: or data: "link" is an injection vector.
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null
-    if (!u.hostname.includes('.')) return null // "foo" is a typo, not a host
-    return u.href
-  } catch {
-    return null
-  }
-}
+// #118: the implementation moved to `uri-policy`, where the server's copy of the
+// same rule can be diffed against it. Re-exported because this was its home and
+// PlanningPanel still imports it from here.
+export { normalizeUrl }
 
 /** Phase 22 (D56): notes + links on ANY entity the backend allows.
  *
@@ -127,9 +113,16 @@ export function EntityNotes({
       {myLinks.length > 0 && (
         <>
           <p className="pp-section-lbl">Links</p>
-          {myLinks.map(l => (
+          {/* #118: a row stored before the policy existed can hold a scheme we
+              no longer accept. Nothing rewrites it — see `uri_audit` — so the
+              render refuses to make it clickable instead, and shows the URL so
+              a human can see what it actually is. */}
+          {myLinks.map(l => isAllowedLink(l.url) ? (
             <a key={l.id} className="pp-row-title pp-link pp-attach-link" href={l.url}
               target="_blank" rel="noopener noreferrer">{l.title || l.url}</a>
+          ) : (
+            <span key={l.id} className="pp-attach-link pp-link-blocked"
+              title="This link uses a scheme Planarus no longer allows.">{l.title || l.url}</span>
           ))}
         </>
       )}
