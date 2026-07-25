@@ -11,6 +11,33 @@ _DOC_COLORS = frozenset(DOC_COLORS)
 
 _MAX_CONTENT_BYTES = 2 * 1024 * 1024  # 2 MB
 
+# #117: structural limits for rich-document JSON (Tiptap docs and Excalidraw
+# scenes both land in `content_json`). Generous next to any real document — a
+# deeply nested list is single digits deep and a big canvas is thousands of
+# nodes, not a hundred thousand — but they bound the recursion every consumer
+# does over this tree.
+_MAX_JSON_DEPTH = 100
+_MAX_JSON_NODES = 200_000
+
+
+def _check_json_shape(value, field: str) -> None:
+    """Reject JSON that is too deep or has too many nodes. Iterative on purpose:
+    a recursive check would blow the stack on exactly the input it is meant to
+    reject."""
+    nodes = 0
+    stack = [(value, 1)]
+    while stack:
+        node, depth = stack.pop()
+        nodes += 1
+        if depth > _MAX_JSON_DEPTH:
+            raise ValueError(f"{field} nests deeper than {_MAX_JSON_DEPTH} levels")
+        if nodes > _MAX_JSON_NODES:
+            raise ValueError(f"{field} has more than {_MAX_JSON_NODES} nodes")
+        if isinstance(node, dict):
+            stack.extend((v, depth + 1) for v in node.values())
+        elif isinstance(node, list):
+            stack.extend((v, depth + 1) for v in node)
+
 
 class DocCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
@@ -97,9 +124,26 @@ class DocUpdate(BaseModel):
             raise ValueError("content_json exceeds the 2 MB size limit")
         import json
         try:
-            json.loads(v)
+            parsed = json.loads(v)
         except Exception:
             raise ValueError("content_json must be valid JSON")
+        # #117: size alone does not bound the *shape*. A small payload can nest
+        # thousands of levels deep, and every consumer that walks it recursively
+        # — the Markdown serializer, the editor, a future exporter — recurses
+        # with it.
+        _check_json_shape(parsed, "content_json")
+        return v
+
+    @field_validator("markdown_cache")
+    @classmethod
+    def validate_markdown_cache(cls, v: Optional[str]) -> Optional[str]:
+        """#117: `content_json` was capped and its derived twin was not.
+
+        `markdown_cache` is sent by the frontend, stored verbatim and written
+        into disk exports, so an unbounded one is an unbounded write.
+        """
+        if v is not None and len(v.encode("utf-8")) > _MAX_CONTENT_BYTES:
+            raise ValueError("markdown_cache exceeds the 2 MB size limit")
         return v
 
 

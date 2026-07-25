@@ -39,6 +39,19 @@ from app.core.config import settings
 
 EXTERNAL_PREFIX = "/api/external/"
 MAX_BODY_BYTES = 64 * 1024
+
+#: Ceiling for the local ``/api/v1`` surface (#117). Far above the external
+#: 64 KiB cap because the local surface carries real documents: `content_json`
+#: is capped at 2 MiB and `markdown_cache` at 2 MiB by `app.schemas.doc`, and a
+#: canvas save sends both. This is the outer bound that stops an unbounded body
+#: being buffered at all; the finer per-route limits live in the schemas, where
+#: they can speak about fields rather than bytes:
+#:
+#:   * ``DocUpdate.content_json`` / ``markdown_cache`` — 2 MiB each
+#:   * ``ProjectImport.data`` — see ``export_service.validate_import_payload``
+#:     (entity counts, nesting depth, string sizes, total size)
+LOCAL_MAX_BODY_BYTES = 8 * 1024 * 1024
+LOCAL_PREFIX = "/api/v1"
 DEFAULT_ALLOWED_HOSTS = ("localhost", "127.0.0.1", "[::1]")
 _BODY_METHODS = ("POST", "PUT", "PATCH", "DELETE")
 
@@ -111,6 +124,36 @@ async def _send_problem(
     await send({"type": "http.response.body", "body": body})
 
 
+async def _send_too_large(send: Send, request_id: str) -> None:
+    """413 for the local surface, in FastAPI's ``{"detail": ...}`` shape.
+
+    Deliberately not ``problem+json``: that media type is the external API's
+    contract, and the web client parses ``detail`` like every other /api/v1
+    error. The request id still travels, in the same header.
+    """
+    body = json.dumps(
+        {
+            "detail": (
+                f"request body exceeds the "
+                f"{LOCAL_MAX_BODY_BYTES // (1024 * 1024)} MiB limit"
+            ),
+            "request_id": request_id,
+        }
+    ).encode("utf-8")
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 413,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode("latin-1")),
+                (REQUEST_ID_HEADER.lower().encode("latin-1"), request_id.encode("latin-1")),
+            ],
+        }
+    )
+    await send({"type": "http.response.body", "body": body})
+
+
 async def _read_capped_body(receive: Receive, limit: int) -> tuple[bytes, bool]:
     """Read the request body, capping at ``limit`` bytes. Returns (body, exceeded)."""
     chunks: list[bytes] = []
@@ -169,10 +212,36 @@ class ExternalApiGuard:
 
         if not scope.get("path", "").startswith(EXTERNAL_PREFIX):
             # Local surface (/api/v1, /health, /docs): same strict Host check,
-            # nothing else — CORS, auth, and error shapes stay as they are.
+            # plus the #117 body ceiling. CORS, auth and error shapes are
+            # otherwise untouched.
             if not _host_ok(headers.get(b"host")):
                 await _send_problem(send, 403, "forbidden_host", "Forbidden",
                                     "host not allowed", _gen_request_id())
+                return
+            if scope.get("method") in _BODY_METHODS and scope.get("path", "").startswith(
+                LOCAL_PREFIX
+            ):
+                request_id = _gen_request_id()
+                # Declared length first: an honest oversized upload is refused
+                # before a single byte is read.
+                content_length = headers.get(b"content-length")
+                if content_length is not None:
+                    try:
+                        declared = int(content_length)
+                    except ValueError:
+                        declared = -1
+                    if declared > LOCAL_MAX_BODY_BYTES:
+                        await _send_too_large(send, request_id)
+                        return
+                # Then the actual stream, because Content-Length can be absent
+                # (chunked) or simply lie.
+                body, exceeded = await _read_capped_body(receive, LOCAL_MAX_BODY_BYTES)
+                if exceeded:
+                    await _send_too_large(send, request_id)
+                    return
+                await self.app(
+                    scope, _replay_receive(body), _send_with_request_id(send, request_id)
+                )
                 return
             await self.app(scope, receive, send)
             return
