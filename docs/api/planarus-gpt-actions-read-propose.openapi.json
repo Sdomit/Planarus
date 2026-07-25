@@ -801,7 +801,7 @@
           "expires_at",
           "review_hint"
         ],
-        "description": "A PENDING proposal receipt — no canonical record changed. Pending human review in Planarus Approval Queue. Nothing has changed until a local human approves and applies this exact proposal.",
+        "description": "A PENDING proposal receipt — no canonical record changed. Pending human review in Planarus Approval Queue. Nothing has changed until a local human approves and applies this exact proposal. Poll get_approval_status with this approval_id to learn the outcome and the affected entity's id.",
         "properties": {
           "approval_id": {
             "type": "string",
@@ -821,9 +821,9 @@
           },
           "review_hint": {
             "type": "string",
-            "description": "Pending human review in Planarus Approval Queue. Nothing has changed until a local human approves and applies this exact proposal.",
+            "description": "Pending human review in Planarus Approval Queue. Nothing has changed until a local human approves and applies this exact proposal. Poll get_approval_status with this approval_id to learn the outcome and the affected entity's id.",
             "examples": [
-              "Pending human review in Planarus Approval Queue. Nothing has changed until a local human approves and applies this exact proposal."
+              "Pending human review in Planarus Approval Queue. Nothing has changed until a local human approves and applies this exact proposal. Poll get_approval_status with this approval_id to learn the outcome and the affected entity's id."
             ]
           }
         }

@@ -30,7 +30,7 @@ from app.models.phase import Phase
 from app.models.project import Project
 from app.models.risk import Risk
 from app.models.task import Task
-from app.services import status_option_service
+from app.services import approval_service, status_option_service
 
 # The built-in task statuses that count as work in flight. Deliberately narrower
 # than "everything open": `backlog` and `blocked` are open but are not what an
@@ -442,11 +442,19 @@ def get_approval_status(
     ar = session.get(ApprovalRequest, args.approval_id)
     if ar is None or not cap.allows_project(ar.project_id):
         raise MCPToolError(CODE_NOT_FOUND, "approval not found")
+    # The three id keys close the propose -> approve -> apply loop (#91): without
+    # them an agent's only way back to what it created was list_tasks plus a fuzzy
+    # title match, which picks the wrong row whenever two titles are similar. All
+    # three are always present, null before apply, so a poller sees one shape.
+    applied_entity_type, applied_entity_id = approval_service.applied_entity(session, ar)
     metadata = {
         "approval_id": ar.id,
         "status": ar.status,
         "action_type": ar.action_type,
         "target_entity_type": ar.target_entity_type,
+        "target_entity_id": ar.target_entity_id,
+        "applied_entity_type": applied_entity_type,
+        "applied_entity_id": applied_entity_id,
         "origin": ar.origin,
         "expires_at": ar.expires_at,
         "applied_at": ar.applied_at,

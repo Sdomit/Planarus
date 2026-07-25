@@ -144,6 +144,62 @@ def test_get_approval_status_status_only(client: TestClient, session: Session) -
     assert "proposed_patch" not in json.dumps(res.metadata)
 
 
+def test_get_approval_status_closes_the_create_loop(client: TestClient, session: Session) -> None:
+    """#91: propose -> approve -> apply -> poll must hand back the created id.
+
+    Two near-identical titles on purpose: this is the case the old workaround
+    (list_tasks + fuzzy title match) gets wrong, so the assertion has to be that
+    the returned id is *the* task apply created, not merely a task that exists.
+    """
+    ws, pid = seed(client, "rp12b")
+    cap = read_cap(ws, pid)
+    task_service.create_task(session, pid, TaskCreate(title="Ship the parser"))
+    ar = approval_service.create_proposal(
+        session, project_id=pid, action_type="task.create", patch={"title": "Ship the parser v2"}
+    )
+
+    pending = read.get_approval_status(session, cap, read.ApprovalStatusArgs(approval_id=ar.id))
+    # Present-but-null before apply, so a poller sees one stable shape.
+    assert pending.metadata["target_entity_id"] is None
+    assert pending.metadata["applied_entity_type"] is None
+    assert pending.metadata["applied_entity_id"] is None
+
+    approval_service.approve(session, ar.id)
+    applied = approval_service.apply(session, ar.id)
+
+    res = read.get_approval_status(session, cap, read.ApprovalStatusArgs(approval_id=ar.id))
+    assert res.metadata["status"] == "applied"
+    assert res.metadata["applied_entity_type"] == "task"
+    created_id = res.metadata["applied_entity_id"]
+    assert created_id
+    created = task_service.get_task(session, created_id)
+    assert created is not None and created.title == "Ship the parser v2"
+    assert created.project_id == pid
+    # The patch body still never leaks through a status poll.
+    assert "proposed_patch" not in json.dumps(res.metadata)
+    assert applied.applied_audit_event_id
+
+
+def test_get_approval_status_returns_target_id_for_updates(
+    client: TestClient, session: Session
+) -> None:
+    ws, pid = seed(client, "rp12c")
+    task = task_service.create_task(session, pid, TaskCreate(title="Rename the flag"))
+    ar = approval_service.create_proposal(
+        session,
+        project_id=pid,
+        action_type="task.update",
+        patch={"title": "Rename the flag properly"},
+        target_entity_id=task.id,
+    )
+    res = read.get_approval_status(
+        session, read_cap(ws, pid), read.ApprovalStatusArgs(approval_id=ar.id)
+    )
+    # An update knows its target before apply; a create cannot.
+    assert res.metadata["target_entity_id"] == task.id
+    assert res.metadata["applied_entity_id"] is None
+
+
 def test_get_approval_status_out_of_scope_not_found(client: TestClient, session: Session) -> None:
     ws, pid = seed(client, "rp13")
     _, pid2 = seed(client, "rp14")
