@@ -1,9 +1,36 @@
 name: CI
 
+# Actions minutes are metered on this repo because it is private, and the Free
+# plan allowance is 2,000 Linux minutes/month. July 2026 blew past it (2,020 min)
+# and every job started failing with "the job was not started because ... your
+# spending limit needs to be increased". The two filters below are the cheap half
+# of the fix; the structural half is going public, which #119 still gates.
+#
+# paths-ignore is safe here only because this repo has no required status checks
+# (branch protection is a Pro feature and this is a private repo on Free). If
+# protection is ever enabled, a docs-only PR would sit pending forever — either
+# drop these filters or add a skip job that reports the same check names.
+# Note also that GitHub Actions does not support YAML anchors, so the ignore list
+# is duplicated rather than shared.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "context/**"
   pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "context/**"
+
+# Supersede in-flight runs on a branch that gets pushed again. Deliberately not
+# applied to main: every commit that lands there should be verified on its own,
+# and a cancelled main run leaves no record of whether that commit was green.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   api:
