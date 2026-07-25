@@ -5,7 +5,6 @@ tenant_guard, heartbeat→lock→release flow. Store unit tests cover staleness 
 claim ordering with an injectable clock (no sleeping).
 """
 import pytest
-
 from app.core.config import settings
 from app.schemas.doc import DocCreate
 from app.schemas.project import ProjectCreate

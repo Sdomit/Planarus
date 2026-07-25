@@ -4,6 +4,8 @@ import os
 from fastapi import FastAPI, Request
 from fastapi.exception_handlers import (
     http_exception_handler as default_http_exception_handler,
+)
+from fastapi.exception_handlers import (
     request_validation_exception_handler as default_validation_handler,
 )
 from fastapi.exceptions import RequestValidationError
@@ -18,14 +20,13 @@ from app.api.external.problems import (
 )
 from app.api.external.router import router as external_router
 from app.api.v1.router import router as api_v1_router
-from app.mcp.http_transport import MOUNT_PATH, make_mcp_mount, mcp_lifespan
+from app.core.config import settings
 from app.core.errors import (
     approval_conflict_handler,
     conflict_handler,
     server_error_handler,
     unprocessable_handler,
 )
-from app.core.runtime import worker_count_violation
 from app.core.exceptions import (
     ApprovalApplyError,
     ApprovalConflictError,
@@ -33,9 +34,10 @@ from app.core.exceptions import (
     PolicyError,
     SecretDetectedError,
 )
-from app.core.config import settings
+from app.core.runtime import worker_count_violation
 from app.core.security import allowed_ui_origins
 from app.fsmemory.path_safety import PathSafetyError
+from app.mcp.http_transport import MOUNT_PATH, make_mcp_mount, mcp_lifespan
 
 _log = logging.getLogger("planarus")
 

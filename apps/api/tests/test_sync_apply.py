@@ -5,16 +5,15 @@ diverged. We diff against the base, apply the plan, and assert both replicas
 converge with no data lost — plus the conflict path blocks apply until resolved,
 and the baseline round-trips.
 """
-import pytest
-from sqlmodel import Session, SQLModel, create_engine, select
-
 import app.models  # noqa: F401
+import pytest
 from app.db.session import configure_sqlite_pragmas
 from app.etl import copy_all
 from app.models.task import Task
 from app.schemas.project import ProjectCreate
 from app.schemas.task import TaskCreate
 from app.schemas.workspace import WorkspaceCreate
+from app.services import project_service, task_service, workspace_service
 from app.sync import (
     apply_plan,
     build_manifest,
@@ -23,7 +22,7 @@ from app.sync import (
     save_baseline,
     three_way_diff,
 )
-from app.services import project_service, task_service, workspace_service
+from sqlmodel import Session, SQLModel, create_engine
 
 
 def _db(path):

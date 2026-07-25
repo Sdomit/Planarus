@@ -1,6 +1,5 @@
 """Phase 10.6 — sync manifest + three-way conflict detection."""
 import pytest
-
 from app.sync import (
     ChangeKind,
     build_manifest,

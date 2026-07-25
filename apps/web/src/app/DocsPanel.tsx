@@ -91,7 +91,6 @@ const _docSerializer = new MarkdownSerializer(
       close: (_state, mark) => (mark.attrs.color ? '</span>' : ''),
     },
     link: {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       open: (_state, _mark, _parent, _index) => '[',
       close: (_state, mark) =>
         `](${markdownUrl(mark.attrs.href as string)}` +
@@ -100,7 +99,7 @@ const _docSerializer = new MarkdownSerializer(
   },
 )
 
-export function serializeToMarkdown(doc: any): string { // eslint-disable-line @typescript-eslint/no-explicit-any
+export function serializeToMarkdown(doc: any): string {
   return _docSerializer.serialize(doc)
 }
 

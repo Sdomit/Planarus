@@ -9,10 +9,8 @@ a copy that later 500 an import.
 The first test is the one that keeps this closed: a new project-scoped table must
 be declared as travelling or as deliberately excluded, or it fails here.
 """
-import pytest
-from sqlmodel import Session, SQLModel, select
-
 import app.models  # noqa: F401 — registers every table in SQLModel.metadata
+import pytest
 from app.core.utils import new_id, now_utc
 from app.models.calendar_connection import CalendarConnection
 from app.models.calendar_event import CalendarEvent
@@ -20,6 +18,8 @@ from app.models.status_option import StatusOption
 from app.models.task import Task
 from app.models.todo import Todo
 from app.services import export_service, project_graph, project_service
+from sqlmodel import Session, SQLModel, select
+
 from tests.external_util import seed
 
 

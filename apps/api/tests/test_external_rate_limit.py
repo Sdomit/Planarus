@@ -2,8 +2,8 @@
 from types import SimpleNamespace
 
 import pytest
-
 from app.core.rate_limit import RateLimiter
+
 from tests.external_util import auth, issue_key, seed
 
 PROJECTS = "/api/external/v1/projects"

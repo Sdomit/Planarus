@@ -121,9 +121,8 @@ def test_sort_order_stable_after_delete(client: TestClient) -> None:
 
 
 def test_delete_checklist_audit_written(client: TestClient, session) -> None:
-    from sqlmodel import select
-
     from app.models.audit_event import AuditEvent
+    from sqlmodel import select
 
     tid = _seed_task(client)
     item = client.post(
@@ -143,9 +142,8 @@ def test_delete_checklist_audit_written(client: TestClient, session) -> None:
 
 
 def test_create_checklist_audit_written(client: TestClient, session) -> None:
-    from sqlmodel import select
-
     from app.models.audit_event import AuditEvent
+    from sqlmodel import select
 
     tid = _seed_task(client)
     client.post(f"/api/v1/tasks/{tid}/checklist-items", json={"label": "x"})

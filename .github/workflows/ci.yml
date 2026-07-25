@@ -19,10 +19,18 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install -e ".[dev]"
+      # Issue #101: the API half of the lint gate. Folded into this job rather
+      # than given its own — the checkout + pip install are already paid for
+      # here, and ruff itself takes about a second.
+      # Run from the repo root: the rule set lives in the root pyproject.toml
+      # (select = E,F,W,I) and covers any Python added outside apps/api.
+      - name: Lint (ruff)
+        working-directory: .
+        run: ruff check .
       - run: python -m pytest
 
   web:
-    name: Web (vitest + typecheck + build)
+    name: Web (vitest + typecheck + lint + build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -40,11 +48,15 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:web
       - run: pnpm typecheck:web
+      # Issue #101: the web half of the lint gate. Narrow on purpose — typecheck
+      # above already runs strict + noUnusedLocals + noUnusedParameters, so this
+      # only adds the hook rules tsc cannot see. Config: apps/web/eslint.config.js.
+      - run: pnpm lint:web
       - run: pnpm build:web
 
   # Issue #101: nothing in CI looked at dependency advisories — dependabot only
-  # raised monthly version bumps. This is the scan half of that issue; a lint job
-  # (ruff/eslint) is still missing and needs its own config + cleanup pass.
+  # raised monthly version bumps. This is the scan half of that issue; the lint
+  # half is folded into the api and web jobs above.
   audit:
     name: Dependency audit (pip-audit + pnpm audit)
     runs-on: ubuntu-latest

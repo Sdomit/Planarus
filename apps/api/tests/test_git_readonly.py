@@ -9,7 +9,6 @@ is exercised by test_git_fetch.py."""
 from pathlib import Path
 
 import pytest
-
 from app.services import git_service
 
 APP_DIR = Path(git_service.__file__).resolve().parents[1]  # app/

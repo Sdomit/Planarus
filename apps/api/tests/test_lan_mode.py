@@ -8,9 +8,8 @@ every other host still 403s, and loopback keeps working.
 """
 from __future__ import annotations
 
-import pytest
-
 import app.main as app_main
+import pytest
 from app.core.config import settings
 from app.main import create_app
 
@@ -107,9 +106,9 @@ def test_lan_switch_cannot_widen_past_ceiling(client, session, monkeypatch):
 
 
 def test_put_settings_lan_switch_takes_effect_immediately(client, session, monkeypatch):
-    from tests.external_util import local_hdr
-
     from app.services.auth_service import SESSION_COOKIE
+
+    from tests.external_util import local_hdr
 
     _lan_on(monkeypatch)
     # P16.1 (D35): with auth on, flipping switches requires a server admin —

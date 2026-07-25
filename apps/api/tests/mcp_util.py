@@ -1,9 +1,8 @@
 """Shared helpers for Phase 7B MCP tests (not collected as tests)."""
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
-
 from app.mcp.capabilities import Capability
+from fastapi.testclient import TestClient
 
 
 def seed(client: TestClient, suffix: str) -> tuple[str, str]:

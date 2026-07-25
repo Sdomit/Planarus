@@ -14,13 +14,6 @@ the running app.
 """
 from app.sync.apply import apply_plan
 from app.sync.baseline import load_baseline, save_baseline
-from app.sync.transport import (
-    ScopeViolation,
-    build_snapshot,
-    export_records,
-    import_change_set,
-    snapshot_manifest,
-)
 from app.sync.diff import (
     Change,
     ChangeKind,
@@ -29,6 +22,13 @@ from app.sync.diff import (
     three_way_diff,
 )
 from app.sync.manifest import Manifest, build_manifest, entity_signature
+from app.sync.transport import (
+    ScopeViolation,
+    build_snapshot,
+    export_records,
+    import_change_set,
+    snapshot_manifest,
+)
 
 __all__ = [
     "Manifest",

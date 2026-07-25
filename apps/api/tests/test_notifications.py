@@ -1,10 +1,9 @@
 """Phase 9 in-app notification feed (computed, no table)."""
-from fastapi.testclient import TestClient
-from sqlmodel import Session
-
 from app.core.utils import now_utc, now_utc_plus_hours
 from app.models.project import Project
 from app.services import approval_service
+from fastapi.testclient import TestClient
+from sqlmodel import Session
 
 
 def _seed(client: TestClient, suffix: str = "ntf") -> str:

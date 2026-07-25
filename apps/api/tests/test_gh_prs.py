@@ -9,7 +9,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-
 from app.schemas.git import GitPrSummary
 from app.services import gh_service
 

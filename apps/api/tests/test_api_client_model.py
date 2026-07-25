@@ -2,11 +2,10 @@
 import uuid
 
 import pytest
-from sqlalchemy.exc import IntegrityError
-
 from app.core.utils import new_id, now_utc, now_utc_plus_hours
 from app.models.api_client import ApiClient
 from app.services.api_client_service import to_read
+from sqlalchemy.exc import IntegrityError
 
 
 def _ws(client) -> str:

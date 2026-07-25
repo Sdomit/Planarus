@@ -6,11 +6,11 @@ forever, and agents never see a project's in-flight work under a custom name.
 
 Each test below drives one of those surfaces through the supported UI actions.
 """
+from app.core.utils import now_utc_plus_hours
+from app.mcp.tools import read
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.core.utils import now_utc_plus_hours
-from app.mcp.tools import read
 from tests.mcp_util import read_cap, seed
 
 

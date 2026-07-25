@@ -3,13 +3,11 @@ import os
 import types
 
 import pytest
-
 from app.core.config import settings
 from app.fsmemory.path_safety import PathSafetyError
 from app.fsmemory.project_root import (
     ProjectRootError,
     assert_not_dangerous,
-    managed_base,
     managed_root_for,
     resolve_project_root,
     resolve_project_root_or_none,

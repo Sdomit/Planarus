@@ -8,8 +8,6 @@ any error nothing is committed.
 """
 from __future__ import annotations
 
-from typing import Optional
-
 from sqlalchemy import create_engine, func, select
 from sqlmodel import SQLModel
 

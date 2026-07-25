@@ -1,13 +1,12 @@
 import json
 
-from sqlmodel import select
-
 from app.fsmemory.regenerator import regenerate
 from app.fsmemory.spec import CONTEXT_FILES
 from app.models.audit_event import AuditEvent
 from app.models.context_file import ContextFile
 from app.models.project import Project
 from app.models.workspace import Workspace
+from sqlmodel import select
 
 _TS = "2026-06-19T00:00:00+00:00"
 

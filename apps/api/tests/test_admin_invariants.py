@@ -11,10 +11,8 @@ Invariant 2 — the last active admin can be neither demoted nor deactivated.
 """
 import threading
 
-import pytest
-from sqlmodel import Session, SQLModel, create_engine, select
-
 import app.models  # noqa: F401 — registers every table in SQLModel.metadata
+import pytest
 from app.core.config import settings
 from app.core.exceptions import ConflictError
 from app.core.utils import new_id, now_utc
@@ -22,6 +20,7 @@ from app.db.session import configure_sqlite_pragmas
 from app.models.setting import Setting
 from app.models.user import User
 from app.services import admin_service, auth_service
+from sqlmodel import Session, SQLModel, create_engine, select
 
 PASSWORD = "correct-horse-battery"
 
