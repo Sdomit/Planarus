@@ -6,6 +6,7 @@ import { api } from '../api/client'
 const AUTHOR = [
   { label: 'Website', href: 'https://www.sarmaddomit.com', text: 'www.sarmaddomit.com' },
   { label: 'GitHub', href: 'https://github.com/Sdomit', text: 'github.com/Sdomit' },
+  { label: 'LinkedIn', href: 'https://www.linkedin.com/in/sarmad-domit/', text: 'linkedin.com/in/sarmad-domit' },
   { label: 'Email', href: 'mailto:sarmad.domit@gmail.com', text: 'sarmad.domit@gmail.com' },
 ]
 

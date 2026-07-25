@@ -136,6 +136,39 @@ describe('PlanningPanel', () => {
     expect(screen.getByText('Sam Rivera')).toBeTruthy()
   })
 
+  it('sets a due date on create and flags an overdue task (#90)', async () => {
+    setupEmpty()
+    mockApi.tasks.list.mockResolvedValue([
+      {
+        id: 'tsk_due', project_id: 'proj_1', phase_id: null, stage_id: null, parent_task_id: null,
+        title: 'Ship the beta', description: null, status: 'in_progress', priority: null,
+        due_at: '2020-01-02', sort_order: 0, assignee_id: null, assignee_display: null,
+        created_at: '2026-07-19T00:00:00+00:00', updated_at: '2026-07-19T00:00:00+00:00',
+      },
+    ])
+    mockApi.tasks.create.mockResolvedValue({
+      id: 'tsk_new', project_id: 'proj_1', phase_id: null, stage_id: null, parent_task_id: null,
+      title: 'Follow up', description: null, status: 'backlog', priority: null,
+      due_at: '2026-09-01', sort_order: 1, assignee_id: null, assignee_display: null,
+      created_at: '2026-07-19T00:00:00+00:00', updated_at: '2026-07-19T00:00:00+00:00',
+    })
+    render(<PlanningPanel projectId="proj_1" initialTab="tasks" />)
+    await screen.findByText('Ship the beta')
+    expect(screen.getByText(/Overdue 2020-01-02/)).toBeTruthy()
+
+    // The inlet the audit found missing: a date the human can actually type into.
+    fireEvent.click(screen.getByText('+ Add'))
+    fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Follow up' } })
+    fireEvent.change(screen.getByLabelText('Task due date'), { target: { value: '2026-09-01' } })
+    fireEvent.click(screen.getByText('Save'))
+    await waitFor(() =>
+      expect(mockApi.tasks.create).toHaveBeenCalledWith(
+        'proj_1',
+        expect.objectContaining({ title: 'Follow up', due_at: '2026-09-01' }),
+      ),
+    )
+  })
+
   it('shows the comment author display when present (P16.3)', async () => {
     setupEmpty()
     mockApi.comments.list.mockResolvedValue([

@@ -1138,6 +1138,7 @@ export const api = {
         stage_id?: string
         parent_task_id?: string
         assignee_id?: string | null
+        due_at?: string
       },
     ) =>
       request<Task>(`/projects/${projectId}/tasks`, { method: 'POST', body: JSON.stringify(data) }),
