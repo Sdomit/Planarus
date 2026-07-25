@@ -60,6 +60,9 @@ def create_doc(
         return _read(session, doc_service.create_doc(session, project_id, data))
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    except TypeError as exc:
+        # An invalid parent_doc_id (#116) — unprocessable payload, not a bad route.
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 
 
 @router.get("/docs/{doc_id}", response_model=DocRead)
