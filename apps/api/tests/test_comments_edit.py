@@ -55,9 +55,8 @@ def test_delete_comment(client: TestClient) -> None:
 
 
 def test_edit_comment_writes_audit(client: TestClient, session) -> None:
-    from sqlmodel import select
-
     from app.models.audit_event import AuditEvent
+    from sqlmodel import select
 
     pid = _seed(client)
     c = _comment(client, pid)

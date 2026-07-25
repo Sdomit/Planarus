@@ -7,7 +7,6 @@ covers the whole surface, not just the P10.2 crown-jewel routes. Also asserts th
 guard is a complete no-op when auth is off.
 """
 import pytest
-
 from app.core.config import settings
 from app.services.auth_service import SESSION_COOKIE
 
@@ -103,8 +102,7 @@ def test_cross_tenant_denied_across_domain_routes(client, session, auth_on):
 
 
 def test_sweep_routes_open_when_auth_off(client, session):
-    # The same routes must work with no auth (guard is a complete no-op).
-    owner_none = None  # no login needed
+    # The same routes must work with no auth (guard is a complete no-op) — no login below.
     ws = client.post("/api/v1/workspaces", json={"name": "W", "slug": "woff"}).json()["id"]
     pid = client.post(
         "/api/v1/projects", json={"workspace_id": ws, "title": "P", "slug": "poff"}

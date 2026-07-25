@@ -5,10 +5,6 @@ proposal-creation endpoint in 7A). State changes go through the HTTP API with th
 local control token, exercising the real route + dependency stack.
 """
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, select
-
 from app.core.exceptions import PolicyError, SecretDetectedError
 from app.core.utils import new_id, now_utc, now_utc_plus_hours
 from app.models.approval_request import ApprovalRequest
@@ -18,6 +14,9 @@ from app.models.project import Project
 from app.models.task import Task
 from app.schemas.task import TaskCreate, TaskUpdate
 from app.services import approval_service, task_service
+from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session, select
 
 _PAST = "2000-01-01T00:00:00+00:00"
 

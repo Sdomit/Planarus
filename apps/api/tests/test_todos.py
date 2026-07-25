@@ -26,7 +26,7 @@ def test_create_and_list(client: TestClient) -> None:
     assert client.get(f"/api/v1/projects/{pid}/todos").json() == []
     a = _add(client, pid, "buy milk")
     assert a["parent_id"] is None and a["done"] is False and a["id"].startswith("td_")
-    b = _add(client, pid, "walk dog")
+    _add(client, pid, "walk dog")
     got = client.get(f"/api/v1/projects/{pid}/todos").json()
     assert [t["label"] for t in got] == ["buy milk", "walk dog"]
     assert [t["sort_order"] for t in got] == [0, 1]

@@ -7,7 +7,6 @@ names. With auth OFF (the default), everything stays byte-identical to the
 pre-Phase-16 behavior: actor_id None, decided_by ``"local"``, displays None.
 """
 import pytest
-
 from app.core.config import settings
 from app.services import approval_service
 from app.services.auth_service import SESSION_COOKIE
@@ -127,9 +126,8 @@ def test_display_names_degrade_without_auth_tables():
     table) must yield no names — never break a canonical read endpoint.
     Regression: the dogfood dev DB (alembic 0024, decided approvals, no auth
     tables) 500'd the approvals list on first deploy of this slice."""
-    from sqlmodel import Session, create_engine
-
     from app.services import audit_service
+    from sqlmodel import Session, create_engine
 
     engine = create_engine("sqlite://")  # empty DB: no tables at all
     with Session(engine) as bare:

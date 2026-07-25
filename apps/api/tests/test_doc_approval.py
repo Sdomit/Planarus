@@ -9,14 +9,13 @@ until a local human approves and applies the exact proposal.
 import json
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlmodel import Session, select
-
 from app.core.exceptions import PolicyError, SecretDetectedError
 from app.core.utils import now_utc
 from app.models.approval_request import ApprovalRequest
 from app.models.doc import Doc
 from app.services import approval_service
+from fastapi.testclient import TestClient
+from sqlmodel import Session, select
 
 
 def _seed(client: TestClient, suffix: str = "docapr") -> str:

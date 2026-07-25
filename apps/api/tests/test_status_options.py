@@ -205,9 +205,8 @@ def test_reorder_rejects_incomplete_id_set(client: TestClient) -> None:
 
 
 def test_status_option_audit_written(client: TestClient, session) -> None:
-    from sqlmodel import select
-
     from app.models.audit_event import AuditEvent
+    from sqlmodel import select
 
     pid = _seed(client)
     client.post(f"/api/v1/projects/{pid}/status-options", json={"entity_type": "task", "label": "In Review"})

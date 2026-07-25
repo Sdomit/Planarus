@@ -9,10 +9,9 @@ import pytest
 
 boto3 = pytest.importorskip("boto3")
 pytest.importorskip("moto")
-from moto import mock_aws  # noqa: E402
-
 from app.storage import Storage, StorageError  # noqa: E402
 from app.storage.s3 import S3Storage  # noqa: E402
+from moto import mock_aws  # noqa: E402
 
 BUCKET = "planarus-test"
 

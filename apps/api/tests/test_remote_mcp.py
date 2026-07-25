@@ -11,12 +11,12 @@ fresh manager (and points the module global at it, since the mount reads it).
 import anyio
 import httpx
 import pytest
-from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
-
 from app.main import app
 from app.mcp import http_transport
 from app.mcp.http_transport import MOUNT_PATH
+from mcp import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
+
 from tests.external_util import auth, issue_key, seed
 
 # Trailing slash: the mounted ASGI app's canonical path (the bare form 307s to it).

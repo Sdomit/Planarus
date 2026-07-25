@@ -6,7 +6,6 @@ off by default, so every test that needs it flips the settings flags via
 monkeypatch (auto-reverted), mirroring the `external_api` fixture pattern.
 """
 import pytest
-
 from app.core.config import settings
 from app.services.auth_service import SESSION_COOKIE
 
@@ -280,7 +279,7 @@ def test_last_owner_protection(client, session, auth_on):
 
     # promote a second owner, then the first can be demoted
     second = _login(client, "second@acme.co")
-    sg = client.get("/api/v1/auth/me", cookies=_auth(second)).json()["user"]["id"]
+    client.get("/api/v1/auth/me", cookies=_auth(second))
     client.post(
         f"/api/v1/workspaces/{ws}/members",
         json={"email": "second@acme.co", "role": "owner"},

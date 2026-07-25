@@ -2,9 +2,9 @@
 from types import SimpleNamespace
 
 import pytest
+from app.models.api_client import ApiClient
 from sqlmodel import select
 
-from app.models.api_client import ApiClient
 from tests.external_util import auth, issue_key, seed
 
 PROJECTS = "/api/external/v1/projects"

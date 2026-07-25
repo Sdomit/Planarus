@@ -105,9 +105,8 @@ def test_create_link_project_not_found(client: TestClient) -> None:
 
 
 def test_create_link_audit_written(client: TestClient, session) -> None:
-    from sqlmodel import select
-
     from app.models.audit_event import AuditEvent
+    from sqlmodel import select
 
     _, pid = _seed(client)
     client.post(

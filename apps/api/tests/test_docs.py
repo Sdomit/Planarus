@@ -1,11 +1,8 @@
 """Backend tests for Phase 5 Doc CRUD and Markdown export."""
-import hashlib
 import json
 import os
 
-import pytest
 from fastapi.testclient import TestClient
-
 
 _EMPTY_JSON = '{"type": "doc", "content": [{"type": "paragraph"}]}'
 
@@ -287,9 +284,7 @@ def test_list_docs_search_is_case_insensitive_and_covers_the_body(client: TestCl
 
 def test_list_docs_filter_status(client: TestClient) -> None:
     _, pid = _seed(client)
-    d1 = client.post(
-        f"/api/v1/projects/{pid}/docs", json={"title": "D1", "doc_type": "note"}
-    ).json()
+    client.post(f"/api/v1/projects/{pid}/docs", json={"title": "D1", "doc_type": "note"})
     client.post(
         f"/api/v1/projects/{pid}/docs",
         json={"title": "D2", "doc_type": "note", "status": "published"},

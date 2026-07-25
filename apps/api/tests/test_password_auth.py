@@ -6,7 +6,6 @@ other-session revocation, the login throttle, and the D26 cookie Secure relax.
 Flags flip via monkeypatch (auto-reverted), mirroring test_auth_identity.py.
 """
 import pytest
-
 from app.api.v1.endpoints.auth import _pw_limiter
 from app.core.config import settings
 from app.services import auth_service

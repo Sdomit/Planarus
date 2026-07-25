@@ -12,8 +12,6 @@ import sqlite3
 from pathlib import Path
 
 import pytest
-from sqlmodel import Session, SQLModel, create_engine
-
 from app import jobs
 from app.core.config import settings as env
 from app.core.exceptions import ConflictError
@@ -23,6 +21,7 @@ from app.models.project import Project
 from app.models.workspace import Workspace
 from app.services import backup_service as svc
 from app.services import settings_service
+from sqlmodel import Session, SQLModel, create_engine
 
 
 @pytest.fixture(name="live_db")

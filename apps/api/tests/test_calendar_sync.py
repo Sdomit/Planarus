@@ -1,13 +1,12 @@
 from urllib.parse import parse_qs, urlencode, urlparse
 
 import pytest
-from cryptography.fernet import Fernet
-from fastapi.testclient import TestClient
-
 from app.core.config import settings
 from app.services import calendar_sync, oauth
 from app.services.auth_service import SESSION_COOKIE
 from app.services.calendar_sync import CalendarTokens, RemoteEvent
+from cryptography.fernet import Fernet
+from fastapi.testclient import TestClient
 
 
 def _seed(client: TestClient) -> tuple[str, str]:

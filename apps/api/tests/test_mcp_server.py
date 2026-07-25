@@ -8,12 +8,9 @@ import pathlib
 import sys
 
 import anyio
-import pytest
-from sqlalchemy.exc import OperationalError
-from sqlmodel import Session, SQLModel, create_engine, select
-
 import app.mcp
 import app.models  # noqa: F401 — register tables
+import pytest
 from app.core.utils import new_id, now_utc
 from app.db.session import configure_sqlite_pragmas
 from app.mcp import capabilities, server
@@ -21,6 +18,8 @@ from app.models.approval_request import ApprovalRequest
 from app.models.project import Project
 from app.models.task import Task
 from app.models.workspace import Workspace
+from sqlalchemy.exc import OperationalError
+from sqlmodel import Session, SQLModel, create_engine, select
 
 API_DIR = pathlib.Path(__file__).resolve().parents[1]
 

@@ -8,14 +8,13 @@ Every secret-like value here is a FAKE fixture, never a real credential.
 """
 import os
 
-from fastapi.testclient import TestClient
-from sqlmodel import Session, select
-
 from app.core.utils import new_id, now_utc
 from app.fsmemory import atomic_io
 from app.models.audit_event import AuditEvent
 from app.models.context_file import ContextFile
 from app.models.doc import Doc
+from fastapi.testclient import TestClient
+from sqlmodel import Session, select
 
 _FAKE_AWS = "AKIAIOSFODNN7EXAMPLE"
 
