@@ -16,7 +16,6 @@ import RemindersPanel from './RemindersPanel'
 import SettingsPanel from './SettingsPanel'
 import TeamPanel from './TeamPanel'
 import AboutModal from './AboutModal'
-import SupportWidget from './SupportWidget'
 import NotificationsBell from './NotificationsBell'
 import { SidebarTodos } from './SidebarTodos'
 import { useAuthInfo } from './auth'
@@ -576,7 +575,6 @@ export default function Layout() {
       </div>
 
       {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
-      <SupportWidget />
     </div>
   )
 }

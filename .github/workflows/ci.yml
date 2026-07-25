@@ -42,6 +42,34 @@ jobs:
       - run: pnpm typecheck:web
       - run: pnpm build:web
 
+  # Issue #101: nothing in CI looked at dependency advisories — dependabot only
+  # raised monthly version bumps. This is the scan half of that issue; a lint job
+  # (ruff/eslint) is still missing and needs its own config + cleanup pass.
+  audit:
+    name: Dependency audit (pip-audit + pnpm audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+      # setuptools ships with the runner image as a build tool, not as a declared
+      # dependency of this app — upgrade it first so its own advisories don't
+      # fail a scan of the dependency tree we actually control.
+      - run: pip install --upgrade pip setuptools
+      - run: pip install -e "./apps/api[dev]" pip-audit
+      - run: pip-audit
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Gate at high. Moderate advisories reachable only through deep transitive
+      # build chains are tracked, not build-breaking.
+      - run: pnpm audit --audit-level high
+
   api-postgres:
     name: API migrations (Postgres dialect)
     runs-on: ubuntu-latest

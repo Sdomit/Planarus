@@ -3,3 +3,10 @@ packages:
 
 allowBuilds:
   esbuild: true
+
+overrides:
+  # GHSA-r5fr-rjxr-66jc — _.template code injection. Reached only transitively
+  # (excalidraw > mermaid-to-excalidraw > langium > chevrotain), so there is no
+  # direct dependency to bump; 4.18 is the patched line. Drop this once the
+  # excalidraw chain ships a fixed lodash-es itself.
+  lodash-es: '^4.18.1'
