@@ -1,9 +1,61 @@
 name: CI
 
+# Actions minutes are metered on this repo because it is private, and the Free
+# plan allowance is 2,000 Linux minutes/month. July 2026 blew past it (2,020 min)
+# and every job started failing with "the job was not started because ... your
+# spending limit needs to be increased". The two filters below are the cheap half
+# of the fix; the structural half is going public, which #119 still gates.
+#
+# Skipping is safe here only because this repo has no required status checks
+# (branch protection is a Pro feature and this is a private repo on Free). If
+# protection is ever enabled, a docs-only PR would sit pending forever — either
+# drop these filters or add a skip job that reports the same check names.
+# Note also that GitHub Actions does not support YAML anchors, so the list is
+# duplicated rather than shared.
+#
+# `paths` with `!`, not `paths-ignore`: two paths under docs/ are test INPUTS,
+# not documentation, and skipping them would let CI pass on a change it never
+# saw. `paths-ignore` cannot express "ignore this subtree except that part" —
+# negation is only supported in `paths`, and the two filters cannot both apply
+# to one event. Order matters: later patterns win, so the re-includes must come
+# last.
+#   docs/api/**  — the two committed GPT Actions contracts, which
+#                  tests/test_openapi_contract.py compares byte-for-byte against
+#                  the builder. A hand-edit there is a broken contract, not a typo.
+#   docs/plan/** — tests/test_docs_truth.py asserts no two plan docs share a
+#                  number prefix and that every 00-OVERVIEW.md link resolves.
+#
+# Residual, deliberately accepted: that link check also reaches ../dev/,
+# ../guide/, ../../context/ and the repo root, so a docs-only commit that
+# DELETES or RENAMES a linked file there still skips CI and can merge a dead
+# link. Content edits to those paths are safe; only removals are not. Re-including
+# every path the checker can reach would re-include all of docs/, which is the
+# whole saving.
 on:
   push:
     branches: [main]
+    paths:
+      - "**"
+      - "!**.md"
+      - "!docs/**"
+      - "!context/**"
+      - "docs/api/**"
+      - "docs/plan/**"
   pull_request:
+    paths:
+      - "**"
+      - "!**.md"
+      - "!docs/**"
+      - "!context/**"
+      - "docs/api/**"
+      - "docs/plan/**"
+
+# Supersede in-flight runs on a branch that gets pushed again. Deliberately not
+# applied to main: every commit that lands there should be verified on its own,
+# and a cancelled main run leaves no record of whether that commit was green.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   api:
