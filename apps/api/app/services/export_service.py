@@ -32,6 +32,83 @@ EXPORT_VERSION = 2
 SUPPORTED_EXPORT_VERSIONS = (1, 2)
 
 
+# --- #117: bounds for an imported payload -----------------------------------
+# The import body was an arbitrary `dict`, and `import_project` created ORM rows
+# while iterating it, so an oversized or absurdly shaped file was only found out
+# partway through writing it. These are checked in full, before the first row.
+#
+# The shape is not hand-written as a typed schema per collection: the collections
+# ARE `project_graph.ENTITIES` (#87), so deriving the check from the registry is
+# both shorter and drift-proof — a new entity is bounded the day it is added.
+MAX_IMPORT_BYTES = 32 * 1024 * 1024
+MAX_ROWS_PER_ENTITY = 20_000
+MAX_TOTAL_ROWS = 100_000
+MAX_IMPORT_DEPTH = 64
+MAX_FIELD_BYTES = 4 * 1024 * 1024
+
+
+def validate_import_payload(data: dict) -> None:
+    """Raise ``ValueError`` unless the payload is a recognised, bounded export.
+
+    Everything ``import_project`` will read is checked here, before it writes
+    anything — so a rejected import leaves no partial project behind.
+    """
+    import json
+
+    if not isinstance(data, dict):
+        raise ValueError("unrecognized export format")
+    if data.get("planarus_export") not in SUPPORTED_EXPORT_VERSIONS:
+        raise ValueError("unrecognized export format")
+
+    try:
+        size = len(json.dumps(data).encode("utf-8"))
+    except (TypeError, ValueError):
+        raise ValueError("import payload is not JSON-serializable")
+    if size > MAX_IMPORT_BYTES:
+        raise ValueError(
+            f"import payload is {size} bytes, over the "
+            f"{MAX_IMPORT_BYTES // (1024 * 1024)} MiB limit"
+        )
+
+    depth_stack = [(data, 1)]
+    while depth_stack:
+        node, depth = depth_stack.pop()
+        if depth > MAX_IMPORT_DEPTH:
+            raise ValueError(f"import payload nests deeper than {MAX_IMPORT_DEPTH} levels")
+        if isinstance(node, dict):
+            depth_stack.extend((v, depth + 1) for v in node.values())
+        elif isinstance(node, list):
+            depth_stack.extend((v, depth + 1) for v in node)
+
+    total = 0
+    # "export", not "import": `copy_graph` resolves the import surface to the
+    # export one (an import reads exactly what an export writes), so bounding the
+    # export surface bounds precisely the collections import will consume.
+    for entity in project_graph.entities_for("export"):
+        rows = data.get(entity.payload_key)
+        if rows is None:
+            continue  # absent is fine — a v1 file simply has fewer collections
+        if not isinstance(rows, list):
+            raise ValueError(f"{entity.payload_key} must be a list")
+        if len(rows) > MAX_ROWS_PER_ENTITY:
+            raise ValueError(
+                f"{entity.payload_key} has {len(rows)} rows, over the "
+                f"{MAX_ROWS_PER_ENTITY} limit"
+            )
+        total += len(rows)
+        if total > MAX_TOTAL_ROWS:
+            raise ValueError(f"import exceeds {MAX_TOTAL_ROWS} total rows")
+        for row in rows:
+            if not isinstance(row, dict):
+                raise ValueError(f"{entity.payload_key} rows must be objects")
+            for key, value in row.items():
+                if isinstance(value, str) and len(value.encode("utf-8")) > MAX_FIELD_BYTES:
+                    raise ValueError(
+                        f"{entity.payload_key}.{key} exceeds the "
+                        f"{MAX_FIELD_BYTES // (1024 * 1024)} MiB field limit"
+                    )
+
+
 def export_project(session: Session, project_id: str) -> Optional[dict]:
     """Serialize a project + its graph to a JSON-safe dict (original ids)."""
     proj = session.get(Project, project_id)
@@ -52,11 +129,7 @@ def export_project(session: Session, project_id: str) -> Optional[dict]:
 def import_project(session: Session, workspace_id: str, data: dict) -> Project:
     """Create a fresh project from an export dict, remapping every id. Raises
     ValueError on an unrecognized payload."""
-    if (
-        not isinstance(data, dict)
-        or data.get("planarus_export") not in SUPPORTED_EXPORT_VERSIONS
-    ):
-        raise ValueError("unrecognized export format")
+    validate_import_payload(data)  # #117: in full, before the first row is created
     src = data.get("project") or {}
     now = now_utc()
     new_proj = Project(
