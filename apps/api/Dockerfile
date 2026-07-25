@@ -26,4 +26,9 @@ EXPOSE 8000
 # (sqlite:///./planarus.db, cwd=/app) and Alembic both resolve to /app/planarus.db,
 # which the entrypoint symlinks onto the persisted /data volume.
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
+# Single uvicorn process, deliberately (#120): rate-limit buckets, the local
+# control token, the LAN switch mirror and presence are process-local, so a
+# second worker multiplies the rate limits and splits the token. Do NOT add
+# --workers or set WEB_CONCURRENCY/UVICORN_WORKERS — create_app() refuses to
+# start when it can see either. See docs/guide/hosted-go-live.md §0.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
