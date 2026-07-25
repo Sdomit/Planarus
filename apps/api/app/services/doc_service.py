@@ -16,6 +16,7 @@ from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
 from app.core import actor
+from app.core.hierarchy import MAX_DEPTH, validate_parent
 from app.core.utils import new_id, now_utc
 from app.fsmemory import atomic_io
 from app.fsmemory.locks import project_lock
@@ -85,6 +86,15 @@ def create_doc(session: Session, project_id: str, payload: DocCreate) -> Doc:
     if project is None:
         raise ValueError(f"Project {project_id!r} not found")
 
+    parent_doc_id = validate_parent(
+        session,
+        Doc,
+        parent_id=payload.parent_doc_id,
+        project_id=project_id,
+        parent_attr="parent_doc_id",
+        label="parent doc",
+    )
+
     base_slug = _slugify(payload.slug or payload.title)
     slug = _unique_slug(session, project_id, base_slug)
 
@@ -92,7 +102,7 @@ def create_doc(session: Session, project_id: str, payload: DocCreate) -> Doc:
     doc = Doc(
         id=new_id("doc"),
         project_id=project_id,
-        parent_doc_id=payload.parent_doc_id,
+        parent_doc_id=parent_doc_id,
         title=payload.title,
         slug=slug,
         doc_type=payload.doc_type,
@@ -194,7 +204,15 @@ def update_doc(session: Session, doc_id: str, payload: DocUpdate) -> Doc:
         doc.sort_order = payload.sort_order
         changed = True
     if payload.parent_doc_id is not None:
-        doc.parent_doc_id = payload.parent_doc_id
+        doc.parent_doc_id = validate_parent(
+            session,
+            Doc,
+            parent_id=payload.parent_doc_id,
+            project_id=doc.project_id,
+            child_id=doc.id,
+            parent_attr="parent_doc_id",
+            label="parent doc",
+        )
         changed = True
     if payload.content_json is not None:
         doc.content_json = payload.content_json
@@ -230,6 +248,62 @@ def update_doc(session: Session, doc_id: str, payload: DocUpdate) -> Doc:
     return doc
 
 
+def repair_parent_integrity(session: Session, *, dry_run: bool = False) -> list[dict]:
+    """Find and clear parent links that ``validate_parent`` would now reject.
+
+    Data written before #116 can hold a cross-project parent, a self-parent, a
+    parent that no longer exists, or a cycle. Each is reported as
+    ``{doc_id, project_id, parent_doc_id, reason}``; with ``dry_run`` the rows
+    are reported and left alone, so an operator can look before anything moves.
+
+    Data-only, so it is a service call rather than an Alembic revision: it is
+    safe to re-run, it reports before it writes, and it needs no schema change.
+    """
+    docs = session.exec(select(Doc).where(Doc.parent_doc_id.is_not(None))).all()  # type: ignore[union-attr]
+    by_id = {d.id: d for d in docs}
+    findings: list[dict] = []
+
+    for doc in docs:
+        parent = by_id.get(doc.parent_doc_id) or session.get(Doc, doc.parent_doc_id)
+        if doc.parent_doc_id == doc.id:
+            reason = "self-parent"
+        elif parent is None:
+            reason = "parent missing"
+        elif parent.project_id != doc.project_id:
+            reason = "parent in another project"
+        else:
+            reason = ""
+            seen, node = {doc.id}, parent
+            for _ in range(MAX_DEPTH):
+                if node is None or node.id in seen:
+                    reason = "cycle" if node is not None else ""
+                    break
+                seen.add(node.id)
+                if node.parent_doc_id is None:
+                    break
+                node = by_id.get(node.parent_doc_id) or session.get(Doc, node.parent_doc_id)
+            else:
+                reason = "chain too deep"
+        if not reason:
+            continue
+
+        findings.append(
+            {
+                "doc_id": doc.id,
+                "project_id": doc.project_id,
+                "parent_doc_id": doc.parent_doc_id,
+                "reason": reason,
+            }
+        )
+        if not dry_run:
+            doc.parent_doc_id = None
+            session.add(doc)
+
+    if findings and not dry_run:
+        session.commit()
+    return findings
+
+
 def delete_doc(session: Session, doc_id: str) -> bool:
     """Hard-delete a doc, its comments/links (attached via entity_type='doc'),
     and promote any child docs to top-level (parent_doc_id cleared, so the FK
@@ -248,12 +322,26 @@ def delete_doc(session: Session, doc_id: str) -> bool:
         select(Link).where(Link.entity_type == "doc", Link.entity_id == doc_id)
     ).all():
         session.delete(link)
+    # Project-scoped as defence in depth (#116). The normal path only ever
+    # touches this project's documents.
     for child in session.exec(
-        select(Doc).where(Doc.parent_doc_id == doc_id)
+        select(Doc).where(Doc.parent_doc_id == doc_id, Doc.project_id == project_id)
     ).all():
         child.parent_doc_id = None
         child.updated_at = now
         session.add(child)
+
+    # A cross-project child can no longer be created, but one written before
+    # #116 still points here, and the self-FK will not let this row be deleted
+    # while it does. Clearing it is unavoidable, so do it as a visible repair
+    # rather than silently inside the scoped loop above: no `updated_at` bump,
+    # so the other project's document is not made to look edited by a delete it
+    # had no part in. `repair_parent_integrity` clears these ahead of time.
+    for stray in session.exec(
+        select(Doc).where(Doc.parent_doc_id == doc_id, Doc.project_id != project_id)
+    ).all():
+        stray.parent_doc_id = None
+        session.add(stray)
 
     # Flush child updates/deletes before the doc's own DELETE (parent_doc_id FK).
     session.flush()
