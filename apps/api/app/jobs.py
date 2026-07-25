@@ -24,6 +24,7 @@ recording success, and can tell "switched off on purpose" apart from "broken".
     python -m app.jobs restore NAME --yes
     python -m app.jobs admin --list | --grant EMAIL | --reset-password EMAIL
     python -m app.jobs adopt-roots [--apply]
+    python -m app.jobs audit-uris
 """
 from __future__ import annotations
 
@@ -41,7 +42,13 @@ from app.core.exceptions import ConflictError
 from app.fsmemory.project_root import ProjectRootError, managed_base, managed_root_for
 from app.models.project import Project
 from app.models.user import User
-from app.services import admin_service, backup_service, email_service, settings_service
+from app.services import (
+    admin_service,
+    backup_service,
+    email_service,
+    settings_service,
+    uri_audit,
+)
 
 # Refusing a destructive action without explicit confirmation is a distinct
 # outcome from "it failed" — a scheduler/operator can tell them apart.
@@ -284,6 +291,33 @@ def _cmd_adopt_roots(args: argparse.Namespace) -> int:
         return EXIT_FAILED if failed else EXIT_OK
 
 
+def _cmd_audit_uris(_args: argparse.Namespace) -> int:
+    """List stored links and documents whose URIs the #118 policy rejects.
+
+    Read-only. Exits 1 when it finds something, so it can be used as a gate
+    before a release rather than only read by eye.
+    """
+    with _session() as session:
+        report = uri_audit.audit_stored_uris(session)
+
+    for row in report["links"]:
+        print(f"[link] {row['id']} (project {row['project_id']}): {row['url']}")
+    for row in report["docs"]:
+        print(f"[doc]  {row['id']} (project {row['project_id']}) {row['title']!r}")
+        for problem in row["problems"]:
+            print(f"         {problem}")
+
+    if not report["total"]:
+        print("audit-uris: no stored URI violates the policy")
+        return EXIT_OK
+    print(
+        f"audit-uris: {len(report['links'])} link(s) and {len(report['docs'])} "
+        "document(s) hold a URI this build would refuse to store. Nothing was "
+        "changed — they render as plain text, not as links."
+    )
+    return EXIT_FAILED
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m app.jobs",
@@ -339,6 +373,12 @@ def main(argv: list[str] | None = None) -> int:
         "--apply", action="store_true", help="make changes (default: dry run)"
     )
     adopt.set_defaults(func=_cmd_adopt_roots)
+
+    audit = sub.add_parser(
+        "audit-uris",
+        help="report stored links/documents whose URIs the current policy rejects (#118)",
+    )
+    audit.set_defaults(func=_cmd_audit_uris)
 
     args = parser.parse_args(argv)
     try:
