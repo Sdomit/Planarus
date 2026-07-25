@@ -29,9 +29,17 @@ from app.models.task import Task
 from app.prompt import boundary
 from app.services import approval_service
 
+# Kept byte-identical to the copy in app/api/external/openapi.py, which the GPT
+# contract embeds; test_openapi_contract asserts the two are equal. The second
+# sentence exists because the poll tool was named only in that contract (#91), so
+# an MCP agent had to guess that get_approval_status was the other half of this
+# loop. Both sentences ship to GPT Actions, whose descriptions cap at 300 chars —
+# this string plus its 58-char schema prefix sits at 286.
 REVIEW_HINT = (
     "Pending human review in Planarus Approval Queue. Nothing has changed "
-    "until a local human approves and applies this exact proposal."
+    "until a local human approves and applies this exact proposal. "
+    "Poll get_approval_status with this approval_id to learn the outcome "
+    "and the affected entity's id."
 )
 
 
