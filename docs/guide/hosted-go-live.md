@@ -1,11 +1,62 @@
 # Going live: hosted Planarus (OAuth + S3)
 
-Everything hosted is **off by default** — the code is complete and config-driven,
-so going live is providing infrastructure and secrets, not writing code. Work
-top-to-bottom; the last step (`doctor`) verifies the whole thing before you deploy.
+Everything hosted is **off by default** and config-driven, so going live is
+providing infrastructure and secrets, not writing code. Work top-to-bottom; the
+last step (`doctor`) verifies the whole thing before you deploy.
+
+**Read [§0 Supported topology](#0-supported-topology-read-this-first) first.**
+Pre-1.0 Planarus is supported on **exactly one API process and one replica**.
+That is the only runtime it is tested against, and the app refuses to start in
+the multi-worker configurations it can detect.
 
 All settings are `PLANARUS_*` env vars; `apps/api/deploy/hosted.env.example` is a
 fill-in-the-blanks template.
+
+## 0. Supported topology (read this first)
+
+| | Supported pre-1.0 |
+|---|---|
+| API processes | **1** — no `--workers N`, no `WEB_CONCURRENCY`/`UVICORN_WORKERS` > 1, no gunicorn |
+| Replicas / instances | **1** — no autoscaling, no multi-region, no warm standby serving traffic |
+| Deploys | **stop-then-start.** No rolling deploy that runs the old and new instance concurrently |
+| Database | managed Postgres is fine — it is the only shared store |
+| Local-disk features | require a single server-owned mounted volume attached to that one instance |
+
+**Why.** Several security and coordination controls are deliberately
+process-local at this stage, so a second process is not a second copy — it is a
+divergent one:
+
+| Process-local state | Where | What a second process breaks |
+|---|---|---|
+| Login rate-limit buckets, external-API concurrency counters | `core/rate_limit.py` (module-level `limiter`) | N workers = N× the limit an attacker actually gets |
+| Local control token | `core/security.py` `_LOCAL_CONTROL_TOKEN` | the token minted by one process is rejected by the other |
+| LAN acceptance switch mirror | `services/settings_service.py` `_lan_switch_cache` | turning LAN mode **off** only reaches the worker that served the write |
+| Document presence / soft-locks | in-process by design | two users can hold the "same" lock |
+| Local filesystem storage + managed project roots | — | assume one node owns the disk |
+| S3 `append_line` | `storage/s3.py` | read-modify-write with no distributed lock — concurrent appends silently lose data |
+
+**Not on that list: OAuth.** Sign-in state used to be an HMAC blob signed with a
+per-process key — invisible to a second worker and lost on restart. #113
+replaced it with a one-time server-side `oauthtransaction` row shared by the
+login and calendar flows, so OAuth already survives restarts and would survive
+multiple workers. It is the one piece of this that is already shared.
+
+**What is enforced vs. what you must guarantee.** The app fails closed on
+`WEB_CONCURRENCY` or `UVICORN_WORKERS` greater than 1 (or unparseable, e.g.
+`auto`) — it raises at startup rather than serving. It **cannot** see your
+replica count, autoscaling policy, or rolling-deploy overlap, and it cannot see
+a `--workers 4` typed directly into a start command. Those are yours to get
+right; `doctor` prints them as explicit obligations rather than assuming them.
+
+**Restart behaviour.** A restart re-mints the local control token, empties the
+rate-limit buckets, and clears presence/soft-lock state. Nothing is corrupted and
+signed-in users stay signed in. Prefer restarting when idle; a restart under load
+briefly resets the rate-limit window.
+
+Need real multi-worker/multi-node scale-out? That is issue
+[#120](https://github.com/Sdomit/Planarus/issues/120) Option B — shared OAuth
+transaction state, centralised rate limits, distributed locking and atomic
+object-storage operations. It is not built, so do not configure for it.
 
 ## 1. Database (Postgres)
 1. Provision managed Postgres (Supabase, RDS, Neon, …).
@@ -100,26 +151,45 @@ Credentials come from the standard AWS chain (instance role, `AWS_*` env, etc.).
 Install the extra: `pip install -e ".[s3]"`. The IAM principal needs
 `s3:GetObject`/`PutObject`/`DeleteObject` (and `HeadObject`) on the bucket.
 
+S3 does not give you multi-node safety: `append_line` is read-modify-write with
+no distributed lock, so two instances appending concurrently lose one of the
+writes. The §0 single-instance contract is what makes it safe — object storage
+buys you durability and a stateless disk, not scale-out.
+
 ## 5. Preflight — run the doctor
 Before deploying, validate the whole config from the API host:
 ```
 cd apps/api && python scripts/doctor.py
 ```
-It checks the DB is reachable **and migrated to head**, that auth is sane
-(fails if the dev-login backdoor is on, warns if no web origins), that each
-configured OAuth provider has both id + secret, and — for the s3 backend — that
-the bucket is actually **writable** (it does a put/read/delete probe). It exits
-non-zero on any hard failure, so you can gate your deploy on it.
+It checks the **§0 worker contract** (fails on `WEB_CONCURRENCY`/`UVICORN_WORKERS`
+> 1) and prints the topology obligations it cannot verify, that the DB is
+reachable **and migrated to head**, that auth is sane (fails if the dev-login
+backdoor is on, warns if no web origins), that each configured OAuth provider has
+both id + secret, and — for the s3 backend — that the bucket is actually
+**writable** (it does a put/read/delete probe). It exits non-zero on any hard
+failure, so you can gate your deploy on it.
+
+Run it **on the API host with the deploy's real environment**, not on your
+laptop — the worker check reads the env the app will actually boot with.
 
 ## 6. Deploy
 - **Frontend:** build `apps/web` to static assets → Cloudflare Pages / Vercel.
 - **API:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT` behind the platform's
   TLS/ingress (Render, Railway, Fly, …); run `alembic upgrade head` on release.
-  The existing `apps/api/Dockerfile` builds a runnable image — it runs as a
-  non-root `planarus` user (#115) and needs its `/data` volume and
-  `PLANARUS_PROJECTS_ROOT` writable by that user; its entrypoint fixes the
-  bind-mount ownership on start.
+  Use that command **verbatim** — no `--workers`, no gunicorn wrapper — and leave
+  `WEB_CONCURRENCY`/`UVICORN_WORKERS` unset (§0). The existing
+  `apps/api/Dockerfile` builds a runnable image with exactly this single-process
+  `CMD` — it runs as a non-root `planarus` user (#115) and needs its `/data`
+  volume and `PLANARUS_PROJECTS_ROOT` writable by that user; its entrypoint fixes
+  the bind-mount ownership on start.
+- **Platform settings:** set instance/replica count to **1**, turn autoscaling
+  **off**, and choose stop-then-start (recreate) over rolling/zero-downtime
+  deploys. On Render that is one instance with autoscaling disabled; on Fly,
+  `min_machines_running = 1` with no `auto_start`/`auto_stop` scaling group; on
+  Railway, a single replica. Point the platform health check at the API and let
+  it restart the one instance rather than adding another.
 
 The app still binds loopback by default and never manages its own TLS/tunnel — the
 platform fronts it. Rate limiting, the app-wide Host guard, and RFC 9457 errors are
-already on.
+already on — and per §0, that rate limiting is per-process, which is exactly why
+the one-process contract is a security property and not a packaging detail.

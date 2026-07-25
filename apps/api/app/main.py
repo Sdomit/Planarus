@@ -25,6 +25,7 @@ from app.core.errors import (
     server_error_handler,
     unprocessable_handler,
 )
+from app.core.runtime import worker_count_violation
 from app.core.exceptions import (
     ApprovalApplyError,
     ApprovalConflictError,
@@ -100,6 +101,14 @@ def create_app() -> FastAPI:
             "(#115): in team mode a project's on-disk root is server-owned and "
             "derived under this base, never chosen by a tenant. Refusing to start."
         )
+    # Issue #120 fail-closed precondition: the supported topology is exactly one
+    # API process. Multiple workers silently multiply the in-memory rate limits,
+    # split the local control token, and diverge the LAN switch mirror. Refuse
+    # the only variant we can actually detect (env-configured worker count).
+    _worker_violation = worker_count_violation()
+    if _worker_violation:
+        raise RuntimeError(f"Refusing to start: {_worker_violation}")
+
     if settings.lan_mode_enabled:
         lan_hosts = ", ".join(
             h.strip() for h in settings.lan_allowed_hosts.split(",") if h.strip()
