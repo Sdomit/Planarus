@@ -7,7 +7,7 @@ from app.core.utils import new_id, now_utc
 from app.models.decision import Decision
 from app.models.task import Task
 from app.prompt.boundary import PRECEDENCE_SENTENCE
-from app.services import approval_service
+from app.services import approval_service, task_service
 
 from tests.external_util import auth, issue_key, seed
 
@@ -100,6 +100,27 @@ def test_approval_status_is_status_only(env, client, session):
     whole = json.dumps(body)
     assert "proposed_patch" not in whole
     assert "pending thing" not in whole
+
+
+def test_approval_status_carries_the_applied_id(env, client, session):
+    """#91 over the external surface: the route delegates to the same handler,
+    so the id keys must arrive here too — that is the GPT-facing half of the loop.
+    """
+    ar = approval_service.create_proposal(
+        session, project_id=env.proj, action_type="task.create",
+        patch={"title": "external round trip"},
+    )
+    approval_service.approve(session, ar.id)
+    approval_service.apply(session, ar.id)
+
+    res = client.get(f"/api/external/v1/approvals/{ar.id}/status", headers=auth(env.key))
+    assert res.status_code == 200
+    meta = res.json()["metadata"]
+    assert meta["status"] == "applied"
+    assert meta["applied_entity_type"] == "task"
+    assert task_service.get_task(session, meta["applied_entity_id"]).project_id == env.proj
+    # Scalar-only metadata contract: ids and statuses, never a structure.
+    assert all(v is None or isinstance(v, (str, int, bool)) for v in meta.values())
 
 
 def test_propose_only_key_cannot_read(client, external_api):

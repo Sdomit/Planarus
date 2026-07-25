@@ -396,6 +396,33 @@ def get_proposal_audit(session: Session, approval_id: str) -> list[AuditEvent]:
     return list(session.exec(stmt).all())
 
 
+def applied_entity(
+    session: Session, ar: ApprovalRequest
+) -> tuple[Optional[str], Optional[str]]:
+    """(entity_type, entity_id) of what an applied proposal actually created or
+    changed; (None, None) until it applies.
+
+    For ``*.create`` there is no id at proposal time, so ``target_entity_id`` is
+    null and this is the only way an agent can learn what it made. The ids live
+    solely in the payload of the audit event ``apply`` links through
+    ``applied_audit_event_id`` — this reader lives next to that writer on purpose.
+    Non-string values are dropped: the callers put these straight into
+    scalar-only external metadata.
+    """
+    if not ar.applied_audit_event_id:
+        return (None, None)
+    event = session.get(AuditEvent, ar.applied_audit_event_id)
+    if event is None or not event.payload_json:
+        return (None, None)
+    payload = json.loads(event.payload_json)
+    entity_type = payload.get("applied_entity_type")
+    entity_id = payload.get("applied_entity_id")
+    return (
+        entity_type if isinstance(entity_type, str) else None,
+        entity_id if isinstance(entity_id, str) else None,
+    )
+
+
 def _scene_counts(raw: Optional[str]) -> tuple[Optional[int], Optional[int]]:
     """(element count, total text-element chars) for an Excalidraw scene, or
     (None, None) if unparseable. Used for the compact canvas review preview."""
