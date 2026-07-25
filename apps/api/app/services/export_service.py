@@ -15,6 +15,7 @@ from typing import Optional
 
 from sqlmodel import Session
 
+from app.core.uri_policy import check_rich_content, normalize_link
 from app.core.utils import new_id, now_utc
 from app.models.project import Project
 from app.services import project_graph
@@ -107,6 +108,26 @@ def validate_import_payload(data: dict) -> None:
                         f"{entity.payload_key}.{key} exceeds the "
                         f"{MAX_FIELD_BYTES // (1024 * 1024)} MiB field limit"
                     )
+            # #118: an import file is written by whoever hands it over, so it
+            # reaches none of the checks `LinkCreate`/`DocUpdate` apply to a
+            # request. Which columns carry a URI is declared on the entity
+            # itself (`uri_fields`/`rich_fields`), so a new one is covered the
+            # day it is added rather than the day someone remembers this loop.
+            for column in entity.uri_fields:
+                value = row.get(column)
+                if isinstance(value, str) and value.strip():
+                    normalize_link(value, label=f"{entity.payload_key}.{column}")
+            for column in entity.rich_fields:
+                value = row.get(column)
+                if not isinstance(value, str) or not value.strip():
+                    continue
+                try:
+                    parsed = json.loads(value)
+                except ValueError:
+                    raise ValueError(
+                        f"{entity.payload_key}.{column} must be valid JSON"
+                    ) from None
+                check_rich_content(parsed, f"{entity.payload_key}.{column}")
 
 
 def export_project(session: Session, project_id: str) -> Optional[dict]:

@@ -95,6 +95,10 @@
 .pp-attach .pp-comment { flex-direction: row; align-items: flex-start; justify-content: space-between; gap: var(--space-2); }
 .pp-attach .pp-comment-body { flex: 1; }
 .pp-attach-link { display: block; font-size: var(--text-sm); }
+/* #118: a stored link whose scheme the policy no longer allows. Rendered as
+   text, not as an anchor — muted and struck so it reads as deliberately inert
+   rather than as a link that failed to style. */
+.pp-link-blocked { color: var(--text-tertiary); text-decoration: line-through; cursor: help; }
 .pp-attach-actions { display: flex; gap: var(--space-2); }
 .pp-attach-error { color: var(--status-danger-fg); font-size: var(--text-xs); margin: 0; }
 
