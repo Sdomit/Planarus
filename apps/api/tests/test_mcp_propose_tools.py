@@ -35,6 +35,21 @@ def test_create_task_proposal_pending_only(client: TestClient, session: Session)
     assert session.exec(select(Task).where(Task.project_id == pid)).all() == []
 
 
+def test_review_hint_names_the_poll_tool(client: TestClient, session: Session) -> None:
+    """#91: the receipt must name its own follow-up tool.
+
+    The pairing used to be stated only in the GPT contract, so an MCP agent had to
+    infer that get_approval_status existed. Asserted on the receipt, not on the
+    constant, because the receipt is what an agent actually reads.
+    """
+    ws, pid = seed(client, "pp1b")
+    res = propose.create_task_proposal(
+        session, propose_cap(ws, pid), propose.CreateTaskProposalArgs(project_id=pid, title="t")
+    )
+    for surface in (res.metadata["review_hint"], res.text):
+        assert "get_approval_status" in surface
+
+
 def test_create_decision_proposal_pending_only(client: TestClient, session: Session) -> None:
     ws, pid = seed(client, "pp2")
     cap = propose_cap(ws, pid)

@@ -39,9 +39,13 @@ SERVER_URL = "https://REPLACE-WITH-YOUR-PUBLIC-HOST/api/external/v1"
 # Mirrored from the live serializers / propose tool (kept honest by the drift tests).
 MAX_LIST_ROWS = 100
 MAX_DOC_EXCERPT_CHARS = 4000
+# Byte-identical to app/mcp/tools/propose.py's copy; test_openapi_contract
+# asserts it. Changing either means regenerating docs/api/*.json.
 REVIEW_HINT = (
     "Pending human review in Planarus Approval Queue. Nothing has changed "
-    "until a local human approves and applies this exact proposal."
+    "until a local human approves and applies this exact proposal. "
+    "Poll get_approval_status with this approval_id to learn the outcome "
+    "and the affected entity's id."
 )
 
 # Visible profile markings (required by the phase brief).
