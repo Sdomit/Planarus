@@ -8,8 +8,6 @@ validation before storage; no secret can be smuggled through a reference field.
 import uuid
 
 import pytest
-from sqlmodel import func, select
-
 from app.core.exceptions import PolicyError, SecretDetectedError
 from app.core.utils import new_id, now_utc
 from app.models.approval_request import ApprovalRequest
@@ -19,8 +17,12 @@ from app.models.stage import Stage
 from app.policy import allowlist
 from app.prompt import secrets as secret_scan
 from app.services import approval_service
-from tests.external_util import auth, issue_key, seed as ext_seed
-from tests.mcp_util import propose_cap, seed as mcp_seed
+from sqlmodel import func, select
+
+from tests.external_util import auth, issue_key
+from tests.external_util import seed as ext_seed
+from tests.mcp_util import propose_cap
+from tests.mcp_util import seed as mcp_seed
 
 AWS_KEY = "AKIAIOSFODNN7EXAMPLE"
 SECRET_ASSIGN = "aws_secret_access_key=wJalrXUtnFEMI/K7MDENGbPxRfiCYEXAMPLEKEY"

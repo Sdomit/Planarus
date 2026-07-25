@@ -14,7 +14,8 @@
     "dev:web": "pnpm --filter @planarus/web dev",
     "build:web": "pnpm --filter @planarus/web build",
     "test:web": "pnpm --filter @planarus/web test",
-    "typecheck:web": "pnpm --filter @planarus/web typecheck"
+    "typecheck:web": "pnpm --filter @planarus/web typecheck",
+    "lint:web": "pnpm --filter @planarus/web lint"
   },
   "engines": {
     "node": ">=20",

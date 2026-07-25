@@ -9,11 +9,10 @@ import shutil
 import subprocess
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlmodel import Session
-
 from app.models.project import Project
 from app.services import git_service
+from fastapi.testclient import TestClient
+from sqlmodel import Session
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git not installed")
 

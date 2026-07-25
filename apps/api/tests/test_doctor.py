@@ -6,8 +6,6 @@ individual checks with monkeypatched settings, asserting the FAIL/OK accounting.
 import importlib.util
 import pathlib
 
-import pytest
-
 from app.core.config import settings
 
 _DOCTOR_PATH = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "doctor.py"

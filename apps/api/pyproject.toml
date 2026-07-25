@@ -21,6 +21,8 @@ dev = [
     # P10.3b: mocked S3 so the s3 storage backend is covered in CI without AWS.
     # Pulls boto3, so the s3 backend imports resolve in the test run too.
     "moto[s3]>=5.2.2",
+    # #101: the lint gate. Rules live in the repo-root pyproject.toml.
+    "ruff>=0.16.0",
 ]
 # P10.0: driver for the Postgres dialect CI job; the app itself stays
 # SQLite-by-default and never requires this locally.

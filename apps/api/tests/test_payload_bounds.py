@@ -9,7 +9,6 @@ an arbitrary dict that `import_project` iterated while creating rows, and
 import json
 
 import pytest
-
 from app.api.external.middleware import LOCAL_MAX_BODY_BYTES
 from app.models.project import Project
 from app.services import export_service

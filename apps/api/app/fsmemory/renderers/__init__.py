@@ -256,7 +256,7 @@ def _tasks_body(ctx: RenderContext) -> list[str]:
             priority = _sanitize(t.priority) or "—"
             lines.append(f"| {_trunc(t.title)} | {t.status} | {priority} |")
 
-    lines += ["", f"## Done", f"{done_count} completed.", ""]
+    lines += ["", "## Done", f"{done_count} completed.", ""]
 
     lines.append("## Open blockers")
     if not open_blockers:
@@ -317,7 +317,7 @@ def _risks_body(ctx: RenderContext) -> list[str]:
                 f"| {r.severity} | {_trunc(r.title, 50)} | {r.status} | {mitigation} |"
             )
 
-    lines += ["", f"## Closed risks", f"{len(closed_risks)} closed.", ""]
+    lines += ["", "## Closed risks", f"{len(closed_risks)} closed.", ""]
 
     lines.append("## Open blockers")
     if not open_blockers:

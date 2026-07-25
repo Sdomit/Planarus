@@ -11,7 +11,6 @@ from app.models.decision import Decision
 from app.models.doc import Doc
 from app.models.milestone import Milestone
 from app.models.phase import Phase
-from app.models.project import Project
 from app.models.risk import Risk
 from app.models.stage import Stage
 from app.models.task import Task

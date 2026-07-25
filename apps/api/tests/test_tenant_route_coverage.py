@@ -14,7 +14,6 @@ one instead of waiting for a review to notice.
 from datetime import datetime, timezone
 
 import pytest
-
 from app.core.config import settings
 from app.core.tenant import _build_resolvers, tenant_guard
 from app.main import app

@@ -6,7 +6,6 @@ and that the memory backend enforces its own key-safety. The local backend's
 byte-identical behavior is covered by the existing fsmemory suite.
 """
 import pytest
-
 from app.core.config import settings
 from app.fsmemory import atomic_io
 from app.storage import (

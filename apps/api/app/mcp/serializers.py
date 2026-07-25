@@ -21,8 +21,10 @@ from app.prompt import boundary
 from app.prompt.secrets import (  # noqa: PLC2701 — intentional internal reuse
     _ENTROPY_THRESHOLD,
     _HIGH_ENTROPY_CANDIDATE,
-    _PATTERNS as _SECRET_PATTERNS,
     _shannon_entropy,
+)
+from app.prompt.secrets import (
+    _PATTERNS as _SECRET_PATTERNS,
 )
 
 MAX_LIST_ROWS = 100

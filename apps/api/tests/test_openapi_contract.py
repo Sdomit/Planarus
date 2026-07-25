@@ -14,17 +14,22 @@ from types import SimpleNamespace
 from urllib.parse import urlsplit
 
 import pytest
-
 from app.api.external.openapi import (
     CONTRACT_VERSION,
-    MAX_DOC_EXCERPT_CHARS as C_MAX_DOC_EXCERPT_CHARS,
-    MAX_LIST_ROWS as C_MAX_LIST_ROWS,
     PROPOSE_PROFILE_NOTE,
     READONLY_PROFILE_NOTE,
-    REVIEW_HINT as C_REVIEW_HINT,
     SERVER_URL,
     build_read_propose_openapi,
     build_readonly_openapi,
+)
+from app.api.external.openapi import (
+    MAX_DOC_EXCERPT_CHARS as C_MAX_DOC_EXCERPT_CHARS,
+)
+from app.api.external.openapi import (
+    MAX_LIST_ROWS as C_MAX_LIST_ROWS,
+)
+from app.api.external.openapi import (
+    REVIEW_HINT as C_REVIEW_HINT,
 )
 from app.api.external.router import _TaskUpdateBody
 from app.api.external.router import router as external_router
@@ -42,6 +47,7 @@ from app.models.decision import Decision
 from app.models.doc import Doc
 from app.models.task import Task
 from app.services import approval_service
+
 from tests.external_util import auth, issue_key, seed
 
 REPO_ROOT = Path(__file__).resolve().parents[3]

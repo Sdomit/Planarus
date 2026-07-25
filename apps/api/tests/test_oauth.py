@@ -9,8 +9,6 @@ credentials); the flow is provider-agnostic, driven through a fake provider.
 from urllib.parse import parse_qs, urlparse
 
 import pytest
-from sqlmodel import select
-
 from app.core.config import settings
 from app.core.utils import now_utc
 from app.models.oauth_transaction import OAuthTransaction
@@ -19,6 +17,7 @@ from app.models.user_identity import UserIdentity
 from app.services import oauth
 from app.services.auth_service import SESSION_COOKIE
 from app.services.oauth import OAuthIdentity
+from sqlmodel import select
 
 COOKIE = SESSION_COOKIE
 BINDER = oauth.BINDER_COOKIE

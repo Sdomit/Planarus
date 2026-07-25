@@ -1,8 +1,7 @@
 """Phase 15.0 — delete + reorder endpoints for planning entities."""
+from app.models.audit_event import AuditEvent
 from fastapi.testclient import TestClient
 from sqlmodel import select
-
-from app.models.audit_event import AuditEvent
 
 
 def _seed(client: TestClient) -> str:

@@ -1,7 +1,4 @@
 import pytest
-from fastapi.testclient import TestClient
-from sqlmodel import Session, select
-
 from app.mcp import errors
 from app.mcp.registry import PROPOSE_TOOLS
 from app.mcp.tools import propose
@@ -12,6 +9,9 @@ from app.models.doc import Doc
 from app.models.task import Task
 from app.schemas.task import TaskCreate
 from app.services import approval_service, task_service
+from fastapi.testclient import TestClient
+from sqlmodel import Session, select
+
 from tests.mcp_util import propose_cap, read_cap, seed
 
 

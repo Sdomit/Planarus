@@ -32,8 +32,8 @@ import argparse
 import os
 import shutil
 import sys
-from contextlib import contextmanager
 from collections.abc import Iterator
+from contextlib import contextmanager
 
 from sqlmodel import Session, select
 

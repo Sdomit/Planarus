@@ -27,11 +27,11 @@ from app.models.notification_rule import NotificationRule
 from app.models.project import Project
 from app.models.task import Task
 from app.prompt.secrets import scan
-from app.services.audit_service import create_audit_event
+from app.schemas.notifications import ReminderOutcome, ReminderSendResult
 from app.services import status_option_service
+from app.services.audit_service import create_audit_event
 from app.services.notification_service import due_task_buckets
 from app.services.settings_service import get_setting
-from app.schemas.notifications import ReminderOutcome, ReminderSendResult
 
 # ponytail: fixed daily cap; make it a setting if a real use case ever needs more.
 EMAIL_DAILY_CAP = 20

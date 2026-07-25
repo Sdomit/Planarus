@@ -6,11 +6,11 @@ import json
 import socket
 
 import pytest
-from cryptography.fernet import Fernet
-
 from app.core.config import settings
 from app.models.webhook_subscription import WebhookSubscription
 from app.services import webhook_service
+from cryptography.fernet import Fernet
+
 from tests.external_util import local_hdr, seed
 
 

@@ -158,11 +158,12 @@ def test_0006_origin_check_allows_mcp(tmp_path):
         "patch_checksum,policy_version,risk_level,status,created_at,expires_at) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
     )
-    row = lambda **k: [
-        k.get("id", "apr_t"), "ws", "pr", k.get("origin", "local"),
-        k.get("action_type", "task.create"), "{}", "c", 1, "low",
-        k.get("status", "pending"), "2026", "2027",
-    ]
+    def row(**k):
+        return [
+            k.get("id", "apr_t"), "ws", "pr", k.get("origin", "local"),
+            k.get("action_type", "task.create"), "{}", "c", 1, "low",
+            k.get("status", "pending"), "2026", "2027",
+        ]
     try:
         con.execute(base, row(id="apr_mcp", origin="mcp"))
         con.commit()  # mcp accepted

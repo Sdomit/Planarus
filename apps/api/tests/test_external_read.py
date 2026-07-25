@@ -3,12 +3,12 @@ import json
 from types import SimpleNamespace
 
 import pytest
-
 from app.core.utils import new_id, now_utc
 from app.models.decision import Decision
 from app.models.task import Task
 from app.prompt.boundary import PRECEDENCE_SENTENCE
 from app.services import approval_service
+
 from tests.external_util import auth, issue_key, seed
 
 AWS_KEY = "AKIAIOSFODNN7EXAMPLE"

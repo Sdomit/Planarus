@@ -6,7 +6,6 @@ session revocation); last-active-admin guards; the registration switch; and
 the D35 settings hardening.
 """
 import pytest
-
 from app.core.config import settings
 from app.services.auth_service import SESSION_COOKIE
 

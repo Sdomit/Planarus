@@ -1,7 +1,6 @@
 import json
 
 import pytest
-
 from app.mcp import capabilities
 from app.mcp.capabilities import Capability
 

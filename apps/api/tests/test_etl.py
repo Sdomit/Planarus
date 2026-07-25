@@ -5,16 +5,15 @@ verification with two SQLite databases (hermetic). The cross-dialect
 SQLite→Postgres path (the real use case) is verified manually against a live
 Postgres 16 — see the phase doc — since CI can't assume a Postgres service here.
 """
-import pytest
-from sqlmodel import Session, SQLModel, create_engine, select
-
 import app.models  # noqa: F401
+import pytest
 from app.etl import EtlError, copy_all
 from app.models.project import Project
 from app.models.workspace import Workspace
 from app.schemas.project import ProjectCreate
 from app.schemas.workspace import WorkspaceCreate
 from app.services import project_service, workspace_service
+from sqlmodel import Session, SQLModel, create_engine, select
 
 
 def _make_db(path):

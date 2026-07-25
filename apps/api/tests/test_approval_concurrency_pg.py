@@ -14,10 +14,8 @@ import os
 import threading
 from uuid import uuid4
 
-import pytest
-from sqlmodel import Session, SQLModel, create_engine
-
 import app.models  # noqa: F401 — registers every table in SQLModel.metadata
+import pytest
 from app.core.utils import now_utc
 from app.models.project import Project
 from app.models.task import Task
@@ -25,6 +23,7 @@ from app.models.workspace import Workspace
 from app.policy import handlers
 from app.schemas.task import TaskUpdate
 from app.services import approval_service, task_service
+from sqlmodel import Session, SQLModel, create_engine
 
 DSN = os.environ.get("PLANARUS_DATABASE_URL", "")
 

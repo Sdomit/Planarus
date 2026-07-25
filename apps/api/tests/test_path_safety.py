@@ -1,7 +1,6 @@
 import os
 
 import pytest
-
 from app.fsmemory.path_safety import (
     PathSafetyError,
     is_reparse_point,
