@@ -128,7 +128,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="Planarus API",
-        version="0.2.0",
+        version=settings.app_version,  # one source of truth, not a second literal
         description="Local-first AI project cockpit — API",
         lifespan=mcp_lifespan,
     )

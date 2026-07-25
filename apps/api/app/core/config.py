@@ -4,7 +4,12 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     app_name: str = "Planarus"
-    app_version: str = "0.1.0"
+    # The API's single source of version truth: `/info`, the OpenAPI document and
+    # the package manifest all resolve to this one value. Keep it equal to
+    # `apps/api/pyproject.toml` — `test_version_single_source` fails otherwise.
+    # The npm packages are versioned separately and are still 0.1.0; per
+    # CHANGELOG.md they synchronize only when the owner picks a release version.
+    app_version: str = "0.2.0"
     # P10.0: env-overridable so the app (and Alembic, which reads this field via
     # alembic/env.py) can target Postgres without a code change. PLANARUS_* wins
     # over the platform-conventional DATABASE_URL when both are set.
@@ -47,7 +52,9 @@ class Settings(BaseSettings):
     # Phase 10.1 (hosted mode) — identity/auth. DISABLED by default: when off, the
     # /api/v1/auth/* and workspace members routes 404 and the app is the same
     # local single-user tool it has always been. Only a hosted deployment turns
-    # this on. No tenant enforcement on existing domain routes yet (that is P10.2).
+    # this on. Tenant enforcement across the domain routes shipped in P10.2/P10.2b
+    # and is load-bearing: the registry-driven guard in app/core/tenant.py is a
+    # no-op when this is off and the enforced boundary when it is on.
     auth_enabled: bool = Field(
         default=False, validation_alias="PLANARUS_AUTH_ENABLED"
     )
@@ -72,7 +79,8 @@ class Settings(BaseSettings):
 
     # Phase 10.3 (hosted mode) — storage backend for generated project artifacts.
     # "local" (default) is the filesystem, byte-identical to before. "memory" is
-    # for tests/ephemeral use. A hosted "s3" adapter is a future addition.
+    # for tests/ephemeral use. The hosted "s3" adapter shipped in P10.3b
+    # (app/storage/s3.py); its bucket/prefix knobs are the fields below.
     storage_backend: str = Field(
         default="local", validation_alias="PLANARUS_STORAGE_BACKEND"
     )

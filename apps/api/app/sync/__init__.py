@@ -3,13 +3,14 @@
 Sync is the hardest, deliberately-last piece. This slice ships its **core**: a
 content-based *manifest* of a project's entities, and a *three-way diff* that
 classifies every change and, crucially, **surfaces conflicts for explicit
-resolution instead of silently applying last-write-wins**. Transport (moving
-manifests/records between a local and a hosted replica), persisting the last-sync
-baseline, and applying a resolved plan are future work — this is the detection and
-planning engine they build on.
+resolution instead of silently applying last-write-wins**.
 
-Standalone and off by default: importing this package changes nothing about the
-running app; there is no wired sync path yet.
+Transport, the last-sync baseline and plan application were future work when this
+was written; all three shipped (P10.6b/P10.6c) and are re-exported below.
+
+Off by default, but no longer unreachable: `app/api/v1/endpoints/sync.py` wires
+the manifest to a local route. Importing this package still changes nothing about
+the running app.
 """
 from app.sync.apply import apply_plan
 from app.sync.baseline import load_baseline, save_baseline
