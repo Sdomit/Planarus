@@ -1,19 +1,2 @@
-# Terraform state holds secrets (the generated DB password) — never commit it.
-**/.terraform/*
-*.tfstate
-*.tfstate.*
-crash.log
-
-# Real variable files carry secrets. Keep only the *.example.
-*.tfvars
-!*.tfvars.example
-
-override.tf
-override.tf.json
-*_override.tf
-*_override.tf.json
-.terraformrc
-terraform.rc
-
-# hosted.env is assembled on the box from the secret store — never here.
+# hosted.env is assembled on the box from the platform secret store — never here.
 hosted.env
