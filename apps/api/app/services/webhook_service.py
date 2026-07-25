@@ -18,12 +18,11 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import http.client
 import ipaddress
 import json
 import secrets
 import socket
-import urllib.error
-import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from typing import Iterable, Optional
 from urllib.parse import urlparse
@@ -157,24 +156,41 @@ def _sign(secret: str, body: bytes) -> str:
 # mode this is skipped — pointing a webhook at your own localhost receiver (e.g.
 # a local n8n) is a legitimate local-first use. Checked at create AND delivery,
 # so DNS rebinding after creation is still caught.
+#
+# Issue #121: validating and connecting must not be two independent resolutions.
+# The delivery path resolves once, validates every answer, then connects to a
+# validated address — the hostname is still what sets the Host header and the
+# TLS SNI/certificate check, so only the resolver step is pinned.
 
 
-def _host_is_public(host: str) -> bool:
-    """True iff every address ``host`` resolves to is a global/public address."""
+def _public_addrs(host: str) -> Optional[list[str]]:
+    """Resolve ``host`` once; return its addresses, or None if any is non-public."""
     if not host:
-        return False
+        return None
     try:
-        infos = socket.getaddrinfo(host, None)
+        infos = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
     except socket.gaierror:
-        return False  # unresolvable → treat as unsafe, do not connect
+        return None  # unresolvable → treat as unsafe, do not connect
+    addrs: list[str] = []
     for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
+        raw = info[4][0]
+        ip = ipaddress.ip_address(raw)
+        # ::ffff:127.0.0.1 must be judged as 127.0.0.1, not as an opaque v6 address.
+        if ip.version == 6 and ip.ipv4_mapped is not None:
+            ip = ip.ipv4_mapped
         if (
             ip.is_private or ip.is_loopback or ip.is_link_local
             or ip.is_reserved or ip.is_multicast or ip.is_unspecified
         ):
-            return False
-    return True
+            return None
+        if raw not in addrs:
+            addrs.append(raw)
+    return addrs or None
+
+
+def _host_is_public(host: str) -> bool:
+    """True iff every address ``host`` resolves to is a global/public address."""
+    return _public_addrs(host) is not None
 
 
 def _target_blocked(target_url: str) -> bool:
@@ -183,28 +199,49 @@ def _target_blocked(target_url: str) -> bool:
     return not _host_is_public(urlparse(target_url).hostname or "")
 
 
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Never follow redirects — a webhook receiver returns 2xx directly, and a 3xx
-    to an internal host would otherwise slip past the target check."""
+def _resolve_target(target_url: str) -> tuple[Optional[str], Optional[str]]:
+    """Returns ``(pinned_ip, error)`` for one delivery. ``(None, None)`` means the
+    guard is off (single-user local mode) — connect by hostname as before."""
+    if not settings.auth_enabled:
+        return None, None
+    addrs = _public_addrs(urlparse(target_url).hostname or "")
+    if addrs is None:
+        return None, "blocked_non_public_host"
+    return addrs[0], None
 
-    def redirect_request(self, *args, **kwargs):
-        return None
 
-
-_opener = urllib.request.build_opener(_NoRedirect)
-
-
-def _http_post(url: str, body: bytes, headers: dict, timeout: int) -> tuple[Optional[int], Optional[str]]:
+def _http_post(
+    url: str, body: bytes, headers: dict, timeout: int, pinned_ip: Optional[str] = None
+) -> tuple[Optional[int], Optional[str]]:
     """POST the signed body. Returns (status_code, error). Best-effort: any network
-    failure returns (None, reason) rather than raising."""
-    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    failure returns (None, reason) rather than raising.
+
+    ``http.client`` rather than ``urllib``: it never follows redirects (a 3xx to an
+    internal host must not slip past the target check) and it lets the socket be
+    opened against ``pinned_ip`` while ``self.host`` — the real hostname — still
+    supplies the Host header and the TLS SNI/certificate name.
+    """
+    parsed = urlparse(url)
+    https = parsed.scheme == "https"
+    port = parsed.port or (443 if https else 80)
+    path = parsed.path or "/"
+    if parsed.query:
+        path = f"{path}?{parsed.query}"
+    cls = http.client.HTTPSConnection if https else http.client.HTTPConnection
+    conn = cls(parsed.hostname or "", port, timeout=timeout)
+    if pinned_ip:
+        conn._create_connection = (  # type: ignore[method-assign]
+            lambda address, *a, **kw: socket.create_connection((pinned_ip, address[1]), *a, **kw)
+        )
     try:
-        with _opener.open(req, timeout=timeout) as resp:  # noqa: S310 — scheme + host guarded
-            return resp.status, None
-    except urllib.error.HTTPError as exc:  # a real HTTP status (4xx/5xx)
-        return exc.code, None
+        conn.request("POST", path, body=body, headers=headers)
+        resp = conn.getresponse()
+        resp.read()  # drain so the connection closes cleanly
+        return resp.status, None
     except Exception as exc:  # noqa: BLE001 — connection/timeout/etc. are best-effort
         return None, type(exc).__name__
+    finally:
+        conn.close()
 
 
 def _render_text(env: dict) -> str:
@@ -254,10 +291,13 @@ def _deliver(delivery_id: str, engine) -> None:
             "X-Planarus-Delivery": d.id,
             "X-Planarus-Signature": f"sha256={_sign(secret, body)}",
         }
-        if _target_blocked(sub.target_url):
-            status_code, error = None, "blocked_non_public_host"
+        pinned_ip, error = _resolve_target(sub.target_url)
+        if error is not None:
+            status_code = None
         else:
-            status_code, error = _http_post(sub.target_url, body, headers, _TIMEOUT_SECONDS)
+            status_code, error = _http_post(
+                sub.target_url, body, headers, _TIMEOUT_SECONDS, pinned_ip
+            )
         d.status_code = status_code
         d.delivered_at = now_utc()
         if error is None and status_code is not None and 200 <= status_code < 300:

@@ -3,6 +3,7 @@ auto-disable, redeliver, and the disabled-without-key gate."""
 import hashlib
 import hmac
 import json
+import socket
 
 import pytest
 from cryptography.fernet import Fernet
@@ -20,8 +21,8 @@ def wh(monkeypatch):
     monkeypatch.setattr(webhook_service, "_submit", lambda fn, *a: fn(*a))
     calls: list[dict] = []
 
-    def fake_post(url, body, headers, timeout):
-        calls.append({"url": url, "body": body, "headers": headers})
+    def fake_post(url, body, headers, timeout, pinned_ip=None):
+        calls.append({"url": url, "body": body, "headers": headers, "pinned_ip": pinned_ip})
         return 200, None
 
     monkeypatch.setattr(webhook_service, "_http_post", fake_post)
@@ -94,7 +95,9 @@ def test_task_create_fires_signed_webhook(client, wh):
 
 
 def test_auto_disable_after_failure_streak(client, session, monkeypatch, wh):
-    monkeypatch.setattr(webhook_service, "_http_post", lambda url, body, headers, timeout: (500, None))
+    monkeypatch.setattr(
+        webhook_service, "_http_post", lambda url, body, headers, timeout, pinned_ip=None: (500, None)
+    )
     ws, _ = seed(client, "whfail")
     sub_id = _create_sub(client, ws)["subscription"]["id"]
     for _ in range(webhook_service._FAILURE_THRESHOLD):
@@ -140,7 +143,70 @@ def test_host_is_public_classifies_addresses():
     assert _host_is_public("10.0.0.5") is False           # private
     assert _host_is_public("192.168.1.10") is False       # private
     assert _host_is_public("169.254.169.254") is False    # cloud metadata (link-local)
+    assert _host_is_public("::ffff:127.0.0.1") is False   # IPv4-mapped loopback
+    assert _host_is_public("::1") is False                # IPv6 loopback
     assert _host_is_public("") is False
+
+
+# --- #121: the validate-then-connect DNS rebinding window --------------------
+
+
+def _resolver(*answers: str):
+    """A deterministic getaddrinfo returning ``answers``, newest call first."""
+    queue = list(answers)
+
+    def _gai(host, port, *a, **kw):
+        ip = queue.pop(0) if len(queue) > 1 else queue[0]
+        family = socket.AF_INET6 if ":" in ip else socket.AF_INET
+        return [(family, socket.SOCK_STREAM, 6, "", (ip, port or 0))]
+
+    return _gai
+
+
+def test_resolve_target_pins_the_address_it_validated(monkeypatch):
+    monkeypatch.setattr(settings, "auth_enabled", True)
+    # public on the validating lookup, private on every lookup after it — the
+    # classic rebind. Only the first answer may ever be connected to.
+    monkeypatch.setattr(socket, "getaddrinfo", _resolver("93.184.216.34", "127.0.0.1"))
+    assert webhook_service._resolve_target("https://rebind.test/hook") == ("93.184.216.34", None)
+
+
+def test_resolve_target_rejects_a_mixed_public_private_answer(monkeypatch):
+    monkeypatch.setattr(settings, "auth_enabled", True)
+
+    def _gai(host, port, *a, **kw):
+        return [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0)),
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("169.254.169.254", 0)),
+        ]
+
+    monkeypatch.setattr(socket, "getaddrinfo", _gai)
+    assert webhook_service._resolve_target("https://mixed.test/hook") == (
+        None,
+        "blocked_non_public_host",
+    )
+
+
+def test_http_post_connects_to_the_pinned_address_not_a_fresh_lookup(monkeypatch):
+    """The pinned IP reaches the socket; the hostname still sets Host/SNI."""
+    opened: list[tuple] = []
+
+    def _fake_create_connection(address, *a, **kw):
+        opened.append(address)
+        raise OSError("no network in tests")
+
+    monkeypatch.setattr(socket, "create_connection", _fake_create_connection)
+    monkeypatch.setattr(socket, "getaddrinfo", _resolver("127.0.0.1"))  # would rebind
+    status, error = webhook_service._http_post(
+        "http://rebind.test/hook", b"{}", {}, 1, "93.184.216.34"
+    )
+    assert (status, error) == (None, "OSError")
+    assert opened == [("93.184.216.34", 80)]
+
+
+def test_resolve_target_is_off_in_single_user_mode(monkeypatch):
+    monkeypatch.setattr(settings, "auth_enabled", False)
+    assert webhook_service._resolve_target("http://localhost:9/hook") == (None, None)
 
 
 def test_ssrf_create_blocks_internal_target_when_multi_user(client, session, monkeypatch, wh):
