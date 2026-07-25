@@ -95,6 +95,25 @@ const RISK_SEVERITIES = ['low', 'medium', 'high', 'critical']
 const RISK_STATUSES = ['open', 'monitoring', 'mitigated', 'accepted', 'closed']
 const BLOCKER_STATUSES = ['open', 'resolved', 'canceled']
 const COMMENT_STATUSES = ['active', 'done', 'attention']
+const DONE_TASK = new Set(['done', 'canceled'])
+
+// `due_at` is a plain date string, so the comparison is a local-calendar-day
+// one — en-CA formats as YYYY-MM-DD without the UTC shift toISOString() adds.
+const todayISO = () => new Date().toLocaleDateString('en-CA')
+
+/** A due-date badge, tinted red once the day has passed on an unfinished task. */
+function DueBadge({ due, status }: { due: string; status: string }) {
+  const day = due.slice(0, 10)
+  const overdue = !DONE_TASK.has(status) && day < todayISO()
+  return (
+    <span
+      className={`sbadge ${overdue ? 'sbadge--danger' : 'sbadge--neutral'}`}
+      title={overdue ? `Overdue — was due ${day}` : `Due ${day}`}
+    >
+      {overdue ? 'Overdue ' : 'Due '}{day}
+    </span>
+  )
+}
 
 type BoardCol = { key: string; label: string; statuses: string[]; dot: string }
 
@@ -212,7 +231,7 @@ export default function PlanningPanel({
 
   const [phaseForm, setPhaseForm] = useState({ title: '', status: 'planned' })
   const [taskForm, setTaskForm] = useState({
-    title: '', status: 'backlog', priority: '', phase_id: '', stage_id: '',
+    title: '', status: 'backlog', priority: '', phase_id: '', stage_id: '', due_at: '',
   })
   const [milestoneForm, setMilestoneForm] = useState({ title: '', status: 'planned', target_date: '', phase_id: '' })
   const [decisionForm, setDecisionForm] = useState({ title: '', decision: '', status: 'proposed', phase_id: '' })
@@ -294,9 +313,10 @@ export default function PlanningPanel({
           priority: taskForm.priority || undefined,
           phase_id: taskForm.phase_id || undefined,
           stage_id: taskForm.stage_id || undefined,
+          due_at: taskForm.due_at || undefined,
         })
         setTasks(prev => [...prev, tk])
-        setTaskForm({ title: '', status: 'backlog', priority: '', phase_id: '', stage_id: '' })
+        setTaskForm({ title: '', status: 'backlog', priority: '', phase_id: '', stage_id: '', due_at: '' })
       } else if (tab === 'milestones') {
         const mil = await api.milestones.create(project.id, {
           title: milestoneForm.title, status: milestoneForm.status,
@@ -464,6 +484,8 @@ export default function PlanningPanel({
                   onChange={e => setTaskForm(f => ({ ...f, priority: e.target.value }))}>
                   {TASK_PRIORITIES.map(p => <option key={p || 'none'} value={p}>{p || 'no priority'}</option>)}
                 </select>
+                <input className="input" type="date" aria-label="Task due date"
+                  value={taskForm.due_at} onChange={e => setTaskForm(f => ({ ...f, due_at: e.target.value }))} />
                 <select className="input select" value={taskForm.phase_id} aria-label="Task phase"
                   onChange={e => setTaskForm(f => ({ ...f, phase_id: e.target.value, stage_id: '' }))}>
                   <option value="">Unphased</option>
@@ -1078,6 +1100,7 @@ function TaskBoard({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
                     <div className="ab-task-title">{t.title}</div>
                     <div className="ab-task-foot">
                       {t.phase_id && <span className="pp-card-phase">{phaseTitle.get(t.phase_id)}</span>}
+                      {t.due_at && <DueBadge due={t.due_at} status={t.status} />}
                       <StatusBadge kind="task" value={t.status} />
                       {setTasks && <RowActions title={t.title} onDelete={() => void api.tasks.remove(t.id).then(() => setTasks(prev => prev.filter(x => x.id !== t.id)))} />}
                     </div>
@@ -1203,6 +1226,13 @@ function TaskDetailBody({ task, phases, stages, projectId, onTaskUpdated, status
             {TASK_PRIORITIES.map(priority => <option key={priority || 'none'} value={priority}>{priority || 'none'}</option>)}
           </select>
         </label>
+        <label>
+          <span>Due</span>
+          <input className="input input-sm" type="date" disabled={saving}
+            value={task.due_at?.slice(0, 10) ?? ''}
+            aria-label={`Due date for ${task.title}`}
+            onChange={event => void updateTask({ due_at: event.target.value || null })} />
+        </label>
         {members.length > 0 && (
           <label>
             <span>Assignee</span>
@@ -1303,6 +1333,7 @@ function TaskRow({ task, phases, stages, projectId, onTaskUpdated, onDelete, dra
           <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
           {editable.node ?? <span className="pp-row-title">{task.title}</span>}
           {subtasks.length > 0 && <span className="pp-subcount">{subtasks.length}</span>}
+          {task.due_at && <DueBadge due={task.due_at} status={task.status} />}
           {task.assignee_id && task.assignee_display && (
             <PersonChip id={task.assignee_id} name={task.assignee_display} />
           )}
