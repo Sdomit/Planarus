@@ -63,11 +63,22 @@ gh api --method POST repos/Sdomit/Planarus/rulesets --input - <<'JSON'
           { "context": "API (pytest)" },
           { "context": "API migrations (Postgres dialect)" },
           { "context": "Docker (compose build + smoke)" },
-          { "context": "Web (vitest + typecheck + build)" } ] } }
+          { "context": "Web (vitest + typecheck + lint + build)" } ] } }
   ]
 }
 JSON
 ```
+
+**Before running that, delete the `paths-ignore` filters from
+[.github/workflows/ci.yml](../.github/workflows/ci.yml).** They were added while
+the July 2026 Actions allowance was exhausted, so that docs-only commits stop
+burning metered minutes — roughly half of recent commits touch nothing but
+`**.md`, `docs/**` and `context/**`. That is free today precisely *because* there
+are no required checks. Apply this ruleset with the filters still in place and a
+docs-only pull request produces no CI run at all, so all four contexts stay
+permanently pending and the PR can never merge — the same failure the paragraph
+above warns about, arrived at from the other direction. Either drop the filters
+or replace them with a skip job that reports the four context names and exits 0.
 
 Four decisions are baked into that payload, each deliberate:
 
