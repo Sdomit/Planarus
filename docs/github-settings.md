@@ -69,7 +69,7 @@ gh api --method POST repos/Sdomit/Planarus/rulesets --input - <<'JSON'
 JSON
 ```
 
-**Before running that, delete the `paths-ignore` filters from
+**Before running that, delete the `paths` filters from
 [.github/workflows/ci.yml](../.github/workflows/ci.yml).** They were added while
 the July 2026 Actions allowance was exhausted, so that docs-only commits stop
 burning metered minutes — roughly half of recent commits touch nothing but
@@ -79,6 +79,13 @@ docs-only pull request produces no CI run at all, so all four contexts stay
 permanently pending and the PR can never merge — the same failure the paragraph
 above warns about, arrived at from the other direction. Either drop the filters
 or replace them with a skip job that reports the four context names and exits 0.
+
+Two paths under `docs/` are deliberately **not** skipped, and that is not
+cosmetic: `docs/api/**` holds the two committed GPT Actions contracts that
+`tests/test_openapi_contract.py` compares byte-for-byte against the builder, and
+`docs/plan/**` is what `tests/test_docs_truth.py` reads. Skipping either would let
+CI report green on a change it never ran. If you rewrite these filters, keep the
+re-includes last — in a `paths` list, later patterns win.
 
 Four decisions are baked into that payload, each deliberate:
 
