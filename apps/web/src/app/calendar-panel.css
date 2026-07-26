@@ -45,7 +45,7 @@
   font-variant-numeric: tabular-nums;
 }
 .cal-daynum:hover { background: var(--bg-muted); color: var(--text-primary); }
-.cal-daynum--today { background: var(--accent); color: var(--text-on-accent, #fff); }
+.cal-daynum--today { background: var(--accent); color: var(--text-on-accent); }
 .cal-cell-items { display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
 
 /* ── Chips ───────────────────────────────────────────────── */

@@ -576,7 +576,7 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
                       <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>
                         {pinned && '📍 '}{c.body}
                       </div>
-                      <div style={{ fontSize: 'var(--text-2xs, 10px)', color: 'var(--text-tertiary)', marginTop: 2 }}>
+                      <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-tertiary)', marginTop: 2 }}>
                         {c.author_type} · {c.created_at.slice(0, 10)}
                       </div>
                     </div>

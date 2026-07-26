@@ -341,7 +341,7 @@ html, body { height: 100%; margin: 0; }
   }
   .dp-title-input:hover:not(:disabled) { border-color: var(--border-subtle); }
   .dp-title-input:focus { outline: none; border-color: var(--accent); background: var(--bg-surface); }
-  .dp-danger { color: var(--danger, #DC2626); }
+  .dp-danger { color: var(--status-danger-fg); }
 
   /* Card tools row: swatches + delete, revealed together. */
   .ab-notecard-tools { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
@@ -353,7 +353,7 @@ html, body { height: 100%; margin: 0; }
   }
   .ab-notecard:hover .ab-note-del, .ab-notecard:focus-within .ab-note-del { opacity: 1; }
   @media (hover: none) { .ab-note-del { opacity: 1; } }
-  .ab-note-del:hover { color: var(--danger, #DC2626); background: var(--bg-subtle); }
+  .ab-note-del:hover { color: var(--status-danger-fg); background: var(--bg-subtle); }
   .ab-note-del:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .ab-notecard[data-color] .ab-note-del { color: var(--text-primary); opacity: 0; }
   .ab-notecard[data-color]:hover .ab-note-del, .ab-notecard[data-color]:focus-within .ab-note-del { opacity: 0.75; }

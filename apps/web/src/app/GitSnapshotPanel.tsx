@@ -88,7 +88,7 @@ export default function GitSnapshotPanel({ projectId }: { projectId: string }) {
   const fetchNote = fetchMsg && (
     <p style={{
       margin: '0 0 var(--space-3)', fontSize: 'var(--text-xs)',
-      color: fetchMsg.tone === 'ok' ? 'var(--text-secondary)' : 'var(--warning, var(--text-secondary))',
+      color: fetchMsg.tone === 'ok' ? 'var(--text-secondary)' : 'var(--status-warning-fg)',
     }}>
       {fetchMsg.text}
     </p>
@@ -326,7 +326,7 @@ function FolderField({ projectId, current, onSaved }: {
           Cancel
         </button>
       )}
-      {err && <span style={{ width: '100%', fontSize: 'var(--text-xs)', color: 'var(--danger, var(--text-secondary))' }}>{err}</span>}
+      {err && <span style={{ width: '100%', fontSize: 'var(--text-xs)', color: 'var(--status-danger-fg)' }}>{err}</span>}
     </span>
   )
 }

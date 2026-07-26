@@ -148,8 +148,10 @@ export default function NotificationsBell({
               height: 16,
               padding: '0 4px',
               borderRadius: 8,
-              background: 'var(--danger, #d9432b)',
-              color: '#fff',
+              // The count is knocked out of a solid danger fill, so it inverts with the
+              // theme: dark digits on the light dark-mode rose, white on the light-mode red.
+              background: 'var(--status-danger-fg)',
+              color: 'var(--bg-surface)',
               fontSize: 10,
               fontWeight: 700,
               lineHeight: '16px',
