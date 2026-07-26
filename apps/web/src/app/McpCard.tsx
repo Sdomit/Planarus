@@ -125,8 +125,8 @@ export default function McpCard() {
       </p>
 
       <div className="form-field">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
-          <div className="tabs" role="tablist" aria-label="Config format" style={{ borderBottom: 'none', gap: 'var(--space-3)' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
+          <div className="tabs" role="tablist" aria-label="Config format" style={{ borderBottom: 'none', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
             <button type="button" role="tab" aria-selected={fmt === 'json'} className={`tab${fmt === 'json' ? ' active' : ''}`} onClick={() => setFmt('json')}>JSON config</button>
             <button type="button" role="tab" aria-selected={fmt === 'cli'} className={`tab${fmt === 'cli' ? ' active' : ''}`} onClick={() => setFmt('cli')}>Claude Code CLI</button>
           </div>
