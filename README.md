@@ -1,39 +1,35 @@
 <p align="center">
-  <img src="assets/readme/banner.svg" width="820" alt="Planarus — plan clearly, navigate safely, achieve with control" />
-</p>
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/readme/logo-dark.svg" />
-    <img src="assets/readme/logo-light.svg" width="56" alt="Planarus mark" />
-  </picture>
+  <img src="assets/readme/logo-mark.png" width="132" alt="Planarus" />
 </p>
 
 <h1 align="center">Planarus</h1>
 
 <p align="center">
-  <strong>Plan clearly. Navigate safely. Achieve with control.</strong><br />
+  <strong>Plan . Navigate . Achieve</strong>
+</p>
+
+<p align="center">
   A local-first project cockpit for real planning work — phases, tasks, boards, docs, decisions, risks.<br />
   Bring an AI agent in and it reads and proposes; you approve and apply.
 </p>
 
 <p align="center">
   <a href="https://github.com/Sdomit/Planarus/actions/workflows/ci.yml"><img src="https://github.com/Sdomit/Planarus/actions/workflows/ci.yml/badge.svg" alt="Continuous integration" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-D97706.svg?style=flat-square" alt="Apache-2.0 license" /></a>
-  <img src="https://img.shields.io/badge/status-pre--1.0-8A8A82.svg?style=flat-square" alt="Pre-1.0" />
-  <img src="https://img.shields.io/badge/local--first-no%20cloud%20required-3F3F3A.svg?style=flat-square" alt="Local-first" />
-  <img src="https://img.shields.io/badge/AI%20writes-human%20approved-0F0F0A.svg?style=flat-square" alt="Human-approved AI writes" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2D6CC8.svg?style=flat-square" alt="Apache-2.0 license" /></a>
+  <img src="https://img.shields.io/badge/status-pre--1.0-7A63C7.svg?style=flat-square" alt="Pre-1.0" />
+  <img src="https://img.shields.io/badge/local--first-no%20cloud%20required-374155.svg?style=flat-square" alt="Local-first" />
+  <img src="https://img.shields.io/badge/AI%20writes-human%20approved-0D1220.svg?style=flat-square" alt="Human-approved AI writes" />
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/React-19-D97706.svg?style=flat-square&logo=react&logoColor=white" alt="React 19" />
+  <img src="https://img.shields.io/badge/React-19-2D6CC8.svg?style=flat-square&logo=react&logoColor=white" alt="React 19" />
   <img src="https://img.shields.io/badge/TypeScript-3178C6.svg?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/Vite-B45309.svg?style=flat-square&logo=vite&logoColor=white" alt="Vite" />
-  <img src="https://img.shields.io/badge/FastAPI-0F0F0A.svg?style=flat-square&logo=fastapi&logoColor=D97706" alt="FastAPI" />
-  <img src="https://img.shields.io/badge/Python-3.11-3F3F3A.svg?style=flat-square&logo=python&logoColor=D97706" alt="Python 3.11" />
-  <img src="https://img.shields.io/badge/SQLite-WAL-8A8A82.svg?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite WAL" />
-  <img src="https://img.shields.io/badge/Docker-Compose-D97706.svg?style=flat-square&logo=docker&logoColor=white" alt="Docker Compose" />
-  <img src="https://img.shields.io/badge/MCP-enabled-0F0F0A.svg?style=flat-square" alt="MCP enabled" />
+  <img src="https://img.shields.io/badge/Vite-4A4DBE.svg?style=flat-square&logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/FastAPI-0D1220.svg?style=flat-square&logo=fastapi&logoColor=2D6CC8" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/Python-3.11-374155.svg?style=flat-square&logo=python&logoColor=2D6CC8" alt="Python 3.11" />
+  <img src="https://img.shields.io/badge/SQLite-WAL-7A63C7.svg?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite WAL" />
+  <img src="https://img.shields.io/badge/Docker-Compose-2D6CC8.svg?style=flat-square&logo=docker&logoColor=white" alt="Docker Compose" />
+  <img src="https://img.shields.io/badge/MCP-enabled-0D1220.svg?style=flat-square" alt="MCP enabled" />
 </p>
 
 <p align="center">
@@ -46,12 +42,12 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/-%20-D97706.svg?style=flat-square" width="60" height="4" alt="" />
+  <img src="https://img.shields.io/badge/-%20-2D6CC8.svg?style=flat-square" width="60" height="4" alt="" />
 </p>
 
 ---
 
-## <img src="https://img.shields.io/badge/-01-D97706.svg?style=flat-square" height="18" alt="" /> Overview
+## <img src="https://img.shields.io/badge/-01-2D6CC8.svg?style=flat-square" height="18" alt="" /> Overview
 
 Planarus is a project management application that runs on your machine. It holds
 the plan, decisions, risks, work, documentation, context files, and execution
@@ -100,7 +96,7 @@ Planarus organizes the boundary between the two.
 
 ---
 
-## <img src="https://img.shields.io/badge/-02-D97706.svg?style=flat-square" height="18" alt="" /> Quickstart
+## <img src="https://img.shields.io/badge/-02-2D6CC8.svg?style=flat-square" height="18" alt="" /> Quickstart
 
 ### Docker — fastest path to a running app
 
@@ -168,7 +164,7 @@ Windows specifics, alternate frontend ports, and troubleshooting live in
 
 ---
 
-## <img src="https://img.shields.io/badge/-03-D97706.svg?style=flat-square" height="18" alt="" /> The trust model
+## <img src="https://img.shields.io/badge/-03-2D6CC8.svg?style=flat-square" height="18" alt="" /> The trust model
 
 Every agent-facing surface — STDIO MCP, remote HTTP MCP, ChatGPT Actions, the
 external REST API — resolves to the same two verbs.
@@ -202,7 +198,7 @@ them intact:
 
 ---
 
-## <img src="https://img.shields.io/badge/-04-D97706.svg?style=flat-square" height="18" alt="" /> Product surfaces
+## <img src="https://img.shields.io/badge/-04-2D6CC8.svg?style=flat-square" height="18" alt="" /> Product surfaces
 
 <table>
   <tr>
@@ -227,7 +223,7 @@ them intact:
 
 ---
 
-## <img src="https://img.shields.io/badge/-05-D97706.svg?style=flat-square" height="18" alt="" /> Architecture
+## <img src="https://img.shields.io/badge/-05-2D6CC8.svg?style=flat-square" height="18" alt="" /> Architecture
 
 <p align="center">
   <img src="assets/readme/architecture-diagram.svg" width="100%" alt="Planarus architecture: human and agent lanes converge through the approval boundary into FastAPI, backed by SQLite, project folders, and MCP/REST" />
@@ -278,7 +274,7 @@ switch. Tauri 2 desktop packaging is planned and not yet started.
 
 ---
 
-## <img src="https://img.shields.io/badge/-06-D97706.svg?style=flat-square" height="18" alt="" /> Connect an agent
+## <img src="https://img.shields.io/badge/-06-2D6CC8.svg?style=flat-square" height="18" alt="" /> Connect an agent
 
 Optional — the app is fully usable without any of this. When you do want an
 agent involved, the agent-facing paths are deliberately distinct, with different
@@ -297,22 +293,22 @@ and
 
 ---
 
-## <img src="https://img.shields.io/badge/-07-D97706.svg?style=flat-square" height="18" alt="" /> Optional capabilities
+## <img src="https://img.shields.io/badge/-07-2D6CC8.svg?style=flat-square" height="18" alt="" /> Optional capabilities
 
 > [!NOTE]
 > Nothing below is enabled by the quickstart — every capability here starts off.
 
 | Capability | What it adds | Guide |
 | --- | --- | --- |
-| <img src="https://img.shields.io/badge/-LAN-8A8A82.svg?style=flat-square" height="20" alt="" /> Team mode | Local accounts, attribution, and soft edit locks for a small trusted network | [LAN team mode](docs/guide/lan-team-mode.md) |
-| <img src="https://img.shields.io/badge/-sync-8A8A82.svg?style=flat-square" height="20" alt="" /> Calendar sync | Explicit Google or Microsoft connections | [Connect a calendar](docs/guide/connect-your-calendar.md) |
-| <img src="https://img.shields.io/badge/-alerts-8A8A82.svg?style=flat-square" height="20" alt="" /> Notifications and backups | OS-scheduled reminders and verified local database snapshots | [Notifications and backups](docs/guide/notifications-and-backup.md) |
-| <img src="https://img.shields.io/badge/-roles-8A8A82.svg?style=flat-square" height="20" alt="" /> Team administration | Roles, invitations, and attribution for LAN deployments | [Team administration](docs/guide/team-administration.md) |
-| <img src="https://img.shields.io/badge/-hosted-8A8A82.svg?style=flat-square" height="20" alt="" /> Hosted go-live | The documented path for deliberately enabling a hosted deployment | [Hosted go-live](docs/guide/hosted-go-live.md) |
+| <img src="https://img.shields.io/badge/-LAN-7A63C7.svg?style=flat-square" height="20" alt="" /> Team mode | Local accounts, attribution, and soft edit locks for a small trusted network | [LAN team mode](docs/guide/lan-team-mode.md) |
+| <img src="https://img.shields.io/badge/-sync-7A63C7.svg?style=flat-square" height="20" alt="" /> Calendar sync | Explicit Google or Microsoft connections | [Connect a calendar](docs/guide/connect-your-calendar.md) |
+| <img src="https://img.shields.io/badge/-alerts-7A63C7.svg?style=flat-square" height="20" alt="" /> Notifications and backups | OS-scheduled reminders and verified local database snapshots | [Notifications and backups](docs/guide/notifications-and-backup.md) |
+| <img src="https://img.shields.io/badge/-roles-7A63C7.svg?style=flat-square" height="20" alt="" /> Team administration | Roles, invitations, and attribution for LAN deployments | [Team administration](docs/guide/team-administration.md) |
+| <img src="https://img.shields.io/badge/-hosted-7A63C7.svg?style=flat-square" height="20" alt="" /> Hosted go-live | The documented path for deliberately enabling a hosted deployment | [Hosted go-live](docs/guide/hosted-go-live.md) |
 
 ---
 
-## <img src="https://img.shields.io/badge/-08-D97706.svg?style=flat-square" height="18" alt="" /> Validate a checkout
+## <img src="https://img.shields.io/badge/-08-2D6CC8.svg?style=flat-square" height="18" alt="" /> Validate a checkout
 
 ```bash
 # Backend — from apps/api
@@ -329,7 +325,7 @@ test. See [Contributing](CONTRIBUTING.md) for the focused pull-request workflow.
 
 ---
 
-## <img src="https://img.shields.io/badge/-09-D97706.svg?style=flat-square" height="18" alt="" /> Project status
+## <img src="https://img.shields.io/badge/-09-2D6CC8.svg?style=flat-square" height="18" alt="" /> Project status
 
 > [!TIP]
 > Planarus is a working, pre-1.0, local-first application used daily by its
@@ -345,7 +341,7 @@ additive layer rather than a rewrite.
 
 ---
 
-## <img src="https://img.shields.io/badge/-10-D97706.svg?style=flat-square" height="18" alt="" /> Documentation map
+## <img src="https://img.shields.io/badge/-10-2D6CC8.svg?style=flat-square" height="18" alt="" /> Documentation map
 
 | Document | Read it for |
 | --- | --- |
@@ -361,7 +357,7 @@ additive layer rather than a rewrite.
 
 ---
 
-## <img src="https://img.shields.io/badge/-11-D97706.svg?style=flat-square" height="18" alt="" /> Contributing
+## <img src="https://img.shields.io/badge/-11-2D6CC8.svg?style=flat-square" height="18" alt="" /> Contributing
 
 Contributions are welcome. Keep the trust model intact: external AI clients may
 read data and create pending proposals, and must never directly approve or apply
@@ -372,7 +368,7 @@ canonical changes. Read [CONTRIBUTING.md](CONTRIBUTING.md) and
 > For vulnerabilities, **do not open a public issue** — use
 > [private vulnerability reporting](SECURITY.md).
 
-## <img src="https://img.shields.io/badge/-12-D97706.svg?style=flat-square" height="18" alt="" /> License
+## <img src="https://img.shields.io/badge/-12-2D6CC8.svg?style=flat-square" height="18" alt="" /> License
 
 Apache License 2.0. See [LICENSE](LICENSE), and [NOTICE](NOTICE) for bundled
 third-party terms. Trademarks: [TRADEMARKS.md](TRADEMARKS.md).
