@@ -22,7 +22,6 @@ from app.models.risk import Risk  # noqa: F401
 from app.models.setting import Setting  # noqa: F401
 from app.models.stage import Stage  # noqa: F401
 from app.models.status_option import StatusOption  # noqa: F401
-from app.models.sync_baseline import SyncBaseline  # noqa: F401
 from app.models.task import Task  # noqa: F401
 from app.models.todo import Todo  # noqa: F401
 from app.models.user import User  # noqa: F401
@@ -60,7 +59,6 @@ __all__ = [
     "WorkspaceMember",
     "UserSession",
     "OAuthTransaction",
-    "SyncBaseline",
     "Setting",
     "CalendarEvent",
     "CalendarConnection",

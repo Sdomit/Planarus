@@ -124,8 +124,6 @@ tenant               POST    /api/v1/projects/{project_id}/stages
 tenant               GET     /api/v1/projects/{project_id}/status-options
 tenant               POST    /api/v1/projects/{project_id}/status-options
 tenant               POST    /api/v1/projects/{project_id}/status-options/reorder
-tenant               POST    /api/v1/projects/{project_id}/sync/push
-tenant               GET     /api/v1/projects/{project_id}/sync/snapshot
 tenant               GET     /api/v1/projects/{project_id}/tasks
 tenant               POST    /api/v1/projects/{project_id}/tasks
 tenant               POST    /api/v1/projects/{project_id}/tasks/reorder

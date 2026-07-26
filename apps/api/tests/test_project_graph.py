@@ -1,7 +1,7 @@
 """#87 — one graph description, and the four bugs its absence caused.
 
-Duplicate, export/import and the sync manifest walked the same graph from three
-hand-maintained lists. They drifted: `parent_task_id` was remapped by none of
+Duplicate, export/import and the (since-retired, #102) sync manifest walked the
+same graph from three hand-maintained lists. They drifted: `parent_task_id` was remapped by none of
 them, and `StatusOption` / `CalendarEvent` / `Todo` were in no list at all — data
 loss in an export documented as round-trippable, and cross-project references in
 a copy that later 500 an import.
@@ -212,14 +212,6 @@ def test_a_future_version_is_refused(client, session):
         export_service.import_project(session, ws, data)
 
 
-# --- the manifest sees the same graph -----------------------------------------
-def test_manifest_covers_checklist_items_and_the_new_entities(client, session):
-    from app.sync.manifest import build_manifest
-
-    ws, proj = seed(client, "gph-manifest")
-    task = _create(client, f"/api/v1/projects/{proj}/tasks", {"title": "T"})
-    _create(client, f"/api/v1/tasks/{task['id']}/checklist-items", {"label": "step one"})
-    _seed_extras(session, proj)
-
-    tables = {table for table, _ in build_manifest(session, proj)}
-    assert {"checklistitem", "status_option", "calendar_event", "todo"} <= tables
+# The third consumer, the sync manifest, was retired with app/sync (#102), so its
+# coverage test went with it. The first test above is the one that keeps the
+# original bug closed, and it is graph-wide rather than per-consumer.

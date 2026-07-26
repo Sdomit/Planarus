@@ -190,7 +190,6 @@ EXCLUDED: dict[str, str] = {
         "a one-time, browser-bound handshake that expires in minutes (#113); it "
         "is meaningless to a copy and carries the initiating user"
     ),
-    "syncbaseline": "replica-pair state, meaningless to a copy",
 }
 
 
