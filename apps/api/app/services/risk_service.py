@@ -127,5 +127,6 @@ def reorder_risks(session: Session, project_id: str, ids: list[str]) -> list[Ris
     if session.get(Project, project_id) is None:
         raise LookupError(f"project '{project_id}' not found")
     rows = {r.id: r for r in list_risks(session, project_id)}
-    apply_reorder(session, project_id=project_id, entity_type="risk", rows=rows, ids=ids)
-    return list_risks(session, project_id)
+    return apply_reorder(
+        session, project_id=project_id, entity_type="risk", rows=rows, ids=ids
+    )

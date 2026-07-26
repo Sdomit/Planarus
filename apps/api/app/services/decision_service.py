@@ -130,7 +130,6 @@ def reorder_decisions(
     if session.get(Project, project_id) is None:
         raise LookupError(f"project '{project_id}' not found")
     rows = {d.id: d for d in list_decisions(session, project_id)}
-    apply_reorder(
+    return apply_reorder(
         session, project_id=project_id, entity_type="decision", rows=rows, ids=ids
     )
-    return list_decisions(session, project_id)

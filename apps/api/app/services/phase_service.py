@@ -169,5 +169,6 @@ def reorder_phases(session: Session, project_id: str, ids: list[str]) -> list[Ph
     if session.get(Project, project_id) is None:
         raise LookupError(f"project '{project_id}' not found")
     rows = {p.id: p for p in list_phases(session, project_id)}
-    apply_reorder(session, project_id=project_id, entity_type="phase", rows=rows, ids=ids)
-    return list_phases(session, project_id)
+    return apply_reorder(
+        session, project_id=project_id, entity_type="phase", rows=rows, ids=ids
+    )

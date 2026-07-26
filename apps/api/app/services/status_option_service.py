@@ -1,5 +1,5 @@
 import re
-from typing import Optional
+from typing import Optional, Sequence
 
 from sqlalchemy import func
 from sqlmodel import Session, select
@@ -67,6 +67,39 @@ def status_categories(
     }
     for opt in list_custom(session, project_id, entity_type):
         out[opt.key] = opt.category
+    return out
+
+
+def status_keys_in_many(
+    session: Session, project_ids: Sequence[str], entity_type: str, *categories: str
+) -> dict[str, set[str]]:
+    """``status_keys_in`` for several projects in **one** query (#103).
+
+    The notification feed asks this per project on every poll; over an unarchived
+    project list that was one `StatusOption` select per project, forever, in the
+    background. Every id in ``project_ids`` gets an entry, including projects with
+    no custom options at all — a missing key would otherwise read as "no closed
+    statuses" and silently unhide finished work.
+    """
+    wanted = set(categories)
+    builtin = {
+        key
+        for key in BUILTIN_STATUS_KEYS.get(entity_type, ())
+        if builtin_status_category(key) in wanted
+    }
+    out: dict[str, set[str]] = {pid: set(builtin) for pid in project_ids}
+    if not out:
+        return out
+    stmt = select(StatusOption).where(
+        StatusOption.project_id.in_(list(out)),  # type: ignore[attr-defined]
+        StatusOption.entity_type == entity_type,
+    )
+    for opt in session.exec(stmt).all():
+        if opt.category in wanted:
+            out[opt.project_id].add(opt.key)
+        else:
+            # A custom option can re-categorize a built-in key out of `wanted`.
+            out[opt.project_id].discard(opt.key)
     return out
 
 

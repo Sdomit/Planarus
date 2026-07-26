@@ -2,6 +2,7 @@ import calendar as _calendar
 from datetime import date, timedelta
 from typing import Optional
 
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.core.utils import now_utc
@@ -10,6 +11,28 @@ from app.models.milestone import Milestone
 from app.models.project import Project
 from app.models.task import Task
 from app.schemas.calendar_event import CalendarItem, ProjectCalendar
+
+
+def _windowed(stmt, column, date_from: Optional[str], date_to: Optional[str]):
+    """#103: apply `_in_range` as SQL so the window bounds the rows fetched.
+
+    `build_calendar` used to load every task and milestone in the project and
+    throw most of them away in Python. `substr(col, 1, 10)` is the same 10-char
+    date-prefix comparison `_in_range` does, so the semantics are identical —
+    which is why the Python check stays in place as the guarantee of that, and
+    catches the empty-string case SQL's `IS NOT NULL` does not.
+
+    Only the dated rows can be filtered this way. Calendar *events* are excluded
+    on purpose: a recurring event whose base date sits before the window still
+    produces occurrences inside it, so narrowing that query would drop them.
+    """
+    stmt = stmt.where(column.is_not(None))
+    day = func.substr(column, 1, 10)
+    if date_from:
+        stmt = stmt.where(day >= date_from)
+    if date_to:
+        stmt = stmt.where(day <= date_to)
+    return stmt
 
 
 def _in_range(start_at: str, date_from: Optional[str], date_to: Optional[str]) -> bool:
@@ -163,7 +186,12 @@ def build_calendar(
         items.extend(_event_items(ev, win_from, win_to, date_from, date_to))
 
     for ms in session.exec(
-        select(Milestone).where(Milestone.project_id == project_id)
+        _windowed(
+            select(Milestone).where(Milestone.project_id == project_id),
+            Milestone.target_date,  # type: ignore[arg-type]
+            date_from,
+            date_to,
+        )
     ).all():
         if not ms.target_date or not _in_range(ms.target_date, date_from, date_to):
             continue
@@ -181,7 +209,14 @@ def build_calendar(
             )
         )
 
-    for tk in session.exec(select(Task).where(Task.project_id == project_id)).all():
+    for tk in session.exec(
+        _windowed(
+            select(Task).where(Task.project_id == project_id),
+            Task.due_at,  # type: ignore[arg-type]
+            date_from,
+            date_to,
+        )
+    ).all():
         if not tk.due_at or not _in_range(tk.due_at, date_from, date_to):
             continue
         items.append(

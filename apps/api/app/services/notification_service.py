@@ -5,7 +5,7 @@ overdue tasks, open blockers. Nothing is stored, so there is no read/unread
 state to migrate and the feed can never drift from the DB.
 """
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Iterable, Optional
 
 from sqlmodel import Session, select
 
@@ -51,26 +51,18 @@ def _parse_ts(value: Optional[str]) -> Optional[datetime]:
     return parsed
 
 
-def due_task_buckets(
-    session: Session, project_id: str, window_hours: float
+def _bucket_by_due(
+    tasks: Iterable[Task], window_hours: float
 ) -> tuple[list[Task], list[Task]]:
-    """(overdue, due_soon) open tasks with a parseable due date, ordered by due_at.
+    """Split already-fetched open, dated tasks into (overdue, due_soon).
 
-    Tasks whose due_at cannot be parsed are excluded — never guessed at.
+    Kept separate from the query so the per-project and batched callers share one
+    definition of the window. Tasks whose due_at cannot be parsed are excluded —
+    never guessed at.
     """
     now = _parse_ts(now_utc())
     horizon = _parse_ts(now_utc_plus_hours(window_hours))
     assert now is not None and horizon is not None
-    closed = status_option_service.status_keys_in(
-        session, project_id, "task", "done", "canceled"
-    )
-    tasks = session.exec(
-        select(Task)
-        .where(Task.project_id == project_id)
-        .where(Task.due_at.is_not(None))  # type: ignore[union-attr]
-        .where(Task.status.not_in(closed))  # type: ignore[attr-defined]
-        .order_by(Task.due_at)
-    ).all()
     overdue: list[Task] = []
     due_soon: list[Task] = []
     for t in tasks:
@@ -84,7 +76,38 @@ def due_task_buckets(
     return overdue, due_soon
 
 
-def _project_items(session: Session, project: Project) -> list[NotificationItem]:
+def due_task_buckets(
+    session: Session, project_id: str, window_hours: float
+) -> tuple[list[Task], list[Task]]:
+    """(overdue, due_soon) open tasks with a parseable due date, ordered by due_at.
+
+    Tasks whose due_at cannot be parsed are excluded — never guessed at.
+    """
+    closed = status_option_service.status_keys_in(
+        session, project_id, "task", "done", "canceled"
+    )
+    tasks = session.exec(
+        select(Task)
+        .where(Task.project_id == project_id)
+        .where(Task.due_at.is_not(None))  # type: ignore[union-attr]
+        .where(Task.status.not_in(closed))  # type: ignore[attr-defined]
+        .order_by(Task.due_at)
+    ).all()
+    return _bucket_by_due(tasks, window_hours)
+
+
+def _project_items(
+    project: Project,
+    approvals: list[ApprovalRequest],
+    tasks: list[Task],
+    blockers: list[Blocker],
+) -> list[NotificationItem]:
+    """Render one project's rows from state already fetched by ``build_feed``.
+
+    #103: this used to run its own three queries, so the whole-workspace feed was
+    O(projects) per poll — forever, in the background. It takes no session now,
+    which is what keeps that from creeping back.
+    """
     items: list[NotificationItem] = []
     now = now_utc()
     # Proposals live 24h (Phase 7A); flag the last 6h as "expiring soon".
@@ -104,11 +127,6 @@ def _project_items(session: Session, project: Project) -> list[NotificationItem]
             )
         )
 
-    approvals = session.exec(
-        select(ApprovalRequest)
-        .where(ApprovalRequest.project_id == project.id)
-        .where(ApprovalRequest.status == "pending")
-    ).all()
     for ap in approvals:
         if ap.expires_at <= now:
             continue  # stale — cannot be applied anymore
@@ -131,17 +149,12 @@ def _project_items(session: Session, project: Project) -> list[NotificationItem]
                 ap.created_at,
             )
 
-    overdue, due_soon = due_task_buckets(session, project.id, DUE_SOON_WINDOW_HOURS)
+    overdue, due_soon = _bucket_by_due(tasks, DUE_SOON_WINDOW_HOURS)
     for t in overdue:
         add("task_overdue", "warn", f"Task overdue: {t.title}", f"due {t.due_at}", t.id, t.due_at or now)
     for t in due_soon:
         add("task_due_soon", "info", f"Task due soon: {t.title}", f"due {t.due_at}", t.id, t.due_at or now)
 
-    blockers = session.exec(
-        select(Blocker)
-        .where(Blocker.project_id == project.id)
-        .where(Blocker.status == "open")
-    ).all()
     for b in blockers:
         add("blocker_open", "warn", f"Open blocker: {b.title}", b.description, b.id, b.created_at)
 
@@ -161,9 +174,46 @@ def build_feed(session: Session, project_id: Optional[str] = None) -> Notificati
             ).all()
         )
 
+    # #103: four batched queries for the whole feed instead of four per project.
+    ids = [p.id for p in projects]
+    approvals: dict[str, list[ApprovalRequest]] = {pid: [] for pid in ids}
+    tasks: dict[str, list[Task]] = {pid: [] for pid in ids}
+    blockers: dict[str, list[Blocker]] = {pid: [] for pid in ids}
+
+    if ids:
+        closed = status_option_service.status_keys_in_many(
+            session, ids, "task", "done", "canceled"
+        )
+        for ap in session.exec(
+            select(ApprovalRequest)
+            .where(ApprovalRequest.project_id.in_(ids))  # type: ignore[attr-defined]
+            .where(ApprovalRequest.status == "pending")
+        ).all():
+            approvals[ap.project_id].append(ap)
+        for tk in session.exec(
+            select(Task)
+            .where(Task.project_id.in_(ids))  # type: ignore[attr-defined]
+            .where(Task.due_at.is_not(None))  # type: ignore[union-attr]
+            .order_by(Task.due_at)
+        ).all():
+            # The closed-status filter is per project (a key can be done in one
+            # project and open in another), so it cannot ride along in the WHERE.
+            if tk.status not in closed[tk.project_id]:
+                tasks[tk.project_id].append(tk)
+        for bl in session.exec(
+            select(Blocker)
+            .where(Blocker.project_id.in_(ids))  # type: ignore[attr-defined]
+            .where(Blocker.status == "open")
+        ).all():
+            blockers[bl.project_id].append(bl)
+
     items: list[NotificationItem] = []
     for project in projects:
-        items.extend(_project_items(session, project))
+        items.extend(
+            _project_items(
+                project, approvals[project.id], tasks[project.id], blockers[project.id]
+            )
+        )
 
     # Newest first within severity; actions before warnings before info.
     items.sort(key=lambda i: i.at, reverse=True)
