@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react'
-import Layout from './Layout'
+import Layout, { notificationTarget } from './Layout'
 
 // Every panel Layout renders hits the API on mount — stub the surfaces the
 // default (dashboard) view and the two sidebar menus actually touch.
@@ -188,5 +188,31 @@ describe('brand mark', () => {
     const marks = Array.from(container.querySelectorAll('.pj-mark'), (e) => e.textContent?.trim())
     expect(marks.length).toBe(2)
     expect(marks).toEqual([name.slice(0, 2).toUpperCase(), name.slice(0, 2).toUpperCase()])
+  })
+})
+
+describe('notificationTarget (#95)', () => {
+  const item = (id: string, kind: string) => ({
+    id, kind, severity: 'warn', title: 't', detail: null,
+    project_id: 'p1', project_title: 'Planarus', at: '2026-07-26T00:00:00+00:00',
+  })
+
+  it('sends approval rows to the queue, with nothing to scroll to there', () => {
+    expect(notificationTarget(item('approval_pending:apr_1', 'approval_pending')))
+      .toEqual({ view: 'approvals' })
+  })
+
+  it('sends each planning row to the tab that actually holds it', () => {
+    // The bug: all three of these landed on Tasks, and two of them do not live there.
+    expect(notificationTarget(item('task_overdue:tsk_1', 'task_overdue')))
+      .toEqual({ view: 'planning', planningTab: 'tasks', focusEntityId: 'tsk_1' })
+    expect(notificationTarget(item('blocker_open:blk_1', 'blocker_open')))
+      .toEqual({ view: 'planning', planningTab: 'risks', focusEntityId: 'blk_1' })
+    expect(notificationTarget(item('milestone_missed:mls_1', 'milestone_missed')))
+      .toEqual({ view: 'planning', planningTab: 'milestones', focusEntityId: 'mls_1' })
+  })
+
+  it('leaves the focus empty rather than guessing when the id carries no entity', () => {
+    expect(notificationTarget(item('task_overdue:', 'task_overdue')).focusEntityId).toBeUndefined()
   })
 })

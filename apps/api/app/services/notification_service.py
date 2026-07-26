@@ -13,6 +13,7 @@ from app.core.exceptions import NotFoundError
 from app.core.utils import new_id, now_utc, now_utc_plus_hours
 from app.models.approval_request import ApprovalRequest
 from app.models.blocker import Blocker
+from app.models.milestone import Milestone
 from app.models.notification_rule import NotificationRule
 from app.models.project import Project
 from app.models.task import Task
@@ -32,6 +33,18 @@ DUE_SOON_WINDOW_HOURS = 48
 # question — a custom column marked done or canceled is finished work, and
 # nagging about it forever was the bug.
 _SEVERITY_RANK = {"action": 0, "warn": 1, "info": 2}
+
+# #95: a missed milestone showed in the Cockpit's "Needs attention" widget but
+# never in the bell, because no feed kind existed for it.
+#
+# Milestone finality cannot come from the #88 categories alone:
+# `builtin_status_category` deliberately leaves `achieved` and `missed` in the
+# *open* category ("finality is a judgement call"), so a category-only filter
+# would nag about an achieved milestone forever — the exact bug #88 fixed for
+# tasks. These three built-ins are what the widget already treats as finished
+# (`attention.ts` DONE_MILESTONE); custom milestone statuses still resolve
+# through their category, which is what the category system is for.
+_FINISHED_MILESTONE_BUILTINS = frozenset({"achieved", "missed", "canceled"})
 
 
 def _parse_ts(value: Optional[str]) -> Optional[datetime]:
@@ -102,6 +115,7 @@ def _project_items(
     approvals: list[ApprovalRequest],
     tasks: list[Task],
     blockers: list[Blocker],
+    milestones: list[Milestone] = (),  # type: ignore[assignment]
 ) -> list[NotificationItem]:
     """Render one project's rows from state already fetched by ``build_feed``.
 
@@ -159,6 +173,23 @@ def _project_items(
     for b in blockers:
         add("blocker_open", "warn", f"Open blocker: {b.title}", b.description, b.id, b.created_at)
 
+    # Already filtered to unfinished milestones by the caller; the date is what
+    # decides. An unparseable target_date is skipped, never guessed at — same
+    # rule as task due dates.
+    now_dt = _parse_ts(now)
+    for m in milestones:
+        target = _parse_ts(m.target_date)
+        if target is None or now_dt is None or target >= now_dt:
+            continue
+        add(
+            "milestone_missed",
+            "warn",
+            f"Milestone missed: {m.title}",
+            f"target {m.target_date}",
+            m.id,
+            m.target_date or now,
+        )
+
     return items
 
 
@@ -180,6 +211,7 @@ def build_feed(session: Session, project_id: Optional[str] = None) -> Notificati
     approvals: dict[str, list[ApprovalRequest]] = {pid: [] for pid in ids}
     tasks: dict[str, list[Task]] = {pid: [] for pid in ids}
     blockers: dict[str, list[Blocker]] = {pid: [] for pid in ids}
+    milestones: dict[str, list[Milestone]] = {pid: [] for pid in ids}
 
     if ids:
         closed = status_option_service.status_keys_in_many(
@@ -207,12 +239,31 @@ def build_feed(session: Session, project_id: Optional[str] = None) -> Notificati
             .where(Blocker.status == "open")
         ).all():
             blockers[bl.project_id].append(bl)
+        # #95: one batched query, matching the #103 shape — never per project.
+        finished_ms = status_option_service.status_keys_in_many(
+            session, ids, "milestone", "done", "canceled"
+        )
+        for ms in session.exec(
+            select(Milestone)
+            .where(Milestone.project_id.in_(ids))  # type: ignore[attr-defined]
+            .where(Milestone.target_date.is_not(None))  # type: ignore[union-attr]
+            .order_by(Milestone.target_date)
+        ).all():
+            if ms.status in _FINISHED_MILESTONE_BUILTINS:
+                continue
+            if ms.status in finished_ms[ms.project_id]:
+                continue
+            milestones[ms.project_id].append(ms)
 
     items: list[NotificationItem] = []
     for project in projects:
         items.extend(
             _project_items(
-                project, approvals[project.id], tasks[project.id], blockers[project.id]
+                project,
+                approvals[project.id],
+                tasks[project.id],
+                blockers[project.id],
+                milestones[project.id],
             )
         )
 

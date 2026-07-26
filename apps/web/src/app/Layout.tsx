@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import Dashboard from './Dashboard'
 import CockpitPanel from './CockpitPanel'
-import PlanningPanel from './PlanningPanel'
+import PlanningPanel, { type TabKey as PlanningTabKey } from './PlanningPanel'
 import RoadmapPanel from './RoadmapPanel'
 import TimelinePanel from './TimelinePanel'
 import CalendarPanel from './CalendarPanel'
@@ -32,6 +32,29 @@ interface SelectedProject {
   id: string
   title: string
   slug: string
+}
+
+/**
+ * Where a notification row should land (#95).
+ *
+ * Every non-approval row used to go to the Tasks tab generally — including rows
+ * about a blocker or a milestone, which live on other tabs — and none carried
+ * the item it was about. The feed id is `kind:entity_id`, so the entity to
+ * scroll to is already in hand. Pure, so the mapping is testable without
+ * rendering the whole shell.
+ */
+export function notificationTarget(item: NotificationItem): {
+  view: MainView
+  planningTab?: PlanningTabKey
+  focusEntityId?: string
+} {
+  const focusEntityId = item.id.slice(item.id.indexOf(':') + 1) || undefined
+  if (item.kind.startsWith('approval_')) return { view: 'approvals' }
+  if (item.kind === 'blocker_open')
+    return { view: 'planning', planningTab: 'risks', focusEntityId }
+  if (item.kind === 'milestone_missed')
+    return { view: 'planning', planningTab: 'milestones', focusEntityId }
+  return { view: 'planning', planningTab: 'tasks', focusEntityId }
 }
 
 const NAV: { group: string; items: { view: MainView; label: string; icon: string }[] }[] = [
@@ -174,7 +197,10 @@ export default function Layout() {
   const [mobileNavMode, setMobileNavMode] = useState(isMobileViewport)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
-  const [planningTab, setPlanningTab] = useState<'phases' | 'tasks'>('phases')
+  const [planningTab, setPlanningTab] = useState<PlanningTabKey>('phases')
+  // #95: which row Planning should scroll to and mark, when we got there from a
+  // notification about one specific item.
+  const [planningFocus, setPlanningFocus] = useState<string | undefined>(undefined)
   const [projMenuOpen, setProjMenuOpen] = useState(false)
   const [acctMenuOpen, setAcctMenuOpen] = useState(false)
   const [projects, setProjects] = useState<Project[] | null>(null)
@@ -259,8 +285,14 @@ export default function Layout() {
 
   const closeMenu = () => setMobileMenuOpen(false)
 
-  const navigate = (view: MainView, options?: { planningTab?: 'phases' | 'tasks' }) => {
-    if (view === 'planning') setPlanningTab(options?.planningTab ?? 'phases')
+  const navigate = (
+    view: MainView,
+    options?: { planningTab?: PlanningTabKey; focusEntityId?: string },
+  ) => {
+    if (view === 'planning') {
+      setPlanningTab(options?.planningTab ?? 'phases')
+      setPlanningFocus(options?.focusEntityId)
+    }
     setMainView(view)
     setSearchQuery('')
     setSearchOpen(false)
@@ -282,8 +314,8 @@ export default function Layout() {
       const target = await api.projects.get(item.project_id)
       setProject({ id: target.id, title: target.title, slug: target.slug })
     }
-    if (item.kind.startsWith('approval_')) navigate('approvals')
-    else navigate('planning', { planningTab: 'tasks' })
+    const { view, ...options } = notificationTarget(item)
+    navigate(view, options)
   }
 
   const placeholder = (
@@ -563,9 +595,10 @@ export default function Layout() {
                   onOpenItem={item => void openNotification(item)}
                   onOpenApprovals={() => navigate('approvals')}
                   onOpenTasks={() => navigate('planning', { planningTab: 'tasks' })}
+                  onOpenPlanning={tab => navigate('planning', { planningTab: tab })}
                 />
               ) : placeholder)}
-              {mainView === 'planning' && (project ? <PlanningPanel projectId={project.id} initialTab={planningTab} /> : placeholder)}
+              {mainView === 'planning' && (project ? <PlanningPanel projectId={project.id} initialTab={planningTab} focusEntityId={planningFocus} /> : placeholder)}
               {mainView === 'roadmap' && (project ? <RoadmapPanel projectId={project.id} onOpenPlanning={() => navigate('planning', { planningTab: 'tasks' })} /> : placeholder)}
               {mainView === 'timeline' && (project ? <TimelinePanel projectId={project.id} /> : placeholder)}
               {mainView === 'calendar' && (project ? <CalendarPanel projectId={project.id} onOpenPlanning={() => navigate('planning', { planningTab: 'tasks' })} /> : placeholder)}

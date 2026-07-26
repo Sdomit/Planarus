@@ -317,23 +317,47 @@ def _seed_feed_project(client: TestClient, suffix: str) -> str:
     return pid
 
 
+def _feed_query_counts(client: TestClient, engine) -> dict[str, int]:
+    with QueryCounter(engine, contains="FROM task") as tasks:
+        with QueryCounter(engine, contains="FROM blocker") as blockers:
+            with QueryCounter(engine, contains="FROM milestone") as milestones:
+                with QueryCounter(engine, contains="FROM status_option") as statuses:
+                    res = client.get("/api/v1/notifications")
+    assert res.status_code == 200
+    return {
+        "task": len(tasks),
+        "blocker": len(blockers),
+        "milestone": len(milestones),
+        "status_option": len(statuses),
+    }
+
+
 def test_feed_query_count_does_not_scale_with_projects(
     client: TestClient, engine
 ) -> None:
     """The bell polls this forever in the background. Before: 4 queries per
-    unarchived project. After: a fixed set of IN-queries for the whole feed."""
-    for i in range(6):
-        _seed_feed_project(client, f"nf{i}")
+    unarchived project. After: a fixed set of IN-queries for the whole feed.
 
-    with QueryCounter(engine, contains="FROM task") as tasks:
-        with QueryCounter(engine, contains="FROM blocker") as blockers:
-            with QueryCounter(engine, contains="FROM status_option") as statuses:
-                res = client.get("/api/v1/notifications")
-    assert res.status_code == 200
-    # One batched query each, regardless of how many projects exist.
-    assert len(tasks) == 1, f"task query per project: {len(tasks)}"
-    assert len(blockers) == 1, f"blocker query per project: {len(blockers)}"
-    assert len(statuses) == 1, f"status query per project: {len(statuses)}"
+    Asserted as "the same count at 3 projects and at 9" rather than against
+    literal numbers. The literal version broke the moment #95 added a second
+    batched `status_option` read for milestone categories — a change that does
+    not scale with projects at all, which is the property this guards. A magic
+    number turns every legitimate batched addition into a failing test and
+    teaches the next person to just bump it.
+    """
+    for i in range(3):
+        _seed_feed_project(client, f"nf{i}")
+    few = _feed_query_counts(client, engine)
+
+    for i in range(3, 9):
+        _seed_feed_project(client, f"nf{i}")
+    many = _feed_query_counts(client, engine)
+
+    assert few == many, f"query count grew with project count: {few} -> {many}"
+    # Each source is still read in one batched statement, not N.
+    assert all(count == 1 for source, count in many.items() if source != "status_option"), many
+    # Two status reads: task categories and milestone categories, both batched.
+    assert many["status_option"] <= 2, many
 
 
 def test_feed_still_reports_every_project(client: TestClient) -> None:

@@ -79,7 +79,7 @@ function PersonChip({ id, name }: { id: string; name: string }) {
 // Re-exported for tests + existing callers; the implementation now lives in EntityBoard.
 export const nextStatusForColumn = nextStatusForCol
 
-type TabKey = 'phases' | 'tasks' | 'milestones' | 'decisions' | 'risks' | 'comments' | 'links'
+export type TabKey = 'phases' | 'tasks' | 'milestones' | 'decisions' | 'risks' | 'comments' | 'links'
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'phases', label: 'Phases' },
@@ -212,14 +212,35 @@ function useStatusManager(opts: {
 export default function PlanningPanel({
   projectId,
   initialTab = 'phases',
+  focusEntityId,
 }: {
   projectId: string
   initialTab?: TabKey
+  /** #95: the row a notification was about, so click-through lands on the item
+   *  rather than on the tab that contains it somewhere. */
+  focusEntityId?: string
 }) {
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<TabKey>(initialTab)
+  // The panel stays mounted across navigations, so a notification arriving while
+  // Planning is already open has to move the tab, not just seed it once.
+  useEffect(() => { setTab(initialTab) }, [initialTab])
+
+  // #95: click-through used to land on the Tasks tab generally — no scroll-to,
+  // no highlight — leaving you to find the row the alert was about. Waits for
+  // `loading` because the row is not in the DOM until the lists resolve.
+  // `scrollIntoView` is optional-called: jsdom does not implement it.
+  useEffect(() => {
+    if (!focusEntityId || loading) return
+    const el = document.getElementById(`pp-entity-${focusEntityId}`)
+    if (!el) return
+    el.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+    el.classList.add('pp-row-focus')
+    const timer = setTimeout(() => el.classList.remove('pp-row-focus'), 2500)
+    return () => clearTimeout(timer)
+  }, [focusEntityId, loading, tab])
 
   const [phases, setPhases] = useState<Phase[]>([])
   const [stages, setStages] = useState<Stage[]>([])
@@ -675,7 +696,7 @@ function ExpandableRow({
 }: { id: string; header: React.ReactNode; children: React.ReactNode; className?: string }) {
   const [open, setOpen] = useState(false)
   return (
-    <li className={`pp-row pp-row-expandable${className ? ` ${className}` : ''}`}>
+    <li id={`pp-entity-${id}`} className={`pp-row pp-row-expandable${className ? ` ${className}` : ''}`}>
       <button
         type="button"
         className="pp-row-main"
@@ -1413,7 +1434,7 @@ function TaskRow({ task, phases, stages, projectId, onTaskUpdated, onDelete, dra
   }
 
   return (
-    <li className={`pp-row pp-row-expandable pp-row-managed${isSub ? ' pp-row-subtask' : ''}`} {...dragProps}>
+    <li id={`pp-entity-${task.id}`} className={`pp-row pp-row-expandable pp-row-managed${isSub ? ' pp-row-subtask' : ''}`} {...dragProps}>
       <div className="pp-row-main-wrap">
         <button
           type="button"
@@ -1544,7 +1565,7 @@ function MilestoneListRow({ milestone, update, remove, dragProps, move, statusKe
   const [open, setOpen] = useState(false)
   const editable = useEditable(milestone.title, t => update(milestone.id, { title: t }))
   return (
-    <li className="pp-row pp-row-expandable pp-row-managed" {...dragProps}>
+    <li id={`pp-entity-${milestone.id}`} className="pp-row pp-row-expandable pp-row-managed" {...dragProps}>
       <div className="pp-row-main-wrap">
         <button type="button" className="pp-row-main" onClick={() => setOpen(v => !v)} aria-expanded={open}>
           <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
