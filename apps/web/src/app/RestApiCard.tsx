@@ -118,8 +118,10 @@ export default function RestApiCard({ active, permitted }: { active: boolean; pe
       </div>
 
       <div className="form-field">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
-          <div className="tabs" role="tablist" aria-label="Snippet language" style={{ borderBottom: 'none', gap: 'var(--space-3)' }}>
+        {/* wrap: the language tabs plus the copy button do not fit on one line
+            at phone widths, and nowrap pushed the button past the page edge. */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
+          <div className="tabs" role="tablist" aria-label="Snippet language" style={{ borderBottom: 'none', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
             {LANGS.map(l => (
               <button
                 key={l.key}

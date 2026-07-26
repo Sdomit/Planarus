@@ -71,7 +71,7 @@ export default function GptActionsCard(
         )}
       </p>
 
-      <div className="tabs" role="tablist" aria-label="Contract profile" style={{ borderBottom: 'none', gap: 'var(--space-3)', marginBottom: 'var(--space-2)' }}>
+      <div className="tabs" role="tablist" aria-label="Contract profile" style={{ borderBottom: 'none', flexWrap: 'wrap', gap: 'var(--space-3)', marginBottom: 'var(--space-2)' }}>
         <button type="button" role="tab" aria-selected={profile === 'readonly'} className={`tab${profile === 'readonly' ? ' active' : ''}`} onClick={() => setProfile('readonly')}>Read-only (recommended)</button>
         <button type="button" role="tab" aria-selected={profile === 'read_propose'} className={`tab${profile === 'read_propose' ? ' active' : ''}`} onClick={() => setProfile('read_propose')}>Read + propose</button>
       </div>
@@ -89,7 +89,7 @@ export default function GptActionsCard(
       {error && <p className="form-error" role="alert">{error}</p>}
       {contract && (
         <div className="form-field">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
             <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)' }}>OpenAPI schema — paste into ChatGPT → Actions</span>
             <CopyButton text={schemaText(contract, host)} label="Copy schema" />
           </div>
