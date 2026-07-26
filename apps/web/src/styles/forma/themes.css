@@ -1,7 +1,20 @@
 /* ============================================================
    FORMA — Themes
-   16 complete themes: 8 light + 8 dark
-   Usage: set data-theme="light-{name}" or "dark-{name}"
+   Two themes: light-cosmo and dark-cosmo. Usage: set
+   data-theme="light-cosmo" or "dark-cosmo" (index.html resolves
+   it before first paint; Layout's toggle is the only writer).
+
+   Sixteen further palettes — amber, blue, green, violet, teal,
+   terracotta, crimson, slate in light and dark — were deleted in
+   #157. Nothing could reach them: the toggle only ever set the
+   cosmo pair, 17 of the then 19 blocks failed WCAG AA on
+   --text-tertiary, and none of them defined the --ab-sidebar-*
+   chrome that only exists for cosmo, so a theme picker would have
+   rendered a white sidebar against a dark canvas.
+
+   Adding a theme means adding a full block AND its sidebar
+   tokens. themes.contrast.test.ts asserts every block present
+   clears AA, so a new palette fails the suite until it does.
    ============================================================ */
 
 /* ── SHARED DARK SHADOWS & STATUS TOKENS ─────────────────── */
@@ -26,81 +39,6 @@
   --text-disabled: rgba(255,255,255,0.18);
 }
 
-/* ── LIGHT AMBER ─────────────────────────────────────────── */
-[data-theme="light-amber"] {
-  --bg-canvas:   #FAFAF8; --bg-surface:  #FFFFFF;
-  --bg-subtle:   #F3F3F0; --bg-muted:    #E8E8E4;
-  --bg-inverse:  #1A1A14;
-  --text-primary:#1A1A14; --text-secondary:#52524A;
-  --text-tertiary:#A8A8A2; --text-inverse:#FFFFFF;
-  --text-accent: #B45309;
-  --border-subtle:#E8E8E4; --border-default:#D1D1CC;
-  --border-strong:#78786E; --border-accent:#D97706;
-  --accent:#D97706;       --accent-hover:#B45309;
-  --accent-active:#92400E; --accent-subtle:#FFFBEB;
-  --accent-muted:#FEF3C7;
-  --status-success-fg:#047857; --status-success-bg:#ECFDF5; --status-success-border:#D1FAE5;
-  --status-danger-fg:#BE123C;  --status-danger-bg:#FFF1F2;  --status-danger-border:#FFE4E6;
-  --status-warning-fg:#B45309; --status-warning-bg:#FFFBEB; --status-warning-border:#FEF3C7;
-  --status-info-fg:#0369A1;    --status-info-bg:#F0F9FF;    --status-info-border:#E0F2FE;
-}
-
-/* ── LIGHT BLUE ──────────────────────────────────────────── */
-[data-theme="light-blue"] {
-  --bg-canvas:   #F7F9FC; --bg-surface:  #FFFFFF;
-  --bg-subtle:   #F1F5F9; --bg-muted:    #E2E8F0;
-  --bg-inverse:  #0F172A;
-  --text-primary:#0F172A; --text-secondary:#475569;
-  --text-tertiary:#94A3B8; --text-inverse:#FFFFFF;
-  --text-accent: #1D4ED8;
-  --border-subtle:#E2E8F0; --border-default:#CBD5E1;
-  --border-strong:#64748B; --border-accent:#2563EB;
-  --accent:#2563EB;       --accent-hover:#1D4ED8;
-  --accent-active:#1E40AF; --accent-subtle:#EFF6FF;
-  --accent-muted:#DBEAFE;
-  --status-success-fg:#047857; --status-success-bg:#ECFDF5; --status-success-border:#D1FAE5;
-  --status-danger-fg:#BE123C;  --status-danger-bg:#FFF1F2;  --status-danger-border:#FFE4E6;
-  --status-warning-fg:#B45309; --status-warning-bg:#FFFBEB; --status-warning-border:#FEF3C7;
-  --status-info-fg:#0369A1;    --status-info-bg:#F0F9FF;    --status-info-border:#E0F2FE;
-}
-
-/* ── LIGHT GREEN ─────────────────────────────────────────── */
-[data-theme="light-green"] {
-  --bg-canvas:   #F5F9F5; --bg-surface:  #FFFFFF;
-  --bg-subtle:   #EDFAED; --bg-muted:    #D8EED8;
-  --bg-inverse:  #14532D;
-  --text-primary:#1A281A; --text-secondary:#3D5C3D;
-  --text-tertiary:#7A9A7A; --text-inverse:#FFFFFF;
-  --text-accent: #15803D;
-  --border-subtle:#D8EED8; --border-default:#C0D8C0;
-  --border-strong:#6A8A6A; --border-accent:#16A34A;
-  --accent:#16A34A;       --accent-hover:#15803D;
-  --accent-active:#166534; --accent-subtle:#F0FDF4;
-  --accent-muted:#DCFCE7;
-  --status-success-fg:#047857; --status-success-bg:#ECFDF5; --status-success-border:#D1FAE5;
-  --status-danger-fg:#BE123C;  --status-danger-bg:#FFF1F2;  --status-danger-border:#FFE4E6;
-  --status-warning-fg:#B45309; --status-warning-bg:#FFFBEB; --status-warning-border:#FEF3C7;
-  --status-info-fg:#0369A1;    --status-info-bg:#F0F9FF;    --status-info-border:#E0F2FE;
-}
-
-/* ── LIGHT VIOLET ────────────────────────────────────────── */
-[data-theme="light-violet"] {
-  --bg-canvas:   #F9F7FF; --bg-surface:  #FFFFFF;
-  --bg-subtle:   #F5F3FF; --bg-muted:    #EDE9FE;
-  --bg-inverse:  #1C1428;
-  --text-primary:#1C1428; --text-secondary:#4A4060;
-  --text-tertiary:#9C8AB8; --text-inverse:#FFFFFF;
-  --text-accent: #6D28D9;
-  --border-subtle:#EDE9FE; --border-default:#DDD6FE;
-  --border-strong:#7C3AED; --border-accent:#7C3AED;
-  --accent:#7C3AED;       --accent-hover:#6D28D9;
-  --accent-active:#5B21B6; --accent-subtle:#F5F3FF;
-  --accent-muted:#EDE9FE;
-  --status-success-fg:#047857; --status-success-bg:#ECFDF5; --status-success-border:#D1FAE5;
-  --status-danger-fg:#BE123C;  --status-danger-bg:#FFF1F2;  --status-danger-border:#FFE4E6;
-  --status-warning-fg:#B45309; --status-warning-bg:#FFFBEB; --status-warning-border:#FEF3C7;
-  --status-info-fg:#0369A1;    --status-info-bg:#F0F9FF;    --status-info-border:#E0F2FE;
-}
 
 /* ── LIGHT COSMO ────────────────────────────────────────── */
 [data-theme="light-cosmo"] {
@@ -115,163 +53,29 @@
      The fills (--accent*) are untouched — white-on-accent is a separate axis. */
   --text-tertiary:#5C6A85; --text-inverse:#FFFFFF;
   --text-accent: #1F63DB;
-  --border-subtle:#E7ECF4; --border-default:#D6E0EC;
-  --border-strong:#9AABC0; --border-accent:#5EC3FF;
+  /* --border-default carries every control boundary (43 sites: inputs, selects,
+     cards, the RTE, calendar cells), so WCAG 1.4.11 wants 3:1 against the fill
+     behind it. #D6E0EC measured 1.33:1. #7A879B clears 3:1 on all four light
+     backdrops — 3.64 surface, 3.48 subtle, 3.31 canvas, 3.07 muted — and
+     --border-strong moves with it to stay the stronger of the two.
+     --border-subtle is deliberately untouched: it draws decorative hairlines,
+     not component boundaries. */
+  --border-subtle:#E7ECF4; --border-default:#7A879B;
+  --border-strong:#66748F; --border-accent:#5EC3FF;
   --accent:#2D77FF;       --accent-hover:#1F63DB;
   --accent-active:#174FBA; --accent-subtle:#EEF6FF;
   --accent-muted:#DDEEFF;
+  /* KNOWN GAP, tracked in themes.contrast.test.ts: --text-on-accent is white
+     from :root, which measures 4.04:1 on this fill — under the 4.5:1 AA bar for
+     the 13px button labels that use it. Unlike dark-cosmo (see below) there is
+     no free fix: #2D77FF is a mid-tone, so dark text only reaches 4.60:1 and
+     looks wrong on a saturated blue. Clearing it properly means moving the fill
+     to --accent-hover #1F63DB (white then measures 5.43:1), which changes the
+     brand colour of every primary button — a decision, not a defect fix. */
   --status-success-fg:#047857; --status-success-bg:#ECFDF5; --status-success-border:#D1FAE5;
   --status-danger-fg:#D12672;  --status-danger-bg:#FFF2F8; --status-danger-border:#FFD6E8;
   --status-warning-fg:#A16207; --status-warning-bg:#FFFBEB; --status-warning-border:#FEF3C7;
   --status-info-fg:#1F63DB;    --status-info-bg:#EEF6FF; --status-info-border:#CFE4FF;
-}
-
-/* ── LIGHT TEAL ──────────────────────────────────────────── */
-[data-theme="light-teal"] {
-  --bg-canvas:   #F3FAFA; --bg-surface:  #FFFFFF;
-  --bg-subtle:   #EDFAF8; --bg-muted:    #CCFBF1;
-  --bg-inverse:  #0F3832;
-  --text-primary:#0F2826; --text-secondary:#2A5050;
-  --text-tertiary:#6AACAA; --text-inverse:#FFFFFF;
-  --text-accent: #0F766E;
-  --border-subtle:#CCFBF1; --border-default:#99F6E4;
-  --border-strong:#14B8A6; --border-accent:#0D9488;
-  --accent:#0D9488;       --accent-hover:#0F766E;
-  --accent-active:#115E59; --accent-subtle:#F0FDFA;
-  --accent-muted:#CCFBF1;
-  --status-success-fg:#047857; --status-success-bg:#ECFDF5; --status-success-border:#D1FAE5;
-  --status-danger-fg:#BE123C;  --status-danger-bg:#FFF1F2;  --status-danger-border:#FFE4E6;
-  --status-warning-fg:#B45309; --status-warning-bg:#FFFBEB; --status-warning-border:#FEF3C7;
-  --status-info-fg:#0369A1;    --status-info-bg:#F0F9FF;    --status-info-border:#E0F2FE;
-}
-
-/* ── LIGHT TERRACOTTA ────────────────────────────────────── */
-[data-theme="light-terracotta"] {
-  --bg-canvas:   #FBF5F1; --bg-surface:  #FFFFFF;
-  --bg-subtle:   #F5EBE3; --bg-muted:    #EDD8C8;
-  --bg-inverse:  #2A1508;
-  --text-primary:#2A1508; --text-secondary:#6B3D25;
-  --text-tertiary:#B8927A; --text-inverse:#FFFFFF;
-  --text-accent: #9A3412;
-  --border-subtle:#EDD8C8; --border-default:#DCC0A8;
-  --border-strong:#B8927A; --border-accent:#C2410C;
-  --accent:#C2410C;       --accent-hover:#9A3412;
-  --accent-active:#7C2D12; --accent-subtle:#FFF7ED;
-  --accent-muted:#FFEDD5;
-  --status-success-fg:#047857; --status-success-bg:#ECFDF5; --status-success-border:#D1FAE5;
-  --status-danger-fg:#BE123C;  --status-danger-bg:#FFF1F2;  --status-danger-border:#FFE4E6;
-  --status-warning-fg:#9A3412; --status-warning-bg:#FFF7ED; --status-warning-border:#FFEDD5;
-  --status-info-fg:#0369A1;    --status-info-bg:#F0F9FF;    --status-info-border:#E0F2FE;
-}
-
-/* ── LIGHT CRIMSON ───────────────────────────────────────── */
-[data-theme="light-crimson"] {
-  --bg-canvas:   #FFF7F8; --bg-surface:  #FFFFFF;
-  --bg-subtle:   #FFF0F2; --bg-muted:    #FFE4E6;
-  --bg-inverse:  #280810;
-  --text-primary:#280810; --text-secondary:#62243A;
-  --text-tertiary:#B87A8C; --text-inverse:#FFFFFF;
-  --text-accent: #BE123C;
-  --border-subtle:#FFE4E6; --border-default:#FECDD3;
-  --border-strong:#FB7185; --border-accent:#E11D48;
-  --accent:#E11D48;       --accent-hover:#BE123C;
-  --accent-active:#9F1239; --accent-subtle:#FFF1F2;
-  --accent-muted:#FFE4E6;
-  --status-success-fg:#047857; --status-success-bg:#ECFDF5; --status-success-border:#D1FAE5;
-  --status-danger-fg:#BE123C;  --status-danger-bg:#FFF1F2;  --status-danger-border:#FFE4E6;
-  --status-warning-fg:#B45309; --status-warning-bg:#FFFBEB; --status-warning-border:#FEF3C7;
-  --status-info-fg:#0369A1;    --status-info-bg:#F0F9FF;    --status-info-border:#E0F2FE;
-}
-
-/* ── LIGHT SLATE ─────────────────────────────────────────── */
-[data-theme="light-slate"] {
-  --bg-canvas:   #F7F8FA; --bg-surface:  #FFFFFF;
-  --bg-subtle:   #F1F5F9; --bg-muted:    #E2E8F0;
-  --bg-inverse:  #0F1117;
-  --text-primary:#0F1117; --text-secondary:#475569;
-  --text-tertiary:#94A3B8; --text-inverse:#FFFFFF;
-  --text-accent: #1E293B;
-  --border-subtle:#E2E8F0; --border-default:#CBD5E1;
-  --border-strong:#64748B; --border-accent:#334155;
-  --accent:#334155;       --accent-hover:#1E293B;
-  --accent-active:#0F172A; --accent-subtle:#F8FAFC;
-  --accent-muted:#F1F5F9;
-  --status-success-fg:#047857; --status-success-bg:#ECFDF5; --status-success-border:#D1FAE5;
-  --status-danger-fg:#BE123C;  --status-danger-bg:#FFF1F2;  --status-danger-border:#FFE4E6;
-  --status-warning-fg:#B45309; --status-warning-bg:#FFFBEB; --status-warning-border:#FEF3C7;
-  --status-info-fg:#0369A1;    --status-info-bg:#F0F9FF;    --status-info-border:#E0F2FE;
-}
-
-/* ═══════════════════════════════════════════════════════════
-   DARK THEMES
-   ═══════════════════════════════════════════════════════════ */
-
-/* ── DARK AMBER ──────────────────────────────────────────── */
-[data-theme="dark-amber"] {
-  --bg-canvas:   #111110; --bg-surface:  #1A1A18;
-  --bg-subtle:   #272720; --bg-muted:    #3A3A33;
-  --bg-inverse:  #F3F3F0;
-  --text-primary:#F3F3F0; --text-secondary:#A8A8A2;
-  --text-tertiary:#52524A; --text-inverse:#1A1A14;
-  --text-accent: #FCD34D;
-  --border-subtle:rgba(255,255,255,0.06);
-  --border-default:rgba(255,255,255,0.10);
-  --border-strong:rgba(255,255,255,0.18);
-  --border-accent:#F59E0B;
-  --accent:#F59E0B;       --accent-hover:#D97706;
-  --accent-active:#B45309; --accent-subtle:rgba(245,158,11,0.10);
-  --accent-muted:rgba(245,158,11,0.18);
-}
-
-/* ── DARK BLUE ───────────────────────────────────────────── */
-[data-theme="dark-blue"] {
-  --bg-canvas:   #0A0F1E; --bg-surface:  #131929;
-  --bg-subtle:   #1E2842; --bg-muted:    #2D3A5C;
-  --bg-inverse:  #E2E8F0;
-  --text-primary:#E2E8F0; --text-secondary:#94A3B8;
-  --text-tertiary:#475569; --text-inverse:#0F172A;
-  --text-accent: #93C5FD;
-  --border-subtle:rgba(255,255,255,0.06);
-  --border-default:rgba(255,255,255,0.10);
-  --border-strong:rgba(255,255,255,0.18);
-  --border-accent:#60A5FA;
-  --accent:#60A5FA;       --accent-hover:#3B82F6;
-  --accent-active:#2563EB; --accent-subtle:rgba(96,165,250,0.10);
-  --accent-muted:rgba(96,165,250,0.18);
-}
-
-/* ── DARK GREEN ──────────────────────────────────────────── */
-[data-theme="dark-green"] {
-  --bg-canvas:   #0A1410; --bg-surface:  #112018;
-  --bg-subtle:   #1A3022; --bg-muted:    #224030;
-  --bg-inverse:  #D1FAE5;
-  --text-primary:#E8F5EE; --text-secondary:#9ECAB0;
-  --text-tertiary:#4A7A60; --text-inverse:#14532D;
-  --text-accent: #6EE7B7;
-  --border-subtle:rgba(255,255,255,0.06);
-  --border-default:rgba(255,255,255,0.10);
-  --border-strong:rgba(255,255,255,0.18);
-  --border-accent:#34D399;
-  --accent:#34D399;       --accent-hover:#10B981;
-  --accent-active:#059669; --accent-subtle:rgba(52,211,153,0.10);
-  --accent-muted:rgba(52,211,153,0.18);
-}
-
-/* ── DARK VIOLET ─────────────────────────────────────────── */
-[data-theme="dark-violet"] {
-  --bg-canvas:   #0D0820; --bg-surface:  #160E2E;
-  --bg-subtle:   #1E1540; --bg-muted:    #2D2058;
-  --bg-inverse:  #EDE9FE;
-  --text-primary:#EDE9FE; --text-secondary:#C4B5FD;
-  --text-tertiary:#6D28D9; --text-inverse:#1C1428;
-  --text-accent: #C4B5FD;
-  --border-subtle:rgba(255,255,255,0.06);
-  --border-default:rgba(255,255,255,0.10);
-  --border-strong:rgba(255,255,255,0.18);
-  --border-accent:#A78BFA;
-  --accent:#A78BFA;       --accent-hover:#8B5CF6;
-  --accent-active:#7C3AED; --accent-subtle:rgba(167,139,250,0.10);
-  --accent-muted:rgba(167,139,250,0.18);
 }
 
 /* ── DARK COSMO ─────────────────────────────────────────── */
@@ -282,10 +86,19 @@
   --text-primary:#F2F6FF; --text-secondary:#B2C0D8;
   --text-tertiary:#7F91AF; --text-inverse:#0B1226;
   --text-accent: #5EC3FF;
+  /* Same 3:1 control-boundary bar as light-cosmo. 0.16 alpha measured 1.51:1;
+     0.45 clears it on all four dark backdrops — 3.54 surface, 3.43 subtle,
+     3.60 canvas, 3.08 muted. */
   --border-subtle:rgba(205,221,248,0.10);
-  --border-default:rgba(205,221,248,0.16);
-  --border-strong:rgba(205,221,248,0.30);
+  --border-default:rgba(205,221,248,0.45);
+  --border-strong:rgba(205,221,248,0.65);
   --border-accent:#5EC3FF;
+  /* The accent is LIGHT in this theme, so text on it must be dark — white
+     measured 1.96:1 on #5EC3FF, which is what every primary button, the brand
+     mark and the calendar's today pill rendered until #157. Navy reaches
+     9.50:1. This is why --text-on-accent cannot be a single mode-independent
+     value, as tokens.css originally claimed. */
+  --text-on-accent:#0B1226;
   --accent:#5EC3FF;       --accent-hover:#43B1F1;
   --accent-active:#2D77FF; --accent-subtle:rgba(94,195,255,0.13);
   --accent-muted:rgba(94,195,255,0.24);
@@ -293,72 +106,4 @@
   --status-danger-fg:#FF9DCB;  --status-danger-bg:rgba(244,114,182,0.13); --status-danger-border:rgba(244,114,182,0.28);
   --status-warning-fg:#FDE68A; --status-warning-bg:rgba(245,158,11,0.13); --status-warning-border:rgba(245,158,11,0.25);
   --status-info-fg:#9CDBFF;    --status-info-bg:rgba(94,195,255,0.13); --status-info-border:rgba(94,195,255,0.24);
-}
-
-/* ── DARK TEAL ───────────────────────────────────────────── */
-[data-theme="dark-teal"] {
-  --bg-canvas:   #061412; --bg-surface:  #0D2020;
-  --bg-subtle:   #142E2C; --bg-muted:    #1E4040;
-  --bg-inverse:  #CCFBF1;
-  --text-primary:#E8FAFA; --text-secondary:#7ED8D0;
-  --text-tertiary:#3A8080; --text-inverse:#0F2826;
-  --text-accent: #5EEAD4;
-  --border-subtle:rgba(255,255,255,0.06);
-  --border-default:rgba(255,255,255,0.10);
-  --border-strong:rgba(255,255,255,0.18);
-  --border-accent:#2DD4BF;
-  --accent:#2DD4BF;       --accent-hover:#14B8A6;
-  --accent-active:#0D9488; --accent-subtle:rgba(45,212,191,0.10);
-  --accent-muted:rgba(45,212,191,0.18);
-}
-
-/* ── DARK TERRACOTTA ─────────────────────────────────────── */
-[data-theme="dark-terracotta"] {
-  --bg-canvas:   #1A1410; --bg-surface:  #251C14;
-  --bg-subtle:   #33261A; --bg-muted:    #403020;
-  --bg-inverse:  #F5ECE2;
-  --text-primary:#F5ECE2; --text-secondary:#C4A888;
-  --text-tertiary:#7A6050; --text-inverse:#2A1508;
-  --text-accent: #FDBA74;
-  --border-subtle:rgba(255,255,255,0.06);
-  --border-default:rgba(255,255,255,0.10);
-  --border-strong:rgba(255,255,255,0.18);
-  --border-accent:#FB923C;
-  --accent:#FB923C;       --accent-hover:#F97316;
-  --accent-active:#EA580C; --accent-subtle:rgba(251,146,60,0.10);
-  --accent-muted:rgba(251,146,60,0.18);
-}
-
-/* ── DARK CRIMSON ────────────────────────────────────────── */
-[data-theme="dark-crimson"] {
-  --bg-canvas:   #180610; --bg-surface:  #20081A;
-  --bg-subtle:   #300A26; --bg-muted:    #420D34;
-  --bg-inverse:  #FFE4E6;
-  --text-primary:#FFE4E6; --text-secondary:#FDA4AF;
-  --text-tertiary:#9F1239; --text-inverse:#280810;
-  --text-accent: #FDA4AF;
-  --border-subtle:rgba(255,255,255,0.06);
-  --border-default:rgba(255,255,255,0.10);
-  --border-strong:rgba(255,255,255,0.18);
-  --border-accent:#F43F5E;
-  --accent:#F43F5E;       --accent-hover:#E11D48;
-  --accent-active:#BE123C; --accent-subtle:rgba(244,63,94,0.10);
-  --accent-muted:rgba(244,63,94,0.18);
-}
-
-/* ── DARK SLATE ──────────────────────────────────────────── */
-[data-theme="dark-slate"] {
-  --bg-canvas:   #0F1117; --bg-surface:  #18181B;
-  --bg-subtle:   #27272A; --bg-muted:    #3F3F46;
-  --bg-inverse:  #F1F5F9;
-  --text-primary:#F1F5F9; --text-secondary:#94A3B8;
-  --text-tertiary:#475569; --text-inverse:#0F1117;
-  --text-accent: #CBD5E1;
-  --border-subtle:rgba(255,255,255,0.06);
-  --border-default:rgba(255,255,255,0.10);
-  --border-strong:rgba(255,255,255,0.18);
-  --border-accent:#94A3B8;
-  --accent:#94A3B8;       --accent-hover:#64748B;
-  --accent-active:#475569; --accent-subtle:rgba(148,163,184,0.10);
-  --accent-muted:rgba(148,163,184,0.18);
 }

@@ -75,8 +75,12 @@
   --text-disabled:  var(--cn-300);
   --text-inverse:   var(--cn-0);
   --text-accent:    var(--ca-700);
-  /* Text sitting ON an --accent fill. Deliberately not --text-inverse: accent is a
-     mid-tone in every theme, light and dark, so this must not flip with the mode. */
+  /* Text sitting ON an --accent fill. Not --text-inverse, which tracks the mode
+     rather than the fill it sits on. This default suits a mid-tone accent; a
+     theme whose accent is light must override it (dark-cosmo does, at 9.50:1 —
+     white measured 1.96:1 there). Every consumer reads this token, so the
+     override reaches all of them: .btn-solid, .ab-brand-mark, the checkbox tick,
+     the toggle knob and .cal-daynum--today. */
   --text-on-accent: #FFFFFF;
   --text-success:   var(--cs-700);
   --text-danger:    var(--cd-700);
@@ -84,7 +88,10 @@
 
   /* Borders */
   --border-subtle:  var(--cn-200);
-  --border-default: var(--cn-300);
+  /* Not --cn-300: control boundaries need 3:1 against the fill behind them
+     (WCAG 1.4.11) and --cn-300 measured 1.53:1 on white. #84847F clears it on
+     every base backdrop — 3.76 on cn-0, 3.60 cn-50, 3.38 cn-100, 3.06 cn-200. */
+  --border-default: #84847F;
   --border-strong:  var(--cn-500);
   --border-accent:  var(--ca-600);
 
@@ -218,39 +225,10 @@
   --z-toast:     500; /* @kind other */
 }
 
-/* ── DARK MODE ─────────────────────────────────────────────── */
-[data-theme="dark"] {
-  --bg-canvas:   #111110;
-  --bg-surface:  var(--cn-900);
-  --bg-subtle:   var(--cn-800);
-  --bg-muted:    var(--cn-700);
-  --bg-inverse:  var(--cn-100);
-
-  --text-primary:   var(--cn-50);
-  --text-secondary: var(--cn-300);
-  --text-tertiary:  var(--cn-500);
-  --text-disabled:  var(--cn-700);
-  --text-inverse:   var(--cn-900);
-
-  --border-subtle:  rgba(255,255,255,0.06);
-  --border-default: rgba(255,255,255,0.10);
-  --border-strong:  rgba(255,255,255,0.18);
-
-  --accent-subtle:  rgba(217, 119, 6, 0.12);
-  --accent-muted:   rgba(217, 119, 6, 0.20);
-
-  --status-success-bg: rgba(5, 150, 105, 0.12);
-  --status-success-border: rgba(5, 150, 105, 0.2);
-  --status-danger-bg: rgba(225, 29, 72, 0.12);
-  --status-danger-border: rgba(225, 29, 72, 0.2);
-  --status-warning-bg: rgba(217, 119, 6, 0.12);
-  --status-warning-border: rgba(217, 119, 6, 0.2);
-  --status-info-bg: rgba(2, 132, 199, 0.12);
-  --status-info-border: rgba(2, 132, 199, 0.2);
-
-  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-md:  0 4px 8px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.2);
-  --shadow-lg:  0 12px 24px rgba(0, 0, 0, 0.4), 0 4px 8px rgba(0, 0, 0, 0.25);
-  --shadow-xl:  0 24px 48px rgba(0, 0, 0, 0.5), 0 8px 16px rgba(0, 0, 0, 0.3);
-}
+/* No [data-theme="dark"] block. It matched only the literal string "dark",
+   which nothing ever sets — index.html resolves the stored value to the
+   cosmo pair before first paint, and Layout's toggle writes only those two.
+   It was 36 lines of unreachable overrides on the amber palette; deleted in
+   #157 with the sixteen unreachable themes. Dark tokens live in
+   themes.css: [data-theme^="dark"] for the shared set, [data-theme="dark-cosmo"]
+   for the theme itself. */

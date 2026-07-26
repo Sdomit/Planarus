@@ -29,7 +29,7 @@ html, body { height: 100%; margin: 0; }
   }
   .ab-brand-mark {
     width: 30px; height: 30px; border-radius: var(--radius-md);
-    background: var(--accent); color: #fff;
+    background: var(--accent); color: var(--text-on-accent);
     display: flex; align-items: center; justify-content: center;
     font-weight: 800; font-size: 15px; flex-shrink: 0;
     box-shadow: var(--shadow-sm);
