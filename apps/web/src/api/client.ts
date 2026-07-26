@@ -1102,7 +1102,7 @@ export const api = {
     create: (data: ProjectCreate) =>
       request<Project>('/projects', { method: 'POST', body: JSON.stringify(data) }),
     get: (id: string) => request<Project>(`/projects/${id}`),
-    update: (id: string, data: Partial<Pick<Project, 'title' | 'summary' | 'status' | 'folder_path'>>) =>
+    update: (id: string, data: Partial<Pick<Project, 'title' | 'summary' | 'status' | 'priority' | 'folder_path'>>) =>
       request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     archive: (id: string) => request<Project>(`/projects/${id}/archive`, { method: 'POST' }),
     unarchive: (id: string) => request<Project>(`/projects/${id}/unarchive`, { method: 'POST' }),

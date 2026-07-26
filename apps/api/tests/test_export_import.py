@@ -46,6 +46,27 @@ def test_project_export_import_round_trips(client):
     assert copy["comments"][0]["entity_id"] in {t["id"] for t in copy["tasks"]}
 
 
+def test_import_coerces_priority_to_the_allowed_scale(client):
+    """#158 review: the column has no DB CHECK and ProjectImport does not cover
+    `priority`, so import was the one write path that could land an arbitrary
+    string in a field the Dashboard renders as a badge."""
+    ws, proj = seed(client, "expprio")
+    data = client.get(f"/api/v1/projects/{proj}/export").json()
+
+    # A valid value survives the round trip.
+    data["project"]["priority"] = "high"
+    kept = client.post("/api/v1/projects/import", json={"workspace_id": ws, "data": data})
+    assert kept.status_code == 201, kept.text
+    assert kept.json()["priority"] == "high"
+
+    # Anything outside the scale drops to None rather than reaching the column.
+    for junk in ("P0 URGENT", "", "HIGH", 3, ["high"]):
+        data["project"]["priority"] = junk
+        res = client.post("/api/v1/projects/import", json={"workspace_id": ws, "data": data})
+        assert res.status_code == 201, res.text
+        assert res.json()["priority"] is None, junk
+
+
 def test_import_rejects_unrecognized_payload(client):
     ws, _ = seed(client, "expbad")
     res = client.post("/api/v1/projects/import", json={"workspace_id": ws, "data": {"nope": 1}})

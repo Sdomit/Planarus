@@ -15,6 +15,7 @@ from typing import Optional
 
 from sqlmodel import Session
 
+from app.core.constants import PROJECT_PRIORITIES
 from app.core.uri_policy import check_rich_content, normalize_link
 from app.core.utils import new_id, now_utc
 from app.models.project import Project
@@ -147,6 +148,11 @@ def export_project(session: Session, project_id: str) -> Optional[dict]:
     return out
 
 
+def _import_priority(value: object) -> Optional[str]:
+    """Coerce an imported ``project.priority`` to the allowed scale, or None."""
+    return value if isinstance(value, str) and value in PROJECT_PRIORITIES else None
+
+
 def import_project(session: Session, workspace_id: str, data: dict) -> Project:
     """Create a fresh project from an export dict, remapping every id. Raises
     ValueError on an unrecognized payload."""
@@ -161,7 +167,11 @@ def import_project(session: Session, workspace_id: str, data: dict) -> Project:
         summary=src.get("summary"),
         project_type=src.get("project_type"),
         status="idea",
-        priority=src.get("priority"),
+        # The column has no DB CHECK and ProjectImport does not cover this field,
+        # so an untrusted payload would otherwise land an arbitrary string in a
+        # column the Dashboard now renders as a badge. Unknown values drop to None
+        # rather than raising — the same forgiving shape as the title clamp above.
+        priority=_import_priority(src.get("priority")),
         folder_path=None,
         created_at=now,
         updated_at=now,

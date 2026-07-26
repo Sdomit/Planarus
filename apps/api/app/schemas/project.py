@@ -4,11 +4,12 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.core.constants import PROJECT_STATUSES
+from app.core.constants import PROJECT_PRIORITIES, PROJECT_STATUSES
 
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$")
 
 _PROJECT_STATUSES = frozenset(PROJECT_STATUSES)
+_PROJECT_PRIORITIES = frozenset(PROJECT_PRIORITIES)
 
 
 class ProjectImport(BaseModel):
@@ -69,6 +70,10 @@ class ProjectUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=1, max_length=200)
     summary: Optional[str] = None
     status: Optional[str] = None
+    # #158: nullable on purpose — an explicit `"priority": null` clears the badge,
+    # while omitting the key leaves the stored value alone (the service patches
+    # with exclude_unset).
+    priority: Optional[str] = None
     folder_path: Optional[str] = None
 
     @field_validator("status")
@@ -76,6 +81,13 @@ class ProjectUpdate(BaseModel):
     def validate_status(cls, v: Optional[str]) -> Optional[str]:
         if v is not None and v not in _PROJECT_STATUSES:
             raise ValueError(f"status must be one of: {', '.join(sorted(_PROJECT_STATUSES))}")
+        return v
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in _PROJECT_PRIORITIES:
+            raise ValueError(f"priority must be one of: {', '.join(sorted(_PROJECT_PRIORITIES))}")
         return v
 
     @field_validator("folder_path")
