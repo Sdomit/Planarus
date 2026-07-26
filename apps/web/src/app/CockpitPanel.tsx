@@ -53,7 +53,7 @@ export default function CockpitPanel({
         api.risks.list(projectId),
         api.milestones.list(projectId).catch(() => []),
         api.decisions.list(projectId).catch(() => []),
-        api.approvals.list(projectId, 'pending').catch(() => []),
+        api.approvals.listPaged(projectId, 'pending').catch(() => ({ items: [], total: 0, hasMore: false })),
         api.roadmap.get(projectId).catch(() => null),
         api.timeline.get(projectId, 6).catch(() => null),
         api.blockers.list(projectId).catch(() => []),
@@ -67,7 +67,8 @@ export default function CockpitPanel({
       setRisks(rks)
       setMilestones(mils)
       setDecisions(decs)
-      setPending(approvals.length)
+      // #154 review: the page length under-counts past the server cap.
+      setPending(approvals.total)
       setRoadmap(rm)
       setEvents(tl?.events ?? [])
       setBlockers(blks)

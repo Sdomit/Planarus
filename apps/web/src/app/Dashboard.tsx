@@ -76,8 +76,12 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
         )
         setAggs(data)
         setCats(listCategories())
-        const pend = await api.approvals.list(undefined, 'pending').catch(() => [])
-        setPending(pend.length)
+        // #154 review: the list is capped server-side, so its length under-counts
+        // once a project passes the cap. X-Total-Count is the real number.
+        const pend = await api.approvals
+          .listPaged(undefined, 'pending')
+          .catch(() => ({ items: [], total: 0, hasMore: false }))
+        setPending(pend.total)
       }
     } catch {
       setError('Could not reach the API. Make sure the backend is running on port 8000.')

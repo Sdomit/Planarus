@@ -6,6 +6,7 @@ vi.mock('../api/client', () => ({
   api: {
     approvals: {
       list: vi.fn(),
+      listPaged: vi.fn(),
       get: vi.fn(),
       audit: vi.fn(),
       approve: vi.fn(),
@@ -21,6 +22,7 @@ import { api } from '../api/client'
 const mockApi = api as unknown as {
   approvals: {
     list: ReturnType<typeof vi.fn>
+    listPaged: ReturnType<typeof vi.fn>
     get: ReturnType<typeof vi.fn>
     audit: ReturnType<typeof vi.fn>
     approve: ReturnType<typeof vi.fn>
@@ -73,11 +75,29 @@ afterEach(() => {
 
 describe('ApprovalQueuePanel', () => {
   it('renders a pending proposal in the queue', async () => {
-    mockApi.approvals.list.mockResolvedValue([PENDING])
+    mockApi.approvals.listPaged.mockResolvedValue({ items: [PENDING], total: ([PENDING]).length, hasMore: false })
     render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
     await waitFor(() => screen.getByText('task.create'))
     expect(screen.getByText(/Pending \(1\)/)).toBeTruthy()
     expect(screen.getByText(/History \(0\)/)).toBeTruthy()
+  })
+
+  it('says so when the server clipped the list (#103)', async () => {
+    mockApi.approvals.listPaged.mockResolvedValue({
+      items: [PENDING], total: 250, hasMore: true,
+    })
+    render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
+    await waitFor(() => screen.getByText('task.create'))
+    expect(screen.getByText(/most recent of 250/)).toBeTruthy()
+  })
+
+  it('stays silent when the list is complete', async () => {
+    mockApi.approvals.listPaged.mockResolvedValue({
+      items: [PENDING], total: 1, hasMore: false,
+    })
+    render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
+    await waitFor(() => screen.getByText('task.create'))
+    expect(screen.queryByText(/most recent of/)).toBeNull()
   })
 
   it('shows who decided and named audit actors (P16.0)', async () => {
@@ -88,7 +108,7 @@ describe('ApprovalQueuePanel', () => {
       decided_by: 'usr_1',
       decided_by_display: 'Alice Smith',
     }
-    mockApi.approvals.list.mockResolvedValue([decided])
+    mockApi.approvals.listPaged.mockResolvedValue({ items: [decided], total: ([decided]).length, hasMore: false })
     mockApi.approvals.get.mockResolvedValue({ ...DETAIL, ...decided })
     mockApi.approvals.audit.mockResolvedValue([
       {
@@ -109,7 +129,7 @@ describe('ApprovalQueuePanel', () => {
   })
 
   it('shows the field-level diff as text and the mandatory warning', async () => {
-    mockApi.approvals.list.mockResolvedValue([PENDING])
+    mockApi.approvals.listPaged.mockResolvedValue({ items: [PENDING], total: ([PENDING]).length, hasMore: false })
     mockApi.approvals.get.mockResolvedValue(DETAIL)
     mockApi.approvals.audit.mockResolvedValue([])
     render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
@@ -129,7 +149,7 @@ describe('ApprovalQueuePanel', () => {
   })
 
   it('approve is required before apply; both call the API', async () => {
-    mockApi.approvals.list.mockResolvedValue([PENDING])
+    mockApi.approvals.listPaged.mockResolvedValue({ items: [PENDING], total: ([PENDING]).length, hasMore: false })
     mockApi.approvals.get.mockResolvedValue(DETAIL)
     mockApi.approvals.audit.mockResolvedValue([])
     mockApi.approvals.approve.mockResolvedValue({ ...PENDING, status: 'approved' })
@@ -152,7 +172,7 @@ describe('ApprovalQueuePanel', () => {
   })
 
   it('surfaces stale and expired warnings', async () => {
-    mockApi.approvals.list.mockResolvedValue([PENDING])
+    mockApi.approvals.listPaged.mockResolvedValue({ items: [PENDING], total: ([PENDING]).length, hasMore: false })
     mockApi.approvals.get.mockResolvedValue({
       ...DETAIL,
       is_expired: true,
@@ -169,7 +189,7 @@ describe('ApprovalQueuePanel', () => {
   })
 
   it('has no bulk approve/apply controls', async () => {
-    mockApi.approvals.list.mockResolvedValue([PENDING])
+    mockApi.approvals.listPaged.mockResolvedValue({ items: [PENDING], total: ([PENDING]).length, hasMore: false })
     render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
     await waitFor(() => screen.getByText('task.create'))
     expect(screen.queryByText(/approve all/i)).toBeNull()
@@ -180,7 +200,7 @@ describe('ApprovalQueuePanel', () => {
   })
 
   it('makes no direct network (fetch) request', async () => {
-    mockApi.approvals.list.mockResolvedValue([PENDING])
+    mockApi.approvals.listPaged.mockResolvedValue({ items: [PENDING], total: ([PENDING]).length, hasMore: false })
     mockApi.approvals.get.mockResolvedValue(DETAIL)
     mockApi.approvals.audit.mockResolvedValue([])
     mockApi.approvals.approve.mockResolvedValue({ ...PENDING, status: 'approved' })

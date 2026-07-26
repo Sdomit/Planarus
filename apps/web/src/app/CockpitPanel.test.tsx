@@ -30,7 +30,10 @@ vi.mock('../api/client', () => ({
     milestones: { list: vi.fn(async () => []) },
     decisions: { list: vi.fn(async () => []) },
     git: { snapshot: vi.fn(async () => gitSnapshot), fetchNow: vi.fn() },
-    approvals: { list: vi.fn(async () => []) },
+    approvals: {
+      list: vi.fn(async () => []),
+      listPaged: vi.fn(async () => ({ items: [], total: 0, hasMore: false })),
+    },
     // #95: the cockpit now also reads open blockers and the UNSCOPED feed for the
     // "Needs attention" widget.
     blockers: { list: vi.fn(async () => []) },

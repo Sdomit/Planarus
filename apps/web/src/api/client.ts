@@ -997,6 +997,35 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
+/** A bounded list plus the paging facts the server sends in headers (#103).
+ *
+ * The approvals list body is a bare array, so `X-Total-Count` / `X-Has-More`
+ * are how a caller tells a complete page from a clipped one. Without this the
+ * server-side cap would be a silent truncation in the UI. */
+export interface Paged<T> {
+  items: T[]
+  total: number
+  hasMore: boolean
+}
+
+async function requestPaged<T>(path: string, init?: RequestInit): Promise<Paged<T>> {
+  const res = await fetch(`${BASE}${path}`, {
+    ...init,
+    headers: { 'Content-Type': 'application/json', ...init?.headers },
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`${res.status}: ${text}`)
+  }
+  const items = (await res.json()) as T[]
+  const total = Number(res.headers.get('X-Total-Count') ?? items.length)
+  return {
+    items,
+    total: Number.isFinite(total) ? total : items.length,
+    hasMore: res.headers.get('X-Has-More') === 'true',
+  }
+}
+
 // Local control token (Phase 7A): fetched once from the loopback API and attached
 // to every state-changing approval call. Held in memory only — never persisted.
 let _localToken: string | null = null
@@ -1427,6 +1456,17 @@ export const api = {
       if (status) q.set('status', status)
       const qs = q.toString()
       return request<ApprovalSummary[]>(`/approvals${qs ? `?${qs}` : ''}`)
+    },
+    /** #103: the queue view, which needs history as well as pending, and so
+     * needs to know when the server's cap clipped the page. */
+    listPaged: (projectId?: string, status?: string, limit?: number, offset?: number) => {
+      const q = new URLSearchParams()
+      if (projectId) q.set('project_id', projectId)
+      if (status) q.set('status', status)
+      if (limit != null) q.set('limit', String(limit))
+      if (offset != null) q.set('offset', String(offset))
+      const qs = q.toString()
+      return requestPaged<ApprovalSummary>(`/approvals${qs ? `?${qs}` : ''}`)
     },
     get: (id: string) => request<ApprovalDetail>(`/approvals/${id}`),
     audit: (id: string) => request<ApprovalAuditEntry[]>(`/approvals/${id}/audit`),

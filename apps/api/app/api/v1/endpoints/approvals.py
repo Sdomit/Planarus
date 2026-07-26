@@ -8,7 +8,7 @@ proposal-creation endpoint in Phase 7A — proposals are created only through th
 """
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlmodel import Session
 
 from app.core import tenant
@@ -32,6 +32,13 @@ from app.schemas.approval import (
 from app.services import approval_service, audit_service
 
 router = APIRouter()
+
+
+# #103: nothing prunes ApprovalRequest, so this list grows without bound. The cap
+# is deliberately generous — the queue UI splits one response into "pending" and
+# "history" client-side, so a small default would silently empty the history view.
+# Callers page with offset and read X-Total-Count / X-Has-More.
+MAX_APPROVAL_ROWS = 200
 
 
 def _summarize(session: Session, rows) -> list[ApprovalSummary]:
@@ -93,8 +100,11 @@ def _require_approval_read(session: Session, approval_id: str, user: Optional[Us
 
 @router.get("/approvals", response_model=list[ApprovalSummary])
 def list_approvals(
+    response: Response,
     project_id: Optional[str] = None,
     status: Optional[str] = None,
+    limit: int = Query(default=MAX_APPROVAL_ROWS, ge=1, le=MAX_APPROVAL_ROWS),
+    offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
     user: Optional[User] = Depends(tenant_user),
 ) -> list[ApprovalSummary]:
@@ -107,7 +117,18 @@ def list_approvals(
         if project is None:
             raise HTTPException(status_code=404, detail="project not found")
         tenant.require_project_access(session, project, user, *tenant.READ_ROLES)
-    rows = approval_service.list_approvals(session, project_id=project_id, status=status)
+    rows = approval_service.list_approvals(
+        session, project_id=project_id, status=status, limit=limit, offset=offset
+    )
+    # The response body is a bare list (changing its shape would break every
+    # existing client), so the paging facts ride in headers. Without these a cap
+    # is a silent truncation — the caller cannot tell a complete page from a
+    # clipped one.
+    total = approval_service.count_approvals(
+        session, project_id=project_id, status=status
+    )
+    response.headers["X-Total-Count"] = str(total)
+    response.headers["X-Has-More"] = "true" if offset + len(rows) < total else "false"
     return _summarize(session, rows)
 
 

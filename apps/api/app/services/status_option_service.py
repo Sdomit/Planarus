@@ -213,14 +213,21 @@ def reorder_status_options(
 
 
 def _usage_count(session: Session, opt: StatusOption) -> int:
+    """#103: COUNT in SQL rather than materializing every row just to len() it.
+
+    This exists only to refuse a delete, so the rows themselves were always
+    thrown away. mcp/tools/read.py already does it this way.
+    """
     model, attr = _STATUS_MODELS[opt.entity_type]
-    return len(
+    return int(
         session.exec(
-            select(model).where(
+            select(func.count())
+            .select_from(model)
+            .where(
                 model.project_id == opt.project_id,
                 getattr(model, attr) == opt.key,
             )
-        ).all()
+        ).one()
     )
 
 
