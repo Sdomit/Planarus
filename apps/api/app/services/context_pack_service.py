@@ -84,6 +84,41 @@ class PackTooLargeError(ValueError):
     """The raw selection exceeds the hard pack-size cap (HTTP 422)."""
 
 
+# Governance states that block a pack: the file exists in the project's history
+# and something recoverable is wrong with it. A project with no folder yet
+# (`no-root`) or no provisioned rows (`no-record`) is not in trouble — it simply
+# has no pack, so it still previews, with the warning it always carried.
+REFUSABLE_GOVERNANCE_STATUSES = frozenset({"drifted", "missing-on-disk", "unavailable"})
+
+
+class GovernanceIncompleteError(RuntimeError):
+    """A governance file cannot be embedded, so the scope section would lie.
+
+    Raised instead of footnoting it (HTTP 409). The three governance files are the
+    pack's entire safety story — the allowed and forbidden paths, and the agent
+    rules — and they sit under a heading that calls itself authoritative. Shipping
+    that heading with `_Unavailable — not included._` under it hands an agent a
+    pack with no scope at all while still asserting it is governed, and the only
+    signal was one line in `warnings` (#98).
+
+    `allow_incomplete_governance=True` on the request is the confirm path: the
+    caller has read which files are missing and wants the pack regardless.
+    """
+
+    def __init__(self, excluded: list[tuple[str, str]]) -> None:
+        self.excluded = excluded
+        detail = ", ".join(f"{path} ({status})" for path, status in excluded)
+        remedy = (
+            "adopt the on-disk content (POST /context-files/{id}/adopt) if the edit"
+            " was intended, or regenerate the pack"
+        )
+        super().__init__(
+            f"governance files cannot be embedded: {detail}. The scope section"
+            f" would be incomplete — {remedy}. To generate anyway, resend with"
+            " allow_incomplete_governance=true."
+        )
+
+
 # --- internal fragment model ----------------------------------------------
 
 
@@ -173,7 +208,12 @@ def _short_hash(text: str) -> str:
 class _Governance:
     relative_path: str
     content: str | None
-    status: str  # ok | drifted | missing-on-disk | no-record | unavailable
+    # ok | drifted | missing-on-disk | no-record | no-root | unavailable
+    # The first three mean "governance exists and something is wrong with it",
+    # which is recoverable and therefore refusable (#98). no-record/no-root mean
+    # the project has no provisioned pack at all — nothing to adopt, so those
+    # only warn. `unavailable` is a path-safety refusal, which is not routine.
+    status: str
 
 
 def _read_governance(session: Session, project: Project) -> list[_Governance]:
@@ -186,7 +226,10 @@ def _read_governance(session: Session, project: Project) -> list[_Governance]:
     results: list[_Governance] = []
     root = resolve_project_root_or_none(project)  # recheck-before-op (#115)
     if root is None:
-        return [_Governance(p, None, "unavailable") for p in GOVERNANCE_PATHS]
+        # Distinct from `unavailable` (a per-file path-safety refusal): the project
+        # has no usable folder, so no governance was ever written. Nothing to
+        # recover, so this warns rather than blocking the pack.
+        return [_Governance(p, None, "no-root") for p in GOVERNANCE_PATHS]
     rows = {
         cf.relative_path: cf
         for cf in session.exec(
@@ -765,6 +808,18 @@ def generate_preview(
     ctx = build_render_context(session, project, workspace)
     profile = profiles.get_profile(request.profile)
     governance = _read_governance(session, project)
+
+    # Refuse before doing any work, unless the caller has confirmed. Checked here
+    # rather than in _constraints_lines so the decision is visible at the entry
+    # point instead of buried in a body builder that can only append a warning.
+    if not request.allow_incomplete_governance:
+        excluded = [
+            (g.relative_path, g.status)
+            for g in governance
+            if g.status in REFUSABLE_GOVERNANCE_STATUSES
+        ]
+        if excluded:
+            raise GovernanceIncompleteError(excluded)
 
     fragments = _build_structured_fragments(session, project, ctx, request)
     fragments += _build_doc_fragments(session, project, request)

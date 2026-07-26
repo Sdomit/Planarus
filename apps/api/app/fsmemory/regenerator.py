@@ -225,6 +225,21 @@ def regenerate(
             )
 
             if pinned:
+                if drifted:
+                    # Pinned means the on-disk copy is authoritative: regeneration
+                    # will never overwrite it, so a stale checksum protects
+                    # nothing. It only makes the file drifted forever, and
+                    # context_pack_service excludes a drifted governance file from
+                    # the pack — silently dropping the allowed/forbidden paths
+                    # from a section that still claims to be authoritative (#98).
+                    # Re-adopt the bytes that are actually there. The outcome
+                    # still reports drifted=True so the UI can say "you edited
+                    # this", and last_manual_edit_at records when.
+                    row.checksum = on_disk_sum
+                    row.token_estimate = max(1, len(on_disk) // 4)
+                    row.last_manual_edit_at = now
+                    row.updated_at = now
+                    session.add(row)
                 report.outcomes.append(
                     FileOutcome(rel, spec.kind, STATUS_PINNED, True, drifted)
                 )

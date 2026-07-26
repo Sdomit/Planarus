@@ -35,6 +35,10 @@ class ContextPackPreviewRequest(BaseModel):
     budget_preset: str = tokens.DEFAULT_BUDGET_PRESET
     objective: str = ""
     selection: ContextPackSelection = Field(default_factory=ContextPackSelection)
+    # Default false so the refusal is opt-out, not opt-in: a caller that has not
+    # been told a governance file is missing must not receive a pack whose scope
+    # section is empty under an "authoritative" heading (#98).
+    allow_incomplete_governance: bool = False
 
     @field_validator("profile")
     @classmethod

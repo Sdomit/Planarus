@@ -44,6 +44,7 @@ tenant               DELETE  /api/v1/comments/{comment_id}
 tenant               PATCH   /api/v1/comments/{comment_id}
 tenant               GET     /api/v1/context-files
 tenant               PATCH   /api/v1/context-files/{context_file_id}
+tenant               POST    /api/v1/context-files/{context_file_id}/adopt
 tenant               GET     /api/v1/context-files/{context_file_id}/content
 tenant               GET     /api/v1/context-files/{context_file_id}/diff
 tenant               GET     /api/v1/context-pack/profiles
