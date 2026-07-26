@@ -142,8 +142,17 @@ def test_active_phase_skips_a_custom_done_phase_column(
     shipped = _status(client, pid, "Shipped", "done", entity_type="phase")["key"]
     first = client.post(f"/api/v1/projects/{pid}/phases", json={"title": "Finished phase"}).json()
     client.patch(f"/api/v1/phases/{first['id']}", json={"status": shipped})
-    client.post(f"/api/v1/projects/{pid}/phases", json={"title": "Live phase"})
+    live = client.post(
+        f"/api/v1/projects/{pid}/phases", json={"title": "Live phase"}
+    ).json()
 
     res = read.get_active_work(session, read_cap(ws, pid), read.ProjectArgs(project_id=pid))
+    # Assert the selection directly rather than via text absence: since #93 the
+    # phase roster lists every phase (that is how an old task's phase_id pointing
+    # at a finished phase stays resolvable), so "Finished phase" legitimately
+    # appears in the roster. What must never happen is it being chosen as active.
+    assert res.metadata["active_phase_id"] == live["id"]
     assert "Live phase" in res.text
-    assert "Finished phase" not in res.text
+    # It is present only as a roster line, never as the active-phase block.
+    assert f"source: phase:{first['id']}" not in res.text
+    assert f"source: phase:{live['id']}" in res.text

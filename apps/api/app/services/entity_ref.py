@@ -6,25 +6,15 @@ against REF_ENTITY_TYPES by the schema, so this only resolves + scope-checks.
 """
 from sqlmodel import Session
 
-from app.models.blocker import Blocker
-from app.models.decision import Decision
-from app.models.doc import Doc
-from app.models.milestone import Milestone
-from app.models.phase import Phase
-from app.models.risk import Risk
-from app.models.stage import Stage
-from app.models.task import Task
+from app.services.entity_registry import ENTITY_MODELS
 
-# Every model here has a `project_id` column; "project" is handled specially.
+# Derived from the one registry (#94) so this can never again advertise a type it
+# cannot resolve. Every model here has a `project_id` column; "project" is handled
+# specially below and so is excluded.
 _REF_MODELS = {
-    "phase": Phase,
-    "stage": Stage,
-    "task": Task,
-    "decision": Decision,
-    "risk": Risk,
-    "blocker": Blocker,
-    "milestone": Milestone,
-    "doc": Doc,
+    entity_type: model
+    for entity_type, (model, _label) in ENTITY_MODELS.items()
+    if entity_type != "project"
 }
 
 
@@ -37,7 +27,14 @@ def validate_entity_ref(
             raise LookupError(f"project '{entity_id}' does not match '{project_id}'")
         return
 
-    model = _REF_MODELS[entity_type]
+    model = _REF_MODELS.get(entity_type)
+    if model is None:
+        # Unreachable for schema-validated input (the registry assert keeps this
+        # map aligned with REF_ENTITY_TYPES). Kept explicit so an unregistered
+        # type fails with a readable message rather than a bare KeyError whose
+        # 404 detail is just the type name.
+        raise LookupError(f"unsupported entity_type '{entity_type}'")
+
     obj = session.get(model, entity_id)
     if obj is None or obj.project_id != project_id:
         raise LookupError(

@@ -13,7 +13,7 @@ Security posture (all inherited or reused — nothing new invented):
   * Auth: reuses ``app.api.external.auth._authenticate`` — the DB switch check,
     Argon2id verify, generic 401, and key→capability scoping are identical to the
     REST surface. No key ⇒ no tools (default-deny).
-  * Scope: a read key sees the 9 read tools; a propose key additionally sees the 4
+  * Scope: a read key sees the 10 read tools; a propose key additionally sees the 4
     propose tools; a read key that calls a propose tool is denied by ``get_spec``.
   * Never widens power (D40): read + create-pending-proposal only; no approve/apply.
 """

@@ -463,7 +463,14 @@ def _read_paths() -> dict:
                 success_status=200,
                 success_response=_read_success(),
                 error_statuses=_READ_ERRORS_WITH_PARAMS,
-                parameters=[_path_param("project_id", _PROJECT_ID_DESC), _limit_param()],
+                parameters=[
+                    _path_param("project_id", _PROJECT_ID_DESC),
+                    # #93: the live route has always accepted this; the contract
+                    # omitted it, and the drift tests compared only method/path
+                    # pairs and bounds, so the gap was structurally invisible.
+                    _query_str("phase_id", "Optional phase id filter, from a prior scoped read."),
+                    _limit_param(),
+                ],
             )
         },
         "/projects/{project_id}/risks": {
@@ -475,7 +482,12 @@ def _read_paths() -> dict:
                 success_status=200,
                 success_response=_read_success(),
                 error_statuses=_READ_ERRORS_WITH_PARAMS,
-                parameters=[_path_param("project_id", _PROJECT_ID_DESC), _limit_param()],
+                parameters=[
+                    _path_param("project_id", _PROJECT_ID_DESC),
+                    # #93: same drift as listDecisions above.
+                    _query_str("phase_id", "Optional phase id filter, from a prior scoped read."),
+                    _limit_param(),
+                ],
             )
         },
         "/projects/{project_id}/docs": {

@@ -1,8 +1,8 @@
 """Static, explicit MCP tool registry (Phase 7B).
 
 There is NO reflection / decorator auto-discovery: the two dicts below are the
-only source of tools. The read tier sees the nine read tools; the propose tier
-sees those nine plus exactly four proposal tools. No registered tool name (or
+only source of tools. The read tier sees the ten read tools; the propose tier
+sees those ten plus exactly four proposal tools. No registered tool name (or
 implementation) involves approve/apply/reject/invalidate/delete/archive/export/
 filesystem/path/shell/command/git/network/http/chatgpt — asserted at import.
 """
@@ -58,7 +58,12 @@ READ_TOOLS: dict[str, ToolSpec] = {
     ),
     "get_active_work": ToolSpec(
         "get_active_work", "read",
-        "Return the active phase and in-progress tasks for one scoped project.",
+        "START HERE for any project. One call returns the active phase, its "
+        "in-progress tasks, the decisions and open risks for that phase, every "
+        "open blocker, and the full phase roster needed to resolve the phase_id "
+        "on any task/decision/risk row (metadata.phase_ids[i] names the phase "
+        "described by the phase[i] line). Calling list_decisions or list_risks "
+        "for the active phase after this is redundant.",
         read_tools.ProjectArgs, read_tools.get_active_work,
     ),
     "list_tasks": ToolSpec(
@@ -85,6 +90,13 @@ READ_TOOLS: dict[str, ToolSpec] = {
         "get_doc_excerpt", "read",
         "Return a bounded, redacted excerpt of one document's Markdown.",
         read_tools.DocExcerptArgs, read_tools.get_doc_excerpt,
+    ),
+    "get_item": ToolSpec(
+        "get_item", "read",
+        "Return one task, decision, risk or doc with its text fields at a larger "
+        "cap than list rows. Use this after a list result reports field_truncated, "
+        "instead of proposing an edit from a clipped field.",
+        read_tools.GetItemArgs, read_tools.get_item,
     ),
     "get_approval_status": ToolSpec(
         "get_approval_status", "read",

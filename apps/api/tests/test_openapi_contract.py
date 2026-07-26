@@ -160,6 +160,43 @@ def test_full_profile_matches_live_external_router_exactly():
     assert _contract_pairs(build_read_propose_openapi()) == _live_external_pairs()
 
 
+def _live_query_params() -> dict[tuple[str, str], set[str]]:
+    out: dict[tuple[str, str], set[str]] = {}
+    for route in external_router.routes:
+        path, methods = getattr(route, "path", None), getattr(route, "methods", None)
+        dependant = getattr(route, "dependant", None)
+        if not path or not methods or dependant is None:
+            continue
+        names = {p.name for p in dependant.query_params}
+        for method in methods:
+            if method in {"GET", "POST"}:
+                out[(method, path)] = names
+    return out
+
+
+def _contract_query_params(doc: dict) -> dict[tuple[str, str], set[str]]:
+    out: dict[tuple[str, str], set[str]] = {}
+    for path, method, op in _operations(doc):
+        names = {
+            p["name"] for p in op.get("parameters", []) if p.get("in") == "query"
+        }
+        out[(method.upper(), urlsplit(path).path)] = names
+    return out
+
+
+def test_contract_declares_exactly_the_live_query_params():
+    """#93: the pair/bounds drift tests could not see a missing query param.
+
+    listDecisions and listRisks accepted `phase_id` on the live route while the
+    contract declared it only on listTasks — invisible to every existing drift
+    test, which is exactly how it shipped. This compares the parameter sets
+    themselves, so an undeclared (or over-declared) query param fails here.
+    """
+    live = _live_query_params()
+    contract = _contract_query_params(build_read_propose_openapi())
+    assert contract == live
+
+
 def test_readonly_profile_is_exactly_the_get_subset():
     live_gets = {(m, p) for (m, p) in _live_external_pairs() if m == "GET"}
     contract = _contract_pairs(build_readonly_openapi())
