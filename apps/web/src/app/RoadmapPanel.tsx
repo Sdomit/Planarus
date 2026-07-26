@@ -67,13 +67,27 @@ function PhaseCard({ phase, reload, onOpenPlanning, children }: {
 }) {
   const [renaming, setRenaming] = useState(false)
   const [draft, setDraft] = useState(phase.title)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
 
-  const setStatus = (status: string) => void api.phases.update(phase.id, { status }).then(reload)
-  const del = () => void api.phases.remove(phase.id).then(reload)
+  // Every one of these used to be `void api.X().then(reload)` with no .catch, so
+  // a 409 or a restarted API changed nothing and said nothing — the user clicks
+  // again and concludes the app is broken (#97).
+  const fail = (e: Error) => setErr(e.message)
+
+  const setStatus = (status: string) =>
+    void api.phases.update(phase.id, { status }).then(reload).catch(fail)
+  const del = () => {
+    setConfirmingDelete(false)
+    setErr(null)
+    void api.phases.remove(phase.id).then(reload).catch(fail)
+  }
   const rename = () => {
     setRenaming(false)
     const t = draft.trim()
-    if (t && t !== phase.title) void api.phases.update(phase.id, { title: t }).then(reload)
+    if (t && t !== phase.title) {
+      void api.phases.update(phase.id, { title: t }).then(reload).catch(fail)
+    }
   }
 
   return (
@@ -96,9 +110,38 @@ function PhaseCard({ phase, reload, onOpenPlanning, children }: {
           <MenuItem onClick={() => { setDraft(phase.title); setRenaming(true) }}>Rename</MenuItem>
           <MenuLabel>Set status</MenuLabel>
           {PHASE_STATUSES.map(s => <MenuItem key={s} onClick={() => setStatus(s)}>{s}</MenuItem>)}
-          <MenuItem danger onClick={del}>Delete phase</MenuItem>
+          {/* Two steps, like every other delete in the app: RowActions' inline
+              confirm, CanvasPanel's window.confirm, Dashboard's type-to-confirm.
+              This one deleted on a single menu click (#97). The ellipsis says
+              another step is coming. */}
+          <MenuItem danger onClick={() => { setErr(null); setConfirmingDelete(true) }}>
+            Delete phase…
+          </MenuItem>
         </Menu>
       </div>
+      {confirmingDelete && (
+        <div className="rm-confirm" role="alertdialog" aria-label={`Delete ${phase.title}?`}>
+          <p className="rm-confirm-text">
+            Delete <strong>{phase.title}</strong>? Its {phase.stages.length === 1
+              ? '1 stage is'
+              : `${phase.stages.length} stages are`} deleted
+            {phase.tasks.total > 0 && (
+              <> and {phase.tasks.total === 1 ? '1 task' : `${phase.tasks.total} tasks`} become
+                unphased</>
+            )}. Nothing else is lost — tasks, milestones, decisions and risks are kept.
+          </p>
+          <div className="rm-confirm-actions">
+            <button type="button" className="btn btn-sm rm-confirm-del" onClick={del}>
+              Delete phase
+            </button>
+            <button type="button" className="btn btn-outline btn-sm"
+              onClick={() => setConfirmingDelete(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {err && <p className="rm-error" role="alert">{err}</p>}
       <Bar pct={phase.pct_done} label={`${phase.title} progress`} />
       <Counts r={phase.tasks} />
       {children}
