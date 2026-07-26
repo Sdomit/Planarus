@@ -39,7 +39,7 @@ from app.db.session import get_session
 from app.mcp.capabilities import Capability
 from app.mcp.errors import CODE_FORBIDDEN, CODE_INTERNAL, MCPToolError
 from app.mcp.registry import get_spec, visible_specs
-from app.mcp.server import SERVER_NAME, _error, _run_tool
+from app.mcp.server import SERVER_NAME, _error, _run_tool, instructions_for
 
 MOUNT_PATH = "/api/external/v1/mcp"
 
@@ -49,7 +49,8 @@ _capability: ContextVar[Capability] = ContextVar("_mcp_http_capability")
 
 def _build_http_server() -> Server:
     """A server whose visible/callable tools follow the per-request capability."""
-    server: Server = Server(SERVER_NAME)
+    # No capability at construction time, so the orientation describes both tiers.
+    server: Server = Server(SERVER_NAME, instructions=instructions_for())
 
     @server.list_tools()
     async def _list_tools() -> list[types.Tool]:
