@@ -22,3 +22,30 @@
 .ck-activity-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
 .ck-activity-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); color: var(--text-primary); text-transform: capitalize; }
 .ck-activity-when { flex-shrink: 0; font-size: var(--text-xs); color: var(--text-tertiary); }
+
+/* ── Needs attention (#95) ───────────────────────────────── */
+/* Full width above the widget grid: it answers "what now?", so it reads first. */
+.ck-attention { margin-bottom: 0; }
+.ck-att-count {
+  margin-left: auto; font-size: var(--text-xs); font-weight: 700;
+  padding: 0 var(--space-1-5); border-radius: var(--radius-full);
+  background: var(--status-warning-bg); color: var(--status-warning-fg);
+  border: 1px solid var(--status-warning-border);
+}
+.ck-att-row {
+  display: flex; align-items: center; gap: var(--space-2-5); width: 100%;
+  padding: var(--space-2); border: 1px solid transparent; border-radius: var(--radius-md);
+  background: transparent; text-align: left; cursor: pointer; font: inherit;
+  color: var(--text-primary);
+}
+.ck-att-row:hover { background: var(--bg-subtle); border-color: var(--border-subtle); }
+.ck-att-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ck-att-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.ck-att-danger { background: var(--status-danger-fg); }
+.ck-att-warn { background: var(--status-warning-fg); }
+.ck-att-info { background: var(--text-tertiary); }
+.ck-att-title {
+  flex: 1; min-width: 0; font-size: var(--text-sm);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ck-att-detail { flex-shrink: 0; font-size: var(--text-xs); color: var(--text-secondary); }

@@ -553,7 +553,18 @@ export default function Layout() {
           <div className="ab-content-inner">
             <div style={{ minWidth: 0 }}>
               {mainView === 'dashboard' && <Dashboard onSelectProject={p => selectProject(p, { open: true })} />}
-              {mainView === 'cockpit' && (project ? <CockpitPanel projectId={project.id} onClose={() => setMainView('dashboard')} onOpenCanvas={() => setMainView('canvas')} /> : placeholder)}
+              {mainView === 'cockpit' && (project ? (
+                <CockpitPanel
+                  projectId={project.id}
+                  onClose={() => setMainView('dashboard')}
+                  onOpenCanvas={() => setMainView('canvas')}
+                  // Same handler the bell uses, so a row about another project
+                  // switches project before navigating (#95).
+                  onOpenItem={item => void openNotification(item)}
+                  onOpenApprovals={() => navigate('approvals')}
+                  onOpenTasks={() => navigate('planning', { planningTab: 'tasks' })}
+                />
+              ) : placeholder)}
               {mainView === 'planning' && (project ? <PlanningPanel projectId={project.id} initialTab={planningTab} /> : placeholder)}
               {mainView === 'roadmap' && (project ? <RoadmapPanel projectId={project.id} onOpenPlanning={() => navigate('planning', { planningTab: 'tasks' })} /> : placeholder)}
               {mainView === 'timeline' && (project ? <TimelinePanel projectId={project.id} /> : placeholder)}
