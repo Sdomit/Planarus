@@ -397,6 +397,71 @@ describe('PlanningPanel', () => {
     expect(screen.getByRole('button', { name: '+ Add column' })).toBeTruthy()
   })
 
+  it('draws a custom-status task in an Other column on the Flow board (#97 part 1)', async () => {
+    setupEmpty()
+    const builtins = ['backlog', 'ready', 'in_progress', 'waiting', 'needs_review', 'blocked', 'done', 'canceled']
+      .map((k, i) => ({ id: null, key: k, label: k, category: STATUS_CATEGORY(k), color: null, sort_order: i, builtin: true }))
+    const custom = { id: 'sto_1', key: 'in_review', label: 'In Review', category: 'open' as const, color: null, sort_order: 8, builtin: false }
+    mockApi.statusOptions.list.mockResolvedValue([...builtins, custom])
+    mockApi.tasks.list.mockResolvedValue([
+      {
+        id: 'tsk_1', project_id: 'proj_1', phase_id: null, stage_id: null, parent_task_id: null,
+        title: 'Review PR', description: null, status: 'in_review', priority: null,
+        due_at: null, sort_order: 0, created_at: 'x', updated_at: 'x',
+      },
+      {
+        id: 'tsk_2', project_id: 'proj_1', phase_id: null, stage_id: null, parent_task_id: null,
+        title: 'Draft the spec', description: null, status: 'backlog', priority: null,
+        due_at: null, sort_order: 1, created_at: 'x', updated_at: 'x',
+      },
+    ])
+
+    render(<PlanningPanel projectId="proj_1" initialTab="tasks" />)
+    await screen.findByText('Review PR')
+    fireEvent.click(screen.getByRole('button', { name: 'Board' }))
+    // Flow is the default grouping, and its four buckets enumerate only the
+    // canonical statuses — the custom one used to land in no column at all.
+    expect(screen.getByRole('button', { name: 'Flow' }).getAttribute('aria-pressed')).toBe('true')
+    const other = (await screen.findByText('Other', { selector: '.ab-col-title' })).closest('.ab-col')!
+    expect(within(other as HTMLElement).getByText('Review PR')).toBeTruthy()
+    const backlog = screen.getByText('Backlog', { selector: '.ab-col-title' }).closest('.ab-col')!
+    expect(within(backlog as HTMLElement).getByText('Draft the spec')).toBeTruthy()
+  })
+
+  it('leaves the Flow board at its four buckets when every status is canonical (#97 part 1)', async () => {
+    setupEmpty()
+    mockApi.tasks.list.mockResolvedValue([{
+      id: 'tsk_1', project_id: 'proj_1', phase_id: null, stage_id: null, parent_task_id: null,
+      title: 'Draft the spec', description: null, status: 'backlog', priority: null,
+      due_at: null, sort_order: 0, created_at: 'x', updated_at: 'x',
+    }])
+
+    render(<PlanningPanel projectId="proj_1" initialTab="tasks" />)
+    await screen.findByText('Draft the spec')
+    fireEvent.click(screen.getByRole('button', { name: 'Board' }))
+    expect(await screen.findByText('Backlog', { selector: '.ab-col-title' })).toBeTruthy()
+    expect(screen.queryByText('Other', { selector: '.ab-col-title' })).toBeNull()
+  })
+
+  it('surfaces a failed inline task update instead of silently doing nothing (#97 part 2)', async () => {
+    setupEmpty()
+    mockApi.tasks.list.mockResolvedValue([{
+      id: 'tsk_1', project_id: 'proj_1', phase_id: null, stage_id: null, parent_task_id: null,
+      title: 'Wire the API', description: null, status: 'backlog', priority: null,
+      due_at: null, sort_order: 0, created_at: 'x', updated_at: 'x',
+    }])
+    mockApi.tasks.update.mockRejectedValue(new Error('409 Conflict'))
+
+    render(<PlanningPanel projectId="proj_1" initialTab="tasks" />)
+    await screen.findByText('Wire the API')
+    fireEvent.click(screen.getByLabelText('Change status of Wire the API'))
+    fireEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: /^done$/i }))
+    // Before #97 the PATCH was `void api.tasks.update(...).then(...)` with no
+    // `.catch`: the row stayed on `backlog` and said nothing.
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('409 Conflict')
+  })
+
   it('shows a custom phase status as a board column', async () => {
     setupEmpty()
     const builtins = ['planned', 'active', 'blocked', 'done', 'canceled']

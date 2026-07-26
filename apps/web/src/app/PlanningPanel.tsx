@@ -128,6 +128,18 @@ const BOARD_COLS: BoardCol[] = [
   { key: 'done',     label: 'Done',     statuses: ['done', 'canceled'],                   dot: 'var(--status-success-fg)' },
 ]
 
+/** Flow columns for the statuses actually in play. The four buckets enumerate
+ *  only the canonical statuses, so a task in a custom status — created from the
+ *  board's own "+ Add column" — used to render in no column at all (#97 part 1).
+ *  Everything the buckets miss goes to one "Other" column, including a status
+ *  still on a task after its option was deleted, so no work is invisible. */
+function flowCols(statusKeys: string[], inUse: string[], dots: Record<string, string>): BoardCol[] {
+  const covered = new Set(BOARD_COLS.flatMap(c => c.statuses))
+  const other = [...new Set([...statusKeys, ...inUse])].filter(s => !covered.has(s))
+  if (other.length === 0) return BOARD_COLS
+  return [...BOARD_COLS, { key: 'other', label: 'Other', statuses: other, dot: dots[other[0]] ?? 'var(--text-tertiary)' }]
+}
+
 // "Status" board: one column per canonical status (matches the list's statuses).
 const STATUS_DOT: Record<string, string> = {
   backlog: 'var(--text-tertiary)', ready: 'var(--status-info-fg)', in_progress: 'var(--status-info-fg)',
@@ -690,6 +702,21 @@ function useRowUpdate<T>(updateFn: (patch: Partial<T>) => Promise<T>, onUpdated:
   return { saving, error, update }
 }
 
+/** Section-level PATCH/DELETE plumbing (#97 part 2). Every `update`/`remove`
+ *  below used to be `void api.X(...).then(...)` with no `.catch`: a 409 or a
+ *  restarted API changed nothing and said nothing, so the user clicked again
+ *  and concluded the app was broken. `useRowUpdate` above solves this for one
+ *  row's own patch; sections mutate by id, hence the second shape. */
+function useSectionMutate() {
+  const [error, setError] = useState<string | null>(null)
+  const run = <T,>(call: Promise<T>, applied: (result: T) => void) => {
+    setError(null)
+    void call.then(applied).catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+  }
+  const node = error ? <p className="form-error" role="alert">{error}</p> : null
+  return { run, node }
+}
+
 /** View toggle shared by the entity sections. */
 function ViewToggle({ view, setView }: { view: 'list' | 'board'; setView: (v: 'list' | 'board') => void }) {
   return (
@@ -764,8 +791,9 @@ function PhasesSection({ phases, tasks = [], decisions = [], risks = [], project
   const mgr = useStatusManager({ projectId, entityType: 'phase', kind: 'phase', statuses, reload: reloadStatuses })
   const onUpdated = (u: Phase) => setPhases(prev => prev.map(p => (p.id === u.id ? u : p)))
   const onDeleted = (id: string) => setPhases(prev => prev.filter(p => p.id !== id))
-  const update = (id: string, patch: Parameters<typeof api.phases.update>[1]) => void api.phases.update(id, patch).then(onUpdated)
-  const remove = (id: string) => void api.phases.remove(id).then(() => onDeleted(id))
+  const { run, node: errorNode } = useSectionMutate()
+  const update = (id: string, patch: Parameters<typeof api.phases.update>[1]) => run(api.phases.update(id, patch), onUpdated)
+  const remove = (id: string) => run(api.phases.remove(id), () => onDeleted(id))
   const { itemProps, reorder, moveBy } = useListReorder(phases, next => setPhases(next), ids => api.phases.reorder(projectId, ids))
 
   if (phases.length === 0)
@@ -774,6 +802,7 @@ function PhasesSection({ phases, tasks = [], decisions = [], risks = [], project
   return (
     <>
       <div className="pp-toolbar"><ViewToggle view={view} setView={setView} />{mgr.button}</div>
+      {errorNode}
       {view === 'board' ? (
         <EntityBoard
           labelOf={p => p.title} items={phases} columns={statusCols(statusKeys, statusDots(PHASE_DOT, statuses))} statusOf={p => p.status}
@@ -952,7 +981,8 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
     searchText: task => [task.title, task.description, task.status, task.priority, task.assignee_display].filter(Boolean).join(' '),
   })
   const done = tasks.filter(t => t.status === 'done' || t.status === 'canceled').length
-  const remove = (id: string) => void api.tasks.remove(id).then(() => setTasks?.(prev => prev.filter(t => t.id !== id)))
+  const { run, node: errorNode } = useSectionMutate()
+  const remove = (id: string) => run(api.tasks.remove(id), () => setTasks?.(prev => prev.filter(t => t.id !== id)))
   // Reorder persists the full id set, so it is only valid when `tasks` is the
   // full project list. The in-component filters below (status/mine) narrow only
   // `shown`, not `tasks`, so they stay safe — but a phase filter applied by the
@@ -999,6 +1029,7 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
         {done > 0 && <span className="pp-done-lbl">{done} done</span>}
       </div>
       {mgr.modal}
+      {errorNode}
 
       {view === 'board' ? (
         <TaskBoard tasks={finderItems} reorderTasks={tasks} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated}
@@ -1048,21 +1079,21 @@ function TaskBoard({ tasks, reorderTasks = tasks, phases, stages, projectId, onT
   const [dragId, setDragId] = useState<string | null>(null)
   const [overCol, setOverCol] = useState<string | null>(null)
   const statusKeys = statusKeysOf(taskStatuses)
-  // Status grouping: one column per status (built-in + custom). Flow: fixed buckets.
-  const cols = group === 'flow' ? BOARD_COLS : statusCols(statusKeys, statusDots(STATUS_DOT, taskStatuses))
+  const dots = statusDots(STATUS_DOT, taskStatuses)
+  // Status grouping: one column per status (built-in + custom). Flow: the four
+  // buckets plus "Other" for whatever they don't cover.
+  const cols = group === 'flow' ? flowCols(statusKeys, tasks.map(t => t.status), dots) : statusCols(statusKeys, dots)
   const phaseTitle = new Map(phases.map(phase => [phase.id, phase.title]))
   const openTask = tasks.find(t => t.id === openId) ?? null
   const { reorder } = useListReorder(reorderTasks, next => setTasks?.(next), ids => api.tasks.reorder(projectId, ids))
+  const { run, node: errorNode } = useSectionMutate()
 
-  async function restatus(id: string, status: string) {
-    try {
-      onTaskUpdated(await api.tasks.update(id, { status }))
-    } catch {
-      /* leave the card where it was on failure */
-    }
+  // The card snaps back on failure; before #97 that was the only signal.
+  function restatus(id: string, status: string) {
+    run(api.tasks.update(id, { status }), onTaskUpdated)
   }
 
-  async function dropOn(col: BoardCol) {
+  function dropOn(col: BoardCol) {
     setOverCol(null)
     const id = dragId
     setDragId(null)
@@ -1070,7 +1101,7 @@ function TaskBoard({ tasks, reorderTasks = tasks, phases, stages, projectId, onT
     const task = tasks.find(t => t.id === id)
     if (!task) return
     const status = nextStatusForColumn(task.status, col)
-    if (status) await restatus(id, status)
+    if (status) restatus(id, status)
   }
 
   function dropOnCard(targetId: string) {
@@ -1082,7 +1113,7 @@ function TaskBoard({ tasks, reorderTasks = tasks, phases, stages, projectId, onT
     const targetTask = tasks.find(t => t.id === targetId)
     if (!dragTask || !targetTask) return
     if (dragTask.status === targetTask.status) { if (reorderable) reorder(id, targetId) }
-    else void restatus(id, targetTask.status)
+    else restatus(id, targetTask.status)
   }
 
   return (
@@ -1094,6 +1125,7 @@ function TaskBoard({ tasks, reorderTasks = tasks, phases, stages, projectId, onT
         </div>
         <span className="pp-done-lbl">Drag a card to change its status</span>
       </div>
+      {errorNode}
       <div className="pp-board-wrap">
         <div className="ab-board">
           {cols.map(col => {
@@ -1130,7 +1162,7 @@ function TaskBoard({ tasks, reorderTasks = tasks, phases, stages, projectId, onT
                       {t.phase_id && <span className="pp-card-phase">{phaseTitle.get(t.phase_id)}</span>}
                       {t.due_at && <DueBadge due={t.due_at} status={t.status} />}
                       <StatusBadge kind="task" value={t.status} />
-                      {setTasks && <RowActions title={t.title} onDelete={() => void api.tasks.remove(t.id).then(() => setTasks(prev => prev.filter(x => x.id !== t.id)))} />}
+                      {setTasks && <RowActions title={t.title} onDelete={() => run(api.tasks.remove(t.id), () => setTasks(prev => prev.filter(x => x.id !== t.id)))} />}
                     </div>
                   </div>
                 ))}
@@ -1338,7 +1370,8 @@ function TaskRow({ task, phases, stages, projectId, onTaskUpdated, onDelete, dra
   const [addingSub, setAddingSub] = useState(false)
   const [subTitle, setSubTitle] = useState('')
   const isSub = Boolean(task.parent_task_id)
-  const update = (patch: Parameters<typeof api.tasks.update>[1]) => void api.tasks.update(task.id, patch).then(onTaskUpdated)
+  const { run, node: errorNode } = useSectionMutate()
+  const update = (patch: Parameters<typeof api.tasks.update>[1]) => run(api.tasks.update(task.id, patch), onTaskUpdated)
   const editable = useEditable(task.title, t => update({ title: t }))
   const onAddNew = addTaskStatus ? () => promptNewStatus(addTaskStatus) : undefined
 
@@ -1373,6 +1406,7 @@ function TaskRow({ task, phases, stages, projectId, onTaskUpdated, onDelete, dra
         <RowActions title={task.title} onEdit={editable.start} onDelete={onDelete} dragHandle={Boolean(dragProps)}
           onMoveUp={move && (() => move(-1))} onMoveDown={move && (() => move(1))} />
       </div>
+      {errorNode}
       {open && <TaskDetailBody task={task} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated} statusKeys={statusKeys} />}
       {(subtasks.length > 0 || (setTasks && !isSub)) && (
         <div className="pp-subtasks">
@@ -1380,7 +1414,7 @@ function TaskRow({ task, phases, stages, projectId, onTaskUpdated, onDelete, dra
             {subtasks.map(st => (
               <TaskRow key={st.id} task={st} phases={phases} stages={stages} projectId={projectId}
                 onTaskUpdated={onTaskUpdated} statusKeys={statusKeys} addTaskStatus={addTaskStatus} colorOf={colorOf}
-                onDelete={setTasks ? () => void api.tasks.remove(st.id).then(() => setTasks(prev => prev.filter(x => x.id !== st.id))) : undefined} />
+                onDelete={setTasks ? () => run(api.tasks.remove(st.id), () => setTasks(prev => prev.filter(x => x.id !== st.id))) : undefined} />
             ))}
           </ul>
           {setTasks && !isSub && (
@@ -1415,8 +1449,9 @@ function MilestonesSection({ milestones, projectId, setMilestones, statuses, add
     searchText: milestone => [milestone.title, milestone.description, milestone.status, milestone.target_date].filter(Boolean).join(' '),
   })
   const onUpdated = (u: Milestone) => setMilestones(prev => prev.map(m => (m.id === u.id ? u : m)))
-  const update = (id: string, patch: Parameters<typeof api.milestones.update>[1]) => void api.milestones.update(id, patch).then(onUpdated)
-  const remove = (id: string) => void api.milestones.remove(id).then(() => setMilestones(prev => prev.filter(m => m.id !== id)))
+  const { run, node: errorNode } = useSectionMutate()
+  const update = (id: string, patch: Parameters<typeof api.milestones.update>[1]) => run(api.milestones.update(id, patch), onUpdated)
+  const remove = (id: string) => run(api.milestones.remove(id), () => setMilestones(prev => prev.filter(m => m.id !== id)))
   const { itemProps, reorder, moveBy } = useListReorder(milestones, next => setMilestones(next), ids => api.milestones.reorder(projectId, ids))
 
   if (milestones.length === 0)
@@ -1425,6 +1460,7 @@ function MilestonesSection({ milestones, projectId, setMilestones, statuses, add
   return (
     <>
       <div className="pp-toolbar pp-toolbar-finder"><ViewToggle view={view} setView={setView} />{finder.controls}{mgr.button}</div>
+      {errorNode}
       {view === 'board' ? (
         <EntityBoard
           labelOf={m => m.title} items={finder.filtered} columns={statusCols(statusKeys, statusDots(MILESTONE_DOT, statuses))} statusOf={m => m.status}
@@ -1511,8 +1547,9 @@ function DecisionsSection({ decisions, phases = [], projectId, setDecisions, sta
     searchText: decision => [decision.title, decision.decision, decision.context, decision.status].filter(Boolean).join(' '),
   })
   const onUpdated = (u: Decision) => setDecisions(prev => prev.map(d => (d.id === u.id ? u : d)))
-  const update = (id: string, patch: Parameters<typeof api.decisions.update>[1]) => void api.decisions.update(id, patch).then(onUpdated)
-  const remove = (id: string) => void api.decisions.remove(id).then(() => setDecisions(prev => prev.filter(d => d.id !== id)))
+  const { run, node: errorNode } = useSectionMutate()
+  const update = (id: string, patch: Parameters<typeof api.decisions.update>[1]) => run(api.decisions.update(id, patch), onUpdated)
+  const remove = (id: string) => run(api.decisions.remove(id), () => setDecisions(prev => prev.filter(d => d.id !== id)))
   const { itemProps, reorder, moveBy } = useListReorder(decisions, next => setDecisions(next), ids => api.decisions.reorder(projectId, ids))
 
   if (decisions.length === 0)
@@ -1521,6 +1558,7 @@ function DecisionsSection({ decisions, phases = [], projectId, setDecisions, sta
   return (
     <>
       <div className="pp-toolbar pp-toolbar-finder"><ViewToggle view={view} setView={setView} />{finder.controls}{mgr.button}</div>
+      {errorNode}
       {view === 'board' ? (
         <EntityBoard
           labelOf={d => d.title} items={finder.filtered} columns={statusCols(statusKeys, statusDots(DECISION_DOT, statuses))} statusOf={d => d.status}
@@ -1607,8 +1645,9 @@ function RisksSection({
     searchText: risk => [risk.title, risk.description, risk.mitigation, risk.status, risk.severity].filter(Boolean).join(' '),
   })
   const onUpdated = (u: Risk) => setRisks(prev => prev.map(r => (r.id === u.id ? u : r)))
-  const update = (id: string, patch: Parameters<typeof api.risks.update>[1]) => void api.risks.update(id, patch).then(onUpdated)
-  const remove = (id: string) => void api.risks.remove(id).then(() => setRisks(prev => prev.filter(r => r.id !== id)))
+  const { run, node: errorNode } = useSectionMutate()
+  const update = (id: string, patch: Parameters<typeof api.risks.update>[1]) => run(api.risks.update(id, patch), onUpdated)
+  const remove = (id: string) => run(api.risks.remove(id), () => setRisks(prev => prev.filter(r => r.id !== id)))
   const { itemProps, reorder, moveBy } = useListReorder(risks, next => setRisks(next), ids => api.risks.reorder(projectId, ids))
 
   if (risks.length === 0 && blockers.length === 0)
@@ -1617,6 +1656,7 @@ function RisksSection({
   return (
     <>
       <div className="pp-toolbar pp-toolbar-finder">{risks.length > 0 && <ViewToggle view={view} setView={setView} />}{risks.length > 0 && finder.controls}{mgr.button}</div>
+      {errorNode}
       {risks.length > 0 && (view === 'board' ? (
         <EntityBoard
           labelOf={r => r.title} items={finder.filtered} columns={statusCols(statusKeys, statusDots(RISK_STATUS_DOT, statuses))} statusOf={r => r.status}
@@ -1732,8 +1772,9 @@ function CommentsSection({ comments, setComments }: {
     attachmentHost: comment => ({ entity_type: comment.entity_type, entity_id: comment.entity_id }),
   })
   const onUpdated = (u: Comment) => setComments(prev => prev.map(c => (c.id === u.id ? u : c)))
-  const update = (id: string, patch: Parameters<typeof api.comments.update>[1]) => void api.comments.update(id, patch).then(onUpdated)
-  const remove = (id: string) => void api.comments.remove(id).then(() => setComments(prev => prev.filter(c => c.id !== id)))
+  const { run, node: errorNode } = useSectionMutate()
+  const update = (id: string, patch: Parameters<typeof api.comments.update>[1]) => run(api.comments.update(id, patch), onUpdated)
+  const remove = (id: string) => run(api.comments.remove(id), () => setComments(prev => prev.filter(c => c.id !== id)))
 
   if (comments.length === 0) return <p style={EMPTY}>No comments yet.</p>
 
@@ -1746,6 +1787,7 @@ function CommentsSection({ comments, setComments }: {
         </div>
         {finder.controls}
       </div>
+      {errorNode}
       {finder.filtered.length === 0 ? <p style={EMPTY}>No comments match this finder.</p> : <div className={view === 'card' ? 'pp-comment-cards' : 'pp-rows'}>
         {finder.filtered.map(c => (
           <CommentItem key={c.id} comment={c} card={view === 'card'} update={update} remove={remove} />
