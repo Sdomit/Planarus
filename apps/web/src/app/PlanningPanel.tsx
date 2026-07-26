@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import {
-  api, Blocker, ChecklistItem, Comment, Decision, Link, MemberRead, Milestone, Phase, Project, Risk, Stage, StatusOption, Task,
+  api, Blocker, ChecklistItem, Comment, Decision, DocSummary, EntityConnection, Link, MemberRead, Milestone, Phase, Project, Risk, Stage, StatusOption, Task,
 } from '../api/client'
 import { StatusBadge, type ToneKind } from './StatusBadge'
 import { InlineStatusSelect } from './InlineStatusSelect'
@@ -11,6 +11,8 @@ import { EntityBoard, nextStatusForColumn as nextStatusForCol } from './EntityBo
 import { StatusManager } from './StatusManager'
 import { Markdown } from './markdown'
 import { useAuthInfo } from './auth'
+import { ConnectionCount, ConnectionProvider, EntityConnections, type ConnectionTarget } from './EntityConnections'
+import { usePlanningFinder } from './PlanningFinder'
 import './planning-panel.css'
 
 // P16.3 (D33): team members (for the assignee picker) + the signed-in user id
@@ -218,6 +220,8 @@ export default function PlanningPanel({
   const [blockers, setBlockers] = useState<Blocker[]>([])
   const [comments, setComments] = useState<Comment[]>([])
   const [links, setLinks] = useState<Link[]>([])
+  const [connections, setConnections] = useState<EntityConnection[]>([])
+  const [docs, setDocs] = useState<DocSummary[]>([])
   // P16.3: assignable people = the project workspace's members (team mode only).
   const { me } = useAuthInfo()
   const [members, setMembers] = useState<MemberRead[]>([])
@@ -277,7 +281,7 @@ export default function PlanningPanel({
   }
 
   async function loadEntities(projectId: string) {
-    const [ph, stg, tk, mil, dec, rsk, blk, cmt, lnk, sto, phSto, rkSto, mlSto, dcSto] = await Promise.all([
+    const [ph, stg, tk, mil, dec, rsk, blk, cmt, lnk, con, dcs, sto, phSto, rkSto, mlSto, dcSto] = await Promise.all([
       api.phases.list(projectId),
       api.stages.list(projectId),
       api.tasks.list(projectId),
@@ -287,6 +291,8 @@ export default function PlanningPanel({
       api.blockers.list(projectId),
       api.comments.list(projectId),
       api.links.list(projectId),
+      api.connections.list(projectId),
+      api.docs.list(projectId),
       api.statusOptions.list(projectId).catch(() => []),
       api.statusOptions.list(projectId, 'phase').catch(() => []),
       api.statusOptions.list(projectId, 'risk').catch(() => []),
@@ -294,7 +300,7 @@ export default function PlanningPanel({
       api.statusOptions.list(projectId, 'decision').catch(() => []),
     ])
     setPhases(ph); setStages(stg); setTasks(tk); setMilestones(mil); setDecisions(dec)
-    setRisks(rsk); setBlockers(blk); setComments(cmt); setLinks(lnk); setTaskStatuses(sto)
+    setRisks(rsk); setBlockers(blk); setComments(cmt); setLinks(lnk); setConnections(con); setDocs(dcs); setTaskStatuses(sto)
     setPhaseStatuses(phSto); setRiskStatuses(rkSto); setMilestoneStatuses(mlSto); setDecisionStatuses(dcSto)
   }
 
@@ -410,8 +416,24 @@ export default function PlanningPanel({
       ?.focus()
   }
 
+  const phaseTitleById = new Map(phases.map(phase => [phase.id, phase.title]))
+  const connectionTargets: ConnectionTarget[] = [
+    ...phases.map(phase => ({ entityType: 'phase' as const, id: phase.id, title: phase.title, meta: phase.status })),
+    ...tasks.map(task => ({ entityType: 'task' as const, id: task.id, title: task.title,
+      meta: [task.phase_id ? phaseTitleById.get(task.phase_id) : null, task.status.replace(/_/g, ' ')].filter(Boolean).join(' · ') })),
+    ...milestones.map(milestone => ({ entityType: 'milestone' as const, id: milestone.id, title: milestone.title,
+      meta: [milestone.phase_id ? phaseTitleById.get(milestone.phase_id) : null, milestone.status].filter(Boolean).join(' · ') })),
+    ...decisions.map(decision => ({ entityType: 'decision' as const, id: decision.id, title: decision.title,
+      meta: [decision.phase_id ? phaseTitleById.get(decision.phase_id) : null, decision.status].filter(Boolean).join(' · ') })),
+    ...risks.map(risk => ({ entityType: 'risk' as const, id: risk.id, title: risk.title,
+      meta: [risk.phase_id ? phaseTitleById.get(risk.phase_id) : null, risk.status].filter(Boolean).join(' · ') })),
+    ...docs.map(doc => ({ entityType: 'doc' as const, id: doc.id, title: doc.title,
+      meta: [doc.doc_type, doc.status].join(' · ') })),
+  ]
+
   return (
    <TeamContext.Provider value={{ members, myId: me?.user.id ?? null }}>
+   <ConnectionProvider connections={connections} setConnections={setConnections} targets={connectionTargets}>
    <AttachContext.Provider value={{ comments, setComments, links, setLinks }}>
     <div className="pp-panel">
       <div className="pp-header">
@@ -632,6 +654,7 @@ export default function PlanningPanel({
       </div>
     </div>
    </AttachContext.Provider>
+   </ConnectionProvider>
    </TeamContext.Provider>
   )
 }
@@ -932,6 +955,10 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
   const [filter, setFilter] = useState('open')
   const [mineOnly, setMineOnly] = useState(false)
   const { myId } = useContext(TeamContext)  // P16.3: "assigned to me" (team mode)
+  const finder = usePlanningFinder({
+    label: 'tasks', items: tasks, entityType: 'task',
+    searchText: task => [task.title, task.description, task.status, task.priority, task.assignee_display].filter(Boolean).join(' '),
+  })
   const done = tasks.filter(t => t.status === 'done' || t.status === 'canceled').length
   const remove = (id: string) => void api.tasks.remove(id).then(() => setTasks?.(prev => prev.filter(t => t.id !== id)))
   // Reorder persists the full id set, so it is only valid when `tasks` is the
@@ -943,8 +970,11 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
   if (tasks.length === 0)
     return <><div className="pp-toolbar">{mgr.button}</div><p style={EMPTY}>No tasks yet.</p>{mgr.modal}</>
 
-  const shown = tasks.filter(t => {
+  const finderItems = finder.filtered.filter(t => {
     if (mineOnly && t.assignee_id !== myId) return false
+    return true
+  })
+  const shown = finderItems.filter(t => {
     if (filter === 'all') return true
     if (filter === 'open') return t.status !== 'done' && t.status !== 'canceled'
     return t.status === filter
@@ -952,7 +982,7 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
 
   return (
     <>
-      <div className="pp-toolbar">
+      <div className="pp-toolbar pp-toolbar-finder">
         <div className="pp-toolbar-group">
           <div className="ab-seg">
             <button type="button" aria-pressed={view === 'list'} className={view === 'list' ? 'active' : ''} onClick={() => setView('list')}>List</button>
@@ -973,12 +1003,13 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
           )}
           {mgr.button}
         </div>
+        {finder.controls}
         {done > 0 && <span className="pp-done-lbl">{done} done</span>}
       </div>
       {mgr.modal}
 
       {view === 'board' ? (
-        <TaskBoard tasks={tasks} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated}
+        <TaskBoard tasks={finderItems} reorderTasks={tasks} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated}
           setTasks={setTasks} taskStatuses={taskStatuses} addTaskStatus={addTaskStatus} reorderable={reorderable} />
       ) : shown.length === 0 ? (
         <p style={EMPTY}>No tasks match this filter.</p>
@@ -1014,7 +1045,12 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
 }
 
 /** Kanban board with two groupings (Flow buckets / per-status), drag-to-restatus, and click-to-open. */
-function TaskBoard({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, taskStatuses, addTaskStatus, reorderable = true }: TasksListProps) {
+// `tasks` is what the board draws — the finder's subset. `reorderTasks` is the
+// list a drag reorders against, which must stay whole: persisting an order
+// computed from a subset is the #86 corruption. `reorderable` is the other half
+// of that — the parent sets it false when it has already narrowed the list it
+// passed, so there is no whole list left here to reorder against.
+function TaskBoard({ tasks, reorderTasks = tasks, phases, stages, projectId, onTaskUpdated, setTasks, taskStatuses, addTaskStatus, reorderable = true }: TasksListProps & { reorderTasks?: Task[] }) {
   const [group, setGroup] = useState<'flow' | 'status'>('flow')
   const [openId, setOpenId] = useState<string | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
@@ -1024,7 +1060,7 @@ function TaskBoard({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
   const cols = group === 'flow' ? BOARD_COLS : statusCols(statusKeys, statusDots(STATUS_DOT, taskStatuses))
   const phaseTitle = new Map(phases.map(phase => [phase.id, phase.title]))
   const openTask = tasks.find(t => t.id === openId) ?? null
-  const { reorder } = useListReorder(tasks, next => setTasks?.(next), ids => api.tasks.reorder(projectId, ids))
+  const { reorder } = useListReorder(reorderTasks, next => setTasks?.(next), ids => api.tasks.reorder(projectId, ids))
 
   async function restatus(id: string, status: string) {
     try {
@@ -1285,6 +1321,7 @@ function TaskDetailBody({ task, phases, stages, projectId, onTaskUpdated, status
           <button type="submit" className="btn btn-outline btn-sm">Add</button>
         </form>
       </div>
+      <EntityConnections entityType="task" entityId={task.id} projectId={projectId} label={task.title} />
       <Attachments entityType="task" entityId={task.id} projectId={projectId} label={task.title} />
     </div>
   )
@@ -1333,6 +1370,7 @@ function TaskRow({ task, phases, stages, projectId, onTaskUpdated, onDelete, dra
           <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
           {editable.node ?? <span className="pp-row-title">{task.title}</span>}
           {subtasks.length > 0 && <span className="pp-subcount">{subtasks.length}</span>}
+          <ConnectionCount entityType="task" entityId={task.id} label={task.title} />
           {task.due_at && <DueBadge due={task.due_at} status={task.status} />}
           {task.assignee_id && task.assignee_display && (
             <PersonChip id={task.assignee_id} name={task.assignee_display} />
@@ -1380,6 +1418,10 @@ function MilestonesSection({ milestones, projectId, setMilestones, statuses, add
   const onAddNew = addStatus ? () => promptNewStatus(addStatus) : undefined
   const colorOf = colorMapOf(statuses)
   const mgr = useStatusManager({ projectId, entityType: 'milestone', kind: 'milestone', statuses, reload: reloadStatuses })
+  const finder = usePlanningFinder({
+    label: 'milestones', items: milestones, entityType: 'milestone',
+    searchText: milestone => [milestone.title, milestone.description, milestone.status, milestone.target_date].filter(Boolean).join(' '),
+  })
   const onUpdated = (u: Milestone) => setMilestones(prev => prev.map(m => (m.id === u.id ? u : m)))
   const update = (id: string, patch: Parameters<typeof api.milestones.update>[1]) => void api.milestones.update(id, patch).then(onUpdated)
   const remove = (id: string) => void api.milestones.remove(id).then(() => setMilestones(prev => prev.filter(m => m.id !== id)))
@@ -1390,10 +1432,10 @@ function MilestonesSection({ milestones, projectId, setMilestones, statuses, add
 
   return (
     <>
-      <div className="pp-toolbar"><ViewToggle view={view} setView={setView} />{mgr.button}</div>
+      <div className="pp-toolbar pp-toolbar-finder"><ViewToggle view={view} setView={setView} />{finder.controls}{mgr.button}</div>
       {view === 'board' ? (
         <EntityBoard
-          labelOf={m => m.title} items={milestones} columns={statusCols(statusKeys, statusDots(MILESTONE_DOT, statuses))} statusOf={m => m.status}
+          labelOf={m => m.title} items={finder.filtered} columns={statusCols(statusKeys, statusDots(MILESTONE_DOT, statuses))} statusOf={m => m.status}
           onRestatus={(m, status) => update(m.id, { status })}
           onReorder={reorderable ? reorder : undefined}
           onAddColumn={onAddNew}
@@ -1404,9 +1446,9 @@ function MilestonesSection({ milestones, projectId, setMilestones, statuses, add
             </div>
           )}
         />
-      ) : (
+      ) : finder.filtered.length === 0 ? <p style={EMPTY}>No milestones match this finder.</p> : (
         <ul className="pp-rows">
-          {milestones.map(m => (
+          {finder.filtered.map(m => (
             <MilestoneListRow key={m.id} milestone={m} update={update} remove={remove}
               dragProps={reorderable ? itemProps(m.id) : undefined} move={reorderable ? delta => void moveBy(m.id, delta) : undefined}
               statusKeys={statusKeys} onAddNew={onAddNew} colorOf={colorOf} />
@@ -1438,6 +1480,7 @@ function MilestoneListRow({ milestone, update, remove, dragProps, move, statusKe
           <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
           {editable.node ?? <span className="pp-row-title">{milestone.title}</span>}
           {milestone.target_date && <span className="pp-meta">{milestone.target_date}</span>}
+          <ConnectionCount entityType="milestone" entityId={milestone.id} label={milestone.title} />
         </button>
         <InlineStatusSelect kind="milestone" value={milestone.status} options={statusKeys}
           onChange={s => update(milestone.id, { status: s })} label={`Change status of ${milestone.title}`} onAddNew={onAddNew} colorOf={colorOf} />
@@ -1454,6 +1497,7 @@ function MilestoneListRow({ milestone, update, remove, dragProps, move, statusKe
                 onChange={e => update(milestone.id, { target_date: e.target.value || null })} />
             </label>
           </div>
+          <EntityConnections entityType="milestone" entityId={milestone.id} projectId={milestone.project_id} label={milestone.title} />
           <Attachments entityType="milestone" entityId={milestone.id} projectId={milestone.project_id} label={milestone.title} />
         </div>
       )}
@@ -1470,6 +1514,10 @@ function DecisionsSection({ decisions, phases = [], projectId, setDecisions, sta
   const onAddNew = addStatus ? () => promptNewStatus(addStatus) : undefined
   const colorOf = colorMapOf(statuses)
   const mgr = useStatusManager({ projectId, entityType: 'decision', kind: 'decision', statuses, reload: reloadStatuses })
+  const finder = usePlanningFinder({
+    label: 'decisions', items: decisions, entityType: 'decision',
+    searchText: decision => [decision.title, decision.decision, decision.context, decision.status].filter(Boolean).join(' '),
+  })
   const onUpdated = (u: Decision) => setDecisions(prev => prev.map(d => (d.id === u.id ? u : d)))
   const update = (id: string, patch: Parameters<typeof api.decisions.update>[1]) => void api.decisions.update(id, patch).then(onUpdated)
   const remove = (id: string) => void api.decisions.remove(id).then(() => setDecisions(prev => prev.filter(d => d.id !== id)))
@@ -1480,10 +1528,10 @@ function DecisionsSection({ decisions, phases = [], projectId, setDecisions, sta
 
   return (
     <>
-      <div className="pp-toolbar"><ViewToggle view={view} setView={setView} />{mgr.button}</div>
+      <div className="pp-toolbar pp-toolbar-finder"><ViewToggle view={view} setView={setView} />{finder.controls}{mgr.button}</div>
       {view === 'board' ? (
         <EntityBoard
-          labelOf={d => d.title} items={decisions} columns={statusCols(statusKeys, statusDots(DECISION_DOT, statuses))} statusOf={d => d.status}
+          labelOf={d => d.title} items={finder.filtered} columns={statusCols(statusKeys, statusDots(DECISION_DOT, statuses))} statusOf={d => d.status}
           onRestatus={(d, status) => update(d.id, { status })}
           onReorder={reorderable ? reorder : undefined}
           onAddColumn={onAddNew}
@@ -1494,9 +1542,9 @@ function DecisionsSection({ decisions, phases = [], projectId, setDecisions, sta
             </div>
           )}
         />
-      ) : (
+      ) : finder.filtered.length === 0 ? <p style={EMPTY}>No decisions match this finder.</p> : (
         <ul className="pp-rows">
-          {decisions.map(d => (
+          {finder.filtered.map(d => (
             <DecisionListRow key={d.id} decision={d} phases={phases} update={update} remove={remove}
               dragProps={reorderable ? itemProps(d.id) : undefined} move={reorderable ? delta => void moveBy(d.id, delta) : undefined}
               statusKeys={statusKeys} onAddNew={onAddNew} colorOf={colorOf} />
@@ -1528,6 +1576,7 @@ function DecisionListRow({ decision, phases = [], update, remove, dragProps, mov
         <button type="button" className="pp-row-main" onClick={() => setOpen(v => !v)} aria-expanded={open}>
           <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
           {editable.node ?? <span className="pp-row-title">{decision.title}</span>}
+          <ConnectionCount entityType="decision" entityId={decision.id} label={decision.title} />
         </button>
         <PhaseChip phaseId={decision.phase_id} phases={phases} />
         <InlineStatusSelect kind="decision" value={decision.status} options={statusKeys}
@@ -1541,6 +1590,7 @@ function DecisionListRow({ decision, phases = [], update, remove, dragProps, mov
           {decision.context && <p className="pp-row-desc">{decision.context}</p>}
           <PhasePicker phaseId={decision.phase_id} phases={phases} label={`Phase for ${decision.title}`}
             onChange={phase_id => update(decision.id, { phase_id })} />
+          <EntityConnections entityType="decision" entityId={decision.id} projectId={decision.project_id} label={decision.title} />
           <Attachments entityType="decision" entityId={decision.id} projectId={decision.project_id} label={decision.title} />
         </div>
       )}
@@ -1560,6 +1610,10 @@ function RisksSection({
   const onAddNew = addStatus ? () => promptNewStatus(addStatus) : undefined
   const colorOf = colorMapOf(statuses)
   const mgr = useStatusManager({ projectId, entityType: 'risk', kind: 'riskstatus', statuses, reload: reloadStatuses })
+  const finder = usePlanningFinder({
+    label: 'risks', items: risks, entityType: 'risk',
+    searchText: risk => [risk.title, risk.description, risk.mitigation, risk.status, risk.severity].filter(Boolean).join(' '),
+  })
   const onUpdated = (u: Risk) => setRisks(prev => prev.map(r => (r.id === u.id ? u : r)))
   const update = (id: string, patch: Parameters<typeof api.risks.update>[1]) => void api.risks.update(id, patch).then(onUpdated)
   const remove = (id: string) => void api.risks.remove(id).then(() => setRisks(prev => prev.filter(r => r.id !== id)))
@@ -1570,10 +1624,10 @@ function RisksSection({
 
   return (
     <>
-      <div className="pp-toolbar">{risks.length > 0 && <ViewToggle view={view} setView={setView} />}{mgr.button}</div>
+      <div className="pp-toolbar pp-toolbar-finder">{risks.length > 0 && <ViewToggle view={view} setView={setView} />}{risks.length > 0 && finder.controls}{mgr.button}</div>
       {risks.length > 0 && (view === 'board' ? (
         <EntityBoard
-          labelOf={r => r.title} items={risks} columns={statusCols(statusKeys, statusDots(RISK_STATUS_DOT, statuses))} statusOf={r => r.status}
+          labelOf={r => r.title} items={finder.filtered} columns={statusCols(statusKeys, statusDots(RISK_STATUS_DOT, statuses))} statusOf={r => r.status}
           onRestatus={(r, status) => update(r.id, { status })}
           onReorder={reorderable ? reorder : undefined}
           onAddColumn={onAddNew}
@@ -1585,9 +1639,9 @@ function RisksSection({
             </div>
           )}
         />
-      ) : (
+      ) : finder.filtered.length === 0 ? <p style={EMPTY}>No risks match this finder.</p> : (
         <ul className="pp-rows">
-          {risks.map(r => (
+          {finder.filtered.map(r => (
             <RiskListRow key={r.id} risk={r} phases={phases} update={update} remove={remove}
               dragProps={reorderable ? itemProps(r.id) : undefined} move={reorderable ? delta => void moveBy(r.id, delta) : undefined}
               statusKeys={statusKeys} onAddNew={onAddNew} colorOf={colorOf} />
@@ -1629,6 +1683,7 @@ function RiskListRow({ risk, phases = [], update, remove, dragProps, move, statu
         <button type="button" className="pp-row-main" onClick={() => setOpen(v => !v)} aria-expanded={open}>
           <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
           {editable.node ?? <span className="pp-row-title">{risk.title}</span>}
+          <ConnectionCount entityType="risk" entityId={risk.id} label={risk.title} />
         </button>
         <PhaseChip phaseId={risk.phase_id} phases={phases} />
         <InlineStatusSelect kind="severity" value={risk.severity} options={RISK_SEVERITIES}
@@ -1644,6 +1699,7 @@ function RiskListRow({ risk, phases = [], update, remove, dragProps, move, statu
           {risk.mitigation && <p className="pp-row-desc"><strong>Mitigation:</strong> {risk.mitigation}</p>}
           <PhasePicker phaseId={risk.phase_id} phases={phases} label={`Phase for ${risk.title}`}
             onChange={phase_id => update(risk.id, { phase_id })} />
+          <EntityConnections entityType="risk" entityId={risk.id} projectId={risk.project_id} label={risk.title} />
           <Attachments entityType="risk" entityId={risk.id} projectId={risk.project_id} label={risk.title} />
         </div>
       )}
@@ -1678,6 +1734,11 @@ function CommentsSection({ comments, setComments }: {
   comments: Comment[]; setComments: React.Dispatch<React.SetStateAction<Comment[]>>
 }) {
   const [view, setView] = useState<'list' | 'card'>('list')
+  const finder = usePlanningFinder({
+    label: 'comments', items: comments,
+    searchText: comment => [comment.body, comment.author_display, comment.entity_type, comment.status].filter(Boolean).join(' '),
+    attachmentHost: comment => ({ entity_type: comment.entity_type, entity_id: comment.entity_id }),
+  })
   const onUpdated = (u: Comment) => setComments(prev => prev.map(c => (c.id === u.id ? u : c)))
   const update = (id: string, patch: Parameters<typeof api.comments.update>[1]) => void api.comments.update(id, patch).then(onUpdated)
   const remove = (id: string) => void api.comments.remove(id).then(() => setComments(prev => prev.filter(c => c.id !== id)))
@@ -1686,17 +1747,18 @@ function CommentsSection({ comments, setComments }: {
 
   return (
     <>
-      <div className="pp-toolbar">
+      <div className="pp-toolbar pp-toolbar-finder">
         <div className="ab-seg" role="group" aria-label="Comments view">
           <button type="button" aria-pressed={view === 'list'} className={view === 'list' ? 'active' : ''} onClick={() => setView('list')}>List</button>
           <button type="button" aria-pressed={view === 'card'} className={view === 'card' ? 'active' : ''} onClick={() => setView('card')}>Cards</button>
         </div>
+        {finder.controls}
       </div>
-      <div className={view === 'card' ? 'pp-comment-cards' : 'pp-rows'}>
-        {comments.map(c => (
+      {finder.filtered.length === 0 ? <p style={EMPTY}>No comments match this finder.</p> : <div className={view === 'card' ? 'pp-comment-cards' : 'pp-rows'}>
+        {finder.filtered.map(c => (
           <CommentItem key={c.id} comment={c} card={view === 'card'} update={update} remove={remove} />
         ))}
-      </div>
+      </div>}
     </>
   )
 }
@@ -1735,10 +1797,17 @@ function CommentItem({ comment, card, update, remove }: {
 }
 
 function LinksList({ links }: { links: Link[] }) {
+  const finder = usePlanningFinder({
+    label: 'links', items: links,
+    searchText: link => [link.title, link.url, link.entity_type].filter(Boolean).join(' '),
+    attachmentHost: link => ({ entity_type: link.entity_type, entity_id: link.entity_id }),
+  })
   if (links.length === 0) return <p style={EMPTY}>No links yet.</p>
   return (
-    <ul className="pp-rows">
-      {links.map(l => (
+    <>
+      <div className="pp-toolbar pp-toolbar-finder">{finder.controls}</div>
+      {finder.filtered.length === 0 ? <p style={EMPTY}>No links match this finder.</p> : <ul className="pp-rows">
+      {finder.filtered.map(l => (
         <li key={l.id} className="pp-row">
           <a className="pp-row-title pp-link" href={l.url} target="_blank" rel="noopener noreferrer">
             {l.title || l.url}
@@ -1746,6 +1815,7 @@ function LinksList({ links }: { links: Link[] }) {
           <span className="pp-meta">{l.entity_type}</span>
         </li>
       ))}
-    </ul>
+      </ul>}
+    </>
   )
 }

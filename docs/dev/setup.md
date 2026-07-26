@@ -23,6 +23,22 @@ API and the Vite dev server, waits until both actually answer, then opens the
 UI. If 8000 or 5173 is busy it picks the next free port and passes it through
 everywhere. Local dev only — the external API stays disabled.
 
+On Windows, `run-planarus.bat` also creates `apps/api/.venv` with Python 3.11
+and installs the local API/web dependencies if they are missing. It exits
+nonzero instead of opening a broken UI when bootstrap, migration, API health,
+or web readiness fails. A plain run explicitly keeps the app anonymous, even
+if the parent shell previously enabled team-mode variables.
+
+Use the optional verification mode before a handoff or after a larger change:
+
+```powershell
+run-planarus.bat verify
+```
+
+It runs the complete API pytest suite and the web Vitest, typecheck, and
+production-build checks before it starts the local app. Add `team` only when
+you explicitly want local sign-in: `run-planarus.bat team verify`.
+
 ## Prerequisites
 
 | Tool | Version | Install |

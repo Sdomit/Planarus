@@ -208,11 +208,17 @@ APPROVAL_ACTION_TYPES: tuple[str, ...] = (
     "task.update",
     "decision.create",
     "doc.update",  # Phase 13c: AI-proposed canvas/doc edits (content_json)
+    "connection.create",  # Phase 25: approval-gated typed entity connection
 )
 
 # Entity kinds an approval may target. Widening requires a paired migration that
 # rewrites ``ck_approval_target_entity_type`` (migration 0016 for 'doc').
-APPROVAL_TARGET_ENTITY_TYPES: tuple[str, ...] = ("task", "decision", "doc")
+APPROVAL_TARGET_ENTITY_TYPES: tuple[str, ...] = (
+    "task",
+    "decision",
+    "doc",
+    "entity_connection",
+)
 
 
 def approval_status_check_sql(column: str = "status") -> str:
@@ -379,6 +385,34 @@ REF_ENTITY_TYPES: tuple[str, ...] = (
     "doc",
     "calendar_event",
 )
+
+# Phase 25: connections are a deliberately smaller subset than generic
+# comments/links. A connection must join two first-class planning records — it
+# can never point at a project, stage, blocker, or calendar event.
+CONNECTION_ENTITY_TYPES: tuple[str, ...] = (
+    "phase",
+    "task",
+    "decision",
+    "risk",
+    "milestone",
+    "doc",
+)
+CONNECTION_RELATION_TYPES: tuple[str, ...] = (
+    "depends_on",
+    "implements",
+    "mitigates",
+    "contributes_to",
+    "references",
+    "related_to",
+)
+
+
+def entity_connection_entity_type_check_sql(column: str = "source_entity_type") -> str:
+    return _check_sql(column, CONNECTION_ENTITY_TYPES)
+
+
+def entity_connection_relation_type_check_sql(column: str = "relation_type") -> str:
+    return _check_sql(column, CONNECTION_RELATION_TYPES)
 
 
 # --- Phase 15.12: CalendarEvent (calendar surface) ----------------------------

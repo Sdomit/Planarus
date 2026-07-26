@@ -1,157 +1,284 @@
 @echo off
 REM ============================================================================
-REM  Planarus - local dev launcher (UI/UX testing)
-REM  Starts the FastAPI backend (:8000) + Vite frontend (:5173) and opens the UI
-REM  once both actually respond. Commands mirror docs/dev/setup.md. Vite proxies
-REM  /api -> :8000, so every UI feature works with no extra config.
-REM  NOTE: this is LOCAL dev only - the external API (ChatGPT) stays DISABLED.
+REM Planarus - one-command Windows local development launcher
+REM
+REM A plain run bootstraps missing local dependencies, migrates the local DB,
+REM starts FastAPI + Vite, and opens the UI only after both health checks pass.
+REM It is loopback-only and always disables the external API. Add "verify" to
+REM run the complete local API/web checks before launch; add "team" to opt in to
+REM the account gate. Arguments can be combined in either order.
 REM ============================================================================
-setlocal
+setlocal EnableExtensions DisableDelayedExpansion
 set "ROOT=%~dp0"
+set "API_DIR=%ROOT%apps\api"
+set "API_PY=%API_DIR%\.venv\Scripts\python.exe"
+set "PNPM_CMD=pnpm"
+set "TEAM_MODE=0"
+set "VERIFY_MODE=0"
 
-REM --- preflight checks -------------------------------------------------------
-if not exist "%ROOT%apps\api\.venv\Scripts\activate.bat" (
-  echo [ERROR] Backend venv missing: apps\api\.venv
-  echo         First-time setup ^(see docs\dev\setup.md^):
-  echo           cd apps\api ^&^& python -m venv .venv ^&^& .venv\Scripts\activate ^&^& pip install -e ".[dev]"
-  pause
-  exit /b 1
-)
-where pnpm >nul 2>&1
-if errorlevel 1 (
-  echo [ERROR] pnpm not found on PATH. Install Node 20+ then: npm install -g pnpm
-  pause
-  exit /b 1
-)
-if not exist "%ROOT%apps\web\node_modules" (
-  echo [SETUP] Web dependencies missing - running pnpm install once...
-  cd /d "%ROOT%"
-  call pnpm install
-  if errorlevel 1 (
-    echo [ERROR] pnpm install failed - fix the error above and rerun.
-    pause
-    exit /b 1
-  )
-)
-
-REM --- optional team mode: run-planarus.bat team ------------------------------
-REM  Off by default (D25/D26): a plain run stays the single-user local tool with
-REM  no sign-in at all. "team" turns on the account gate and the password
-REM  provider, so the first account you create claims the server as its admin
-REM  and you can add viewers from Team. setlocal keeps both out of your shell.
-set "MODE=local (no sign-in)"
+:parse_args
+if "%~1"=="" goto args_done
 if /i "%~1"=="team" (
+  set "TEAM_MODE=1"
+  shift
+  goto parse_args
+)
+if /i "%~1"=="verify" (
+  set "VERIFY_MODE=1"
+  shift
+  goto parse_args
+)
+if /i "%~1"=="help" goto usage
+if /i "%~1"=="--help" goto usage
+if /i "%~1"=="-h" goto usage
+echo [ERROR] Unknown argument: %~1
+goto usage_error
+
+:args_done
+REM --- prerequisites + first-run bootstrap -----------------------------------
+call :ensure_pnpm
+if errorlevel 1 goto failed
+call :ensure_api_environment
+if errorlevel 1 goto failed
+call :ensure_web_environment
+if errorlevel 1 goto failed
+
+REM Keep every bootstrap and verification command local-only as well.
+set "PLANARUS_EXTERNAL_API_ENABLED=false"
+set "PLANARUS_AUTH_ENABLED=false"
+set "PLANARUS_AUTH_PASSWORD_ENABLED=false"
+
+if "%VERIFY_MODE%"=="1" (
+  call :verify_checkout
+  if errorlevel 1 goto failed
+)
+
+REM --- local-only runtime policy ---------------------------------------------
+REM setlocal means these override only this launcher and its child processes.
+REM A plain run must stay anonymous even if a parent shell had team mode set.
+set "MODE=local (no sign-in)"
+if "%TEAM_MODE%"=="1" (
   set "PLANARUS_AUTH_ENABLED=true"
   set "PLANARUS_AUTH_PASSWORD_ENABLED=true"
   set "MODE=team (sign-in required)"
 )
 
-REM --- pick free ports (parity with run-planarus.sh) --------------------------
-REM  Without this, a second copy - or a leftover window - meant uvicorn failed to
-REM  bind while Vite came up fine, so the browser loaded the app and every call
-REM  died with "Failed to fetch". netstat is built in, so no Python probe here.
+REM --- pick free loopback ports ------------------------------------------------
+REM netstat is built in. The colon anchor prevents :8000 matching :18000; omit
+REM -p tcp so IPv6 Vite listeners are not mistaken for free ports.
 call :free_port 8000 API_PORT
 call :free_port 5173 WEB_PORT
 if not "%API_PORT%"=="8000" echo [PORT] 8000 busy - API moved to :%API_PORT%
 if not "%WEB_PORT%"=="5173" echo [PORT] 5173 busy - Web moved to :%WEB_PORT%
 
-echo Starting Planarus  ^|  API :%API_PORT%   Web :%WEB_PORT%   Mode: %MODE%
+echo.
+echo Starting Planarus ^| API :%API_PORT%  Web :%WEB_PORT%  Mode: %MODE%
+if "%VERIFY_MODE%"=="1" echo Verification passed; starting the local app.
 echo.
 
-REM --- backend window: migrate to head, then run with hot reload --------------
-REM  Force the external (ChatGPT) API OFF for local UI testing, regardless of
-REM  any leftover value in your environment. setlocal keeps this out of your
-REM  shell; the started window inherits it.
-set "PLANARUS_EXTERNAL_API_ENABLED=false"
-cd /d "%ROOT%apps\api"
-REM  --reload-dir app: watch only source; without it the watcher scans .venv
-REM  (thousands of files - minutes on this OneDrive-synced tree).
-start "Planarus API (:%API_PORT%)" cmd /k "call .venv\Scripts\activate.bat && alembic upgrade head && uvicorn app.main:app --reload --reload-dir app --port %API_PORT%"
+REM --- start backend + frontend ------------------------------------------------
+REM The API window applies migrations before uvicorn starts. A failure remains
+REM visible there, while this launcher exits nonzero instead of opening a dead UI.
+start "Planarus API (:%API_PORT%)" /D "%API_DIR%" cmd /k "call .venv\Scripts\activate.bat && alembic upgrade head && uvicorn app.main:app --reload --reload-dir app --port %API_PORT%"
 
-REM --- frontend window: Vite dev server (root workspace script) ---------------
-REM  VITE_PORT also flips Vite to strictPort, so it fails loudly instead of
-REM  silently landing on +1 and leaving the URL below pointing at nothing.
-REM  VITE_API_TARGET repoints the /api proxy when the API moved.
-cd /d "%ROOT%"
+REM vite.config.ts reads both variables; strictPort prevents a silent port drift.
 set "VITE_PORT=%WEB_PORT%"
 set "VITE_API_TARGET=http://localhost:%API_PORT%"
-start "Planarus Web (:%WEB_PORT%)" cmd /k "pnpm dev:web"
+start "Planarus Web (:%WEB_PORT%)" /D "%ROOT%" cmd /k "call %PNPM_CMD% dev:web"
 
-REM --- open the UI when both servers actually answer (max ~60s each) ----------
-REM  /health only returns 2xx once migrations ran and the app imported, so this
-REM  also waits out "alembic upgrade head" on first boot.
-REM  localhost, not 127.0.0.1: vite may bind the IPv6 loopback (::1) only;
-REM  curl on localhost tries both address families. ping is the sleep because
-REM  timeout dies when stdin is redirected (scheduler / nested-script launches).
-where curl >nul 2>&1
-if errorlevel 1 (
-  REM No curl on this box - fall back to a fixed ~8s wait.
-  ping -n 9 127.0.0.1 >nul
-  goto :open_ui
-)
-
+REM --- wait for real readiness -------------------------------------------------
 set /a _tries=0
 :wait_api
-curl -sf -o NUL --max-time 2 http://localhost:%API_PORT%/health >nul 2>&1
-if not errorlevel 1 goto :api_up
+call :probe_url "http://localhost:%API_PORT%/health"
+if not errorlevel 1 goto api_up
 set /a _tries+=1
 if %_tries% geq 120 (
-  echo [WARN] API not answering on :%API_PORT% after 120s - check the API window for errors.
-  goto :open_ui
+  echo [ERROR] API did not pass /health on :%API_PORT% after 120 seconds.
+  echo         Check the Planarus API window for the migration or startup error.
+  goto failed
 )
-ping -n 2 127.0.0.1 >nul
-goto :wait_api
+call :wait_one_second
+goto wait_api
+
 :api_up
 echo   API is up   http://localhost:%API_PORT%
-
 set /a _tries=0
 :wait_web
-curl -sf -o NUL --max-time 2 http://localhost:%WEB_PORT% >nul 2>&1
-if not errorlevel 1 goto :web_up
+call :probe_url "http://localhost:%WEB_PORT%"
+if not errorlevel 1 goto web_up
 set /a _tries+=1
 if %_tries% geq 60 (
-  echo [WARN] Web not answering on :%WEB_PORT% after 60s - check the Web window for errors.
-  goto :open_ui
+  echo [ERROR] Web app did not answer on :%WEB_PORT% after 60 seconds.
+  echo         Check the Planarus Web window for the Vite startup error.
+  goto failed
 )
-ping -n 2 127.0.0.1 >nul
-goto :wait_web
+call :wait_one_second
+goto wait_web
+
 :web_up
 echo   Web is up   http://localhost:%WEB_PORT%
-
-:open_ui
-start "" http://localhost:%WEB_PORT%
-
+start "" "http://localhost:%WEB_PORT%"
 echo.
-echo Opened two windows: API (:%API_PORT%) and Web (:%WEB_PORT%).
-echo   UI:        http://localhost:%WEB_PORT%
-echo   API docs:  http://localhost:%API_PORT%/docs
-echo   Mode:      %MODE%   ^(run "run-planarus.bat team" for sign-in + roles^)
-echo Stop everything by closing those two windows (or Ctrl+C in each).
-endlocal
-goto :eof
+echo Planarus is ready.
+echo   UI:       http://localhost:%WEB_PORT%
+echo   API docs: http://localhost:%API_PORT%/docs
+echo   Mode:     %MODE%
+echo Close the Planarus API and Web windows to stop the local app.
+exit /b 0
 
-REM --- free_port START VARNAME: first free port at or above START -------------
-REM  Ask netstat rather than binding: SO_REUSEADDR and Windows'
-REM  0.0.0.0-vs-127.0.0.1 rules both let a bind succeed on a taken port. The
-REM  colon anchor keeps :8000 from matching :18000.
-REM  NO "-p tcp": that flag drops every IPv6 row, and Vite binds [::1] only -
-REM  with it, a busy :5173 reads as free and the second copy dies on bind.
-REM  UDP rows come along without the filter but never say LISTENING.
-REM  ponytail: check-then-start races if something grabs the port in the next
-REM  second - the server window logs the bind error, rerun. Same caveat the
-REM  shell twin carries.
+REM --- subroutines -------------------------------------------------------------
+:ensure_pnpm
+where node >nul 2>&1
+if errorlevel 1 (
+  echo [ERROR] Node.js 20+ is required but was not found on PATH.
+  exit /b 1
+)
+where pnpm >nul 2>&1
+if not errorlevel 1 (
+  call pnpm --version >nul 2>&1
+  if not errorlevel 1 exit /b 0
+)
+where corepack >nul 2>&1
+if errorlevel 1 (
+  echo [ERROR] pnpm is unavailable. Install Node.js 20+ with Corepack, then run: corepack enable
+  exit /b 1
+)
+set "PNPM_CMD=corepack pnpm"
+call %PNPM_CMD% --version >nul 2>&1
+if errorlevel 1 (
+  echo [ERROR] Corepack could not run this repository's pinned pnpm version.
+  echo         Run "corepack enable" once, then try again.
+  exit /b 1
+)
+exit /b 0
+
+:ensure_api_environment
+if not exist "%API_PY%" (
+  echo [SETUP] Creating the local Python 3.11 environment...
+  call :find_python311
+  if errorlevel 1 exit /b 1
+  %BOOTSTRAP_PY% -m venv "%API_DIR%\.venv"
+  if errorlevel 1 (
+    echo [ERROR] Could not create apps\api\.venv.
+    exit /b 1
+  )
+)
+"%API_PY%" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 11) else 1)" >nul 2>&1
+if errorlevel 1 (
+  echo [ERROR] apps\api\.venv must use Python 3.11.
+  echo         Recreate that environment with Python 3.11, then rerun this file.
+  exit /b 1
+)
+"%API_PY%" -c "import alembic, fastapi, sqlmodel, uvicorn" >nul 2>&1
+if not errorlevel 1 (
+  if "%VERIFY_MODE%"=="0" exit /b 0
+  "%API_PY%" -c "import pytest" >nul 2>&1
+  if not errorlevel 1 exit /b 0
+)
+echo [SETUP] Installing local API and test dependencies...
+pushd "%API_DIR%"
+"%API_PY%" -m pip install -e ".[dev]"
+set "_setup_status=%ERRORLEVEL%"
+popd
+if not "%_setup_status%"=="0" (
+  echo [ERROR] API dependency installation failed.
+  exit /b 1
+)
+exit /b 0
+
+:find_python311
+py -3.11 -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 11) else 1)" >nul 2>&1
+if errorlevel 1 (
+  echo [ERROR] Python 3.11 is required to create apps\api\.venv.
+  echo         Install Python 3.11 from python.org, ensure the Python Launcher is enabled, then rerun this file.
+  exit /b 1
+)
+set "BOOTSTRAP_PY=py -3.11"
+exit /b 0
+
+:ensure_web_environment
+if exist "%ROOT%apps\web\node_modules" if "%VERIFY_MODE%"=="0" exit /b 0
+if "%VERIFY_MODE%"=="1" (
+  echo [SETUP] Verifying locked web dependencies...
+) else (
+  echo [SETUP] Installing locked web dependencies...
+)
+pushd "%ROOT%"
+call %PNPM_CMD% install --frozen-lockfile
+set "_setup_status=%ERRORLEVEL%"
+popd
+if not "%_setup_status%"=="0" (
+  echo [ERROR] Web dependency installation failed.
+  exit /b 1
+)
+exit /b 0
+
+:verify_checkout
+echo.
+echo [VERIFY] Running API tests...
+pushd "%API_DIR%"
+"%API_PY%" -m pytest
+set "_verify_status=%ERRORLEVEL%"
+popd
+if not "%_verify_status%"=="0" exit /b 1
+
+echo [VERIFY] Running web tests...
+pushd "%ROOT%"
+call %PNPM_CMD% test:web
+set "_verify_status=%ERRORLEVEL%"
+if not "%_verify_status%"=="0" goto verify_web_done
+echo [VERIFY] Running web typecheck...
+call %PNPM_CMD% typecheck:web
+set "_verify_status=%ERRORLEVEL%"
+if not "%_verify_status%"=="0" goto verify_web_done
+echo [VERIFY] Building the production web app...
+call %PNPM_CMD% build:web
+set "_verify_status=%ERRORLEVEL%"
+:verify_web_done
+popd
+if not "%_verify_status%"=="0" exit /b 1
+exit /b 0
+
+:probe_url
+curl -sf -o NUL --max-time 2 "%~1" >nul 2>&1
+if not errorlevel 1 exit /b 0
+powershell -NoProfile -Command "try { $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 '%~1'; if ($r.StatusCode -ge 200 -and $r.StatusCode -lt 400) { exit 0 }; exit 1 } catch { exit 1 }" >nul 2>&1
+exit /b %ERRORLEVEL%
+
+:wait_one_second
+ping -n 2 127.0.0.1 >nul
+exit /b 0
+
 :free_port
-setlocal enabledelayedexpansion
+setlocal EnableDelayedExpansion
 set /a _p=%~1
 set /a _stop=%~1+50
 :free_port_probe
 netstat -ano | findstr /r /c:":!_p! .*LISTENING" >nul 2>&1
-if errorlevel 1 goto :free_port_done
+if errorlevel 1 goto free_port_done
 set /a _p+=1
-if !_p! lss !_stop! goto :free_port_probe
-REM  50 in a row busy: fall back to the requested port and let the server
-REM  report the bind error rather than silently scanning forever.
+if !_p! lss !_stop! goto free_port_probe
 set /a _p=%~1
 :free_port_done
 endlocal & set "%~2=%_p%"
-goto :eof
+exit /b 0
+
+:usage
+echo Usage: run-planarus.bat [team] [verify]
+echo.
+echo   run-planarus.bat          Bootstrap and start the local anonymous app.
+echo   run-planarus.bat verify   Run API and web checks, then start the app.
+echo   run-planarus.bat team     Start local team mode with sign-in enabled.
+echo.
+echo Arguments can be combined: run-planarus.bat team verify
+exit /b 0
+
+:usage_error
+echo.
+call :usage
+exit /b 1
+
+:failed
+echo.
+echo Planarus did not start. Fix the error above and run this file again.
+exit /b 1

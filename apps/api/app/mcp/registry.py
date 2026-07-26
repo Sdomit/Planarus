@@ -2,7 +2,7 @@
 
 There is NO reflection / decorator auto-discovery: the two dicts below are the
 only source of tools. The read tier sees the ten read tools; the propose tier
-sees those ten plus exactly four proposal tools. No registered tool name (or
+sees those ten plus exactly five proposal tools. No registered tool name (or
 implementation) involves approve/apply/reject/invalidate/delete/archive/export/
 filesystem/path/shell/command/git/network/http/chatgpt — asserted at import.
 """
@@ -130,6 +130,13 @@ PROPOSE_TOOLS: dict[str, ToolSpec] = {
         "scene. Creates a PENDING approval only; a human must approve and apply it "
         "before anything changes.",
         propose_tools.UpdateCanvasProposalArgs, propose_tools.update_canvas_proposal,
+    ),
+    "create_connection_proposal": ToolSpec(
+        "create_connection_proposal", "propose",
+        "Propose a typed connection between two planning records. Creates a PENDING "
+        "approval only; a human must approve and apply it before anything changes.",
+        propose_tools.CreateConnectionProposalArgs,
+        propose_tools.create_connection_proposal,
     ),
 }
 

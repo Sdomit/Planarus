@@ -7,7 +7,7 @@ from app.models.decision import Decision
 from app.models.phase import Phase
 from app.models.project import Project
 from app.schemas.decision import DecisionCreate, DecisionUpdate
-from app.services import status_option_service
+from app.services import entity_connection_service, status_option_service
 from app.services.audit_service import create_audit_event
 from app.services.planning_reorder import apply_reorder
 
@@ -110,6 +110,7 @@ def delete_decision(session: Session, decision_id: str) -> bool:
     if decision is None:
         return False
     project_id = decision.project_id
+    entity_connection_service.delete_for_entity(session, project_id, "decision", decision_id)
     session.delete(decision)
     create_audit_event(
         session,

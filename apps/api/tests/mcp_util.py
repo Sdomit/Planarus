@@ -37,6 +37,7 @@ EXPECTED_PROPOSE_TOOLS: frozenset[str] = frozenset(
         "update_task_proposal",
         "create_decision_proposal",
         "update_canvas_proposal",
+        "create_connection_proposal",
     }
 )
 

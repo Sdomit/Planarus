@@ -84,6 +84,15 @@ class UpdateCanvasProposalArgs(StrictArgs):
     markdown_cache: Optional[str] = None
 
 
+class CreateConnectionProposalArgs(StrictArgs):
+    project_id: str
+    relation_type: str
+    source_entity_type: str
+    source_entity_id: str
+    target_entity_type: str
+    target_entity_id: str
+
+
 # --- helpers -----------------------------------------------------------------
 
 
@@ -149,6 +158,13 @@ def _create(
 _TASK_FIELDS = ("title", "description", "status", "priority", "phase_id", "stage_id", "due_at")
 _DECISION_FIELDS = ("title", "decision", "context", "status")
 _CANVAS_FIELDS = ("content_json", "markdown_cache")
+_CONNECTION_FIELDS = (
+    "relation_type",
+    "source_entity_type",
+    "source_entity_id",
+    "target_entity_type",
+    "target_entity_id",
+)
 
 
 def create_task_proposal(
@@ -195,4 +211,21 @@ def update_canvas_proposal(
         raise MCPToolError(CODE_NOT_FOUND, "canvas not found")
     return _create(
         session, cap, "doc.update", doc.project_id, doc.id, _patch_from(args, _CANVAS_FIELDS)
+    )
+
+
+def create_connection_proposal(
+    session: Session, cap: Capability, args: CreateConnectionProposalArgs
+) -> ToolResult:
+    """Queue one typed connection; it remains pending until human apply."""
+    _require_propose(cap)
+    if not cap.allows_project(args.project_id):
+        raise MCPToolError(CODE_FORBIDDEN, "project not in scope")
+    return _create(
+        session,
+        cap,
+        "connection.create",
+        args.project_id,
+        None,
+        _patch_from(args, _CONNECTION_FIELDS),
     )

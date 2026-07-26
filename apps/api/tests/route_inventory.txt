@@ -57,6 +57,7 @@ tenant               POST    /api/v1/docs/{doc_id}/export-markdown
 tenant               DELETE  /api/v1/docs/{doc_id}/presence
 tenant               GET     /api/v1/docs/{doc_id}/presence
 tenant               PUT     /api/v1/docs/{doc_id}/presence
+tenant               DELETE  /api/v1/entity-connections/{entity_connection_id}
 global               GET     /api/v1/info
 global               GET     /api/v1/integrations/gpt-openapi
 global               GET     /api/v1/integrations/mcp
@@ -86,6 +87,8 @@ tenant               POST    /api/v1/projects/{project_id}/calendar-events
 tenant               GET     /api/v1/projects/{project_id}/calendar.ics
 tenant               GET     /api/v1/projects/{project_id}/comments
 tenant               POST    /api/v1/projects/{project_id}/comments
+tenant               GET     /api/v1/projects/{project_id}/connections
+tenant               POST    /api/v1/projects/{project_id}/connections
 tenant               POST    /api/v1/projects/{project_id}/context-pack/preview
 tenant               GET     /api/v1/projects/{project_id}/context-pack/sources
 tenant               POST    /api/v1/projects/{project_id}/context/regenerate

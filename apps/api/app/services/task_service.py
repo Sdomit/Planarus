@@ -12,7 +12,7 @@ from app.models.stage import Stage
 from app.models.task import Task
 from app.models.user import User
 from app.schemas.task import TaskCreate, TaskUpdate
-from app.services import status_option_service
+from app.services import entity_connection_service, status_option_service
 from app.services.audit_service import create_audit_event
 from app.services.planning_reorder import apply_reorder
 
@@ -206,6 +206,8 @@ def delete_task(session: Session, task_id: str) -> bool:
         child.parent_task_id = None
         child.updated_at = now
         session.add(child)
+
+    entity_connection_service.delete_for_entity(session, project_id, "task", task_id)
 
     # Flush child deletes/unlinks before the task's own DELETE (FKs enforced).
     session.flush()

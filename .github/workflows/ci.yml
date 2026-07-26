@@ -177,9 +177,11 @@ jobs:
         run: alembic check
       # The rest of the suite runs on SQLite, whose single writer masks the
       # approval apply race entirely. This is the only place that exercises
-      # concurrent writers on the dialect we actually deploy on.
-      - name: Approval concurrency (real Postgres)
-        run: python -m pytest tests/test_approval_concurrency_pg.py -q
+      # concurrent writers on the dialect we actually deploy on. Globbed, not
+      # listed: a concurrency test that names a file nobody added to this line is
+      # a test that silently never runs — which is what happened to the admin one.
+      - name: Concurrency (real Postgres)
+        run: python -m pytest tests/test_*concurrency*.py -q
 
   docker-build:
     name: Docker (compose build + smoke)
