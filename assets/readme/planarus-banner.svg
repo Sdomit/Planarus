@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="600" viewBox="0 0 1600 600" role="img" aria-labelledby="title desc">
+<title id="title">Planarus repository banner</title>
+<desc id="desc">Planarus — Plan, Navigate, Achieve. A local-first project cockpit with human-controlled AI.</desc>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#091226"/><stop offset=".55" stop-color="#0D1220"/><stop offset="1" stop-color="#231E4B"/></linearGradient>
+  <radialGradient id="lg" cx=".22" cy=".55" r=".55"><stop offset="0" stop-color="#2D6CC8" stop-opacity=".45"/><stop offset="1" stop-color="#2D6CC8" stop-opacity="0"/></radialGradient>
+  <radialGradient id="rg" cx=".88" cy=".08" r=".7"><stop offset="0" stop-color="#7A63C7" stop-opacity=".35"/><stop offset="1" stop-color="#7A63C7" stop-opacity="0"/></radialGradient>
+  <linearGradient id="brand" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#2D5BA8"/><stop offset=".52" stop-color="#5DB7F2"/><stop offset="1" stop-color="#7A63C7"/></linearGradient>
+  <linearGradient id="road" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#9EA3D0"/><stop offset="1" stop-color="#E3E5F7"/></linearGradient>
+  <linearGradient id="tag" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5DB7F2"/><stop offset=".5" stop-color="#2D6CC8"/><stop offset="1" stop-color="#7A63C7"/></linearGradient>
+  <pattern id="grid" width="80" height="80" patternUnits="userSpaceOnUse"><path d="M80 0H0V80" fill="none" stroke="#B7B1E6" stroke-opacity=".08"/></pattern>
+</defs>
+<rect width="1600" height="600" fill="url(#bg)"/><rect width="1600" height="600" fill="url(#lg)"/><rect width="1600" height="600" fill="url(#rg)"/><rect width="1600" height="600" fill="url(#grid)"/>
+<path d="M875 510C1050 430 1130 330 1310 285C1410 260 1510 245 1600 230" fill="none" stroke="#7A63C7" stroke-opacity=".42" stroke-width="3"/>
+<g fill="#0D1220" stroke="#B7B1E6" stroke-opacity=".7"><circle cx="970" cy="462" r="10" stroke-width="3"/><circle cx="1110" cy="375" r="6" stroke-width="3"/><circle cx="1225" cy="315" r="4.5" stroke-width="2.5"/><circle cx="1370" cy="272" r="3.5" stroke-width="2"/><circle cx="1500" cy="245" r="2.5" stroke-width="1.8"/></g>
+<g transform="translate(61 65) scale(.5875)">
+  <circle cx="330" cy="400" r="430" fill="#2D6CC8" opacity=".11"/>
+  <path d="M542 49 L479 17 L405 1 L58 1 L32 11 L13 29 L0 65 L0 784 L7 796 L66 799 L70 746 L83 673 L103 603 L122 557 L122 329 L128 310 L147 291 L164 285 L391 285 L420 293 L438 307 L439 328 L428 346 L357 422 L342 444 L320 498 L306 569 L412 570 L478 555 L522 535 L570 501 L613 454 L644 400 L660 352 L667 307 L663 234 L649 184 L626 137 L591 91 Z" fill="url(#brand)"/>
+  <path d="M438 327 L413 333 L357 353 L298 381 L272 396 L239 418 L209 442 L181 469 L159 495 L143 518 L124 553 L108 592 L96 628 L84 673 L76 713 L69 763 L67 799 L237 799 L248 797 L267 789 L287 771 L297 753 L301 738 L300 628 L302 596 L312 526 L327 474 L341 444 L352 427 L414 362 L427 346 Z" fill="url(#road)"/>
+  <path d="M166 760C158 670 177 590 218 520C268 438 337 377 428 330" fill="none" stroke="#6864B2" stroke-width="8" stroke-linecap="round"/>
+  <g fill="#11172A" stroke="#6864B2" stroke-width="7"><circle cx="171" cy="650" r="27"/><circle cx="192" cy="582" r="21"/><circle cx="223" cy="520" r="16"/><circle cx="261" cy="467" r="11"/><circle cx="305" cy="421" r="7"/></g>
+</g>
+<g font-family="Inter,Segoe UI,Arial,sans-serif">
+<text x="574" y="108" fill="#8F9BBB" font-size="14" font-weight="600" letter-spacing="1.2">PROJECT PLANNING · HUMAN-CONTROLLED AI</text>
+<text x="570" y="198" fill="#F8F9FF" font-size="90" font-weight="800" letter-spacing="-2">PLANARUS</text>
+<text x="574" y="250" fill="url(#tag)" font-size="32" font-weight="500">Plan · Navigate · Achieve</text>
+<text x="574" y="318" fill="#E0E5F4" font-size="24">A local-first project cockpit for real planning work.</text>
+<text x="574" y="358" fill="#B7B1E6" font-size="24">AI reads and proposes. You approve and apply.</text>
+<g font-size="14" font-weight="650" fill="#F1F3FA"><rect x="574" y="405" width="119" height="39" rx="19.5" fill="#2D6CC8" fill-opacity=".34" stroke="#2D6CC8" stroke-opacity=".85"/><text x="595" y="430">LOCAL-FIRST</text><rect x="706" y="405" width="146" height="39" rx="19.5" fill="#4A4DBE" fill-opacity=".34" stroke="#4A4DBE" stroke-opacity=".85"/><text x="728" y="430">APPROVAL-FIRST</text><rect x="865" y="405" width="130" height="39" rx="19.5" fill="#7A63C7" fill-opacity=".34" stroke="#7A63C7" stroke-opacity=".85"/><text x="889" y="430">MCP-ENABLED</text><rect x="1008" y="405" width="169" height="39" rx="19.5" fill="#374155" fill-opacity=".5" stroke="#68738D" stroke-opacity=".75"/><text x="1030" y="430">NO CLOUD REQUIRED</text></g>
+<line x1="574" y1="486" x2="1470" y2="486" stroke="#B7B1E6" stroke-opacity=".28"/><text x="574" y="526" fill="#99A5C2" font-size="16">github.com/Sdomit/Planarus</text>
+</g>
+</svg>

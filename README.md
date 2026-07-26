@@ -1,16 +1,5 @@
 <p align="center">
-  <img src="assets/readme/logo-mark.png" width="132" alt="Planarus" />
-</p>
-
-<h1 align="center">Planarus</h1>
-
-<p align="center">
-  <strong>Plan . Navigate . Achieve</strong>
-</p>
-
-<p align="center">
-  A local-first project cockpit for real planning work — phases, tasks, boards, docs, decisions, risks.<br />
-  Bring an AI agent in and it reads and proposes; you approve and apply.
+  <img src="assets/readme/planarus-banner.svg" alt="Planarus — Plan . Navigate . Achieve. A local-first project cockpit for real planning work. AI reads and proposes; you approve and apply." width="100%" />
 </p>
 
 <p align="center">
