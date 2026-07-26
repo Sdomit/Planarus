@@ -61,7 +61,7 @@ button, input, select, textarea {
 /* Solid (Primary) */
 .btn-solid {
   background: var(--accent);
-  color: var(--cn-0);
+  color: var(--text-on-accent);
   border-color: var(--accent);
 }
 .btn-solid:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
@@ -235,6 +235,13 @@ textarea.input { height: auto; padding: var(--space-2-5) var(--space-3); resize:
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: center;
 }
+/* The tick is a graphical object on the accent fill and needs the same 3:1 as
+   the toggle knob — white measured 1.96:1 on a light accent. The stroke is baked
+   into the data URI and cannot read a token, so dark themes carry a second URI
+   with the navy that --text-on-accent resolves to there. */
+[data-theme^="dark"] .checkbox-wrapper input[type="checkbox"]:checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%230B1226' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
+}
 .radio-wrapper input[type="radio"]:checked {
   border-color: var(--accent);
   background: radial-gradient(circle, var(--accent) 40%, transparent 40%);
@@ -257,7 +264,10 @@ textarea.input { height: auto; padding: var(--space-2-5) var(--space-3); resize:
   box-shadow: var(--shadow-xs);
 }
 .toggle.on { background: var(--accent); }
-.toggle.on::after { transform: translateX(16px); }
+/* The knob is the state indicator, so it needs 3:1 against the track it sits on
+   (WCAG 1.4.11). White on a light accent measured 1.96:1 — only the position
+   distinguished on from off. --text-on-accent tracks the fill, not the mode. */
+.toggle.on::after { transform: translateX(16px); background: var(--text-on-accent); }
 .toggle-label { font-size: var(--text-sm); color: var(--text-primary); }
 
 /* ── BADGES & TAGS ───────────────────────────────────────── */
