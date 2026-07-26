@@ -9,11 +9,13 @@ import Image from '@tiptap/extension-image'
 import { TextStyle } from '@tiptap/extension-text-style'
 import Color from '@tiptap/extension-color'
 import { MarkdownSerializer } from 'prosemirror-markdown'
-import { api, type Doc, type DocSummary } from '../api/client'
+import { api, type Doc, type DocSummary, type EntityConnection } from '../api/client'
 import { StatusBadge } from './StatusBadge'
 import { usePresence } from './usePresence'
 import { agoLabel } from './date'
 import { isAllowedImageSrc, isAllowedLink, markdownTitle, markdownUrl } from './uri-policy'
+import { ConnectionProvider, EntityConnections, type ConnectionTarget } from './EntityConnections'
+import { buildConnectionTargets, docToTarget } from './connectionTargets'
 import './docs-panel.css'
 
 // Excalidraw is heavy (~1MB) and pulls in browser-only modules that crash under
@@ -203,9 +205,11 @@ interface DocListProps {
   onNew: () => void
   onClose?: () => void
   docType?: string
+  /** Drops a deleted doc from the loaded connection target list, if any. */
+  onRemoved?: (docId: string) => void
 }
 
-function DocList({ projectId, onSelect, onNew, onClose, docType }: DocListProps) {
+function DocList({ projectId, onSelect, onNew, onClose, docType, onRemoved }: DocListProps) {
   const [docs, setDocs] = useState<DocSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -297,7 +301,7 @@ function DocList({ projectId, onSelect, onNew, onClose, docType }: DocListProps)
                   onClick={() => {
                     if (!window.confirm(`Delete “${d.title}”? This can't be undone.`)) return
                     api.docs.remove(d.id)
-                      .then(() => setDocs(prev => prev.filter(x => x.id !== d.id)))
+                      .then(() => { setDocs(prev => prev.filter(x => x.id !== d.id)); onRemoved?.(d.id) })
                       .catch(reload)
                   }}>
                   <svg className="ic-14" aria-hidden="true"><use href="#icon-trash" /></svg>
@@ -555,10 +559,10 @@ const imageFilesOf = (dt: DataTransfer | null | undefined): File[] =>
     f => f.type.startsWith('image/') && f.type !== 'image/svg+xml',
   )
 
-interface DocEditorProps { docId: string; onBack: () => void }
+interface DocEditorProps { docId: string; onBack: () => void; onRemoved?: (docId: string) => void }
 type SaveState = 'saved' | 'unsaved' | 'saving' | 'conflict' | 'error'
 
-function DocEditor({ docId, onBack }: DocEditorProps) {
+function DocEditor({ docId, onBack, onRemoved }: DocEditorProps) {
   const [doc, setDoc] = useState<Doc | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -710,8 +714,9 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
   const remove = () => {
     if (!docRef.current) return
     if (!window.confirm(`Delete “${docRef.current.title}”? This can't be undone.`)) return
-    api.docs.remove(docRef.current.id)
-      .then(onBack)
+    const removedId = docRef.current.id
+    api.docs.remove(removedId)
+      .then(() => { onRemoved?.(removedId); onBack() })
       .catch((e: Error) => { setSaveError(e.message); setSaveState('error') })
   }
 
@@ -800,8 +805,77 @@ function DocEditor({ docId, onBack }: DocEditorProps) {
         </button>
       </div>
       {exportMsg && <p className="dp-export-msg">{exportMsg}</p>}
+      {/* Plan 25's "Document — referenced by an item; related to". Rendered
+          below the statusbar so it never sits between the prose and its save
+          state. Returns null until the panel's target list has loaded. */}
+      <div className="dp-connections-wrap">
+        <EntityConnections
+          projectId={doc.project_id}
+          entityType="doc"
+          entityId={doc.id}
+          label={doc.title}
+        />
+      </div>
     </div>
   )
+}
+
+/**
+ * Load the project's connection graph and the labels its endpoints render with.
+ *
+ * Deliberately lazy and panel-level, not per-doc: the cost is paid once when the
+ * first document opens, and switching documents afterwards costs nothing. The
+ * Docs panel holds none of these collections otherwise, which is the one real
+ * difference from Planning — there the same data is already on screen, so its
+ * connection section adds no request at all.
+ *
+ * `ready` exists because `ConnectionProvider` prunes any connection whose
+ * endpoints are missing from `targets`. Mounting it against a half-loaded target
+ * list would read every connection as dangling and delete the lot from local
+ * state — so the provider is not mounted until both halves have landed.
+ */
+function useDocConnections(projectId: string, enabled: boolean) {
+  const [connections, setConnections] = useState<EntityConnection[]>([])
+  const [targets, setTargets] = useState<ConnectionTarget[]>([])
+  const [ready, setReady] = useState(false)
+  const loadedFor = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!enabled || loadedFor.current === projectId) return
+    loadedFor.current = projectId
+    let cancelled = false
+    // try//catch around the whole batch, not `.catch()` per call: a missing api
+    // namespace throws *synchronously* at property access, before any promise
+    // exists for `.catch` to attach to, so per-call handlers never see it. The
+    // connections section is supplementary context — if any of this fails it
+    // must stay unmounted, never take the editor down with it.
+    void (async () => {
+      try {
+        const [conns, phases, tasks, milestones, decisions, risks, docs] = await Promise.all([
+          api.connections.list(projectId),
+          api.phases.list(projectId),
+          api.tasks.list(projectId),
+          api.milestones.list(projectId),
+          api.decisions.list(projectId),
+          api.risks.list(projectId),
+          api.docs.list(projectId),
+        ])
+        if (cancelled) return
+        setConnections(conns)
+        setTargets(buildConnectionTargets({ phases, tasks, milestones, decisions, risks, docs }))
+        setReady(true)
+      } catch {
+        // Leave `ready` false: no provider, no section, editor unaffected.
+      }
+    })()
+    return () => { cancelled = true }
+  }, [projectId, enabled])
+
+  // Exposed so a doc create/delete elsewhere in this panel can merge into the
+  // loaded target list directly (Codex #173 P2) instead of leaving it stale
+  // until the whole panel remounts on a project switch. A full re-fetch would
+  // also work but costs seven requests to add or remove one row.
+  return { connections, setConnections, targets, setTargets, ready }
 }
 
 // ---------------------------------------------------------------------------
@@ -815,20 +889,46 @@ export default function DocsPanel({ projectId, onClose, docType }: DocsPanelProp
   const [view, setView] = useState<'list' | 'new' | 'editor'>('list')
   const [selected, setSelected] = useState<{ id: string; format: string } | null>(null)
 
+  // Fetched only once a document is actually open — browsing the list costs
+  // nothing extra.
+  const conn = useDocConnections(projectId, view === 'editor')
+
   const handleSelect = (doc: DocSummary) => { setSelected({ id: doc.id, format: doc.editor_format }); setView('editor') }
-  const handleCreated = (doc: Doc) => { setSelected({ id: doc.id, format: doc.editor_format }); setView('editor') }
+  const handleCreated = (doc: Doc) => {
+    // Merges the new doc into the already-loaded target list so it is
+    // immediately selectable as a connection endpoint from any other open
+    // document, rather than staying invisible until the panel remounts.
+    if (conn.ready) conn.setTargets(prev => [...prev, docToTarget(doc)])
+    setSelected({ id: doc.id, format: doc.editor_format }); setView('editor')
+  }
+  // Dropping the target lets ConnectionProvider's own prune effect (keyed on
+  // `targets`) clean up any connection that pointed at it — no separate
+  // connections-side update needed.
+  const handleRemoved = (docId: string) => {
+    conn.setTargets(prev => prev.filter(t => !(t.entityType === 'doc' && t.id === docId)))
+  }
 
   return (
     <div className="dp-panel">
-      {view === 'list' && <DocList projectId={projectId} onSelect={handleSelect} onNew={() => setView('new')} onClose={onClose} docType={docType} />}
+      {view === 'list' && <DocList projectId={projectId} onSelect={handleSelect} onNew={() => setView('new')} onClose={onClose} docType={docType} onRemoved={handleRemoved} />}
       {view === 'new' && <CreateDocForm projectId={projectId} onCreated={handleCreated} onCancel={() => setView('list')} lockedType={docType} />}
-      {view === 'editor' && selected && (
-        selected.format === 'excalidraw'
-          ? <Suspense fallback={<p className="dp-state">Loading canvas…</p>}>
-              <CanvasEditor docId={selected.id} onBack={() => setView('list')} />
-            </Suspense>
-          : <DocEditor docId={selected.id} onBack={() => setView('list')} />
-      )}
+      {/* Mounted unconditionally, and `ready` carries the loading state instead.
+          Wrapping the editor only once loaded would change the element type at
+          this position and remount it — see ConnectionProvider's `ready` doc. */}
+      <ConnectionProvider
+        connections={conn.connections}
+        setConnections={conn.setConnections}
+        targets={conn.targets}
+        ready={conn.ready}
+      >
+        {view === 'editor' && selected && (
+          selected.format === 'excalidraw'
+            ? <Suspense fallback={<p className="dp-state">Loading canvas…</p>}>
+                <CanvasEditor docId={selected.id} onBack={() => setView('list')} />
+              </Suspense>
+            : <DocEditor docId={selected.id} onBack={() => setView('list')} onRemoved={handleRemoved} />
+        )}
+      </ConnectionProvider>
     </div>
   )
 }

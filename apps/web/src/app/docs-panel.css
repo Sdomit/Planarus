@@ -42,6 +42,16 @@
   padding: var(--space-2) var(--space-4); border-top: 1px solid var(--border-subtle);
 }
 
+/* Connections (plan 25) sit below the statusbar in a fixed-height editor, so the
+   section scrolls on its own rather than pushing the prose out of view. Empty
+   when the doc has no connections and the composer is closed — hence :empty. */
+.dp-connections-wrap {
+  flex-shrink: 0; max-height: 40vh; overflow-y: auto;
+  padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border-subtle);
+  background: var(--bg-subtle);
+}
+.dp-connections-wrap:empty { display: none; padding: 0; border-top: 0; }
+
 /* Markdown raw preview */
 .dp-md-preview {
   font-family: var(--font-mono); font-size: var(--text-xs); line-height: var(--leading-relaxed);
