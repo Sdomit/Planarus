@@ -31,6 +31,10 @@ vi.mock('../api/client', () => ({
     decisions: { list: vi.fn(async () => []) },
     git: { snapshot: vi.fn(async () => gitSnapshot), fetchNow: vi.fn() },
     approvals: { list: vi.fn(async () => []) },
+    // #95: the cockpit now also reads open blockers and the UNSCOPED feed for the
+    // "Needs attention" widget.
+    blockers: { list: vi.fn(async () => []) },
+    notifications: { feed: vi.fn(async () => ({ generated_at: 't', items: [] })) },
     roadmap: { get: vi.fn(async () => ({ project_id: 'p', generated_at: 't', phases: [], unphased: { total: 0, done: 0, in_progress: 0, blocked: 0 }, totals: { total: 0, done: 0, in_progress: 0, blocked: 0 }, pct_done: 0 })) },
     timeline: { get: vi.fn(async () => ({ project_id: 'p', generated_at: 't', events: [] })) },
   },

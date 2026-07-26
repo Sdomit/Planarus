@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import {
   api, Project, Task, Risk, Milestone, Decision,
-  type ProjectRoadmap, type TimelineEvent,
+  type Blocker, type NotificationItem, type ProjectRoadmap, type TimelineEvent,
 } from '../api/client'
 import { StatusBadge } from './StatusBadge'
 import { Icon } from './Icon'
 import GitSnapshotPanel from './GitSnapshotPanel'
+import NeedsAttention from './NeedsAttention'
 import { dayLabel } from './date'
 import './cockpit-panel.css'
 
@@ -17,9 +18,16 @@ interface CockpitPanelProps {
   projectId: string
   onClose: () => void
   onOpenCanvas: () => void
+  // #95: rows in Needs attention navigate. onOpenItem is Layout's existing
+  // notification handler, which switches project when the row belongs to another.
+  onOpenItem?: (item: NotificationItem) => void
+  onOpenApprovals?: () => void
+  onOpenTasks?: () => void
 }
 
-export default function CockpitPanel({ projectId, onOpenCanvas }: CockpitPanelProps) {
+export default function CockpitPanel({
+  projectId, onOpenCanvas, onOpenItem, onOpenApprovals, onOpenTasks,
+}: CockpitPanelProps) {
   const [project, setProject] = useState<Project | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
   const [risks, setRisks] = useState<Risk[]>([])
@@ -29,6 +37,8 @@ export default function CockpitPanel({ projectId, onOpenCanvas }: CockpitPanelPr
   const [events, setEvents] = useState<TimelineEvent[]>([])
   const [phaseCount, setPhaseCount] = useState(0)
   const [pending, setPending] = useState(0)
+  const [blockers, setBlockers] = useState<Blocker[]>([])
+  const [feed, setFeed] = useState<NotificationItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -36,7 +46,7 @@ export default function CockpitPanel({ projectId, onOpenCanvas }: CockpitPanelPr
     setLoading(true)
     setError(null)
     try {
-      const [proj, phases, tks, rks, mils, decs, approvals, rm, tl] = await Promise.all([
+      const [proj, phases, tks, rks, mils, decs, approvals, rm, tl, blks, nf] = await Promise.all([
         api.projects.get(projectId),
         api.phases.list(projectId),
         api.tasks.list(projectId),
@@ -46,6 +56,10 @@ export default function CockpitPanel({ projectId, onOpenCanvas }: CockpitPanelPr
         api.approvals.list(projectId, 'pending').catch(() => []),
         api.roadmap.get(projectId).catch(() => null),
         api.timeline.get(projectId, 6).catch(() => null),
+        api.blockers.list(projectId).catch(() => []),
+        // Deliberately unscoped: this is the only place in the app that shows a
+        // human what is happening in the projects they are not looking at (#95).
+        api.notifications.feed(null).catch(() => null),
       ])
       setProject(proj)
       setPhaseCount(phases.length)
@@ -56,6 +70,8 @@ export default function CockpitPanel({ projectId, onOpenCanvas }: CockpitPanelPr
       setPending(approvals.length)
       setRoadmap(rm)
       setEvents(tl?.events ?? [])
+      setBlockers(blks)
+      setFeed(nf?.items ?? [])
     } catch {
       setError('Could not load the cockpit. Make sure the backend is running on port 8000.')
     } finally {
@@ -121,6 +137,13 @@ export default function CockpitPanel({ projectId, onOpenCanvas }: CockpitPanelPr
           </div>
         ))}
       </div>
+
+      <NeedsAttention
+        input={{ projectId, tasks, milestones, blockers, pendingApprovals: pending, feed }}
+        onOpenItem={onOpenItem ?? (() => {})}
+        onOpenApprovals={onOpenApprovals ?? (() => {})}
+        onOpenTasks={onOpenTasks ?? (() => {})}
+      />
 
       <div className="ck-grid">
         <PhaseProgress roadmap={roadmap} />
