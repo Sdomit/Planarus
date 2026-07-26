@@ -50,6 +50,24 @@
 .rm-pct { flex-shrink: 0; font-size: var(--text-sm); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
 .rm-pct-sm { font-size: var(--text-xs); }
 
+/* Delete confirm: states the consequence rather than asking "are you sure?" */
+.rm-confirm {
+  display: flex; flex-direction: column; gap: var(--space-2);
+  margin-bottom: var(--space-3); padding: var(--space-3);
+  border: 1px solid var(--status-danger-border); border-radius: var(--radius-md);
+  background: var(--status-danger-bg);
+}
+.rm-confirm-text {
+  margin: 0; font-size: var(--text-xs); line-height: var(--leading-relaxed);
+  color: var(--status-danger-fg);
+}
+.rm-confirm-actions { display: flex; gap: var(--space-2); }
+.rm-confirm-del {
+  background: var(--status-danger-fg); color: var(--bg-surface);
+  border-color: var(--status-danger-fg);
+}
+.rm-error { margin: 0 0 var(--space-3); font-size: var(--text-xs); color: var(--status-danger-fg); }
+
 .rm-bar { width: 100%; }
 .rm-counts { display: block; margin-top: var(--space-2); font-size: var(--text-xs); color: var(--text-tertiary); }
 
