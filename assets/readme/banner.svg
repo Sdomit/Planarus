@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360">
+  <rect width="1280" height="360" fill="#FAFAF8"></rect>
+  <rect x="0" y="0" width="1280" height="360" fill="none"></rect>
+  <g opacity="0.06">
+    <line x1="0" y1="0" x2="0" y2="360" stroke="#0F0F0A" stroke-width="1"></line><line x1="96" y1="0" x2="96" y2="360" stroke="#0F0F0A" stroke-width="1"></line><line x1="192" y1="0" x2="192" y2="360" stroke="#0F0F0A" stroke-width="1"></line><line x1="288" y1="0" x2="288" y2="360" stroke="#0F0F0A" stroke-width="1"></line><line x1="384" y1="0" x2="384" y2="360" stroke="#0F0F0A" stroke-width="1"></line><line x1="480" y1="0" x2="480" y2="360" stroke="#0F0F0A" stroke-width="1"></line><line x1="576" y1="0" x2="576" y2="360" stroke="#0F0F0A" stroke-width="1"></line><line x1="672" y1="0" x2="672" y2="360" stroke="#0F0F0A" stroke-width="1"></line><line x1="768" y1="0" x2="768" y2="360" stroke="#0F0F0A" stroke-width="1"></line><line x1="864" y1="0" x2="864" y2="360" stroke="#0F0F0A" stroke-width="1"></line><line x1="960" y1="0" x2="960" y2="360" stroke="#0F0F0A" stroke-width="1"></line><line x1="1056" y1="0" x2="1056" y2="360" stroke="#0F0F0A" stroke-width="1"></line><line x1="1152" y1="0" x2="1152" y2="360" stroke="#0F0F0A" stroke-width="1"></line><line x1="1248" y1="0" x2="1248" y2="360" stroke="#0F0F0A" stroke-width="1"></line>
+  </g>
+  <g transform="translate(120,108)">
+    <rect x="0" y="0" width="144" height="144" rx="16" fill="#D97706" transform="rotate(-8 72 72)"></rect>
+    <path d="M45 100 L72 42 L99 100 Z" fill="none" stroke="#FAFAF8" stroke-width="7" stroke-linejoin="round" stroke-linecap="round" transform="rotate(-8 72 72)"></path>
+  </g>
+  <text x="320" y="170" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="76" letter-spacing="-2" fill="#0F0F0A">Planarus</text>
+  <text x="322" y="216" font-family="Arial, Helvetica, sans-serif" font-weight="600" font-size="26" fill="#57534E">Plan clearly. Navigate safely. Achieve with control.</text>
+  <text x="322" y="254" font-family="Arial, Helvetica, sans-serif" font-weight="400" font-size="20" fill="#8A8A82">A local-first project cockpit where AI agents propose and people approve.</text>
+  <rect x="322" y="278" width="46" height="6" rx="3" fill="#D97706"></rect>
+</svg>
