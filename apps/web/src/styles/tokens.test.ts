@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 
 
 /**
@@ -21,6 +21,14 @@ import { join } from 'node:path'
 const SRC = join(process.cwd(), 'src')
 const SCANNED = ['.css', '.ts', '.tsx']
 
+// `join` uses the platform separator, so on Windows the walk yields
+// `forma\tokens.css` and every path assertion written with a forward slash is
+// false. That made this file fail on a Windows dev box while staying green in
+// Linux CI — a test that is red only where you can see it teaches you to ignore
+// it. Normalise once, here, rather than at each comparison.
+const posix = (path: string) => path.split(sep).join('/')
+const SRC_POSIX = posix(SRC)
+
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name)
@@ -39,12 +47,18 @@ function matches(text: string, re: RegExp): string[] {
 }
 
 describe('CSS custom properties', () => {
-  const files = sourceFiles(SRC).map((path) => ({ path, text: readFileSync(path, 'utf8') }))
+  const files = sourceFiles(SRC).map((path) => ({
+    path: posix(path),
+    text: readFileSync(path, 'utf8'),
+  }))
 
   it('scans the whole web source tree', () => {
     // A broken walk would make every assertion below vacuously true.
     expect(files.length).toBeGreaterThan(50)
     expect(files.some((f) => f.path.endsWith('forma/tokens.css'))).toBe(true)
+    // Pins the normalisation itself: without it this assertion, and the one
+    // above, are false on Windows and true everywhere else.
+    expect(files.every((f) => !f.path.includes('\\'))).toBe(true)
   })
 
   it('never references a token that nothing defines', () => {
@@ -56,7 +70,7 @@ describe('CSS custom properties', () => {
     for (const { path, text } of files) {
       for (const token of new Set(matches(text, REFERENCE))) {
         if (defined.has(token)) continue
-        phantom.set(token, [...(phantom.get(token) ?? []), path.slice(SRC.length)])
+        phantom.set(token, [...(phantom.get(token) ?? []), path.slice(SRC_POSIX.length)])
       }
     }
 
