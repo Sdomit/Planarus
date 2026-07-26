@@ -3,6 +3,7 @@ from typing import Optional
 from sqlmodel import Session, select
 
 from app.core import actor
+from app.core.exceptions import NotFoundError
 from app.core.utils import new_id, now_utc
 from app.models.comment import Comment
 from app.models.project import Project
@@ -28,7 +29,7 @@ def list_comments(
 
 def create_comment(session: Session, project_id: str, data: CommentCreate) -> Comment:
     if session.get(Project, project_id) is None:
-        raise ValueError(f"project '{project_id}' not found")
+        raise NotFoundError(f"project '{project_id}' not found")
     validate_entity_ref(session, project_id, data.entity_type, data.entity_id)
 
     comment = Comment(

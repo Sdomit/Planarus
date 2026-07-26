@@ -5,6 +5,7 @@ from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.core.constants import BUILTIN_STATUS_KEYS, builtin_status_category
+from app.core.exceptions import NotFoundError
 from app.core.utils import new_id, now_utc
 from app.models.decision import Decision
 from app.models.milestone import Milestone
@@ -165,7 +166,7 @@ def create_status_option(
     session: Session, project_id: str, data: StatusOptionCreate
 ) -> StatusOption:
     if session.get(Project, project_id) is None:
-        raise ValueError(f"project '{project_id}' not found")
+        raise NotFoundError(f"project '{project_id}' not found")
 
     key = _slug(data.label)
     taken = allowed_status_keys(session, project_id, data.entity_type)

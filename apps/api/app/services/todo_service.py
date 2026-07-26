@@ -9,6 +9,7 @@ from typing import Optional
 
 from sqlmodel import Session, select
 
+from app.core.exceptions import NotFoundError
 from app.core.utils import new_id, now_utc
 from app.models.project import Project
 from app.models.todo import Todo
@@ -27,12 +28,12 @@ def list_todos(session: Session, project_id: str) -> list[Todo]:
 def _require_parent_in_project(session: Session, parent_id: str, project_id: str) -> None:
     parent = session.get(Todo, parent_id)
     if parent is None or parent.project_id != project_id:
-        raise ValueError("parent todo not found in this project")
+        raise NotFoundError("parent todo not found in this project")
 
 
 def create_todo(session: Session, project_id: str, data: TodoCreate) -> Todo:
     if session.get(Project, project_id) is None:
-        raise ValueError(f"project '{project_id}' not found")
+        raise NotFoundError(f"project '{project_id}' not found")
     if data.parent_id is not None:
         _require_parent_in_project(session, data.parent_id, project_id)
 

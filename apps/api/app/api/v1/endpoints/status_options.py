@@ -60,14 +60,9 @@ def reorder_status_options(
     entity_type: str = Query(default="task"),
     session: Session = Depends(get_session),
 ) -> list[StatusOptionRead]:
-    try:
-        return status_option_service.reorder_status_options(
-            session, project_id, entity_type, data.ids
-        )
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-        )
+    return status_option_service.reorder_status_options(
+        session, project_id, entity_type, data.ids
+    )
 
 
 @router.patch("/status-options/{option_id}", response_model=StatusOptionRead)

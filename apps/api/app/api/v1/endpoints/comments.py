@@ -46,8 +46,6 @@ def create_comment(
         return _read(session, [comment_service.create_comment(session, project_id, data)])[0]
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
 
 @router.patch("/comments/{comment_id}", response_model=CommentRead)

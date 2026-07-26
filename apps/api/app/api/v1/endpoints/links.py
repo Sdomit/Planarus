@@ -34,5 +34,3 @@ def create_link(
         return link_service.create_link(session, project_id, data)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))

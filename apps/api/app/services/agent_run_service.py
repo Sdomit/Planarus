@@ -3,6 +3,7 @@ from typing import Optional
 
 from sqlmodel import Session, select
 
+from app.core.exceptions import NotFoundError
 from app.core.utils import new_id, now_utc
 from app.models.agent_run import AgentRun
 from app.models.project import Project
@@ -27,7 +28,7 @@ def list_agent_runs(
 
 def create_agent_run(session: Session, project_id: str, data: AgentRunCreate) -> AgentRun:
     if session.get(Project, project_id) is None:
-        raise ValueError(f"project '{project_id}' not found")
+        raise NotFoundError(f"project '{project_id}' not found")
 
     now = now_utc()
     ended_at = data.ended_at
@@ -108,7 +109,7 @@ def _duration_minutes(run: AgentRun) -> Optional[float]:
 
 def build_analytics(session: Session, project_id: str) -> AgentRunAnalytics:
     if session.get(Project, project_id) is None:
-        raise ValueError(f"project '{project_id}' not found")
+        raise NotFoundError(f"project '{project_id}' not found")
 
     runs = list_agent_runs(session, project_id)
     by_family: dict[str, int] = {}

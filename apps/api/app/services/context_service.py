@@ -13,6 +13,7 @@ from typing import Optional
 
 from sqlmodel import Session, select
 
+from app.core.exceptions import NotFoundError
 from app.core.utils import now_utc
 from app.fsmemory import atomic_io, regenerate
 from app.fsmemory.project_root import resolve_project_root_or_none
@@ -180,7 +181,7 @@ def provision_and_regenerate(
     """Provision the folder + regenerate the pack, then commit. Raises on failure."""
     workspace = session.get(Workspace, project.workspace_id)
     if workspace is None:
-        raise ValueError(f"workspace '{project.workspace_id}' not found")
+        raise NotFoundError(f"workspace '{project.workspace_id}' not found")
     report = regenerate(session, project, workspace, actor_type=actor_type)
     session.commit()
     return report

@@ -27,14 +27,7 @@ def create_risk(
     data: RiskCreate,
     session: Session = Depends(get_session),
 ) -> RiskRead:
-    try:
-        return risk_service.create_risk(session, project_id, data)
-    except ValueError as exc:
-        if "project" in str(exc) and "not found" in str(exc):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    return risk_service.create_risk(session, project_id, data)
 
 
 @router.patch("/risks/{risk_id}", response_model=RiskRead)
@@ -43,12 +36,7 @@ def update_risk(
     data: RiskUpdate,
     session: Session = Depends(get_session),
 ) -> RiskRead:
-    try:
-        risk = risk_service.update_risk(session, risk_id, data)
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    risk = risk_service.update_risk(session, risk_id, data)
     if risk is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
     return risk
@@ -60,14 +48,7 @@ def reorder_risks(
     data: ReorderRequest,
     session: Session = Depends(get_session),
 ) -> list[RiskRead]:
-    try:
-        return risk_service.reorder_risks(session, project_id, data.ids)
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-        )
+    return risk_service.reorder_risks(session, project_id, data.ids)
 
 
 @router.delete("/risks/{risk_id}", status_code=status.HTTP_204_NO_CONTENT)

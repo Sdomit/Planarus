@@ -9,6 +9,7 @@ from typing import Iterable, Optional
 
 from sqlmodel import Session, select
 
+from app.core.exceptions import NotFoundError
 from app.core.utils import new_id, now_utc, now_utc_plus_hours
 from app.models.approval_request import ApprovalRequest
 from app.models.blocker import Blocker
@@ -165,7 +166,7 @@ def build_feed(session: Session, project_id: Optional[str] = None) -> Notificati
     if project_id is not None:
         project = session.get(Project, project_id)
         if project is None:
-            raise ValueError(f"project '{project_id}' not found")
+            raise NotFoundError(f"project '{project_id}' not found")
         projects = [project]
     else:
         projects = list(
@@ -237,7 +238,7 @@ def create_rule(
     session: Session, project_id: str, data: NotificationRuleCreate
 ) -> NotificationRule:
     if session.get(Project, project_id) is None:
-        raise ValueError(f"project '{project_id}' not found")
+        raise NotFoundError(f"project '{project_id}' not found")
 
     now = now_utc()
     rule = NotificationRule(

@@ -12,6 +12,28 @@ The class meanings and the HTTP status they map to are unchanged from Phase 7A/7
 from __future__ import annotations
 
 
+class NotFoundError(LookupError):
+    """A requested row does not exist, or is not visible to this caller. HTTP 404.
+
+    Subclasses ``LookupError`` on purpose (#99). The app-wide convention was
+    already "``LookupError`` → 404, ``ValueError`` → 422", but roughly twenty
+    services raised ``ValueError(f"project '{id}' not found")`` instead, and five
+    routers recovered the distinction by **string-matching the message**:
+
+        if "project" in str(exc) and "not found" in str(exc):
+
+    Rewording a message, or adding any new ``ValueError``, silently turned a 404
+    into a 422 or the reverse. Raising this class states the intent at the source.
+    Inheriting from ``LookupError`` means the pre-existing ``raise LookupError``
+    sites and ``except LookupError`` blocks keep working unchanged, so the two
+    vocabularies converge without a flag day.
+    """
+
+    def __init__(self, detail: str) -> None:
+        self.detail = detail
+        super().__init__(detail)
+
+
 class ConflictError(Exception):
     """A write violated a uniqueness constraint (e.g. a duplicate slug). HTTP 409."""
 

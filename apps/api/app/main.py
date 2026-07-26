@@ -9,6 +9,7 @@ from fastapi.exception_handlers import (
     request_validation_exception_handler as default_validation_handler,
 )
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.external.middleware import EXTERNAL_PREFIX, ExternalApiGuard, PathScopedCORS
@@ -24,6 +25,7 @@ from app.core.config import settings
 from app.core.errors import (
     approval_conflict_handler,
     conflict_handler,
+    not_found_handler,
     server_error_handler,
     unprocessable_handler,
 )
@@ -78,6 +80,28 @@ async def _external_aware_http_handler(request: Request, exc: StarletteHTTPExcep
         detail = exc.detail if isinstance(exc.detail, str) else title
         return problem_response(exc.status_code, slug, title, detail, request_id_of(request))
     return await default_http_exception_handler(request, exc)
+
+
+async def _external_aware_unhandled_handler(request: Request, exc: Exception):
+    """Last-resort 500 (#99). Without it an unexpected exception reaches Starlette's
+    ``text/plain`` "Internal Server Error", which breaks the problem+json contract
+    ``/api/external`` advertises — the one surface where the shape is promised.
+
+    The detail is deliberately fixed. ``str(exc)`` on an arbitrary exception can
+    carry a SQL fragment, a filesystem path or a connection string, and this is by
+    definition the branch where nobody vetted the message. The real cause goes to
+    the log, with the traceback, and never to the client.
+    """
+    _log.exception("unhandled exception on %s %s", request.method, request.url.path, exc_info=exc)
+    if _is_external(request):
+        return problem_response(
+            500,
+            "internal_error",
+            "Internal Server Error",
+            "the server failed to process this request",
+            request_id_of(request),
+        )
+    return JSONResponse(status_code=500, content={"detail": "internal error"})
 
 
 def create_app() -> FastAPI:
@@ -164,10 +188,20 @@ def create_app() -> FastAPI:
     app.add_exception_handler(SecretDetectedError, unprocessable_handler)
     app.add_exception_handler(ApprovalApplyError, server_error_handler)
 
+    # #99: the app-wide vocabulary, registered once instead of restated in a
+    # try/except per route. NotFoundError subclasses LookupError, so one handler
+    # covers both. Routers no longer translate these; they just let them out.
+    app.add_exception_handler(LookupError, not_found_handler)
+    app.add_exception_handler(ValueError, unprocessable_handler)
+
     # External surface: RFC 9457 problem+json (scoped to /api/external/ by path).
     app.add_exception_handler(ExternalProblem, external_problem_handler)
     app.add_exception_handler(RequestValidationError, _external_aware_validation_handler)
     app.add_exception_handler(StarletteHTTPException, _external_aware_http_handler)
+    # #99: without this, an unexpected exception escapes to Starlette's plain-text
+    # "Internal Server Error", which breaks the problem+json shape /api/external
+    # advertises. Registered last so every more specific handler above wins.
+    app.add_exception_handler(Exception, _external_aware_unhandled_handler)
 
     @app.get("/health", tags=["health"])
     def health() -> dict:

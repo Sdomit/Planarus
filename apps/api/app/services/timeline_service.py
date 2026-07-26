@@ -1,5 +1,6 @@
 from sqlmodel import Session, select
 
+from app.core.exceptions import NotFoundError
 from app.core.utils import now_utc
 from app.models.agent_run import AgentRun
 from app.models.approval_request import ApprovalRequest
@@ -29,7 +30,7 @@ _RESOLVERS: dict[str, tuple[type, str]] = {**ENTITY_MODELS, **_AUDIT_ONLY_RESOLV
 
 def build_timeline(session: Session, project_id: str, limit: int = 50) -> ProjectTimeline:
     if session.get(Project, project_id) is None:
-        raise ValueError(f"project '{project_id}' not found")
+        raise NotFoundError(f"project '{project_id}' not found")
 
     events = list(
         session.exec(

@@ -8,6 +8,7 @@ from typing import Optional
 from sqlmodel import Session, select
 
 from app.core import token_crypto
+from app.core.exceptions import NotFoundError
 from app.core.utils import new_id, now_utc
 from app.models.calendar_connection import CalendarConnection
 from app.models.project import Project
@@ -31,7 +32,7 @@ def create_connection(
     session: Session, project_id: str, provider: str, tokens: CalendarTokens
 ) -> CalendarConnection:
     if session.get(Project, project_id) is None:
-        raise ValueError(f"project '{project_id}' not found")
+        raise NotFoundError(f"project '{project_id}' not found")
     now = now_utc()
     conn = CalendarConnection(
         id=new_id("con"),

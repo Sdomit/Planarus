@@ -2,6 +2,7 @@ from typing import Optional
 
 from sqlmodel import Session, select
 
+from app.core.exceptions import NotFoundError
 from app.core.utils import new_id, now_utc
 from app.models.phase import Phase
 from app.models.project import Project
@@ -44,7 +45,7 @@ def _validate_phase(session: Session, project_id: str, phase_id: Optional[str]) 
 
 def create_risk(session: Session, project_id: str, data: RiskCreate) -> Risk:
     if session.get(Project, project_id) is None:
-        raise ValueError(f"project '{project_id}' not found")
+        raise NotFoundError(f"project '{project_id}' not found")
     _validate_status(session, project_id, data.status)
     _validate_phase(session, project_id, data.phase_id)
 

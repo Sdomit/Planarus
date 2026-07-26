@@ -3,6 +3,7 @@ from typing import Optional
 from sqlalchemy import func
 from sqlmodel import Session, select
 
+from app.core.exceptions import NotFoundError
 from app.core.utils import new_id, now_utc
 from app.models.blocker import Blocker
 from app.models.checklist_item import ChecklistItem
@@ -64,7 +65,7 @@ def _validate_parent_task(
 
 def create_task(session: Session, project_id: str, data: TaskCreate) -> Task:
     if session.get(Project, project_id) is None:
-        raise ValueError(f"project '{project_id}' not found")
+        raise NotFoundError(f"project '{project_id}' not found")
     _validate_status(session, project_id, data.status)
     _validate_parent_task(session, project_id, data.parent_task_id)
     _validate_assignee(session, data.assignee_id)

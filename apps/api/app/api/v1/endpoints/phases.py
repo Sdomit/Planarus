@@ -27,12 +27,7 @@ def create_phase(
     data: PhaseCreate,
     session: Session = Depends(get_session),
 ) -> PhaseRead:
-    try:
-        return phase_service.create_phase(session, project_id, data)
-    except ValueError as exc:
-        if "project" in str(exc) and "not found" in str(exc):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    return phase_service.create_phase(session, project_id, data)
 
 
 @router.patch("/phases/{phase_id}", response_model=PhaseRead)
@@ -41,10 +36,7 @@ def update_phase(
     data: PhaseUpdate,
     session: Session = Depends(get_session),
 ) -> PhaseRead:
-    try:
-        phase = phase_service.update_phase(session, phase_id, data)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    phase = phase_service.update_phase(session, phase_id, data)
     if phase is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Phase not found")
     return phase
@@ -56,14 +48,7 @@ def reorder_phases(
     data: ReorderRequest,
     session: Session = Depends(get_session),
 ) -> list[PhaseRead]:
-    try:
-        return phase_service.reorder_phases(session, project_id, data.ids)
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-        )
+    return phase_service.reorder_phases(session, project_id, data.ids)
 
 
 @router.delete("/phases/{phase_id}", status_code=status.HTTP_204_NO_CONTENT)

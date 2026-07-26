@@ -3,6 +3,7 @@ from typing import Optional
 from sqlalchemy import func
 from sqlmodel import Session, select
 
+from app.core.exceptions import NotFoundError
 from app.core.utils import new_id, now_utc
 from app.models.checklist_item import ChecklistItem
 from app.models.task import Task
@@ -24,7 +25,7 @@ def create_checklist_item(
 ) -> ChecklistItem:
     task = session.get(Task, task_id)
     if task is None:
-        raise ValueError(f"task '{task_id}' not found")
+        raise NotFoundError(f"task '{task_id}' not found")
 
     # Append to the end: one past the current max sort_order. Using max()+1
     # (rather than the item count) keeps ordering stable when items are deleted.

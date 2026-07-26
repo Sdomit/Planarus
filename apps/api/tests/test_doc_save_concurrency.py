@@ -8,6 +8,7 @@ Two defects, both in `doc_service.update_doc`:
   omitted, so `archived_at` and `parent_doc_id` could never be cleared.
 """
 import pytest
+from app.core.exceptions import ConflictError
 from app.models.doc import Doc
 from app.schemas.doc import DocCreate, DocUpdate
 from app.services import doc_service
@@ -103,6 +104,13 @@ def test_null_on_a_not_null_column_is_still_ignored(
 
 
 # --- the lock is now atomic ---------------------------------------------------
+#
+# #99: these three asserted `pytest.raises(LookupError)`, which pinned the bug
+# rather than the behaviour. A version conflict is not a missing row, and the
+# app-wide convention maps LookupError to 404 — so `endpoints/docs.py` carried a
+# local `except LookupError -> 409` to invert it back. The service now raises
+# ConflictError and the router carries nothing. What these tests actually care
+# about — that the losing writer is rejected and writes nothing — is unchanged.
 
 
 def test_stale_version_is_rejected(client: TestClient, session: Session) -> None:
@@ -110,7 +118,7 @@ def test_stale_version_is_rejected(client: TestClient, session: Session) -> None
     stale = doc.version
     doc_service.update_doc(session, doc.id, DocUpdate(version=stale, title="First"))
 
-    with pytest.raises(LookupError):
+    with pytest.raises(ConflictError):
         doc_service.update_doc(session, doc.id, DocUpdate(version=stale, title="Second"))
 
 
@@ -148,7 +156,7 @@ def test_a_writer_losing_the_race_mid_save_is_rejected(
 
     monkeypatch.setattr(doc_service, "now_utc", _commit_a_competing_write)
 
-    with pytest.raises(LookupError):
+    with pytest.raises(ConflictError):
         doc_service.update_doc(session, doc.id, payload)
 
     assert fired, "the competing write never ran — the hook missed its window"
@@ -164,7 +172,7 @@ def test_a_rejected_save_writes_nothing(client: TestClient, session: Session) ->
     stale = doc.version
     doc_service.update_doc(session, doc.id, DocUpdate(version=stale, title="Winner"))
 
-    with pytest.raises(LookupError):
+    with pytest.raises(ConflictError):
         doc_service.update_doc(
             session, doc.id, DocUpdate(version=stale, title="Loser", status="draft")
         )

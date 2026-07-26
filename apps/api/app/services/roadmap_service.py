@@ -1,5 +1,6 @@
 from sqlmodel import Session, select
 
+from app.core.exceptions import NotFoundError
 from app.core.utils import now_utc
 from app.models.phase import Phase
 from app.models.project import Project
@@ -39,7 +40,7 @@ def _pct(rollup: RoadmapTaskRollup) -> int:
 
 def build_roadmap(session: Session, project_id: str) -> ProjectRoadmap:
     if session.get(Project, project_id) is None:
-        raise ValueError(f"project '{project_id}' not found")
+        raise NotFoundError(f"project '{project_id}' not found")
 
     phases = list(
         session.exec(
