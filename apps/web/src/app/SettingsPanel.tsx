@@ -68,7 +68,11 @@ export default function SettingsPanel() {
   const yn = (b: boolean) => (b ? 'Yes' : 'No')
 
   return (
-    <div style={{ maxWidth: 640, display: 'grid', gap: 'var(--space-5)' }}>
+    // `minmax(0, 1fr)`, not the implicit `auto`: these grids exist only for their
+    // `gap`, but an `auto` track sizes to max-content, and `overflow-x` on a
+    // descendant does NOT reduce that contribution. One 591-character curl
+    // snippet was stretching the whole page to 3941px wide.
+    <div style={{ maxWidth: 640, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--space-5)' }}>
       <div className="tabs" role="tablist" aria-label="Settings sections">
         {TABS.map(t => (
           <button
@@ -84,8 +88,10 @@ export default function SettingsPanel() {
         ))}
       </div>
 
+      {/* minmax(0, 1fr) on the card grids below — see the note on the wrapper
+          above. The integrations one is what actually held the wide snippets. */}
       {tab === 'integrations' && (
-        <div className="card" style={{ display: 'grid', gap: 'var(--space-6)' }}>
+        <div className="card" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--space-6)' }}>
           <section>
             <h3 style={{ marginTop: 0 }}>External API</h3>
             <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', margin: '0 0 8px' }}>
@@ -176,7 +182,7 @@ export default function SettingsPanel() {
       )}
 
       {tab === 'access' && (
-        <div className="card" style={{ display: 'grid', gap: 'var(--space-6)' }}>
+        <div className="card" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--space-6)' }}>
           <section>
             <h3 style={{ marginTop: 0 }}>LAN team mode</h3>
             <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', margin: '0 0 8px' }}>
