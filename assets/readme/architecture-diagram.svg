@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="520" viewBox="0 0 1180 520" font-family="Arial, Helvetica, sans-serif">
+  <rect width="1180" height="520" fill="#FAFAF8"></rect>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#57534E"></path>
+    </marker>
+  </defs>
+
+  <rect x="40" y="40" width="200" height="64" rx="10" fill="#FFFFFF" stroke="#E8E8E4" stroke-width="1.5"></rect>
+  <text x="140" y="78" text-anchor="middle" font-size="20" font-weight="700" fill="#0F0F0A">Human</text>
+
+  <rect x="40" y="200" width="200" height="64" rx="10" fill="#FFFFFF" stroke="#E8E8E4" stroke-width="1.5"></rect>
+  <text x="140" y="238" text-anchor="middle" font-size="20" font-weight="700" fill="#0F0F0A">Agent</text>
+
+  <rect x="320" y="40" width="260" height="64" rx="10" fill="#FFFFFF" stroke="#E8E8E4" stroke-width="1.5"></rect>
+  <text x="450" y="72" text-anchor="middle" font-size="17" font-weight="700" fill="#0F0F0A">React + TS + Vite</text>
+  <text x="450" y="92" text-anchor="middle" font-size="13" fill="#8A8A82">Web UI</text>
+
+  <rect x="320" y="200" width="260" height="64" rx="10" fill="#D97706" stroke="#B45309" stroke-width="1.5"></rect>
+  <text x="450" y="238" text-anchor="middle" font-size="18" font-weight="700" fill="#FAFAF8">Approval boundary</text>
+
+  <rect x="660" y="120" width="220" height="64" rx="10" fill="#0F0F0A"></rect>
+  <text x="770" y="152" text-anchor="middle" font-size="18" font-weight="700" fill="#FAFAF8">FastAPI</text>
+  <text x="770" y="172" text-anchor="middle" font-size="13" fill="#D97706">Python 3.11</text>
+
+  <rect x="960" y="30" width="180" height="60" rx="10" fill="#FFFFFF" stroke="#E8E8E4" stroke-width="1.5"></rect>
+  <text x="1050" y="66" text-anchor="middle" font-size="15" font-weight="700" fill="#0F0F0A">SQLite (WAL)</text>
+
+  <rect x="960" y="120" width="180" height="60" rx="10" fill="#FFFFFF" stroke="#E8E8E4" stroke-width="1.5"></rect>
+  <text x="1050" y="146" text-anchor="middle" font-size="14" font-weight="700" fill="#0F0F0A">Project folders</text>
+  <text x="1050" y="166" text-anchor="middle" font-size="13" fill="#8A8A82">Markdown context</text>
+
+  <rect x="960" y="210" width="180" height="60" rx="10" fill="#FFFFFF" stroke="#E8E8E4" stroke-width="1.5"></rect>
+  <text x="1050" y="246" text-anchor="middle" font-size="15" font-weight="700" fill="#0F0F0A">MCP + REST</text>
+
+  <line x1="240" y1="72" x2="320" y2="72" stroke="#57534E" stroke-width="2" marker-end="url(#arrow)"></line>
+  <line x1="240" y1="232" x2="320" y2="232" stroke="#57534E" stroke-width="2" marker-end="url(#arrow)"></line>
+  <line x1="580" y1="72" x2="660" y2="140" stroke="#57534E" stroke-width="2" marker-end="url(#arrow)"></line>
+  <line x1="580" y1="232" x2="660" y2="160" stroke="#57534E" stroke-width="2" marker-end="url(#arrow)"></line>
+  <line x1="880" y1="150" x2="960" y2="60" stroke="#57534E" stroke-width="2" marker-end="url(#arrow)"></line>
+  <line x1="880" y1="152" x2="960" y2="150" stroke="#57534E" stroke-width="2" marker-end="url(#arrow)"></line>
+  <line x1="880" y1="155" x2="960" y2="240" stroke="#57534E" stroke-width="2" marker-end="url(#arrow)"></line>
+
+  <text x="450" y="320" font-size="14" fill="#8A8A82">Every write from the Agent lane must cross the amber approval boundary before it reaches FastAPI.</text>
+</svg>

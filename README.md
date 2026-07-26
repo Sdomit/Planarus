@@ -1,75 +1,110 @@
 <p align="center">
-  <img src="apps/web/public/planarus-icon.png" width="112" alt="Planarus" />
+  <img src="assets/readme/banner.svg" width="820" alt="Planarus — plan clearly, navigate safely, achieve with control" />
+</p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/readme/logo-dark.svg" />
+    <img src="assets/readme/logo-light.svg" width="56" alt="Planarus mark" />
+  </picture>
 </p>
 
 <h1 align="center">Planarus</h1>
 
 <p align="center">
   <strong>Plan clearly. Navigate safely. Achieve with control.</strong><br />
-  A local-first project cockpit where AI agents propose and people approve.
+  A local-first project cockpit for real planning work — phases, tasks, boards, docs, decisions, risks.<br />
+  Bring an AI agent in and it reads and proposes; you approve and apply.
 </p>
 
 <p align="center">
   <a href="https://github.com/Sdomit/Planarus/actions/workflows/ci.yml"><img src="https://github.com/Sdomit/Planarus/actions/workflows/ci.yml/badge.svg" alt="Continuous integration" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-2D77FF.svg" alt="Apache-2.0 license" /></a>
-  <img src="https://img.shields.io/badge/local--first-no%20cloud%20required-7B61FF.svg" alt="Local-first" />
-  <img src="https://img.shields.io/badge/AI%20writes-human%20approved-0B1226.svg" alt="Human-approved AI writes" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-D97706.svg?style=flat-square" alt="Apache-2.0 license" /></a>
+  <img src="https://img.shields.io/badge/status-pre--1.0-8A8A82.svg?style=flat-square" alt="Pre-1.0" />
+  <img src="https://img.shields.io/badge/local--first-no%20cloud%20required-3F3F3A.svg?style=flat-square" alt="Local-first" />
+  <img src="https://img.shields.io/badge/AI%20writes-human%20approved-0F0F0A.svg?style=flat-square" alt="Human-approved AI writes" />
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/React-19-D97706.svg?style=flat-square&logo=react&logoColor=white" alt="React 19" />
+  <img src="https://img.shields.io/badge/TypeScript-3178C6.svg?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Vite-B45309.svg?style=flat-square&logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/FastAPI-0F0F0A.svg?style=flat-square&logo=fastapi&logoColor=D97706" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/Python-3.11-3F3F3A.svg?style=flat-square&logo=python&logoColor=D97706" alt="Python 3.11" />
+  <img src="https://img.shields.io/badge/SQLite-WAL-8A8A82.svg?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite WAL" />
+  <img src="https://img.shields.io/badge/Docker-Compose-D97706.svg?style=flat-square&logo=docker&logoColor=white" alt="Docker Compose" />
+  <img src="https://img.shields.io/badge/MCP-enabled-0F0F0A.svg?style=flat-square" alt="MCP enabled" />
+</p>
+
+<p align="center">
+  <a href="#quickstart"><b>Quickstart</b></a> ·
+  <a href="#the-trust-model"><b>Trust model</b></a> ·
+  <a href="#architecture"><b>Architecture</b></a> ·
+  <a href="#connect-an-agent"><b>Connect an agent</b></a> ·
+  <a href="#documentation-map"><b>Docs</b></a> ·
+  <a href="#contributing"><b>Contributing</b></a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/-%20-D97706.svg?style=flat-square" width="60" height="4" alt="" />
 </p>
 
 ---
 
-## What is Planarus?
+## <img src="https://img.shields.io/badge/-01-D97706.svg?style=flat-square" height="18" alt="" /> Overview
 
-Planarus is the operating surface around an AI-assisted project. It keeps the
-plan, decisions, risks, work, documentation, context files, and execution
-signals together on your machine—then gives coding agents a narrow, useful view
-of that context.
+Planarus is a project management application that runs on your machine. It holds
+the plan, decisions, risks, work, documentation, context files, and execution
+signals in one place — boards, roadmap, timeline, calendar, and rich docs — and
+it is complete on its own, with no agent connected and no account to create.
 
-Its central rule is simple:
+Bring an agent in and the same store hands it a narrow, ordered view of that
+context instead of a re-pasted transcript. Everything it proposes lands in a
+queue you review.
 
+Its central rule is one sentence long:
+
+> [!IMPORTANT]
 > **AI agents can read and propose. Humans approve and apply.**
+>
+> No external agent receives a path to mutate canonical project state through
+> MCP or the REST API. An agent creates a reviewable proposal; you inspect it
+> in the approval queue; the same internal service layer applies and audits it.
 
-An agent never receives a direct path to mutate canonical project state through
-the MCP or external API. Instead, it creates a reviewable proposal. You inspect
-the proposed change in Planarus, approve it, and the same internal path applies
-and audits it.
-
-| Planarus helps you | Without asking you to give up |
+| Planarus gives you | Without asking you to give up |
 | --- | --- |
-| Keep a living project plan beside the work | Your local files, database, and control |
-| Give agents the right context at the right time | An approval boundary for agent-originated changes |
-| Track tasks, decisions, risks, docs, and milestones together | A cloud account or per-seat subscription |
-| Connect agents through MCP, REST, or guided integrations | An always-open remote API |
+| A living plan that sits beside the work | Your local files, database, and control |
+| The right context at the right time for agents | An approval boundary on agent-originated writes |
+| Tasks, decisions, risks, docs, and milestones in one graph | A cloud account or per-seat subscription |
+| Agent access over MCP, REST, or guided integrations | An always-open remote API |
 
-## Why it is different
+### Why it is different
 
 Most project tools organize human work. Most AI tools organize a conversation.
-Planarus organizes the boundary between the two:
+Planarus organizes the boundary between the two.
 
-1. **Local-first by default** — SQLite, project folders, Markdown context, and
-   loopback services stay on your machine.
-2. **Context that agents can actually use** — a generated, ordered context pack
-   gives an agent scoped project memory instead of a large, unstructured dump.
-3. **Approval-first execution** — proposed agent writes wait in an approval
-   queue; external agents do not approve, apply, or delete canonical data.
-4. **Power is opt-in** — LAN team mode, calendar sync, webhooks, scheduled
-   reminders/backups, and remote agent access all start disabled.
+1. **Local-first by default.** SQLite in WAL mode, real project folders,
+   Markdown context, loopback services. Nothing leaves the machine unless you
+   deliberately connect it.
+2. **A complete planner on its own.** Phases, stages, milestones, tasks and
+   sub-tasks, boards, roadmap, timeline, calendar, decisions, risks, checklists
+   and documents all work with zero agents connected. AI is a layer you add, not
+   a dependency you accept.
+3. **Context agents can actually use.** A generated, ordered context pack gives
+   an agent scoped project memory — pointers to files, not an unstructured dump.
+   Token efficiency is treated as a product feature, not an optimization.
+4. **Approval-first execution.** Proposed agent writes wait in a queue. External
+   agents never approve, apply, or delete canonical data.
+5. **Power is opt-in.** LAN team mode, calendar sync, webhooks, scheduled
+   reminders and backups, and remote agent access all start disabled.
 
-## Product surfaces
+---
 
-| Area | What you can do |
-| --- | --- |
-| **Plan** | Projects, phases, milestones, tasks, sub-tasks, boards, roadmap, timeline, calendar, decisions, risks, and checklists |
-| **Context** | Rich documents, Markdown preview, context-pack generation, context files, and an offline canvas |
-| **Agents** | Review approval proposals, inspect agent runs, view notifications/reminders, and use the read-only Git cockpit |
-| **Control** | Manage team access, integrations, MCP/API configuration, webhooks, export/import, and local backups |
+## <img src="https://img.shields.io/badge/-02-D97706.svg?style=flat-square" height="18" alt="" /> Quickstart
 
-## Run Planarus
+### Docker — fastest path to a running app
 
-### Fastest path: Docker
-
-Docker is the simplest way to evaluate Planarus. You do not need Python, Node,
-or pnpm on the host.
+No Python, Node, or pnpm needed on the host.
 
 ```bash
 git clone https://github.com/Sdomit/Planarus.git
@@ -77,52 +112,45 @@ cd Planarus
 docker compose up --build
 ```
 
-Open [http://localhost:5173](http://localhost:5173).
+Open <http://localhost:5173>.
 
-- Data persists in `./planarus-data` on the host.
-- Project folders created in the container must live under `/data` to persist.
-- The Docker web port binds to `127.0.0.1` by default; it is not exposed to your
-  LAN.
-- If port 5173 is busy, use `PLANARUS_PORT=5174 docker compose up --build`.
-- Stop the stack with `docker compose down`.
+| Detail | Behaviour |
+| --- | --- |
+| Data | Persists on the host in `./planarus-data` |
+| Project folders | Must live under `/data` inside the container to persist |
+| Network posture | Web port binds to `127.0.0.1`; the API port is not published |
+| External API | Disabled (`PLANARUS_EXTERNAL_API_ENABLED=false`) |
+| Port conflict | `PLANARUS_PORT=5174 docker compose up --build` |
+| Shutdown | `docker compose down` |
 
 ### Native development with hot reload
 
-For development, Planarus includes launchers that migrate the database, start
-the API and Vite app, wait for both services, and open the UI. They keep the
-external API disabled.
-
 **Prerequisites:** Python 3.11, Node.js 20+, and the pnpm version pinned by the
-repository (`corepack enable` is the recommended installation route).
+repository (`corepack enable` is the recommended route).
 
 ```bash
-# From the repository root, once per checkout
+# Once per checkout, from the repository root
 corepack enable
 pnpm install
 
-# Create the API environment and install its development dependencies
+# API environment and development dependencies
 cd apps/api
 python3 -m venv .venv
-
-# macOS / Linux
-source .venv/bin/activate
-
-# Windows PowerShell (run this instead of the line above)
-# .venv\Scripts\Activate.ps1
-
+source .venv/bin/activate          # macOS / Linux
+# .venv\Scripts\Activate.ps1       # Windows PowerShell — use instead of the line above
 pip install -e ".[dev]"
 alembic upgrade head
 cd ../..
 ```
 
-Then launch both services:
+Launch both services with the bundled launcher — it migrates the database,
+starts the API and the Vite app, waits for both, opens the UI, and keeps the
+external API disabled:
 
 ```bash
 ./run-planarus.sh   # macOS / Linux
 run-planarus.bat    # Windows
 ```
-
-The launcher chooses free loopback ports when necessary. In the usual case:
 
 | Service | Address |
 | --- | --- |
@@ -130,14 +158,83 @@ The launcher chooses free loopback ports when necessary. In the usual case:
 | API health | `http://localhost:8000/health` |
 | Interactive API docs | `http://localhost:8000/docs` |
 
-> **Important:** run backend commands from `apps/api`. The local SQLite path is
-> relative to the working directory; starting it elsewhere can create an empty,
-> separate database.
+> [!WARNING]
+> **Run backend commands from `apps/api`.** The SQLite path is relative to the
+> working directory; starting elsewhere silently creates a second, empty
+> database.
 
-For the full developer reference—including Windows details, alternate frontend
-ports, and troubleshooting—see [Developer setup](docs/dev/setup.md).
+Windows specifics, alternate frontend ports, and troubleshooting live in
+[Developer setup](docs/dev/setup.md).
 
-## Technical architecture
+---
+
+## <img src="https://img.shields.io/badge/-03-D97706.svg?style=flat-square" height="18" alt="" /> The trust model
+
+Every agent-facing surface — STDIO MCP, remote HTTP MCP, ChatGPT Actions, the
+external REST API — resolves to the same two verbs.
+
+```mermaid
+sequenceDiagram
+  participant A as Agent
+  participant P as Planarus API
+  participant Q as Approval queue
+  participant H as Human
+  participant S as Canonical state
+  A->>P: read context pack / project state
+  A->>P: propose change
+  P->>Q: ApprovalRequest (write-pending)
+  H->>Q: review diff
+  H->>S: approve and apply
+  S-->>P: AuditEvent written
+```
+
+Four invariants hold across the codebase, and pull requests are expected to keep
+them intact:
+
+- **One write path.** MCP tools and REST endpoints share the `services/` layer,
+  so there is a single governance and audit path.
+- **Approval-gated external writes.** Only an authenticated local human action
+  applies canonical state.
+- **Deny-by-default power.** No shell execution, no arbitrary filesystem
+  browsing, no Git mutation, no auto-apply.
+- **Everything is audited.** Each state change writes an `AuditEvent`, mirrored
+  to `.planarus/audit-log.jsonl`.
+
+---
+
+## <img src="https://img.shields.io/badge/-04-D97706.svg?style=flat-square" height="18" alt="" /> Product surfaces
+
+<table>
+  <tr>
+    <td width="25%" align="center"><img src="assets/readme/icons/plan.svg" width="28" alt="" /><br /><b>Plan</b><br /><sub>Phases, tasks, boards, roadmap, timeline, decisions, risks</sub></td>
+    <td width="25%" align="center"><img src="assets/readme/icons/context.svg" width="28" alt="" /><br /><b>Context</b><br /><sub>Rich docs, Markdown preview, context packs, offline canvas</sub></td>
+    <td width="25%" align="center"><img src="assets/readme/icons/agents.svg" width="28" alt="" /><br /><b>Agents</b><br /><sub>Approval proposals, agent runs, notifications, Git cockpit</sub></td>
+    <td width="25%" align="center"><img src="assets/readme/icons/control.svg" width="28" alt="" /><br /><b>Control</b><br /><sub>Team access, integrations, MCP/API config, backups</sub></td>
+  </tr>
+</table>
+
+<details>
+<summary>Full surface breakdown</summary>
+
+| Area | What you can do |
+| --- | --- |
+| Plan | Projects, phases, stages, milestones, tasks, sub-tasks, boards, roadmap, timeline, calendar, decisions, risks, checklists |
+| Context | Rich documents, Markdown preview, context-pack generation, context files, offline canvas |
+| Agents | Review approval proposals, inspect agent runs, read notifications and reminders, use the read-only Git cockpit |
+| Control | Team access, integrations, MCP/API configuration, webhooks, export/import, local backups |
+
+</details>
+
+---
+
+## <img src="https://img.shields.io/badge/-05-D97706.svg?style=flat-square" height="18" alt="" /> Architecture
+
+<p align="center">
+  <img src="assets/readme/architecture-diagram.svg" width="100%" alt="Planarus architecture: human and agent lanes converge through the approval boundary into FastAPI, backed by SQLite, project folders, and MCP/REST" />
+</p>
+
+<details>
+<summary>Mermaid source (renders live on GitHub)</summary>
 
 ```mermaid
 flowchart LR
@@ -150,47 +247,72 @@ flowchart LR
   API --> MCP[MCP and REST surfaces]
 ```
 
+</details>
+
 | Layer | Technology | Responsibility |
 | --- | --- | --- |
-| Web | React 19, TypeScript, Vite | Responsive product UI, planning surfaces, rich documents, canvas, and approvals |
-| API | FastAPI, Python 3.11 | Typed REST endpoints, OpenAPI docs, business rules, and internal approval engine |
-| Data | SQLModel, Alembic, SQLite/WAL | Local canonical state with schema migration discipline |
+| Web | React 19, TypeScript, Vite, Tiptap | Planning surfaces, rich documents, canvas, approvals |
+| API | FastAPI, Python 3.11 | Typed REST endpoints, OpenAPI 3.1, business rules, approval engine |
+| Data | SQLModel, Alembic, SQLite/WAL | Local canonical state with migration discipline |
 | Context | Project folders + generated Markdown | Portable, Git-friendly context packs for humans and agents |
-| Agent access | STDIO MCP, opt-in remote HTTP MCP, REST | Narrow read/propose contracts that share the same approval rules |
+| Agent access | STDIO MCP, opt-in remote HTTP MCP, REST | Narrow read/propose contracts under shared approval rules |
 
-The project is an `apps/web` + `apps/api` monorepo. Tauri desktop packaging is
-planned but not yet shipped; today Planarus runs as a local web UI backed by a
-local FastAPI service.
+### Repository layout
 
-## Connect an agent safely
+```
+apps/web/     React + TS + Vite application
+apps/api/     FastAPI service — api · models · schemas · services · fsmemory
+              prompt · policy · mcp · db · core, plus alembic and tests
+context/      Living context pack: rules, architecture, decisions, risks, next step
+docs/plan/    Accepted architecture and product plan, one file per section
+docs/dev/     Build history, one document per phase
+docs/guide/   User guides: ChatGPT, calendar, LAN team mode, notifications, go-live
+deploy/       Hosted deployment compose files and notes
+```
 
-Planarus supports several agent-facing paths. They are intentionally distinct:
+The monorepo is `apps/web` + `apps/api`. The database is authoritative for
+structured data; versioned editor `content_json` is authoritative for free-form
+docs; exported Markdown and `context/*` are derived. Postgres portability is
+kept through portable models plus an explicit application-level ETL — not a URL
+switch. Tauri 2 desktop packaging is planned and not yet started.
+
+---
+
+## <img src="https://img.shields.io/badge/-06-D97706.svg?style=flat-square" height="18" alt="" /> Connect an agent
+
+Optional — the app is fully usable without any of this. When you do want an
+agent involved, the agent-facing paths are deliberately distinct, with different
+default postures.
 
 | Path | Default posture | Start here |
 | --- | --- | --- |
-| Local MCP (STDIO) | Private to the local machine; read/propose only | Settings → Integrations in the app |
+| Local MCP (STDIO) | Private to the local machine; read and propose only | Settings → Integrations |
 | REST / external API | Disabled and loopback-only until explicitly configured | [ChatGPT connection guide](docs/guide/connect-planarus-to-chatgpt.md) |
-| Remote HTTP MCP | Opt-in advanced integration | Settings → Integrations and the integration documentation |
+| Remote HTTP MCP | Opt-in advanced integration | Settings → Integrations |
 
-For a private ChatGPT connection, follow the
-[step-by-step guide](docs/guide/connect-planarus-to-chatgpt.md). It keeps the
-local application private by default and exposes only a deliberately scoped,
-read-only integration path when you choose to configure one.
+Machine-readable contracts for the ChatGPT Actions surfaces ship in the repo:
+[`docs/api/planarus-gpt-actions-readonly.openapi.json`](docs/api/planarus-gpt-actions-readonly.openapi.json)
+and
+[`docs/api/planarus-gpt-actions-read-propose.openapi.json`](docs/api/planarus-gpt-actions-read-propose.openapi.json).
 
-## Optional capabilities
+---
 
-Nothing in this table is enabled by the quickstart.
+## <img src="https://img.shields.io/badge/-07-D97706.svg?style=flat-square" height="18" alt="" /> Optional capabilities
+
+> [!NOTE]
+> Nothing below is enabled by the quickstart — every capability here starts off.
 
 | Capability | What it adds | Guide |
 | --- | --- | --- |
-| LAN team mode | Local accounts, attribution, and soft edit locks for a small trusted network | [LAN team mode](docs/guide/lan-team-mode.md) |
-| Calendar sync | Explicit Google/Microsoft connections | [Connect a calendar](docs/guide/connect-your-calendar.md) |
-| Notifications & backups | OS-scheduled reminders and verified local database snapshots | [Notifications & backups](docs/guide/notifications-and-backup.md) |
-| Hosted go-live | The documented path for deliberately enabling a hosted deployment | [Hosted go-live](docs/guide/hosted-go-live.md) |
+| <img src="https://img.shields.io/badge/-LAN-8A8A82.svg?style=flat-square" height="20" alt="" /> Team mode | Local accounts, attribution, and soft edit locks for a small trusted network | [LAN team mode](docs/guide/lan-team-mode.md) |
+| <img src="https://img.shields.io/badge/-sync-8A8A82.svg?style=flat-square" height="20" alt="" /> Calendar sync | Explicit Google or Microsoft connections | [Connect a calendar](docs/guide/connect-your-calendar.md) |
+| <img src="https://img.shields.io/badge/-alerts-8A8A82.svg?style=flat-square" height="20" alt="" /> Notifications and backups | OS-scheduled reminders and verified local database snapshots | [Notifications and backups](docs/guide/notifications-and-backup.md) |
+| <img src="https://img.shields.io/badge/-roles-8A8A82.svg?style=flat-square" height="20" alt="" /> Team administration | Roles, invitations, and attribution for LAN deployments | [Team administration](docs/guide/team-administration.md) |
+| <img src="https://img.shields.io/badge/-hosted-8A8A82.svg?style=flat-square" height="20" alt="" /> Hosted go-live | The documented path for deliberately enabling a hosted deployment | [Hosted go-live](docs/guide/hosted-go-live.md) |
 
-## Validate a checkout
+---
 
-Run these before opening a pull request:
+## <img src="https://img.shields.io/badge/-08-D97706.svg?style=flat-square" height="18" alt="" /> Validate a checkout
 
 ```bash
 # Backend — from apps/api
@@ -205,39 +327,52 @@ pnpm build:web
 CI additionally verifies the Postgres migration path and a Docker Compose smoke
 test. See [Contributing](CONTRIBUTING.md) for the focused pull-request workflow.
 
-## Project status
+---
 
-Planarus is a working, local-first pre-1.0 application used daily by its
-author. Phases 1–18 are built: planning, structured docs, approval workflows,
-MCP/API boundaries, LAN team mode, Git cockpit, offline canvas, integrations,
-notifications, and verified backups.
+## <img src="https://img.shields.io/badge/-09-D97706.svg?style=flat-square" height="18" alt="" /> Project status
 
-The hosted/SaaS groundwork exists but is not enabled by default. Desktop
-packaging has not started. Those boundaries are deliberate: the current product
-is designed to be useful and safe on one local machine first.
+> [!TIP]
+> Planarus is a working, pre-1.0, local-first application used daily by its
+> author. Phases 1–19 and 22 are built: planning entities, structured docs,
+approval workflows, MCP and API boundaries, LAN team mode, the read-only Git
+cockpit, offline canvas, the integration hub, notifications, verified backups,
+the planning graph, and entity attachments.
 
-## Documentation map
+Hosted groundwork exists but stays disabled by default. Desktop packaging has
+not started. Both boundaries are deliberate: the product is designed to be
+useful and safe on one local machine first, and every later capability is an
+additive layer rather than a rewrite.
 
-- [Developer setup](docs/dev/setup.md) — prerequisites, hot reload, API, tests
-- [Product and architecture plan](docs/plan/00-OVERVIEW.md) — product scope,
-  design decisions, and technical architecture
-- [User guides](docs/guide/) — ChatGPT, calendar, LAN team mode, notifications,
-  backups, and hosted go-live
-- [Contributing](CONTRIBUTING.md) — contribution workflow and non-negotiable
-  safety invariants
-- [Security policy](SECURITY.md) — private vulnerability reporting and scope
+---
 
-## Contributing and security
+## <img src="https://img.shields.io/badge/-10-D97706.svg?style=flat-square" height="18" alt="" /> Documentation map
 
-Contributions are welcome. Please keep the product’s trust model intact:
-external AI clients may read data and create pending proposals, but they must
-never directly approve or apply canonical changes. Read
-[CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+| Document | Read it for |
+| --- | --- |
+| [context/PROJECT_CONTEXT.md](context/PROJECT_CONTEXT.md) | The dense brief — what Planarus is, in one page |
+| [docs/plan/00-OVERVIEW.md](docs/plan/00-OVERVIEW.md) | Accepted architecture and product plan, section by section |
+| [docs/plan/01-product-and-scope.md](docs/plan/01-product-and-scope.md) | Product definition, competitive wedge, MVP boundary |
+| [context/DECISIONS.md](context/DECISIONS.md) · [context/RISKS.md](context/RISKS.md) | Why the system looks the way it does, and what could bite |
+| [docs/dev/setup.md](docs/dev/setup.md) | Prerequisites, hot reload, API, tests |
+| [docs/guide/](docs/guide/) | ChatGPT, calendar, LAN team mode, notifications, backups, go-live |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution workflow and non-negotiable safety invariants |
+| [SECURITY.md](SECURITY.md) | Private vulnerability reporting and scope |
+| [CHANGELOG.md](CHANGELOG.md) | Release-level history |
 
-For vulnerabilities, **do not open a public issue**. Use
-[private vulnerability reporting](SECURITY.md) instead.
+---
 
-## License
+## <img src="https://img.shields.io/badge/-11-D97706.svg?style=flat-square" height="18" alt="" /> Contributing
 
-Planarus is released under the [Apache License 2.0](LICENSE). Bundled fonts keep
-their own licenses; see [NOTICE](NOTICE).
+Contributions are welcome. Keep the trust model intact: external AI clients may
+read data and create pending proposals, and must never directly approve or apply
+canonical changes. Read [CONTRIBUTING.md](CONTRIBUTING.md) and
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before opening a pull request.
+
+> [!CAUTION]
+> For vulnerabilities, **do not open a public issue** — use
+> [private vulnerability reporting](SECURITY.md).
+
+## <img src="https://img.shields.io/badge/-12-D97706.svg?style=flat-square" height="18" alt="" /> License
+
+Apache License 2.0. See [LICENSE](LICENSE), and [NOTICE](NOTICE) for bundled
+third-party terms. Trademarks: [TRADEMARKS.md](TRADEMARKS.md).
