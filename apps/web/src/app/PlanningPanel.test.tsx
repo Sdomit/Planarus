@@ -125,7 +125,7 @@ describe('PlanningPanel', () => {
     render(<PlanningPanel projectId="proj_1" initialTab="tasks" />)
     await screen.findByText('Test Project')
     expect(screen.getByRole('tab', { name: 'Tasks' }).getAttribute('aria-selected')).toBe('true')
-    expect(screen.getByText('No tasks yet.')).toBeTruthy()
+    expect(screen.getByText('No tasks yet')).toBeTruthy()
   })
 
   it('shows the assignee name on an assigned task (P16.3)', async () => {
@@ -313,7 +313,37 @@ describe('PlanningPanel', () => {
     setupEmpty()
     render(<PlanningPanel projectId="proj_1" />)
     await screen.findByText('Test Project')
-    expect(screen.getByText('No phases yet.')).toBeTruthy()
+    expect(screen.getByText('No phases yet')).toBeTruthy()
+  })
+
+  it('the empty state explains the surface and opens the create form (#159)', async () => {
+    setupEmpty()
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    // Was a bare "No phases yet." — no icon, no explanation, no way forward,
+    // while Roadmap's CTA pointed users straight at this screen.
+    expect(screen.getByText(/Phases group work into stages/)).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add the first phase' }))
+    expect(screen.getByLabelText('Phase title')).toBeTruthy()
+  })
+
+  it('every planning tab explains itself when empty (#159)', async () => {
+    setupEmpty()
+    render(<PlanningPanel projectId="proj_1" />)
+    await screen.findByText('Test Project')
+    const expected: Array<[string, string, RegExp]> = [
+      ['Tasks', 'No tasks yet', /unit of work/],
+      ['Milestones', 'No milestones yet', /dates that matter/],
+      ['Decisions', 'No decisions yet', /reasoning outlives/],
+      ['Risks', 'No risks or blockers', /what could go wrong/],
+      ['Comments', 'No comments yet', /attach discussion/],
+    ]
+    for (const [tab, title, hint] of expected) {
+      fireEvent.click(screen.getByRole('tab', { name: tab }))
+      expect(screen.getByText(title)).toBeTruthy()
+      expect(screen.getByText(hint)).toBeTruthy()
+    }
   })
 
   it('renders phases when present', async () => {

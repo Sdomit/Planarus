@@ -3,6 +3,8 @@ import {
   api, Blocker, ChecklistItem, Comment, Decision, DocSummary, EntityConnection, Link, MemberRead, Milestone, Phase, Project, Risk, Stage, StatusOption, Task,
 } from '../api/client'
 import { StatusBadge, type ToneKind } from './StatusBadge'
+import { EmptyState } from './EmptyState'
+import { Icon } from './Icon'
 import { InlineStatusSelect } from './InlineStatusSelect'
 import { RowActions } from './RowActions'
 import { EntityNotes, normalizeUrl } from './EntityNotes'
@@ -605,7 +607,7 @@ export default function PlanningPanel({
 
         {tab === 'phases' && (
           <PhasesSection phases={phases} tasks={tasks} decisions={decisions} risks={risks}
-            projectId={project.id} setPhases={setPhases}
+            projectId={project.id} setPhases={setPhases} onAddFirst={() => setShowCreate(true)}
             statuses={phaseStatuses} reloadStatuses={reloadStatuses.phase}
             addStatus={addStatusFor('phase')}
             onOpenInPhase={(nextTab, phaseId) => { setPhaseFilter(phaseId); setTab(nextTab) }}
@@ -623,7 +625,7 @@ export default function PlanningPanel({
         )}
         {tab === 'tasks' && (
           <TasksList tasks={inPhase(tasks)} phases={phases} stages={stages} projectId={project.id} setTasks={setTasks}
-            taskStatuses={taskStatuses} reloadStatuses={reloadStatuses.task}
+            taskStatuses={taskStatuses} reloadStatuses={reloadStatuses.task} onAddFirst={() => setShowCreate(true)}
             addTaskStatus={addStatusFor('task')} reorderable={!phaseFilter}
             onTaskUpdated={updated =>
               setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))
@@ -631,12 +633,12 @@ export default function PlanningPanel({
         )}
         {tab === 'milestones' && (
           <MilestonesSection milestones={inPhase(milestones)} projectId={project.id} setMilestones={setMilestones}
-            statuses={milestoneStatuses} reloadStatuses={reloadStatuses.milestone}
+            statuses={milestoneStatuses} reloadStatuses={reloadStatuses.milestone} onAddFirst={() => setShowCreate(true)}
             addStatus={addStatusFor('milestone')} reorderable={!phaseFilter} />
         )}
         {tab === 'decisions' && (
           <DecisionsSection decisions={inPhase(decisions)} phases={phases} projectId={project.id} setDecisions={setDecisions}
-            statuses={decisionStatuses} reloadStatuses={reloadStatuses.decision}
+            statuses={decisionStatuses} reloadStatuses={reloadStatuses.decision} onAddFirst={() => setShowCreate(true)}
             addStatus={addStatusFor('decision')} reorderable={!phaseFilter} />
         )}
         {tab === 'risks' && (
@@ -648,10 +650,14 @@ export default function PlanningPanel({
             setRisks={setRisks}
             statuses={riskStatuses} reloadStatuses={reloadStatuses.risk}
             addStatus={addStatusFor('risk')} reorderable={!phaseFilter}
+            onAddFirst={() => setShowCreate(true)}
             onBlockerUpdated={updated => setBlockers(prev => prev.map(b => b.id === updated.id ? updated : b))}
           />
         )}
-        {tab === 'comments' && <CommentsSection comments={comments} setComments={setComments} />}
+        {tab === 'comments' && (
+          <CommentsSection comments={comments} setComments={setComments}
+            onAddFirst={() => setShowCreate(true)} />
+        )}
         {tab === 'links' && <LinksList links={links} />}
       </div>
     </div>
@@ -776,8 +782,9 @@ export function phaseRollups(
 /** Phase 22.1: the tabs a phase can send you to, pre-scoped to itself. */
 export type PhaseScopedTab = 'tasks' | 'milestones' | 'decisions' | 'risks'
 
-function PhasesSection({ phases, tasks = [], decisions = [], risks = [], projectId, setPhases, statuses, addStatus, reloadStatuses, onOpenInPhase, onAddInPhase }: {
+function PhasesSection({ phases, tasks = [], decisions = [], risks = [], projectId, setPhases, statuses, addStatus, reloadStatuses, onOpenInPhase, onAddInPhase, onAddFirst }: {
   phases: Phase[]; projectId: string; setPhases: React.Dispatch<React.SetStateAction<Phase[]>>
+  onAddFirst?: () => void
   tasks?: Task[]; decisions?: Decision[]; risks?: Risk[]
   statuses?: StatusOption[]; addStatus?: (label: string) => Promise<void>; reloadStatuses?: () => Promise<void>
   onOpenInPhase?: (tab: PhaseScopedTab, phaseId: string) => void
@@ -797,7 +804,18 @@ function PhasesSection({ phases, tasks = [], decisions = [], risks = [], project
   const { itemProps, reorder, moveBy } = useListReorder(phases, next => setPhases(next), ids => api.phases.reorder(projectId, ids))
 
   if (phases.length === 0)
-    return <><div className="pp-toolbar">{mgr.button}</div><p style={EMPTY}>No phases yet.</p>{mgr.modal}</>
+    return (
+      <>
+        <div className="pp-toolbar">{mgr.button}</div>
+        <EmptyState
+          icon={<Icon name="layers" className="ic-32" />}
+          title="No phases yet"
+          hint="Phases group work into stages. They drive the Roadmap, and every task, decision and risk can belong to one."
+          action={onAddFirst ? { label: 'Add the first phase', onClick: onAddFirst } : undefined}
+        />
+        {mgr.modal}
+      </>
+    )
 
   return (
     <>
@@ -950,6 +968,7 @@ interface TasksListProps {
   taskStatuses?: StatusOption[]
   addTaskStatus?: (label: string) => Promise<void>
   reloadStatuses?: () => Promise<void>
+  onAddFirst?: () => void
   /** Off while a phase filter narrows the rows: sort_order is project-global,
    *  so reordering a filtered subset would persist a partial set. See #86. */
   reorderable?: boolean
@@ -967,7 +986,7 @@ function promptNewStatus(add: (label: string) => Promise<void>): void {
   if (label) void add(label)
 }
 
-function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, taskStatuses, addTaskStatus, reloadStatuses, reorderable = true }: TasksListProps) {
+function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, taskStatuses, addTaskStatus, reloadStatuses, onAddFirst, reorderable = true }: TasksListProps) {
   const statusKeys = statusKeysOf(taskStatuses)
   const colorOf = colorMapOf(taskStatuses)
   const mgr = useStatusManager({ projectId, entityType: 'task', kind: 'task', statuses: taskStatuses, reload: reloadStatuses })
@@ -990,7 +1009,18 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
   const { itemProps, moveBy } = useListReorder(tasks, next => setTasks?.(next), ids => api.tasks.reorder(projectId, ids))
 
   if (tasks.length === 0)
-    return <><div className="pp-toolbar">{mgr.button}</div><p style={EMPTY}>No tasks yet.</p>{mgr.modal}</>
+    return (
+      <>
+        <div className="pp-toolbar">{mgr.button}</div>
+        <EmptyState
+          icon={<Icon name="check" className="ic-32" />}
+          title="No tasks yet"
+          hint="Tasks are the unit of work here — the thing a connected agent proposes changes to, and you approve."
+          action={onAddFirst ? { label: 'Add the first task', onClick: onAddFirst } : undefined}
+        />
+        {mgr.modal}
+      </>
+    )
 
   const finderItems = finder.filtered.filter(t => {
     if (mineOnly && t.assignee_id !== myId) return false
@@ -1434,9 +1464,10 @@ function TaskRow({ task, phases, stages, projectId, onTaskUpdated, onDelete, dra
   )
 }
 
-function MilestonesSection({ milestones, projectId, setMilestones, statuses, addStatus, reloadStatuses, reorderable = true }: {
+function MilestonesSection({ milestones, projectId, setMilestones, statuses, addStatus, reloadStatuses, onAddFirst, reorderable = true }: {
   milestones: Milestone[]; projectId: string; setMilestones: React.Dispatch<React.SetStateAction<Milestone[]>>
   statuses?: StatusOption[]; addStatus?: (label: string) => Promise<void>; reloadStatuses?: () => Promise<void>
+  onAddFirst?: () => void
   reorderable?: boolean
 }) {
   const [view, setView] = useState<'list' | 'board'>('list')
@@ -1455,7 +1486,18 @@ function MilestonesSection({ milestones, projectId, setMilestones, statuses, add
   const { itemProps, reorder, moveBy } = useListReorder(milestones, next => setMilestones(next), ids => api.milestones.reorder(projectId, ids))
 
   if (milestones.length === 0)
-    return <><div className="pp-toolbar">{mgr.button}</div><p style={EMPTY}>No milestones yet.</p>{mgr.modal}</>
+    return (
+      <>
+        <div className="pp-toolbar">{mgr.button}</div>
+        <EmptyState
+          icon={<Icon name="calendar" className="ic-32" />}
+          title="No milestones yet"
+          hint="Milestones are the dates that matter. They mark the Roadmap and feed due-soon and overdue reminders."
+          action={onAddFirst ? { label: 'Add the first milestone', onClick: onAddFirst } : undefined}
+        />
+        {mgr.modal}
+      </>
+    )
 
   return (
     <>
@@ -1533,9 +1575,10 @@ function MilestoneListRow({ milestone, update, remove, dragProps, move, statusKe
   )
 }
 
-function DecisionsSection({ decisions, phases = [], projectId, setDecisions, statuses, addStatus, reloadStatuses, reorderable = true }: {
+function DecisionsSection({ decisions, phases = [], projectId, setDecisions, statuses, addStatus, reloadStatuses, onAddFirst, reorderable = true }: {
   decisions: Decision[]; phases?: Phase[]; projectId: string; setDecisions: React.Dispatch<React.SetStateAction<Decision[]>>
   statuses?: StatusOption[]; addStatus?: (label: string) => Promise<void>; reloadStatuses?: () => Promise<void>; reorderable?: boolean
+  onAddFirst?: () => void
 }) {
   const [view, setView] = useState<'list' | 'board'>('list')
   const statusKeys = statuses && statuses.length ? statuses.map(o => o.key) : DECISION_STATUSES
@@ -1553,7 +1596,18 @@ function DecisionsSection({ decisions, phases = [], projectId, setDecisions, sta
   const { itemProps, reorder, moveBy } = useListReorder(decisions, next => setDecisions(next), ids => api.decisions.reorder(projectId, ids))
 
   if (decisions.length === 0)
-    return <><div className="pp-toolbar">{mgr.button}</div><p style={EMPTY}>No decisions yet.</p>{mgr.modal}</>
+    return (
+      <>
+        <div className="pp-toolbar">{mgr.button}</div>
+        <EmptyState
+          icon={<Icon name="info" className="ic-32" />}
+          title="No decisions yet"
+          hint="Record the calls you have made and why, so the reasoning outlives the conversation it happened in — and an agent can read it."
+          action={onAddFirst ? { label: 'Record the first decision', onClick: onAddFirst } : undefined}
+        />
+        {mgr.modal}
+      </>
+    )
 
   return (
     <>
@@ -1629,8 +1683,9 @@ function DecisionListRow({ decision, phases = [], update, remove, dragProps, mov
 }
 
 function RisksSection({
-  risks, phases = [], blockers, projectId, setRisks, onBlockerUpdated, statuses, addStatus, reloadStatuses, reorderable = true,
+  risks, phases = [], blockers, projectId, setRisks, onBlockerUpdated, statuses, addStatus, reloadStatuses, onAddFirst, reorderable = true,
 }: {
+  onAddFirst?: () => void
   risks: Risk[]; phases?: Phase[]; blockers: Blocker[]; projectId: string
   setRisks: React.Dispatch<React.SetStateAction<Risk[]>>; onBlockerUpdated: (b: Blocker) => void
   statuses?: StatusOption[]; addStatus?: (label: string) => Promise<void>; reloadStatuses?: () => Promise<void>; reorderable?: boolean
@@ -1651,7 +1706,18 @@ function RisksSection({
   const { itemProps, reorder, moveBy } = useListReorder(risks, next => setRisks(next), ids => api.risks.reorder(projectId, ids))
 
   if (risks.length === 0 && blockers.length === 0)
-    return <><div className="pp-toolbar">{mgr.button}</div><p style={EMPTY}>No risks or blockers.</p>{mgr.modal}</>
+    return (
+      <>
+        <div className="pp-toolbar">{mgr.button}</div>
+        <EmptyState
+          icon={<Icon name="zap" className="ic-32" />}
+          title="No risks or blockers"
+          hint="Risks track what could go wrong. Blockers mark work that is not ready — an agent reads them before proposing anything."
+          action={onAddFirst ? { label: 'Add the first risk', onClick: onAddFirst } : undefined}
+        />
+        {mgr.modal}
+      </>
+    )
 
   return (
     <>
@@ -1762,8 +1828,9 @@ function BlockerRow({ blocker, onUpdated }: { blocker: Blocker; onUpdated: (b: B
   )
 }
 
-function CommentsSection({ comments, setComments }: {
+function CommentsSection({ comments, setComments, onAddFirst }: {
   comments: Comment[]; setComments: React.Dispatch<React.SetStateAction<Comment[]>>
+  onAddFirst?: () => void
 }) {
   const [view, setView] = useState<'list' | 'card'>('list')
   const finder = usePlanningFinder({
@@ -1776,7 +1843,15 @@ function CommentsSection({ comments, setComments }: {
   const update = (id: string, patch: Parameters<typeof api.comments.update>[1]) => run(api.comments.update(id, patch), onUpdated)
   const remove = (id: string) => run(api.comments.remove(id), () => setComments(prev => prev.filter(c => c.id !== id)))
 
-  if (comments.length === 0) return <p style={EMPTY}>No comments yet.</p>
+  if (comments.length === 0)
+    return (
+      <EmptyState
+        icon={<Icon name="message" className="ic-32" />}
+        title="No comments yet"
+        hint="Comments attach discussion to a task, decision or risk, so the thread lives next to the work instead of in chat."
+        action={onAddFirst ? { label: 'Add the first comment', onClick: onAddFirst } : undefined}
+      />
+    )
 
   return (
     <>
