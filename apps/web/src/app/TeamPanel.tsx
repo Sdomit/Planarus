@@ -269,7 +269,7 @@ function AccountsSection({
           {users.map((u) => {
             const seen = lastSeenLabel(u.last_seen_at)
             return (
-              <li key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 4px', borderTop: '1px solid var(--border-muted, var(--border-default))', opacity: u.is_active ? 1 : 0.55 }}>
+              <li key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 4px', borderTop: '1px solid var(--border-default)', opacity: u.is_active ? 1 : 0.55 }}>
                 <Avatar id={u.id} name={u.display_name || u.email} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
@@ -402,7 +402,7 @@ function WorkspaceMembers({
       {members && (
         <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 6 }}>
           {members.map((m) => (
-            <li key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 4px', borderTop: '1px solid var(--border-muted, var(--border-default))' }}>
+            <li key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 4px', borderTop: '1px solid var(--border-default)' }}>
               <Avatar id={m.user_id} name={m.display_name || m.email} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

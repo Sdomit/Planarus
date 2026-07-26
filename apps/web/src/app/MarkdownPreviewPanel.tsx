@@ -91,7 +91,7 @@ export default function MarkdownPreviewPanel({ projectId }: { projectId: string 
 
       {error && <p className="dp-state dp-error">{error}</p>}
       {drifted && (
-        <p className="dp-state" style={{ color: 'var(--warning, #d99a2b)' }}>
+        <p className="dp-state" style={{ color: 'var(--status-warning-fg)' }}>
           ⚠ This file was edited on disk after generation — you are previewing the on-disk content.
         </p>
       )}
