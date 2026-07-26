@@ -9,6 +9,12 @@ import { StatusBadge } from './StatusBadge'
 import './approval-queue-panel.css'
 
 const OPEN_STATES = ['pending', 'approved', 'applying']
+// #154 review: the actionable rows are fetched by status, not sliced out of a
+// capped page. Ordered by creation time, an old still-pending proposal falls off
+// a 200-row page once enough decided history piles up in front of it — and the
+// panel is the only place it can be approved, rejected or applied. History is
+// the half it is safe to clip.
+const OPEN_FILTER = OPEN_STATES.join(',')
 
 interface ApprovalQueuePanelProps { projectId: string; onClose: () => void }
 
@@ -24,9 +30,12 @@ function renderValue(v: unknown): string {
 }
 
 export default function ApprovalQueuePanel({ projectId }: ApprovalQueuePanelProps) {
-  const [items, setItems] = useState<ApprovalSummary[]>([])
+  const [openItems, setOpenItems] = useState<ApprovalSummary[]>([])
+  const [historyItems, setHistoryItems] = useState<ApprovalSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  // Total row count when the server returned only part of it; null when whole.
+  const [clipped, setClipped] = useState<number | null>(null)
 
   const [selected, setSelected] = useState<ApprovalDetail | null>(null)
   const [audit, setAudit] = useState<ApprovalAuditEntry[]>([])
@@ -38,9 +47,18 @@ export default function ApprovalQueuePanel({ projectId }: ApprovalQueuePanelProp
 
   const loadList = useCallback(() => {
     setLoading(true); setLoadError(null)
-    return api.approvals
-      .list(projectId)
-      .then(setItems)
+    return Promise.all([
+      api.approvals.listPaged(projectId, OPEN_FILTER),
+      api.approvals.listPaged(projectId),
+    ])
+      .then(([openPage, recentPage]) => {
+        setOpenItems(openPage.items)
+        // The second call is unfiltered, so drop the actionable rows it repeats.
+        setHistoryItems(recentPage.items.filter(a => !OPEN_STATES.includes(a.status)))
+        // #103: the server caps the history list. Say so rather than quietly
+        // showing a partial history that looks complete.
+        setClipped(recentPage.hasMore ? recentPage.total : null)
+      })
       .catch((e: Error) => setLoadError(e.message))
       .finally(() => setLoading(false))
   }, [projectId])
@@ -59,15 +77,18 @@ export default function ApprovalQueuePanel({ projectId }: ApprovalQueuePanelProp
     fn()
       .then(updated => {
         setSelected(prev => prev ? { ...prev, ...updated } : prev)
-        setItems(prev => prev.map(it => it.id === updated.id ? { ...it, ...updated } : it))
+        const patch = (prev: ApprovalSummary[]) =>
+          prev.map(it => it.id === updated.id ? { ...it, ...updated } : it)
+        setOpenItems(patch)
+        setHistoryItems(patch)
         api.approvals.audit(id).then(setAudit).catch(() => undefined)
       })
       .catch((e: Error) => setActionError(e.message))
       .finally(() => setBusy(false))
   }, [])
 
-  const pending = items.filter(a => OPEN_STATES.includes(a.status))
-  const history = items.filter(a => !OPEN_STATES.includes(a.status))
+  const pending = openItems
+  const history = historyItems
 
   const renderRow = (a: ApprovalSummary) => (
     <button
@@ -108,6 +129,12 @@ export default function ApprovalQueuePanel({ projectId }: ApprovalQueuePanelProp
                   ? <p className="aqp-empty">No decided proposals yet.</p>
                   : history.map(renderRow)}
               </section>
+              {clipped !== null && (
+                <p className="aqp-state">
+                  Showing every open proposal, and the {historyItems.length} most
+                  recent of {clipped} total. Older decided proposals are not listed.
+                </p>
+              )}
             </>
           )}
         </div>

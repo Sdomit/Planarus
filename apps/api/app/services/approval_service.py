@@ -15,8 +15,10 @@ from __future__ import annotations
 import json
 from typing import Optional
 
+from sqlalchemy import func
 from sqlalchemy import update as sa_update
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import defer
 from sqlmodel import Session, select
 
 from app.core.exceptions import (
@@ -388,17 +390,58 @@ def create_proposal(
     return ar
 
 
+def _approval_filters(stmt, project_id: Optional[str], status: Optional[str]):
+    """``status`` accepts one value or a comma-separated set.
+
+    The set form exists because the queue's *actionable* rows are not one status
+    but three — pending, approved and applying — and every one of them must stay
+    reachable no matter how much decided history accumulates in front of it
+    (#154 review). A single-value filter left approved/applying stranded.
+    """
+    if project_id:
+        stmt = stmt.where(ApprovalRequest.project_id == project_id)
+    if status:
+        wanted = [s.strip() for s in status.split(",") if s.strip()]
+        if len(wanted) == 1:
+            stmt = stmt.where(ApprovalRequest.status == wanted[0])
+        elif wanted:
+            stmt = stmt.where(ApprovalRequest.status.in_(wanted))
+    return stmt
+
+
+def count_approvals(
+    session: Session,
+    project_id: Optional[str] = None,
+    status: Optional[str] = None,
+) -> int:
+    """Total matching rows, so a bounded list can report what it left out (#103)."""
+    stmt = _approval_filters(
+        select(func.count()).select_from(ApprovalRequest), project_id, status
+    )
+    return int(session.exec(stmt).one())
+
+
 def list_approvals(
     session: Session,
     project_id: Optional[str] = None,
     status: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: int = 0,
 ) -> list[ApprovalRequest]:
-    stmt = select(ApprovalRequest)
-    if project_id:
-        stmt = stmt.where(ApprovalRequest.project_id == project_id)
-    if status:
-        stmt = stmt.where(ApprovalRequest.status == status)
+    """#103: bounded, and without dragging every historical patch body through
+    Python. ``proposed_patch_json`` is deferred because no list caller reads it —
+    ApprovalSummary has no such field — while it is the largest column on the
+    table. The detail/apply paths use ``get_approval`` (a plain ``session.get``)
+    and are unaffected; touching the attribute on a deferred row still works, it
+    just costs a second query, which is the right trade for a list of 200.
+    """
+    stmt = _approval_filters(select(ApprovalRequest), project_id, status)
+    stmt = stmt.options(defer(ApprovalRequest.proposed_patch_json))
     stmt = stmt.order_by(ApprovalRequest.created_at.desc(), ApprovalRequest.id)
+    if offset:
+        stmt = stmt.offset(offset)
+    if limit is not None:
+        stmt = stmt.limit(limit)
     return list(session.exec(stmt).all())
 
 

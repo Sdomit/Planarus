@@ -27,7 +27,7 @@ vi.mock('../api/client', () => ({
     },
     tasks: { list: vi.fn() },
     risks: { list: vi.fn() },
-    approvals: { list: vi.fn() },
+    approvals: { list: vi.fn(), listPaged: vi.fn() },
   },
 }))
 
@@ -47,6 +47,7 @@ beforeEach(() => {
   vi.mocked(api.tasks.list).mockResolvedValue([])
   vi.mocked(api.risks.list).mockResolvedValue([])
   vi.mocked(api.approvals.list).mockResolvedValue([])
+  vi.mocked(api.approvals.listPaged).mockResolvedValue({ items: [], total: 0, hasMore: false })
   mockProject()
 })
 

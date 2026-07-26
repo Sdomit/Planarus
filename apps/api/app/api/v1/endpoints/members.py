@@ -5,8 +5,10 @@ manage members, with a bootstrap path for claiming an empty workspace and a
 guard against removing/demoting the last owner. Enforcement of roles on the
 *domain* routes (projects, tasks, …) is a separate slice (P10.2).
 """
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.auth_deps import (
     get_current_user,
@@ -36,8 +38,23 @@ def _require_workspace(session: Session, workspace_id: str) -> Workspace:
     return ws
 
 
-def _member_read(session: Session, member: WorkspaceMember) -> MemberRead:
-    user = session.get(User, member.user_id)
+def _users_by_id(session: Session, members: list[WorkspaceMember]) -> dict[str, User]:
+    """#103: one IN query for the roster instead of a session.get per member."""
+    ids = {m.user_id for m in members if m.user_id}
+    if not ids:
+        return {}
+    rows = session.exec(select(User).where(User.id.in_(ids))).all()  # type: ignore[attr-defined]
+    return {u.id: u for u in rows}
+
+
+def _member_read(
+    session: Session,
+    member: WorkspaceMember,
+    users: Optional[dict[str, User]] = None,
+) -> MemberRead:
+    # `users` is the batch-resolved map for list reads; single reads still fall
+    # back to a direct lookup so callers with one member pay one query, not two.
+    user = users.get(member.user_id) if users is not None else session.get(User, member.user_id)
     return MemberRead(
         id=member.id,
         workspace_id=member.workspace_id,
@@ -61,10 +78,9 @@ def list_members(
     _require_workspace(session, workspace_id)
     # Any member may see the roster; a non-member gets 403.
     require_workspace_role(session, workspace_id, user, "owner", "editor", "viewer")
-    return [
-        _member_read(session, m)
-        for m in auth_service.list_members(session, workspace_id)
-    ]
+    members = list(auth_service.list_members(session, workspace_id))
+    users = _users_by_id(session, members)
+    return [_member_read(session, m, users) for m in members]
 
 
 @router.get(
