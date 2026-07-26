@@ -152,7 +152,17 @@ def test_active_phase_skips_a_custom_done_phase_column(
     # at a finished phase stays resolvable), so "Finished phase" legitimately
     # appears in the roster. What must never happen is it being chosen as active.
     assert res.metadata["active_phase_id"] == live["id"]
-    assert "Live phase" in res.text
-    # It is present only as a roster line, never as the active-phase block.
-    assert f"source: phase:{first['id']}" not in res.text
-    assert f"source: phase:{live['id']}" in res.text
+    # It is present only as a roster line, never as the active-phase block. The
+    # two are told apart by block shape, not by id: the roster renders
+    # `phase[i]: <status> · <title>`, the active-phase block renders `title: <t>`.
+    #
+    # Asserting on the id here was flaky at ~1 run in 10. Block text is
+    # secret-scanned (`prompt/secrets.py`), and a generated id is a bare
+    # alphanumeric run whose Shannon entropy sometimes clears the threshold — so
+    # it came back as `«redacted:high-entropy-string»` and the assertion failed.
+    # The negative form was worse: it passed *because* of the redaction, not
+    # because the phase was absent. `test_phase_ids_are_not_emitted_into_block_text`
+    # already records the same rule as "ids in text come back masked".
+    assert "· Finished phase" in res.text, "the finished phase must still be rostered"
+    assert "title: Finished phase" not in res.text, "…but never as the active phase"
+    assert "title: Live phase" in res.text
