@@ -329,4 +329,14 @@ describe('ApprovalQueuePanel', () => {
     await waitFor(() => expect(mockApi.approvals.approve).toHaveBeenCalled())
     expect(fetch as unknown as ReturnType<typeof vi.fn>).not.toHaveBeenCalled()
   })
+
+  it('teaches the loop when nothing is waiting (#159)', async () => {
+    mockApi.approvals.listPaged.mockResolvedValue({ items: [], total: 0, hasMore: false })
+    render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
+    // Was a bare "No pending proposals." — the queue is the product's whole
+    // loop, and its empty state never said how a proposal would arrive.
+    await waitFor(() => screen.getByText('No proposals waiting'))
+    expect(screen.getByText(/when a connected agent suggests a change/)).toBeTruthy()
+    expect(screen.getByText(/Settings → Integrations/)).toBeTruthy()
+  })
 })

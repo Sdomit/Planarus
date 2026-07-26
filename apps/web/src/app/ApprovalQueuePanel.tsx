@@ -5,7 +5,9 @@ import {
   type ApprovalDetail,
   type ApprovalSummary,
 } from '../api/client'
+import { EmptyState } from './EmptyState'
 import { fmtTimestamp } from './format'
+import { Icon } from './Icon'
 import { StatusBadge } from './StatusBadge'
 import './approval-queue-panel.css'
 
@@ -217,7 +219,16 @@ export default function ApprovalQueuePanel({ projectId }: ApprovalQueuePanelProp
                   </div>
                 )}
                 {pending.length === 0
-                  ? <p className="aqp-empty">No pending proposals.</p>
+                  ? (
+                    // #159: "No pending proposals." never said how one would
+                    // arrive. This queue is the whole product loop, so its empty
+                    // state is the one place a new user can learn the loop exists.
+                    <EmptyState
+                      icon={<Icon name="inbox" className="ic-32" />}
+                      title="No proposals waiting"
+                      hint="Proposals appear here when a connected agent suggests a change. Nothing is applied until you approve it. Connect an agent in Settings → Integrations."
+                    />
+                  )
                   : pending.map(a => renderRow(a, true))}
                 {bulkErrors.length > 0 && (
                   <ul className="aqp-state aqp-error aqp-bulk-errors">

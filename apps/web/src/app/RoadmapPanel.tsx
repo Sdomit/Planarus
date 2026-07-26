@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, type ProjectRoadmap, type RoadmapPhase as RoadmapPhaseT, type RoadmapTaskRollup } from '../api/client'
+import { EmptyState } from './EmptyState'
 import { StatusBadge, toneFor } from './StatusBadge'
 import { Menu, MenuItem, MenuLabel } from './Menu'
 import './roadmap-panel.css'
@@ -193,20 +194,16 @@ export default function RoadmapPanel({
       </div>
 
       {roadmap.phases.length === 0 && (
-        <div className="ab-empty">
-          <div className="ab-empty-art" aria-hidden="true">
+        <EmptyState
+          icon={
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 22V4M4 4h11l-2 3 2 3H4" />
             </svg>
-          </div>
-          <h3>No phases yet</h3>
-          <p>Create phases and tasks in Planning to see the roadmap take shape.</p>
-          {onOpenPlanning && (
-            <button type="button" className="btn btn-solid btn-sm" onClick={onOpenPlanning}>
-              Open Planning
-            </button>
-          )}
-        </div>
+          }
+          title="No phases yet"
+          hint="Create phases and tasks in Planning to see the roadmap take shape."
+          action={onOpenPlanning ? { label: 'Open Planning', onClick: onOpenPlanning } : undefined}
+        />
       )}
 
       {roadmap.phases.map((phase) => (
