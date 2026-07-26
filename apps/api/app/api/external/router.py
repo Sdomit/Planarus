@@ -159,6 +159,21 @@ def project_summary(
     )
 
 
+@router.get("/projects/{project_id}/active-work")
+def active_work(
+    project_id: str,
+    cap: Capability = Depends(require_external_read),
+    session: Session = Depends(get_session),
+) -> dict:
+    """#93: the orientation call. Without it on this surface a Custom GPT needed
+    four round trips (summary + tasks + decisions + risks) to learn what one call
+    already returns — and still could not see blockers or resolve a phase_id."""
+    return _run_read(
+        session, cap, read_tools.get_active_work,
+        read_tools.ProjectArgs(project_id=project_id),
+    )
+
+
 @router.get("/projects/{project_id}/tasks")
 def list_tasks(
     project_id: str,

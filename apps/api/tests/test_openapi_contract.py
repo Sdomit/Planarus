@@ -56,7 +56,7 @@ READONLY_FILE = DOCS_API / "planarus-gpt-actions-readonly.openapi.json"
 PROPOSE_FILE = DOCS_API / "planarus-gpt-actions-read-propose.openapi.json"
 
 READ_OPERATION_IDS = {
-    "listProjects", "getProjectSummary", "listTasks", "listDecisions",
+    "listProjects", "getProjectSummary", "getActiveWork", "listTasks", "listDecisions",
     "listRisks", "listDocs", "getDocExcerpt", "getApprovalStatus",
 }
 PROPOSE_OPERATION_IDS = {"proposeTaskCreate", "proposeTaskUpdate", "proposeDecisionCreate"}
@@ -139,15 +139,15 @@ def test_builder_is_deterministic_and_independent():
 # --- 4/5: operation counts ----------------------------------------------------
 
 
-def test_readonly_profile_has_exactly_8_operations():
+def test_readonly_profile_has_exactly_9_operations():
     ro = build_readonly_openapi()
-    assert sum(len(item) for item in ro["paths"].values()) == 8
+    assert sum(len(item) for item in ro["paths"].values()) == 9
     assert {op["operationId"] for _, _, op in _operations(ro)} == READ_OPERATION_IDS
 
 
-def test_read_propose_profile_has_exactly_11_operations():
+def test_read_propose_profile_has_exactly_12_operations():
     rp = build_read_propose_openapi()
-    assert sum(len(item) for item in rp["paths"].values()) == 11
+    assert sum(len(item) for item in rp["paths"].values()) == 12
     assert {op["operationId"] for _, _, op in _operations(rp)} == (
         READ_OPERATION_IDS | PROPOSE_OPERATION_IDS
     )
@@ -481,8 +481,10 @@ def test_no_runtime_external_route_added_or_served():
     pairs = {
         (m, r.path) for r in routes for m in (r.methods or set()) if m in {"GET", "POST"}
     }
-    # Exactly the 11 live external operations — nothing new mounted.
-    assert len(routes) == 11
+    # Exactly the 12 live external operations — nothing new mounted.
+    # 11 before #93 added getActiveWork, which is a deliberate, reviewed widening
+    # of this surface; any other change to this number is the bug this catches.
+    assert len(routes) == 12
     assert pairs == _live_external_pairs()
     # No served OpenAPI artifact / contract route was mounted on the external surface.
     for r in routes:
