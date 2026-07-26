@@ -7,6 +7,7 @@ import { StatusBadge } from './StatusBadge'
 import { Icon } from './Icon'
 import GitSnapshotPanel from './GitSnapshotPanel'
 import NeedsAttention from './NeedsAttention'
+import type { TabKey as PlanningTabKey } from './PlanningPanel'
 import { dayLabel } from './date'
 import './cockpit-panel.css'
 
@@ -23,10 +24,12 @@ interface CockpitPanelProps {
   onOpenItem?: (item: NotificationItem) => void
   onOpenApprovals?: () => void
   onOpenTasks?: () => void
+  // #95: the KPI tiles counted things you then had to go find yourself.
+  onOpenPlanning?: (tab: PlanningTabKey) => void
 }
 
 export default function CockpitPanel({
-  projectId, onOpenCanvas, onOpenItem, onOpenApprovals, onOpenTasks,
+  projectId, onOpenCanvas, onOpenItem, onOpenApprovals, onOpenTasks, onOpenPlanning,
 }: CockpitPanelProps) {
   const [project, setProject] = useState<Project | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
@@ -97,13 +100,18 @@ export default function CockpitPanel({
   const openRisks = risks.filter((r) => !CLOSED_RISK.has(r.status)).length
   const openMilestones = milestones.filter((m) => !DONE_MILESTONE.has(m.status)).length
 
-  const kpis = [
-    { label: 'Phases', value: phaseCount, foot: 'in plan' },
-    { label: 'Open tasks', value: openTasks, foot: `of ${tasks.length} total` },
-    { label: 'Open risks', value: openRisks, foot: openRisks ? 'need attention' : 'clear' },
-    { label: 'Milestones', value: openMilestones, foot: `of ${milestones.length} total` },
-    { label: 'Decisions', value: decisions.length, foot: 'recorded' },
-    { label: 'Pending approvals', value: pending, foot: pending ? 'awaiting review' : 'queue clear' },
+  // #95: each tile counts rows that live on a specific tab, so the count is a
+  // way in. `go` is undefined when the parent wired no handler, and the tile
+  // then renders as the plain div it always was rather than a dead button.
+  const planning = (tab: PlanningTabKey) =>
+    onOpenPlanning ? () => onOpenPlanning(tab) : undefined
+  const kpis: Array<{ label: string; value: number; foot: string; go?: () => void }> = [
+    { label: 'Phases', value: phaseCount, foot: 'in plan', go: planning('phases') },
+    { label: 'Open tasks', value: openTasks, foot: `of ${tasks.length} total`, go: planning('tasks') },
+    { label: 'Open risks', value: openRisks, foot: openRisks ? 'need attention' : 'clear', go: planning('risks') },
+    { label: 'Milestones', value: openMilestones, foot: `of ${milestones.length} total`, go: planning('milestones') },
+    { label: 'Decisions', value: decisions.length, foot: 'recorded', go: planning('decisions') },
+    { label: 'Pending approvals', value: pending, foot: pending ? 'awaiting review' : 'queue clear', go: onOpenApprovals },
   ]
 
   const upcoming = milestones
@@ -130,13 +138,26 @@ export default function CockpitPanel({
       )}
 
       <div className="ab-kpis stagger">
-        {kpis.map((k) => (
-          <div className="ab-kpi anim-fade-in-up" key={k.label}>
-            <div className="ab-kpi-label">{k.label}</div>
-            <div className="ab-kpi-val">{k.value}</div>
-            <div className="ab-kpi-foot">{k.foot}</div>
-          </div>
-        ))}
+        {kpis.map((k) => {
+          const body = (
+            <>
+              <div className="ab-kpi-label">{k.label}</div>
+              <div className="ab-kpi-val">{k.value}</div>
+              <div className="ab-kpi-foot">{k.foot}</div>
+            </>
+          )
+          return k.go ? (
+            <button
+              type="button" key={k.label} onClick={k.go}
+              className="ab-kpi ab-kpi-go anim-fade-in-up"
+              aria-label={`${k.label}: ${k.value} — open`}
+            >
+              {body}
+            </button>
+          ) : (
+            <div className="ab-kpi anim-fade-in-up" key={k.label}>{body}</div>
+          )
+        })}
       </div>
 
       <NeedsAttention

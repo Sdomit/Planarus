@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react'
 import CockpitPanel from './CockpitPanel'
 import { api } from '../api/client'
 
@@ -51,6 +51,10 @@ function kpiValue(container: HTMLElement, label: string): string | undefined {
   return labelEl?.closest('.ab-kpi')?.querySelector('.ab-kpi-val')?.textContent ?? undefined
 }
 
+// Without this each render stacked on the last, so a second panel's tiles were
+// indistinguishable from the first's.
+afterEach(cleanup)
+
 describe('CockpitPanel', () => {
   it('renders the project header, computed KPIs and the repo snapshot', async () => {
     const { container } = render(<CockpitPanel projectId="proj_1" onClose={() => {}} onOpenCanvas={() => {}} />)
@@ -75,5 +79,33 @@ describe('CockpitPanel', () => {
     await waitFor(() => expect(kpiValue(container, 'Open tasks')).toBe('1'))
     // …and the Git card shows the fallback rather than crashing the panel.
     expect(await screen.findByText('No Git metadata available.')).toBeTruthy()
+  })
+
+  it('KPI tiles navigate to the tab that holds what they count (#95)', async () => {
+    const onOpenPlanning = vi.fn()
+    const onOpenApprovals = vi.fn()
+    render(
+      <CockpitPanel
+        projectId="proj_1" onClose={() => {}} onOpenCanvas={() => {}}
+        onOpenPlanning={onOpenPlanning} onOpenApprovals={onOpenApprovals}
+      />,
+    )
+    // Each tile was a count you then had to go find yourself.
+    fireEvent.click(await screen.findByRole('button', { name: /^Open risks: 1/ }))
+    expect(onOpenPlanning).toHaveBeenCalledWith('risks')
+
+    fireEvent.click(screen.getByRole('button', { name: /^Open tasks: 1/ }))
+    expect(onOpenPlanning).toHaveBeenCalledWith('tasks')
+
+    fireEvent.click(screen.getByRole('button', { name: /^Pending approvals/ }))
+    expect(onOpenApprovals).toHaveBeenCalled()
+  })
+
+  it('leaves the tiles as plain text when the parent wires no navigation (#95)', async () => {
+    render(<CockpitPanel projectId="proj_1" onClose={() => {}} onOpenCanvas={() => {}} />)
+    await screen.findByText('Demo')
+    // A dead button is worse than a label: no handler, no button.
+    expect(screen.queryByRole('button', { name: /^Open tasks/ })).toBeNull()
+    expect(screen.getByText('Open tasks')).toBeTruthy()
   })
 })

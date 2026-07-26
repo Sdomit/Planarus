@@ -123,3 +123,34 @@ def test_feed_workspace_wide_and_archived_excluded(
     session.commit()
     items = client.get("/api/v1/notifications").json()["items"]
     assert pid_b not in {i["project_id"] for i in items}
+
+
+def test_feed_flags_a_missed_milestone(client: TestClient) -> None:
+    """#95: an overdue milestone showed in the Cockpit widget but never here."""
+    pid = _seed(client, "ms")
+    client.post(
+        f"/api/v1/projects/{pid}/milestones", json={"title": "Beta", "target_date": "2000-01-01"}
+    )
+    client.post(
+        f"/api/v1/projects/{pid}/milestones",
+        json={"title": "Shipped", "target_date": "2000-01-01", "status": "achieved"},
+    )
+    client.post(
+        f"/api/v1/projects/{pid}/milestones",
+        json={"title": "Known late", "target_date": "2000-01-01", "status": "missed"},
+    )
+    client.post(
+        f"/api/v1/projects/{pid}/milestones", json={"title": "Undated"}
+    )
+    client.post(
+        f"/api/v1/projects/{pid}/milestones", json={"title": "Ahead", "target_date": "2099-01-01"}
+    )
+
+    items = client.get(f"/api/v1/notifications?project_id={pid}").json()["items"]
+    missed = [i for i in items if i["kind"] == "milestone_missed"]
+    assert [i["title"] for i in missed] == ["Milestone missed: Beta"]
+    # `achieved` and `missed` are built-ins that builtin_status_category leaves in
+    # the *open* category, so a category-only filter would nag about both forever.
+    titles = " ".join(i["title"] for i in items)
+    assert "Shipped" not in titles and "Known late" not in titles
+    assert "Undated" not in titles and "Ahead" not in titles

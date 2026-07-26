@@ -128,6 +128,34 @@ describe('PlanningPanel', () => {
     expect(screen.getByText('No tasks yet')).toBeTruthy()
   })
 
+  it('scrolls to and marks the row a notification was about (#95)', async () => {
+    setupEmpty()
+    mockApi.tasks.list.mockResolvedValue([
+      {
+        id: 'tsk_1', project_id: 'proj_1', phase_id: null, stage_id: null, parent_task_id: null,
+        title: 'Ship the beta', description: null, status: 'in_progress', priority: null,
+        due_at: null, sort_order: 0, assignee_id: null, assignee_display: null,
+        created_at: 'x', updated_at: 'x',
+      },
+      {
+        id: 'tsk_2', project_id: 'proj_1', phase_id: null, stage_id: null, parent_task_id: null,
+        title: 'Something else', description: null, status: 'backlog', priority: null,
+        due_at: null, sort_order: 1, assignee_id: null, assignee_display: null,
+        created_at: 'x', updated_at: 'x',
+      },
+    ])
+    const { container } = render(
+      <PlanningPanel projectId="proj_1" initialTab="tasks" focusEntityId="tsk_2" />,
+    )
+    await screen.findByText('Something else')
+    // Click-through used to drop you on the tab and leave you to find the row.
+    await waitFor(() =>
+      expect(container.querySelector('#pp-entity-tsk_2')?.className).toContain('pp-row-focus'),
+    )
+    expect(container.querySelector('#pp-entity-tsk_1')?.className ?? '')
+      .not.toContain('pp-row-focus')
+  })
+
   it('shows the assignee name on an assigned task (P16.3)', async () => {
     setupEmpty()
     mockApi.tasks.list.mockResolvedValue([
