@@ -12,6 +12,7 @@ import { StatusManager } from './StatusManager'
 import { Markdown } from './markdown'
 import { useAuthInfo } from './auth'
 import { ConnectionCount, ConnectionProvider, EntityConnections, type ConnectionTarget } from './EntityConnections'
+import { buildConnectionTargets } from './connectionTargets'
 import { usePlanningFinder } from './PlanningFinder'
 import './planning-panel.css'
 
@@ -416,20 +417,9 @@ export default function PlanningPanel({
       ?.focus()
   }
 
-  const phaseTitleById = new Map(phases.map(phase => [phase.id, phase.title]))
-  const connectionTargets: ConnectionTarget[] = [
-    ...phases.map(phase => ({ entityType: 'phase' as const, id: phase.id, title: phase.title, meta: phase.status })),
-    ...tasks.map(task => ({ entityType: 'task' as const, id: task.id, title: task.title,
-      meta: [task.phase_id ? phaseTitleById.get(task.phase_id) : null, task.status.replace(/_/g, ' ')].filter(Boolean).join(' · ') })),
-    ...milestones.map(milestone => ({ entityType: 'milestone' as const, id: milestone.id, title: milestone.title,
-      meta: [milestone.phase_id ? phaseTitleById.get(milestone.phase_id) : null, milestone.status].filter(Boolean).join(' · ') })),
-    ...decisions.map(decision => ({ entityType: 'decision' as const, id: decision.id, title: decision.title,
-      meta: [decision.phase_id ? phaseTitleById.get(decision.phase_id) : null, decision.status].filter(Boolean).join(' · ') })),
-    ...risks.map(risk => ({ entityType: 'risk' as const, id: risk.id, title: risk.title,
-      meta: [risk.phase_id ? phaseTitleById.get(risk.phase_id) : null, risk.status].filter(Boolean).join(' · ') })),
-    ...docs.map(doc => ({ entityType: 'doc' as const, id: doc.id, title: doc.title,
-      meta: [doc.doc_type, doc.status].join(' · ') })),
-  ]
+  const connectionTargets: ConnectionTarget[] = buildConnectionTargets({
+    phases, tasks, milestones, decisions, risks, docs,
+  })
 
   return (
    <TeamContext.Provider value={{ members, myId: me?.user.id ?? null }}>
@@ -833,6 +823,7 @@ function PhaseListRow({ phase, rollup, update, remove, dragProps, move, statusKe
         <button type="button" className="pp-row-main" onClick={() => setOpen(v => !v)} aria-expanded={open}>
           <span className="pp-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
           {editable.node ?? <span className="pp-row-title">{phase.title}</span>}
+          <ConnectionCount entityType="phase" entityId={phase.id} label={phase.title} />
         </button>
         {rollup && <PhaseRollupChips rollup={rollup} phaseId={phase.id} onOpenInPhase={onOpenInPhase} />}
         <InlineStatusSelect kind="phase" value={phase.status} options={statusKeys}
@@ -853,6 +844,7 @@ function PhaseListRow({ phase, rollup, update, remove, dragProps, move, statusKe
               ))}
             </div>
           )}
+          <EntityConnections entityType="phase" entityId={phase.id} projectId={phase.project_id} label={phase.title} />
           <Attachments entityType="phase" entityId={phase.id} projectId={phase.project_id} label={phase.title} />
         </div>
       )}

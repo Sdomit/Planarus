@@ -4,6 +4,7 @@ import '@excalidraw/excalidraw/index.css'
 import { api, type Doc, type Comment } from '../api/client'
 import { StatusBadge } from './StatusBadge'
 import { usePresence } from './usePresence'
+import { EntityConnections } from './EntityConnections'
 import {
   CARD_KINDS,
   CARD_STYLE,
@@ -593,6 +594,17 @@ export function CanvasEditor({ docId, onBack }: CanvasEditorProps) {
             </form>
           </div>
         )}
+      </div>
+      {/* A canvas is still a Document and a valid connection endpoint (plan 25),
+          but it renders as DocEditor's sibling alternative rather than inside
+          it, so it never inherited that section. */}
+      <div className="dp-connections-wrap">
+        <EntityConnections
+          projectId={doc.project_id}
+          entityType="doc"
+          entityId={doc.id}
+          label={doc.title}
+        />
       </div>
     </div>
   )

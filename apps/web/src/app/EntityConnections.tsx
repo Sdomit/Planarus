@@ -7,6 +7,7 @@ import {
   type EntityConnection,
   type EntityConnectionCreate,
 } from '../api/client'
+import './entity-connections.css'
 
 export type ConnectionTarget = {
   entityType: ConnectionEntityType
@@ -19,6 +20,19 @@ type ConnectionContextValue = {
   connections: EntityConnection[]
   setConnections: Dispatch<SetStateAction<EntityConnection[]>>
   targets: ConnectionTarget[]
+  /**
+   * False while the collections are still loading, which suppresses the section
+   * without unmounting the provider.
+   *
+   * Panels that already hold this data (Planning) never pass it and default to
+   * true. Docs fetches lazily, and conditionally *wrapping* its editor was the
+   * obvious approach and the wrong one: swapping between `<Provider><Editor/>`
+   * and a bare `<Editor/>` changes the element type at that position, so React
+   * unmounts and remounts the editor when loading finishes — destroying the live
+   * Tiptap instance and re-fetching the document. Keeping the provider mounted
+   * and gating here keeps the tree shape stable.
+   */
+  ready?: boolean
 }
 
 const ConnectionContext = createContext<ConnectionContextValue | null>(null)
@@ -28,11 +42,17 @@ export function ConnectionProvider({
   connections,
   setConnections,
   targets,
+  ready = true,
 }: ConnectionContextValue & { children: ReactNode }) {
   // Endpoint deletes remove their connections transactionally in the API. The
   // root entity lists update locally at the same time, so prune those now-stale
   // records too instead of briefly showing an "Unavailable item" elsewhere.
+  //
+  // Skipped until `ready`: an unloaded target list is not the same claim as "every
+  // endpoint was deleted", and treating it as one would clear the whole local
+  // collection the moment a lazily-loading panel mounted.
   useEffect(() => {
+    if (!ready) return
     const available = new Set(targets.map(target => `${target.entityType}:${target.id}`))
     setConnections(previous => {
       const kept = previous.filter(connection =>
@@ -41,10 +61,10 @@ export function ConnectionProvider({
       )
       return kept.length === previous.length ? previous : kept
     })
-  }, [setConnections, targets])
+  }, [setConnections, targets, ready])
 
   return (
-    <ConnectionContext.Provider value={{ connections, setConnections, targets }}>
+    <ConnectionContext.Provider value={{ connections, setConnections, targets, ready }}>
       {children}
     </ConnectionContext.Provider>
   )
@@ -97,6 +117,28 @@ const choicesFor: Partial<Record<ConnectionEntityType, ComposerChoice[]>> = {
   milestone: [
     { key: 'progress_from', label: 'Progress from', relationType: 'contributes_to', targetTypes: ['task'], currentIsTarget: true },
     { key: 'references', label: 'References', relationType: 'references', targetTypes: ['doc'] },
+    { key: 'related_to', label: 'Related to', relationType: 'related_to', targetTypes: allTargetTypes },
+  ],
+  // Phase and Document, per plan 25's affordance table. Both were specified
+  // from the start and the API has always accepted them — `references` already
+  // lists ("phase","doc") and every ("*","doc") pair — but neither had an entry
+  // here, and `EntityConnections` returns null when its type has no choices, so
+  // the sections rendered nothing. This is the whole of the "extend the same
+  // component to Phases and Documents" gap: no schema, route, or matrix change.
+  phase: [
+    { key: 'references', label: 'References', relationType: 'references', targetTypes: ['doc'] },
+    { key: 'related_to', label: 'Related to', relationType: 'related_to', targetTypes: allTargetTypes },
+  ],
+  // A doc is always the *target* of `references`, so its only forward-authoring
+  // verb is the reverse form — same shape as decision/risk/milestone above.
+  doc: [
+    {
+      key: 'referenced_by',
+      label: 'Referenced by',
+      relationType: 'references',
+      targetTypes: ['phase', 'task', 'decision', 'risk', 'milestone'],
+      currentIsTarget: true,
+    },
     { key: 'related_to', label: 'Related to', relationType: 'related_to', targetTypes: allTargetTypes },
   ],
 }
@@ -186,7 +228,10 @@ export function EntityConnections({
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  if (!ctx || choices.length === 0) return null
+  // `ready === false` means a lazily-loading panel has not got its collections
+  // yet; rendering now would offer an "Add connection" composer with an empty
+  // target picker.
+  if (!ctx || ctx.ready === false || choices.length === 0) return null
   const connectionContext = ctx
 
   const shown = displayConnections(connectionContext.connections, connectionContext.targets, entityType, entityId)
