@@ -299,3 +299,189 @@ def test_single_status_filter_still_works(client: TestClient, session: Session) 
 
     only_pending = client.get(f"/api/v1/approvals?project_id={pid}&status=pending").json()
     assert [r["status"] for r in only_pending] == ["pending"]
+
+
+# --- notification feed: batched, not one query set per project ----------------
+
+
+def _seed_feed_project(client: TestClient, suffix: str) -> str:
+    """A project carrying one of each feed source: overdue task and open blocker."""
+    _, pid = _seed_project(client, suffix)
+    client.post(
+        f"/api/v1/projects/{pid}/tasks",
+        json={"title": f"late {suffix}", "due_at": "2000-01-01T00:00:00+00:00"},
+    )
+    client.post(
+        f"/api/v1/projects/{pid}/blockers", json={"title": f"blocked {suffix}"}
+    )
+    return pid
+
+
+def test_feed_query_count_does_not_scale_with_projects(
+    client: TestClient, engine
+) -> None:
+    """The bell polls this forever in the background. Before: 4 queries per
+    unarchived project. After: a fixed set of IN-queries for the whole feed."""
+    for i in range(6):
+        _seed_feed_project(client, f"nf{i}")
+
+    with QueryCounter(engine, contains="FROM task") as tasks:
+        with QueryCounter(engine, contains="FROM blocker") as blockers:
+            with QueryCounter(engine, contains="FROM status_option") as statuses:
+                res = client.get("/api/v1/notifications")
+    assert res.status_code == 200
+    # One batched query each, regardless of how many projects exist.
+    assert len(tasks) == 1, f"task query per project: {len(tasks)}"
+    assert len(blockers) == 1, f"blocker query per project: {len(blockers)}"
+    assert len(statuses) == 1, f"status query per project: {len(statuses)}"
+
+
+def test_feed_still_reports_every_project(client: TestClient) -> None:
+    """Batching must not drop a project — the whole point of the global feed is
+    that work in a project you are not looking at still reaches you."""
+    ids = [_seed_feed_project(client, f"nb{i}") for i in range(3)]
+    feed = client.get("/api/v1/notifications").json()
+    reported = {item["project_id"] for item in feed["items"]}
+    assert reported == set(ids)
+    kinds = {item["kind"] for item in feed["items"]}
+    assert {"task_overdue", "blocker_open"} <= kinds
+
+
+def test_feed_closed_statuses_stay_per_project(client: TestClient) -> None:
+    """The closed-status set is per project — a key marked done in one project
+    must not silence the same key in another, which is exactly what a single
+    shared WHERE would do."""
+    _, quiet = _seed_project(client, "nq1")
+    _, loud = _seed_project(client, "nq2")
+    for pid in (quiet, loud):
+        client.post(
+            f"/api/v1/projects/{pid}/status-options",
+            json={"entity_type": "task", "label": "Shipped", "key": "shipped"},
+        )
+    # Same key, opposite categories.
+    shipped_quiet = client.get(
+        f"/api/v1/projects/{quiet}/status-options?entity_type=task"
+    ).json()
+    opt = next(o for o in shipped_quiet if o["key"] == "shipped")
+    client.patch(f"/api/v1/status-options/{opt['id']}", json={"category": "done"})
+
+    for pid in (quiet, loud):
+        client.post(
+            f"/api/v1/projects/{pid}/tasks",
+            json={"title": "overdue", "status": "shipped",
+                  "due_at": "2000-01-01T00:00:00+00:00"},
+        )
+
+    overdue = {
+        item["project_id"]
+        for item in client.get("/api/v1/notifications").json()["items"]
+        if item["kind"] == "task_overdue"
+    }
+    assert loud in overdue, "an open custom status must still nag"
+    assert quiet not in overdue, "a done-category status must not nag"
+
+
+# --- calendar: the date window is a WHERE, not a Python filter ----------------
+
+
+def test_calendar_window_is_applied_in_sql(client: TestClient, engine) -> None:
+    _, pid = _seed_project(client, "cal1")
+    for day in ("2026-01-05", "2026-06-05", "2026-12-05"):
+        client.post(
+            f"/api/v1/projects/{pid}/tasks", json={"title": day, "due_at": day}
+        )
+
+    with QueryCounter(engine, contains="substr") as counter:
+        res = client.get(
+            f"/api/v1/projects/{pid}/calendar?from=2026-06-01&to=2026-06-30"
+        )
+    assert res.status_code == 200
+    assert len(counter) >= 1, "the window never reached SQL"
+    titles = [i["title"] for i in res.json()["items"]]
+    assert titles == ["2026-06-05"]
+
+
+def test_calendar_unwindowed_still_returns_everything(client: TestClient) -> None:
+    """No bounds must mean no filter — the SQL clauses are conditional."""
+    _, pid = _seed_project(client, "cal2")
+    for day in ("2026-01-05", "2026-12-05"):
+        client.post(
+            f"/api/v1/projects/{pid}/tasks", json={"title": day, "due_at": day}
+        )
+    items = client.get(f"/api/v1/projects/{pid}/calendar").json()["items"]
+    assert {i["title"] for i in items} == {"2026-01-05", "2026-12-05"}
+
+
+def test_calendar_keeps_recurring_events_from_before_the_window(
+    client: TestClient,
+) -> None:
+    """Events are deliberately *not* narrowed in SQL: a recurring event whose base
+    date precedes the window still has occurrences inside it."""
+    _, pid = _seed_project(client, "cal3")
+    created = client.post(
+        f"/api/v1/projects/{pid}/calendar-events",
+        json={
+            "title": "standup",
+            "start_at": "2026-01-05",
+            "all_day": True,
+            "recurrence": "weekly",
+        },
+    )
+    assert created.status_code == 201, created.text
+    items = client.get(
+        f"/api/v1/projects/{pid}/calendar?from=2026-06-01&to=2026-06-30"
+    ).json()["items"]
+    assert items, "a recurring event from before the window was dropped"
+
+
+# --- reorder: write only what moved, and stop re-listing the table ------------
+
+
+def test_reorder_writes_only_the_rows_that_moved(client: TestClient, engine) -> None:
+    """A drag used to renumber every row of the type; on a 200-task board that was
+    ~200 UPDATEs to move one card."""
+    _, pid = _seed_project(client, "ro1")
+    ids = [
+        client.post(f"/api/v1/projects/{pid}/tasks", json={"title": f"t{i}"}).json()["id"]
+        for i in range(6)
+    ]
+    # Swap the last two only.
+    reordered = ids[:4] + [ids[5], ids[4]]
+
+    with QueryCounter(engine, contains="UPDATE task") as counter:
+        res = client.post(f"/api/v1/projects/{pid}/tasks/reorder", json={"ids": reordered})
+    assert res.status_code == 200
+    assert 0 < len(counter) <= 2, f"renumbered untouched rows: {len(counter)} UPDATEs"
+
+
+def test_reorder_returns_what_a_fresh_list_would(client: TestClient) -> None:
+    """The response is built from rows already in memory instead of a second full
+    scan, so it has to match the re-query it replaced exactly."""
+    _, pid = _seed_project(client, "ro2")
+    ids = [
+        client.post(f"/api/v1/projects/{pid}/tasks", json={"title": f"t{i}"}).json()["id"]
+        for i in range(5)
+    ]
+    reordered = list(reversed(ids))
+
+    returned = [t["id"] for t in client.post(
+        f"/api/v1/projects/{pid}/tasks/reorder", json={"ids": reordered}
+    ).json()]
+    listed = [t["id"] for t in client.get(f"/api/v1/projects/{pid}/tasks").json()]
+    assert returned == reordered
+    assert returned == listed
+
+
+def test_reorder_is_idempotent(client: TestClient, engine) -> None:
+    """Re-sending the order already in force must write nothing at all."""
+    _, pid = _seed_project(client, "ro3")
+    ids = [
+        client.post(f"/api/v1/projects/{pid}/tasks", json={"title": f"t{i}"}).json()["id"]
+        for i in range(4)
+    ]
+    client.post(f"/api/v1/projects/{pid}/tasks/reorder", json={"ids": ids})
+
+    with QueryCounter(engine, contains="UPDATE task") as counter:
+        again = client.post(f"/api/v1/projects/{pid}/tasks/reorder", json={"ids": ids})
+    assert again.status_code == 200
+    assert len(counter) == 0, "a no-op reorder still wrote rows"

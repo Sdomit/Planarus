@@ -124,7 +124,6 @@ def reorder_milestones(
     if session.get(Project, project_id) is None:
         raise LookupError(f"project '{project_id}' not found")
     rows = {m.id: m for m in list_milestones(session, project_id)}
-    apply_reorder(
+    return apply_reorder(
         session, project_id=project_id, entity_type="milestone", rows=rows, ids=ids
     )
-    return list_milestones(session, project_id)

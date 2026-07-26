@@ -228,5 +228,6 @@ def reorder_tasks(session: Session, project_id: str, ids: list[str]) -> list[Tas
     if session.get(Project, project_id) is None:
         raise LookupError(f"project '{project_id}' not found")
     rows = {t.id: t for t in list_tasks(session, project_id)}
-    apply_reorder(session, project_id=project_id, entity_type="task", rows=rows, ids=ids)
-    return list_tasks(session, project_id)
+    return apply_reorder(
+        session, project_id=project_id, entity_type="task", rows=rows, ids=ids
+    )
