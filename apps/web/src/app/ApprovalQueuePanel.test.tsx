@@ -188,15 +188,132 @@ describe('ApprovalQueuePanel', () => {
     expect(screen.getByText(/Secrets are blocked at proposal time/i)).toBeTruthy()
   })
 
-  it('has no bulk approve/apply controls', async () => {
-    mockApi.approvals.listPaged.mockResolvedValue({ items: [PENDING], total: ([PENDING]).length, hasMore: false })
+  // --- #96: ergonomics of the surface that gates every agent write -----------
+
+  it('shows the server-resolved target title instead of the raw id', async () => {
+    const update = {
+      ...PENDING,
+      action_type: 'task.update',
+      target_entity_id: 'tsk_1a2b3c4d5e6f7890',
+      target_title: 'Ship the thing',
+    }
+    mockApi.approvals.listPaged.mockResolvedValue({ items: [update], total: 1, hasMore: false })
+    render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
+    await waitFor(() => screen.getByText('task.update'))
+    expect(screen.getByText('Ship the thing')).toBeTruthy()
+    expect(screen.queryByText(/tsk_1a2b3c4d5e6f/)).toBeNull()
+  })
+
+  it('falls back to the id when the target has no resolved title', async () => {
+    const update = {
+      ...PENDING,
+      action_type: 'task.update',
+      target_entity_id: 'tsk_1a2b3c4d5e6f7890',
+      target_title: null,
+    }
+    mockApi.approvals.listPaged.mockResolvedValue({ items: [update], total: 1, hasMore: false })
+    render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
+    await waitFor(() => screen.getByText('task.update'))
+    expect(screen.getByText(/task:tsk_1a2b3c4d/)).toBeTruthy()
+  })
+
+  it('approve & apply is one click and still calls both endpoints', async () => {
+    mockApi.approvals.listPaged.mockResolvedValue({ items: [PENDING], total: 1, hasMore: false })
+    mockApi.approvals.get.mockResolvedValue(DETAIL)
+    mockApi.approvals.audit.mockResolvedValue([])
+    mockApi.approvals.approve.mockResolvedValue({ ...PENDING, status: 'approved' })
+    mockApi.approvals.apply.mockResolvedValue({ ...PENDING, status: 'applied' })
+
     render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
     await waitFor(() => screen.getByText('task.create'))
-    expect(screen.queryByText(/approve all/i)).toBeNull()
-    expect(screen.queryByText(/apply all/i)).toBeNull()
-    expect(screen.queryByText(/select all/i)).toBeNull()
-    // No selection checkboxes on rows.
-    expect(document.querySelectorAll('input[type="checkbox"]').length).toBe(0)
+    fireEvent.click(screen.getByText('task.create'))
+    await waitFor(() => screen.getByText('Approve & apply'))
+
+    fireEvent.click(screen.getByText('Approve & apply'))
+    await waitFor(() => expect(mockApi.approvals.apply).toHaveBeenCalledWith('apr_1'))
+    // Approve is never skipped — apply still re-runs its stale-state checks.
+    expect(mockApi.approvals.approve).toHaveBeenCalledWith('apr_1')
+  })
+
+  it('bulk-approves and applies every checked row', async () => {
+    const second = { ...PENDING, id: 'apr_2', action_type: 'decision.create' }
+    mockApi.approvals.listPaged.mockResolvedValue({
+      items: [PENDING, second], total: 2, hasMore: false,
+    })
+    mockApi.approvals.approve.mockResolvedValue({ ...PENDING, status: 'approved' })
+    mockApi.approvals.apply.mockResolvedValue({ ...PENDING, status: 'applied' })
+
+    render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
+    await waitFor(() => screen.getByText('task.create'))
+
+    fireEvent.click(screen.getByLabelText('Select all pending proposals'))
+    fireEvent.click(screen.getByText(/Approve & apply \(2\)/))
+
+    await waitFor(() => expect(mockApi.approvals.apply).toHaveBeenCalledTimes(2))
+    expect(mockApi.approvals.approve.mock.calls.map(c => c[0])).toEqual(['apr_1', 'apr_2'])
+    expect(mockApi.approvals.apply.mock.calls.map(c => c[0])).toEqual(['apr_1', 'apr_2'])
+  })
+
+  it('a failing row in a bulk run is named and does not stop the rest', async () => {
+    const second = { ...PENDING, id: 'apr_2', action_type: 'decision.create' }
+    mockApi.approvals.listPaged.mockResolvedValue({
+      items: [PENDING, second], total: 2, hasMore: false,
+    })
+    mockApi.approvals.approve.mockResolvedValue({ ...PENDING, status: 'approved' })
+    mockApi.approvals.apply.mockImplementation((id: string) =>
+      id === 'apr_1' ? Promise.reject(new Error('target changed')) : Promise.resolve({ ...second, status: 'applied' }),
+    )
+
+    render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
+    await waitFor(() => screen.getByText('task.create'))
+    fireEvent.click(screen.getByLabelText('Select all pending proposals'))
+    fireEvent.click(screen.getByText(/Approve & apply \(2\)/))
+
+    await waitFor(() => expect(screen.getByText(/target changed/)).toBeTruthy())
+    // The second row still ran.
+    expect(mockApi.approvals.apply).toHaveBeenCalledWith('apr_2')
+  })
+
+  it('offers no checkbox on decided history rows', async () => {
+    const decided = { ...PENDING, id: 'apr_9', status: 'applied', action_type: 'risk.create' }
+    mockApi.approvals.listPaged
+      .mockResolvedValueOnce({ items: [PENDING], total: 1, hasMore: false })
+      .mockResolvedValueOnce({ items: [PENDING, decided], total: 2, hasMore: false })
+
+    render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
+    await waitFor(() => screen.getByText('risk.create'))
+    expect(screen.getByText(/History \(1\)/)).toBeTruthy()
+    // One row checkbox for the single pending row, plus the select-all box.
+    expect(document.querySelectorAll('.aqp-check').length).toBe(1)
+  })
+
+  it('polls the list so proposals raised while you watch appear', async () => {
+    vi.useFakeTimers()
+    try {
+      mockApi.approvals.listPaged.mockResolvedValue({ items: [PENDING], total: 1, hasMore: false })
+      render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
+      // Two calls per load: the open-status page and the unfiltered page.
+      await vi.waitFor(() => expect(mockApi.approvals.listPaged).toHaveBeenCalledTimes(2))
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(mockApi.approvals.listPaged).toHaveBeenCalledTimes(4)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('puts the rejection reason above the buttons, not below them', async () => {
+    mockApi.approvals.listPaged.mockResolvedValue({ items: [PENDING], total: 1, hasMore: false })
+    mockApi.approvals.get.mockResolvedValue(DETAIL)
+    mockApi.approvals.audit.mockResolvedValue([])
+    render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
+    await waitFor(() => screen.getByText('task.create'))
+    fireEvent.click(screen.getByText('task.create'))
+    await waitFor(() => screen.getByPlaceholderText('Optional rejection reason'))
+
+    const reason = screen.getByPlaceholderText('Optional rejection reason')
+    const reject = screen.getByText('Reject')
+    // DOCUMENT_POSITION_FOLLOWING (4) — the buttons come after the input.
+    expect(reason.compareDocumentPosition(reject) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('makes no direct network (fetch) request', async () => {

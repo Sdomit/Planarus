@@ -12,6 +12,11 @@ class ApprovalSummary(BaseModel):
     action_type: str
     target_entity_type: Optional[str]
     target_entity_id: Optional[str]
+    # #96: the queue rendered `task:tsk_1a2b3c4d5e6f78…`, so an update proposal
+    # showed field diffs without saying which row they belonged to. Resolved
+    # server-side (one query per entity type on the page); None for a *.create
+    # proposal, whose target does not exist yet, and for a target since deleted.
+    target_title: Optional[str] = None
     risk_level: str
     status: str
     policy_version: int

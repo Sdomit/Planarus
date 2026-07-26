@@ -16,9 +16,9 @@ mirrors the pattern ``policy/allowlist.py`` already uses for its action list.
 """
 from __future__ import annotations
 
-from typing import Type
+from typing import Iterable, Mapping, Type
 
-from sqlmodel import SQLModel
+from sqlmodel import Session, SQLModel, select
 
 from app.core.constants import REF_ENTITY_TYPES
 from app.models.blocker import Blocker
@@ -59,6 +59,32 @@ for _entity_type, (_model, _attr) in ENTITY_MODELS.items():
     assert hasattr(
         _model, _attr
     ), f"{_model.__name__} has no attribute '{_attr}' (entity_type '{_entity_type}')"
+
+
+def titles_for(
+    session: Session, wanted: Mapping[str, Iterable[str]]
+) -> dict[tuple[str, str], str]:
+    """Batch-resolve display labels: ``{entity_type: ids} -> {(type, id): title}``.
+
+    One query per entity type present, not one per row. Unknown types and missing
+    ids are simply absent from the result, so a caller renders its own fallback
+    rather than raising on a deleted target.
+
+    ponytail: ``timeline_service`` runs the same loop over its own resolver map
+    (ENTITY_MODELS plus four audit-only types). Give this a resolvers argument and
+    fold that one in if a third caller ever wants it.
+    """
+    titles: dict[tuple[str, str], str] = {}
+    for entity_type, ids in wanted.items():
+        if entity_type not in ENTITY_MODELS:
+            continue
+        ids = list(ids)
+        if not ids:
+            continue
+        model, attr = ENTITY_MODELS[entity_type]
+        for row in session.exec(select(model).where(model.id.in_(ids))).all():  # type: ignore[attr-defined]
+            titles[(entity_type, row.id)] = str(getattr(row, attr))
+    return titles
 
 
 def model_for(entity_type: str) -> Type[SQLModel]:

@@ -566,6 +566,46 @@ def test_list_and_detail(client: TestClient, session: Session) -> None:
     assert detail["is_expired"] is False
 
 
+def test_summary_carries_target_title(client: TestClient, session: Session) -> None:
+    """#96: the queue showed `task:tsk_1a2b…`, so an update proposal's diff had no
+    row name attached. The title is resolved server-side on list and detail."""
+    pid = _seed(client)
+    task = task_service.create_task(session, pid, TaskCreate(title="Ship the thing"))
+    ar = approval_service.create_proposal(
+        session, project_id=pid, action_type="task.update",
+        target_entity_id=task.id, patch={"title": "Ship it twice"},
+    )
+    listed = client.get(f"/api/v1/approvals?project_id={pid}").json()
+    row = next(a for a in listed if a["id"] == ar.id)
+    assert row["target_title"] == "Ship the thing"
+    assert client.get(f"/api/v1/approvals/{ar.id}").json()["target_title"] == "Ship the thing"
+
+
+def test_create_proposal_has_no_target_title(client: TestClient, session: Session) -> None:
+    """A *.create proposal has no target row yet, so the title stays null rather
+    than inventing one from the patch."""
+    pid = _seed(client)
+    ar = _propose_task_create(session, pid, title="Not yet real")
+    listed = client.get(f"/api/v1/approvals?project_id={pid}").json()
+    assert next(a for a in listed if a["id"] == ar.id)["target_title"] is None
+
+
+def test_target_title_survives_a_deleted_target(client: TestClient, session: Session) -> None:
+    """A target deleted after proposal time must not 500 the queue — the row that
+    can only be invalidated is exactly the row a human needs to see."""
+    pid = _seed(client)
+    task = task_service.create_task(session, pid, TaskCreate(title="doomed"))
+    ar = approval_service.create_proposal(
+        session, project_id=pid, action_type="task.update",
+        target_entity_id=task.id, patch={"title": "x"},
+    )
+    session.delete(session.get(Task, task.id))
+    session.commit()
+    res = client.get(f"/api/v1/approvals?project_id={pid}")
+    assert res.status_code == 200
+    assert next(a for a in res.json() if a["id"] == ar.id)["target_title"] is None
+
+
 def test_detail_missing_404(client: TestClient) -> None:
     assert client.get("/api/v1/approvals/apr_missing").status_code == 404
 
