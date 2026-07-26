@@ -305,14 +305,18 @@ body {
 .ab-kpi:nth-child(even)::before { background: var(--ab-brand-warm); }
 .ab-kpi-val { font-variant-numeric: tabular-nums; }
 
+/* No `overflow: hidden` here: the card contains an absolutely-positioned
+   actions menu that must escape its bounds. The accent bar below rounds its own
+   top corners instead of relying on the card to clip them. */
 .ab-proj {
-  position: relative; overflow: hidden;
+  position: relative;
   border-color: rgba(var(--ab-brand-cool-rgb), 0.14);
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.035);
 }
 .ab-proj::before {
   content: ''; position: absolute; inset: 0 0 auto; height: 3px;
   background: var(--ab-brand-cool);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
 }
 .ab-proj.card-interactive:hover {
   border-color: rgba(var(--ab-brand-cool-rgb), 0.34);
