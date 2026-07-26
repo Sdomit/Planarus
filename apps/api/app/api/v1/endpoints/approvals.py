@@ -29,7 +29,7 @@ from app.schemas.approval import (
     LocalSessionResponse,
     RejectRequest,
 )
-from app.services import approval_service, audit_service
+from app.services import approval_service, audit_service, entity_registry
 
 router = APIRouter()
 
@@ -43,12 +43,24 @@ MAX_APPROVAL_ROWS = 200
 
 def _summarize(session: Session, rows) -> list[ApprovalSummary]:
     """Coerce ApprovalRequest rows to summaries with decided_by resolved to a
-    display name (P16.0, D32). The legacy literal "local" simply misses the
-    lookup and the display stays None."""
+    display name (P16.0, D32) and the target resolved to its title (#96).
+
+    The legacy literal "local" simply misses the decided_by lookup and the display
+    stays None. Both lookups are batched across the page — one query per entity
+    type present — so a 200-row queue does not fan out into 200 selects."""
     items = [ApprovalSummary.model_validate(r) for r in rows]
     names = audit_service.display_names(session, (s.decided_by for s in items))
+
+    wanted: dict[str, set[str]] = {}
+    for s in items:
+        if s.target_entity_type and s.target_entity_id:
+            wanted.setdefault(s.target_entity_type, set()).add(s.target_entity_id)
+    titles = entity_registry.titles_for(session, wanted)
+
     for s in items:
         s.decided_by_display = names.get(s.decided_by) if s.decided_by else None
+        if s.target_entity_type and s.target_entity_id:
+            s.target_title = titles.get((s.target_entity_type, s.target_entity_id))
     return items
 
 

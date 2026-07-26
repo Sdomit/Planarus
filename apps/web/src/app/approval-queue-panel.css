@@ -37,6 +37,26 @@
   color: var(--text-tertiary); padding: var(--space-1) 0;
 }
 
+/* #96: bulk approve-and-apply bar over the pending section. */
+.aqp-bulk {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-2); padding: var(--space-1) 0 var(--space-2);
+}
+.aqp-bulk-all {
+  display: flex; align-items: center; gap: var(--space-2);
+  font-size: var(--text-xs); color: var(--text-secondary); cursor: pointer;
+}
+.aqp-bulk-errors {
+  list-style: none; margin: var(--space-2) 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: var(--space-1);
+  text-align: left; font-size: var(--text-xs);
+}
+
+/* A checkbox cannot live inside the row button, so it sits beside it. */
+.aqp-row-wrap { display: flex; align-items: center; gap: var(--space-2); }
+.aqp-row-wrap .aqp-row { flex: 1; min-width: 0; }
+.aqp-check { flex-shrink: 0; cursor: pointer; accent-color: var(--accent); }
+
 /* Queue row button */
 .aqp-row {
   display: flex; align-items: center; gap: var(--space-2); width: 100%;

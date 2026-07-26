@@ -588,6 +588,9 @@ export interface ApprovalSummary {
   action_type: string
   target_entity_type: string | null
   target_entity_id: string | null
+  /** #96: server-resolved title of the target row; null for a create proposal
+   * (no target yet) or a target that has since been deleted. */
+  target_title?: string | null
   risk_level: string
   status: string
   policy_version: number
