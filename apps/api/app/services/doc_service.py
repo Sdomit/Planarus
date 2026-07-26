@@ -13,6 +13,7 @@ import re
 from typing import Optional
 
 from sqlalchemy import func, or_
+from sqlalchemy import update as sa_update
 from sqlmodel import Session, select
 
 from app.core import actor
@@ -190,50 +191,75 @@ def update_doc(session: Session, doc_id: str, payload: DocUpdate) -> Doc:
     if (payload.content_json is None) != (payload.markdown_cache is None):
         raise TypeError("content_json and markdown_cache must be provided together")
 
-    changed = False
+    # NOT-NULL columns: a null here is still "unchanged". The column cannot hold
+    # NULL, so there is no state for an explicit null to express.
+    values: dict = {}
     if payload.title is not None:
-        doc.title = payload.title
-        changed = True
+        values["title"] = payload.title
     if payload.doc_type is not None:
-        doc.doc_type = payload.doc_type
-        changed = True
+        values["doc_type"] = payload.doc_type
     if payload.status is not None:
-        doc.status = payload.status
-        changed = True
+        values["status"] = payload.status
     if payload.sort_order is not None:
-        doc.sort_order = payload.sort_order
-        changed = True
-    if payload.parent_doc_id is not None:
-        doc.parent_doc_id = validate_parent(
-            session,
-            Doc,
-            parent_id=payload.parent_doc_id,
-            project_id=doc.project_id,
-            child_id=doc.id,
-            parent_attr="parent_doc_id",
-            label="parent doc",
-        )
-        changed = True
+        values["sort_order"] = payload.sort_order
     if payload.content_json is not None:
-        doc.content_json = payload.content_json
-        doc.markdown_cache = payload.markdown_cache  # type: ignore[assignment]
-        changed = True
-    if payload.archived_at is not None:
-        doc.archived_at = payload.archived_at
-        changed = True
-    if payload.color is not None:
-        # None means "unchanged" for every field here, so the sentinel "default"
-        # is how a swatch is cleared back to NULL.
-        doc.color = None if payload.color == "default" else payload.color
-        changed = True
+        values["content_json"] = payload.content_json
+        values["markdown_cache"] = payload.markdown_cache
 
-    if changed:
-        doc.version = doc.version + 1
-        doc.updated_at = now_utc()
-        doc.updated_by = actor.current_actor_id()  # P16.3: who last saved it
+    # NULLABLE columns: *presence* decides, not the value (#156). Keying these off
+    # `is not None` made null indistinguishable from omitted, so an archived doc
+    # could never be un-archived and a child doc could never move back to root —
+    # the NULL state was simply unreachable through the only write path there is.
+    provided = payload.model_fields_set
+    if "parent_doc_id" in provided:
+        values["parent_doc_id"] = (
+            validate_parent(
+                session,
+                Doc,
+                parent_id=payload.parent_doc_id,
+                project_id=doc.project_id,
+                child_id=doc.id,
+                parent_attr="parent_doc_id",
+                label="parent doc",
+            )
+            if payload.parent_doc_id is not None
+            else None
+        )
+    if "archived_at" in provided:
+        values["archived_at"] = payload.archived_at
+    if "color" in provided:
+        # An explicit null now clears the swatch. "default" stays accepted as the
+        # older clear-sentinel so existing clients keep working.
+        values["color"] = None if payload.color == "default" else payload.color
 
-    session.add(doc)
-    session.flush()
+    if values:
+        values["version"] = payload.version + 1
+        values["updated_at"] = now_utc()
+        values["updated_by"] = actor.current_actor_id()  # P16.3: who last saved it
+        # Atomic compare-and-swap on version (#156). The check above is a fast,
+        # friendly pre-check; it is NOT the guard, because between that read and
+        # this write another writer can commit. Under SQLite's single writer that
+        # gap is unreachable, but on the LAN/Postgres path two saves from the same
+        # version both passed it and the second silently overwrote the first.
+        # rowcount 0 means someone else won the race.
+        cas = session.execute(
+            sa_update(Doc)
+            .where(Doc.id == doc_id, Doc.version == payload.version)
+            .values(**values)
+        )
+        if cas.rowcount != 1:
+            # Discards the whole transaction, not just the failed UPDATE. Safe
+            # because this route does one write and nothing else; the pre-check
+            # above raises the same LookupError WITHOUT rolling back, so anyone
+            # wrapping two writes in one transaction here must reconcile the two
+            # paths first.
+            session.rollback()
+            raise LookupError(
+                f"Version conflict: expected {payload.version}, but the document "
+                "was changed by another writer"
+            )
+        session.refresh(doc)
+
     create_audit_event(
         session,
         event_type="update",

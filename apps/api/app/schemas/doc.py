@@ -87,12 +87,18 @@ class DocUpdate(BaseModel):
     doc_type: Optional[str] = None
     status: Optional[str] = None
     sort_order: Optional[int] = None
+    # NOTE: for the three NULLABLE columns below — parent_doc_id, archived_at and
+    # color — *presence* decides, not the value (#156). An explicit null clears
+    # the column; omitting the key leaves it alone. `update_doc` reads
+    # `model_fields_set`, so the two are distinguishable here even though both
+    # arrive as None. The NOT-NULL fields above still treat None as "unchanged",
+    # since there is no state a null could express on them.
     parent_doc_id: Optional[str] = None
     content_json: Optional[str] = None
     markdown_cache: Optional[str] = None
     archived_at: Optional[str] = None
-    # NOTE: None means "unchanged" here, so a swatch is cleared with "default",
-    # not null — see doc_service.update_doc.
+    # "default" remains accepted as the historical clear-sentinel so existing
+    # clients keep working; null does the same thing now.
     color: Optional[str] = None
 
     @field_validator("doc_type")
