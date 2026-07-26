@@ -18,7 +18,7 @@ from email.message import EmailMessage
 from sqlmodel import Session, select
 
 from app.core.config import settings
-from app.core.exceptions import ConflictError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.core.utils import new_id, now_utc
 from app.models.approval_request import ApprovalRequest
 from app.models.blocker import Blocker
@@ -132,7 +132,7 @@ def _log(
 def send_project_reminders(session: Session, project_id: str) -> ReminderSendResult:
     project = session.get(Project, project_id)
     if project is None:
-        raise ValueError(f"project '{project_id}' not found")
+        raise NotFoundError(f"project '{project_id}' not found")
 
     # Live switch (DB row) within the env default — a UI toggle takes effect
     # without a restart; env-only deployments (no row) behave exactly as before.

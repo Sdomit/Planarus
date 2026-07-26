@@ -30,8 +30,6 @@ def create_blocker(
         return blocker_service.create_blocker(session, project_id, data)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
 
 @router.patch("/blockers/{blocker_id}", response_model=BlockerRead)
@@ -40,10 +38,7 @@ def update_blocker(
     data: BlockerUpdate,
     session: Session = Depends(get_session),
 ) -> BlockerRead:
-    try:
-        blocker = blocker_service.update_blocker(session, blocker_id, data)
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    blocker = blocker_service.update_blocker(session, blocker_id, data)
     if blocker is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Blocker not found"

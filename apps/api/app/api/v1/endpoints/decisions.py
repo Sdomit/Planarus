@@ -27,14 +27,7 @@ def create_decision(
     data: DecisionCreate,
     session: Session = Depends(get_session),
 ) -> DecisionRead:
-    try:
-        return decision_service.create_decision(session, project_id, data)
-    except ValueError as exc:
-        if "project" in str(exc) and "not found" in str(exc):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    return decision_service.create_decision(session, project_id, data)
 
 
 @router.patch("/decisions/{decision_id}", response_model=DecisionRead)
@@ -43,12 +36,7 @@ def update_decision(
     data: DecisionUpdate,
     session: Session = Depends(get_session),
 ) -> DecisionRead:
-    try:
-        decision = decision_service.update_decision(session, decision_id, data)
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    decision = decision_service.update_decision(session, decision_id, data)
     if decision is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Decision not found"
@@ -64,14 +52,7 @@ def reorder_decisions(
     data: ReorderRequest,
     session: Session = Depends(get_session),
 ) -> list[DecisionRead]:
-    try:
-        return decision_service.reorder_decisions(session, project_id, data.ids)
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-        )
+    return decision_service.reorder_decisions(session, project_id, data.ids)
 
 
 @router.delete("/decisions/{decision_id}", status_code=status.HTTP_204_NO_CONTENT)

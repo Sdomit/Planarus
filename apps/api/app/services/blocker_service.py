@@ -2,6 +2,7 @@ from typing import Optional
 
 from sqlmodel import Session, select
 
+from app.core.exceptions import NotFoundError
 from app.core.utils import new_id, now_utc
 from app.models.blocker import Blocker
 from app.models.project import Project
@@ -27,7 +28,7 @@ def create_blocker(
     session: Session, project_id: str, data: BlockerCreate
 ) -> Blocker:
     if session.get(Project, project_id) is None:
-        raise ValueError(f"project '{project_id}' not found")
+        raise NotFoundError(f"project '{project_id}' not found")
     if data.task_id is not None:
         task = session.get(Task, data.task_id)
         if task is None or task.project_id != project_id:

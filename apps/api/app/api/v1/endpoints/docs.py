@@ -84,11 +84,11 @@ def update_doc(
 ) -> DocRead:
     try:
         return _read(session, doc_service.update_doc(session, doc_id, data))
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doc not found")
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except TypeError as exc:
+        # Not part of the app-wide vocabulary: a TypeError here means the payload
+        # shape is wrong, which is a 422. Everything else — NotFoundError → 404,
+        # ConflictError → 409 — is handled app-wide now (#99). This route used to
+        # invert both to compensate for doc_service raising them backwards.
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 
 
@@ -156,11 +156,10 @@ def export_doc_markdown(
 ) -> DocExportResponse:
     try:
         return doc_service.export_doc_markdown(session, doc_id)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doc not found")
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     except TypeError as exc:
+        # As in update_doc: TypeError is outside the app-wide vocabulary and means
+        # the project is unexportable (no project, or no folder_path), which is a
+        # 422. NotFoundError → 404 and ConflictError → 409 are app-wide now (#99).
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         )

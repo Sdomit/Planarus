@@ -3,6 +3,7 @@ from typing import Optional
 from sqlalchemy import func
 from sqlmodel import Session, select
 
+from app.core.exceptions import NotFoundError
 from app.core.utils import new_id, now_utc
 from app.models.phase import Phase
 from app.models.project import Project
@@ -26,7 +27,7 @@ def get_stage(session: Session, stage_id: str) -> Optional[Stage]:
 
 def create_stage(session: Session, project_id: str, data: StageCreate) -> Stage:
     if session.get(Project, project_id) is None:
-        raise ValueError(f"project '{project_id}' not found")
+        raise NotFoundError(f"project '{project_id}' not found")
     phase = session.get(Phase, data.phase_id)
     if phase is None or phase.project_id != project_id:
         raise LookupError(f"phase '{data.phase_id}' not found in project '{project_id}'")

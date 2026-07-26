@@ -5,6 +5,7 @@ from typing import Optional
 from sqlalchemy import func
 from sqlmodel import Session, select
 
+from app.core.exceptions import NotFoundError
 from app.core.utils import now_utc
 from app.models.calendar_event import CalendarEvent
 from app.models.milestone import Milestone
@@ -173,7 +174,7 @@ def build_calendar(
     date_to: Optional[str] = None,
 ) -> ProjectCalendar:
     if session.get(Project, project_id) is None:
-        raise ValueError(f"project '{project_id}' not found")
+        raise NotFoundError(f"project '{project_id}' not found")
 
     win_from = date.fromisoformat(date_from) if date_from else None
     win_to = date.fromisoformat(date_to) if date_to else None

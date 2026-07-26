@@ -37,15 +37,7 @@ def create_task(
     data: TaskCreate,
     session: Session = Depends(get_session),
 ) -> TaskRead:
-    try:
-        return _read(session, [task_service.create_task(session, project_id, data)])[0]
-    except ValueError as exc:
-        # Project-not-found → 404; a validation error (e.g. illegal nesting) → 422.
-        if "project" in str(exc) and "not found" in str(exc):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    return _read(session, [task_service.create_task(session, project_id, data)])[0]
 
 
 @router.patch("/tasks/{task_id}", response_model=TaskRead)
@@ -54,14 +46,7 @@ def update_task(
     data: TaskUpdate,
     session: Session = Depends(get_session),
 ) -> TaskRead:
-    try:
-        task = task_service.update_task(session, task_id, data)
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-        )
+    task = task_service.update_task(session, task_id, data)
     if task is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     return _read(session, [task])[0]
@@ -73,14 +58,7 @@ def reorder_tasks(
     data: ReorderRequest,
     session: Session = Depends(get_session),
 ) -> list[TaskRead]:
-    try:
-        return _read(session, task_service.reorder_tasks(session, project_id, data.ids))
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-        )
+    return _read(session, task_service.reorder_tasks(session, project_id, data.ids))
 
 
 @router.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)

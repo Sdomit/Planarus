@@ -39,8 +39,6 @@ def create_calendar_event(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
         )
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
 
 @router.patch("/calendar-events/{event_id}", response_model=CalendarEventRead)
@@ -49,10 +47,7 @@ def update_calendar_event(
     data: CalendarEventUpdate,
     session: Session = Depends(get_session),
 ) -> CalendarEventRead:
-    try:
-        event = calendar_event_service.update_calendar_event(session, event_id, data)
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    event = calendar_event_service.update_calendar_event(session, event_id, data)
     if event is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Calendar event not found"

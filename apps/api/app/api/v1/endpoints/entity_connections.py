@@ -17,14 +17,9 @@ def list_connections(
     entity_id: Optional[str] = None,
     session: Session = Depends(get_session),
 ) -> list[EntityConnectionRead]:
-    try:
-        return entity_connection_service.list_connections(
-            session, project_id, entity_type, entity_id
-        )
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    return entity_connection_service.list_connections(
+        session, project_id, entity_type, entity_id
+    )
 
 
 @router.post(
@@ -37,12 +32,7 @@ def create_connection(
     data: EntityConnectionCreate,
     session: Session = Depends(get_session),
 ) -> EntityConnectionRead:
-    try:
-        return entity_connection_service.create_connection(session, project_id, data)
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    return entity_connection_service.create_connection(session, project_id, data)
 
 
 @router.delete("/entity-connections/{entity_connection_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -17,6 +17,7 @@ from sqlalchemy import update as sa_update
 from sqlmodel import Session, select
 
 from app.core import actor
+from app.core.exceptions import ConflictError, NotFoundError
 from app.core.hierarchy import MAX_DEPTH, validate_parent
 from app.core.utils import new_id, now_utc
 from app.fsmemory import atomic_io
@@ -86,7 +87,7 @@ def _unique_slug(session: Session, project_id: str, base: str) -> str:
 def create_doc(session: Session, project_id: str, payload: DocCreate) -> Doc:
     project = session.get(Project, project_id)
     if project is None:
-        raise ValueError(f"Project {project_id!r} not found")
+        raise NotFoundError(f"Project {project_id!r} not found")
 
     parent_doc_id = validate_parent(
         session,
@@ -181,10 +182,14 @@ def list_docs(
 def update_doc(session: Session, doc_id: str, payload: DocUpdate) -> Doc:
     doc = session.get(Doc, doc_id)
     if doc is None:
-        raise ValueError(f"Doc {doc_id!r} not found")
+        raise NotFoundError(f"Doc {doc_id!r} not found")
 
     if payload.version != doc.version:
-        raise LookupError(
+        # #99: was LookupError, which the app-wide convention maps to 404 — for a
+        # document that demonstrably exists. `endpoints/docs.py` compensated by
+        # re-mapping LookupError to 409 locally, inverting the convention twice to
+        # land on the right answer. ConflictError says it once, here.
+        raise ConflictError(
             f"Version conflict: expected {payload.version}, got {doc.version}"
         )
 
@@ -251,11 +256,11 @@ def update_doc(session: Session, doc_id: str, payload: DocUpdate) -> Doc:
         if cas.rowcount != 1:
             # Discards the whole transaction, not just the failed UPDATE. Safe
             # because this route does one write and nothing else; the pre-check
-            # above raises the same LookupError WITHOUT rolling back, so anyone
+            # above raises the same ConflictError WITHOUT rolling back, so anyone
             # wrapping two writes in one transaction here must reconcile the two
             # paths first.
             session.rollback()
-            raise LookupError(
+            raise ConflictError(
                 f"Version conflict: expected {payload.version}, but the document "
                 "was changed by another writer"
             )
@@ -399,7 +404,7 @@ def _checksum(data: bytes) -> str:
 def export_doc_markdown(session: Session, doc_id: str) -> DocExportResponse:
     doc = session.get(Doc, doc_id)
     if doc is None:
-        raise ValueError(f"Doc {doc_id!r} not found")
+        raise NotFoundError(f"Doc {doc_id!r} not found")
 
     project = session.get(Project, doc.project_id)
     if project is None:
@@ -425,7 +430,11 @@ def export_doc_markdown(session: Session, doc_id: str) -> DocExportResponse:
         )
 
         if drift_detected:
-            raise LookupError(
+            # #99: the second inverted raise. Export drift is a conflict — the file
+            # exists and disagrees with us — not a missing row. It was a LookupError
+            # that `endpoints/docs.py` re-mapped to 409, the same double inversion
+            # as the version conflict above.
+            raise ConflictError(
                 "The exported Markdown file was changed outside Planarus. "
                 "Review it before exporting again."
             )

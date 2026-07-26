@@ -161,10 +161,7 @@ def import_project(
             detail=f"Workspace '{body.workspace_id}' not found",
         )
     tenant.require_workspace_access(session, body.workspace_id, user, *tenant.WRITE_ROLES)
-    try:
-        return export_service.import_project(session, body.workspace_id, body.data)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    return export_service.import_project(session, body.workspace_id, body.data)
 
 
 @router.delete("/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
