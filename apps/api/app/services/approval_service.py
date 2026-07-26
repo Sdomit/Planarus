@@ -42,6 +42,13 @@ from app.prompt import secrets as secret_scan
 from app.services import entity_connection_service
 from app.services.audit_service import create_audit_event
 
+# D61 (#103): ApprovalRequest and AuditEvent have NO retention, by design. Do not
+# add a pruning sweep here. For an approval-gated product the audit trail is the
+# evidence that the gate worked, so deleting aged terminal rows to save disk
+# trades the product's core claim for storage. Growth is bounded at the *query*
+# instead — PR #154 caps + offsets the approvals list and defers the patch
+# column (see list_approvals below).
+
 # Proposals expire 24h after creation. Expiry is a backstop; the patch checksum +
 # target fingerprint compare-and-swap is the real freshness guard.
 APPROVAL_TTL_HOURS: float = 24.0
