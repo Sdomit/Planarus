@@ -64,3 +64,6 @@ def preview_context_pack(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         )
+    except context_pack_service.GovernanceIncompleteError as exc:
+        # 409, not 422: the request is well-formed, the repo state is what blocks it.
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))

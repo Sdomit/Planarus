@@ -9,6 +9,7 @@ export default function ContextFilesPanel({ projectId }: { projectId: string }) 
   const [error, setError] = useState<string | null>(null)
   const [regenerating, setRegenerating] = useState(false)
   const [pinning, setPinning] = useState<string | null>(null)
+  const [adopting, setAdopting] = useState<string | null>(null)
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [projectId])
@@ -36,6 +37,20 @@ export default function ContextFilesPanel({ projectId }: { projectId: string }) 
       setError(String(e))
     } finally {
       setRegenerating(false)
+    }
+  }
+
+  // #98: a hand edit used to be a one-way door — the file dropped out of every
+  // context pack and nothing could put the checksum back. This accepts the edit.
+  async function adopt(file: ContextFile) {
+    setAdopting(file.id)
+    try {
+      const updated = await api.contextFiles.adopt(file.id)
+      setFiles(prev => prev.map(f => f.id === updated.id ? updated : f))
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setAdopting(null)
     }
   }
 
@@ -109,8 +124,19 @@ export default function ContextFilesPanel({ projectId }: { projectId: string }) 
               </div>
               <div className="cf-meta">
                 <span className="cf-kind">{f.kind}</span>
-                {f.last_manual_edit_at && <span className="cf-drift">drifted</span>}
+                {/* This flag records that someone edited the file by hand, which
+                    stays true after the edit is accepted — so it says that,
+                    rather than "drifted", which stops being true on adopt. */}
+                {f.last_manual_edit_at && <span className="cf-drift">hand-edited</span>}
                 <span className="cf-time">{f.generated_at.slice(0, 16).replace('T', ' ')}</span>
+                <button
+                  className="btn btn-ghost btn-xs"
+                  onClick={() => adopt(f)}
+                  disabled={adopting === f.id || !project.folder_path}
+                  title="Record the file as it is on disk and pin it, so the context pack includes your edits"
+                >
+                  {adopting === f.id ? 'Accepting…' : 'Accept on-disk'}
+                </button>
               </div>
             </li>
           ))}

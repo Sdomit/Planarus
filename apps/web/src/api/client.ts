@@ -498,6 +498,8 @@ export interface ContextPackPreviewRequest {
   budget_preset: string
   objective: string
   selection: ContextPackSelection
+  /** Proceed even though a governance file is excluded; the API 409s otherwise. */
+  allow_incomplete_governance?: boolean
 }
 
 export interface ManifestEntry {
@@ -1345,6 +1347,10 @@ export const api = {
       ),
     diff: (id: string) =>
       request<{ relative_path: string; diff: string }>(`/context-files/${id}/diff`),
+    // Records the on-disk content as this file's state and pins it, so the pack
+    // stops excluding it and the next regeneration cannot overwrite it (#98).
+    adopt: (id: string) =>
+      request<ContextFile>(`/context-files/${id}/adopt`, { method: 'POST' }),
   },
   git: {
     get: (projectId: string) => request<GitRepoLink>(`/projects/${projectId}/git`),

@@ -53,6 +53,7 @@ export default function ContextPackBuilder({ projectId }: ContextPackBuilderProp
   const [preview, setPreview] = useState<ContextPackPreview | null>(null)
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
+  const [govBlock, setGovBlock] = useState<string | null>(null)
 
   const [showCopyConfirm, setShowCopyConfirm] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -88,12 +89,23 @@ export default function ContextPackBuilder({ projectId }: ContextPackBuilderProp
     return t
   }, [sources, excluded, optionals, selectedDocs])
 
-  const generate = useCallback(() => {
-    setGenerating(true); setGenError(null); setCopied(false); setShowCopyConfirm(false)
+  // #98: the API refuses with 409 when a governance file is excluded, rather than
+  // returning a pack whose "authoritative" scope section is empty. Surface that
+  // as a decision — fix it in Context files, or say so and generate anyway.
+  const generate = useCallback((allowIncompleteGovernance = false) => {
+    setGenerating(true); setGenError(null); setGovBlock(null)
+    setCopied(false); setShowCopyConfirm(false)
     api.contextPack
-      .preview(projectId, { profile, target_tool: targetTool, budget_preset: budget, objective, selection: buildSelection() })
+      .preview(projectId, {
+        profile, target_tool: targetTool, budget_preset: budget, objective,
+        selection: buildSelection(),
+        allow_incomplete_governance: allowIncompleteGovernance,
+      })
       .then(setPreview)
-      .catch((e: Error) => setGenError(e.message))
+      .catch((e: Error) => {
+        if (e.message.startsWith('409:')) setGovBlock(e.message)
+        else setGenError(e.message)
+      })
       .finally(() => setGenerating(false))
   }, [projectId, profile, targetTool, budget, objective, buildSelection])
 
@@ -231,10 +243,29 @@ export default function ContextPackBuilder({ projectId }: ContextPackBuilderProp
             Estimated: <strong>~{liveEstimate.toLocaleString()}</strong> tokens (approximate)
           </div>
 
-          <button className="btn btn-solid" onClick={generate} disabled={generating}>
+          <button className="btn btn-solid" onClick={() => generate()} disabled={generating}>
             {generating ? 'Generating…' : 'Generate preview'}
           </button>
           {genError && <p className="cpb-error-msg">{genError}</p>}
+          {govBlock && (
+            <div className="cpb-gov-block" role="alert">
+              <p className="cpb-error-msg">
+                <strong>Scope section would be incomplete.</strong>{' '}
+                {govBlock.replace(/^409:\s*/, '').replace(/^\{"detail":"?/, '').replace(/"?\}$/, '')}
+              </p>
+              <p className="cpb-gov-hint">
+                Accept the edit on the <strong>Context files</strong> tab to include it, or
+                generate a pack that says the scope is unavailable.
+              </p>
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => generate(true)}
+                disabled={generating}
+              >
+                Generate anyway
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Right: preview */}

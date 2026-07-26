@@ -220,9 +220,16 @@ def test_governance_included_then_excluded_on_drift(
     assert "(none configured yet)" in data["markdown"]
     assert not any("FILES_ALLOWED" in w for w in data["warnings"])
 
-    # Drift the on-disk governance file -> checksum mismatch -> excluded + warning.
+    # Drift the on-disk governance file -> checksum mismatch -> the pack refuses.
+    # It used to return 200 with one line in `warnings`, which meant an agent could
+    # receive a pack whose "authoritative" scope section was empty (#98). The
+    # confirm flag is the way through, and it still carries the warning.
     atomic_io.write_text(folder, "context/FILES_ALLOWED.md", "tampered\n")
-    drifted = _preview(client, pid).json()
+    refused = _preview(client, pid)
+    assert refused.status_code == 409
+    assert "FILES_ALLOWED" in refused.json()["detail"]
+
+    drifted = _preview(client, pid, allow_incomplete_governance=True).json()
     assert any("FILES_ALLOWED" in w and "drifted" in w for w in drifted["warnings"])
 
 

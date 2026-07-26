@@ -68,6 +68,70 @@ def set_pinned(
     return cf
 
 
+def adopt_on_disk(
+    session: Session, context_file_id: str
+) -> tuple[Optional[ContextFile], str]:
+    """Accept the current on-disk content as the file's recorded state.
+
+    Returns (row, status) where status is one of ok | not-found | no-root |
+    missing-on-disk.
+
+    Adoption **pins**. All three governance files ship `authored=False`, so they
+    are generated and unpinned by default — and once the checksum matches the
+    on-disk bytes, an unpinned row falls through regeneration's final branch and
+    gets overwritten with the starter scaffold. Adopting without pinning would
+    therefore clear the drift and then silently destroy the very edit it just
+    accepted, on the next regeneration. Pinning is what makes "I meant this"
+    stick (#98).
+
+    Without this action, drift was a one-way door: the only other checksum writer
+    is that overwrite branch, so the sole way to clear drift was to discard the
+    hand edits it was recording.
+    """
+    cf = session.get(ContextFile, context_file_id)
+    if cf is None:
+        return None, "not-found"
+    project = session.get(Project, cf.project_id)
+    if project is None:
+        return None, "not-found"
+    root = resolve_project_root_or_none(project)  # recheck-before-op (#115)
+    if root is None:
+        return cf, "no-root"
+    content = atomic_io.read_text(root, cf.relative_path)
+    if content is None:
+        return cf, "missing-on-disk"
+
+    checksum = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    already = checksum == cf.checksum
+    was_pinned = bool(cf.pinned)
+    cf.checksum = checksum
+    cf.pinned = True
+    cf.token_estimate = max(1, len(content.encode("utf-8")) // 4)
+    cf.last_manual_edit_at = now_utc()
+    cf.updated_at = now_utc()
+    session.add(cf)
+    create_audit_event(
+        session,
+        event_type="update",
+        actor_type="human",
+        entity_type="context_file",
+        entity_id=cf.id,
+        project_id=cf.project_id,
+        # The checksum is the whole point of the action, so it goes in the record.
+        # No content: an audit payload is not a place to copy a file body.
+        payload_json=json.dumps(
+            {
+                "adopted_checksum": checksum,
+                "was_already_in_sync": already,
+                "pinned_by_adoption": not was_pinned,
+            }
+        ),
+    )
+    session.commit()
+    session.refresh(cf)
+    return cf, "ok"
+
+
 def read_content(
     session: Session, context_file: ContextFile
 ) -> tuple[Optional[str], bool]:

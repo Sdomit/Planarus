@@ -103,6 +103,41 @@ def get_context_file_diff(
     return ContextFileDiff(relative_path=cf.relative_path, diff=diff)
 
 
+@router.post(
+    "/context-files/{context_file_id}/adopt",
+    response_model=ContextFileRead,
+)
+def adopt_context_file(
+    context_file_id: str,
+    session: Session = Depends(get_session),
+) -> ContextFileRead:
+    """Accept the on-disk content as this file's recorded state, keeping the pin.
+
+    Human-local only, like every other route in this module. It writes no file —
+    it records the checksum of bytes the human already wrote — so there is no AI
+    write surface here and nothing for the approval queue to gate.
+    """
+    cf, outcome = context_service.adopt_on_disk(session, context_file_id)
+    if outcome == "not-found" or cf is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Context file not found"
+        )
+    if outcome == "no-root":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Project folder is not available; cannot read the file to adopt.",
+        )
+    if outcome == "missing-on-disk":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"{cf.relative_path} is not on disk. Regenerate the pack to recreate"
+                " it instead of adopting a file that is not there."
+            ),
+        )
+    return cf
+
+
 @router.patch("/context-files/{context_file_id}", response_model=ContextFileRead)
 def update_context_file(
     context_file_id: str,

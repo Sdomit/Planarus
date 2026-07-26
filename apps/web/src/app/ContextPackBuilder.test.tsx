@@ -201,6 +201,40 @@ describe('ContextPackBuilder', () => {
     )
   })
 
+  // #98: the API refuses (409) rather than returning a pack whose authoritative
+  // scope section is empty. The refusal has to read as a decision with a way out,
+  // not as a generic red error line.
+  it('offers a way through when governance blocks the pack', async () => {
+    mockApi.contextPack.profiles.mockResolvedValue(PROFILES)
+    mockApi.contextPack.sources.mockResolvedValue(SOURCES)
+    mockApi.contextPack.preview.mockRejectedValueOnce(
+      new Error('409: {"detail":"governance files cannot be embedded: context/AGENT_RULES.md (drifted). ..."}'),
+    )
+    render(<ContextPackBuilder projectId="proj_1" onClose={vi.fn()} />)
+    await waitFor(() => screen.getByText('Generate preview'))
+    fireEvent.click(screen.getByText('Generate preview'))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
+    expect(screen.getByText(/Scope section would be incomplete/i)).toBeTruthy()
+    expect(screen.getByText(/AGENT_RULES\.md \(drifted\)/)).toBeTruthy()
+    // The raw transport prefix does not leak into the message.
+    expect(screen.queryByText(/409: \{"detail"/)).toBeNull()
+
+    mockApi.contextPack.preview.mockResolvedValue(PREVIEW)
+    fireEvent.click(screen.getByText('Generate anyway'))
+    await waitFor(() =>
+      expect(mockApi.contextPack.preview).toHaveBeenLastCalledWith(
+        'proj_1',
+        expect.objectContaining({ allow_incomplete_governance: true }),
+      ),
+    )
+    // And the block clears once a pack comes back. Queried by its own text, not
+    // by role: the preview's masked-secret list is also role="alert".
+    await waitFor(() =>
+      expect(screen.queryByText(/Scope section would be incomplete/i)).toBeNull(),
+    )
+  })
+
   it('requires a privacy confirmation before copying', async () => {
     mockApi.contextPack.profiles.mockResolvedValue(PROFILES)
     mockApi.contextPack.sources.mockResolvedValue(SOURCES)
