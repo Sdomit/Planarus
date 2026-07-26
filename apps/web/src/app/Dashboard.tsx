@@ -14,6 +14,9 @@ const PROJECT_STATUSES = [
   'idea', 'researching', 'planning', 'ready', 'active',
   'blocked', 'paused', 'later', 'review', 'done', 'archived',
 ]
+// Mirrors PROJECT_PRIORITIES in the API; '' is the "no priority" option, which
+// PATCHes priority: null.
+const PROJECT_PRIORITIES = ['', 'low', 'med', 'high', 'urgent']
 const DONE_TASK = new Set(['done', 'canceled'])
 
 function slugify(title: string): string {
@@ -47,6 +50,7 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
   const [cats, setCats] = useState<string[]>(listCategories())
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [moveFor, setMoveFor] = useState<Project | null>(null)
+  const [editFor, setEditFor] = useState<Project | null>(null)
   const [delFor, setDelFor] = useState<Project | null>(null)
   const [delText, setDelText] = useState('')
 
@@ -136,6 +140,26 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
       await api.projects.remove(id)
       assignCategory(id, null)
     })
+  }
+
+  // #158: title / summary / priority all ride the one PATCH the client already
+  // exposed but nothing ever called. Blank summary and "no priority" clear the
+  // field rather than storing an empty string.
+  //
+  // Deliberately NOT routed through `act`: that swallows the rejection into the
+  // page-level error banner, whose early return unmounts the modal and throws
+  // away what the user typed. Let it propagate so EditModal can show it in place;
+  // only a successful PATCH closes the form and reloads.
+  async function saveEdit(patch: { title: string; summary: string; priority: string }) {
+    if (!editFor) return
+    const id = editFor.id
+    await api.projects.update(id, {
+      title: patch.title.trim(),
+      summary: patch.summary.trim() || null,
+      priority: patch.priority || null,
+    })
+    setEditFor(null)
+    await loadData()
   }
 
   function moveTo(category: string | null) {
@@ -277,6 +301,7 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
                             display: 'flex', flexDirection: 'column',
                           }}
                         >
+                          <MenuItem onClick={() => { setMenuFor(null); setEditFor(p) }}>Edit details…</MenuItem>
                           {!archived && <MenuItem onClick={() => act(() => api.projects.update(p.id, { status: 'active' }))}>Set active</MenuItem>}
                           {!archived && <MenuItem onClick={() => act(() => api.projects.update(p.id, { status: 'done' }))}>Set done</MenuItem>}
                           <MenuItem onClick={() => act(() => api.projects.duplicate(p.id))}>Duplicate</MenuItem>
@@ -359,6 +384,14 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
         </div>
       )}
 
+      {editFor && (
+        <EditModal
+          project={editFor}
+          onClose={() => setEditFor(null)}
+          onSave={saveEdit}
+        />
+      )}
+
       {moveFor && (
         <MoveModal
           project={moveFor}
@@ -421,6 +454,79 @@ function MenuItem({ children, onClick, danger }: { children: ReactNode; onClick:
       onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-muted)')}
       onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
     >{children}</button>
+  )
+}
+
+function EditModal({
+  project, onClose, onSave,
+}: {
+  project: Project
+  onClose: () => void
+  onSave: (patch: { title: string; summary: string; priority: string }) => Promise<void>
+}) {
+  const [title, setTitle] = useState(project.title)
+  const [summary, setSummary] = useState(project.summary ?? '')
+  const [priority, setPriority] = useState(project.priority ?? '')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await onSave({ title, summary, priority })
+    } catch (err) {
+      // Stay open with the entered values intact so the save can be retried.
+      setSaveError(String(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2 className="modal-title">Edit project</h2>
+          <button className="modal-close" type="button" aria-label="Close" onClick={onClose}>
+            <Icon name="x" className="ic-18" />
+          </button>
+        </div>
+        <form onSubmit={submit}>
+          <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <div className="form-field">
+              <label className="form-label" htmlFor="ep-title">Title</label>
+              <input id="ep-title" className="input" required maxLength={200} autoFocus
+                value={title} onChange={(e) => setTitle(e.target.value)} />
+            </div>
+            <div className="form-field">
+              <label className="form-label" htmlFor="ep-sum">Summary</label>
+              <input id="ep-sum" className="input" value={summary}
+                onChange={(e) => setSummary(e.target.value)} placeholder="Optional" />
+            </div>
+            <div className="form-field">
+              <label className="form-label" htmlFor="ep-prio">Priority</label>
+              <select id="ep-prio" className="input select" value={priority}
+                onChange={(e) => setPriority(e.target.value)}>
+                {PROJECT_PRIORITIES.map((v) => (
+                  <option key={v || 'none'} value={v}>{v || 'no priority'}</option>
+                ))}
+              </select>
+            </div>
+            {saveError && (
+              <p role="alert" style={{ color: 'var(--status-danger-fg)', fontSize: 'var(--text-xs)', margin: 0 }}>
+                {saveError}
+              </p>
+            )}
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-solid btn-sm" disabled={saving || !title.trim()}>
+              {saving ? 'Saving…' : 'Save changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   )
 }
 

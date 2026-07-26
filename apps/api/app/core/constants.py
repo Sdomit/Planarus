@@ -38,6 +38,11 @@ def project_status_check_sql(column: str = "status") -> str:
     return _check_sql(column, PROJECT_STATUSES)
 
 
+# Project.priority shares Task.priority's scale — defined as PROJECT_PRIORITIES
+# just below TASK_PRIORITIES, since it is an alias of it and cannot be declared
+# before the tuple it aliases.
+
+
 # Phase and Stage share the same lifecycle status values.
 PHASE_STATUSES: tuple[str, ...] = (
     "planned",
@@ -65,6 +70,17 @@ TASK_STATUSES: tuple[str, ...] = (
 )
 
 TASK_PRIORITIES: tuple[str, ...] = ("low", "med", "high", "urgent")
+
+# Project.priority is the SAME scale (docs/plan/03-data-model.md lists both, with
+# identical values), so this is an alias rather than a second tuple with the same
+# contents — two hand-maintained copies would let a future edit to one silently
+# diverge from the other while the comment still claimed they matched. If they ever
+# genuinely need to differ, split them here on purpose.
+#
+# Note the asymmetry that survives the alias: widening this scale needs a migration
+# rewriting the task column's frozen CHECK, whereas project.priority has shipped
+# unconstrained since the first revision and is enforced at the schema layer only.
+PROJECT_PRIORITIES: tuple[str, ...] = TASK_PRIORITIES
 
 
 def task_status_check_sql(column: str = "status") -> str:

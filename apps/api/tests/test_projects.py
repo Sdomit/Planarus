@@ -65,6 +65,58 @@ def test_update_project(client: TestClient) -> None:
     assert data["status"] == "active"
 
 
+def test_update_project_summary_and_priority(client: TestClient) -> None:
+    """#158: priority was renderable but unsettable — PATCH now carries it."""
+    ws_id = _create_workspace(client)
+    created = client.post(
+        "/api/v1/projects",
+        json={"workspace_id": ws_id, "title": "Prio", "slug": "prio"},
+    ).json()
+    assert created["priority"] is None
+
+    response = client.patch(
+        f"/api/v1/projects/{created['id']}",
+        json={"summary": "Now with a summary", "priority": "high"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["summary"] == "Now with a summary"
+    assert data["priority"] == "high"
+
+    # A field left out of the patch keeps its stored value.
+    kept = client.patch(f"/api/v1/projects/{created['id']}", json={"title": "Prio 2"}).json()
+    assert kept["priority"] == "high"
+
+    # An explicit null clears it again.
+    cleared = client.patch(
+        f"/api/v1/projects/{created['id']}",
+        json={"summary": None, "priority": None},
+    ).json()
+    assert cleared["priority"] is None
+    assert cleared["summary"] is None
+
+
+def test_project_priorities_is_the_task_scale() -> None:
+    """#158 review: guard against the two tuples drifting. PROJECT_PRIORITIES is an
+    alias, so this asserts identity — a copy-paste redefinition would fail here."""
+    from app.core.constants import PROJECT_PRIORITIES, TASK_PRIORITIES
+
+    assert PROJECT_PRIORITIES is TASK_PRIORITIES
+
+
+def test_update_project_rejects_unknown_priority(client: TestClient) -> None:
+    ws_id = _create_workspace(client)
+    created = client.post(
+        "/api/v1/projects",
+        json={"workspace_id": ws_id, "title": "Bad Prio", "slug": "bad-prio"},
+    ).json()
+    response = client.patch(
+        f"/api/v1/projects/{created['id']}",
+        json={"priority": "medium"},
+    )
+    assert response.status_code == 422
+
+
 def test_update_project_not_found(client: TestClient) -> None:
     response = client.patch(
         "/api/v1/projects/proj_doesnotexist",
