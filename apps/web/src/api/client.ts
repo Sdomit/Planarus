@@ -312,7 +312,12 @@ export interface DocUpdate {
   content_json?: string | null
   markdown_cache?: string | null
   archived_at?: string | null
-  /** A swatch key, or the "default" sentinel to clear it (null means unchanged). */
+  /**
+   * A swatch key. Send null — or the historical "default" sentinel — to clear it.
+   * Same for `parent_doc_id` (null moves the doc back to root) and `archived_at`
+   * (null un-archives): on these three, sending null clears and omitting the key
+   * leaves the value alone. Omit, don't null, when you mean "unchanged" (#156).
+   */
   color?: string | null
 }
 
