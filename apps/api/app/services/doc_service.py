@@ -27,6 +27,7 @@ from app.models.doc import Doc
 from app.models.link import Link
 from app.models.project import Project
 from app.schemas.doc import DocCreate, DocExportResponse, DocUpdate
+from app.services import entity_connection_service
 from app.services.audit_service import create_audit_event
 
 # Maps doc_type → export subfolder within docs/
@@ -356,6 +357,8 @@ def delete_doc(session: Session, doc_id: str) -> bool:
         child.parent_doc_id = None
         child.updated_at = now
         session.add(child)
+
+    entity_connection_service.delete_for_entity(session, project_id, "doc", doc_id)
 
     # A cross-project child can no longer be created, but one written before
     # #116 still points here, and the self-FK will not let this row be deleted

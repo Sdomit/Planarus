@@ -12,18 +12,30 @@ def test_project_export_import_round_trips(client):
     ws, proj = seed(client, "exp")
     phase = _create(client, f"/api/v1/projects/{proj}/phases", {"title": "Phase 1"})
     task = _create(client, f"/api/v1/projects/{proj}/tasks", {"title": "Task A", "phase_id": phase["id"]})
-    _create(client, f"/api/v1/projects/{proj}/tasks", {"title": "Task B"})
+    task_b = _create(client, f"/api/v1/projects/{proj}/tasks", {"title": "Task B"})
     _create(client, f"/api/v1/projects/{proj}/decisions", {"title": "D1", "decision": "do it"})
     _create(client, f"/api/v1/projects/{proj}/comments", {"entity_type": "task", "entity_id": task["id"], "body": "hi"})
+    _create(
+        client,
+        f"/api/v1/projects/{proj}/connections",
+        {
+            "relation_type": "depends_on",
+            "source_entity_type": "task",
+            "source_entity_id": task["id"],
+            "target_entity_type": "task",
+            "target_entity_id": task_b["id"],
+        },
+    )
 
     exported = client.get(f"/api/v1/projects/{proj}/export")
     assert exported.status_code == 200, exported.text
     data = exported.json()
-    assert data["planarus_export"] == 2  # #87: status options / calendar events / todos
+    assert data["planarus_export"] == 3  # #87 added three entities; Phase 25 added connections
     assert len(data["tasks"]) == 2
     assert len(data["phases"]) == 1
     assert len(data["decisions"]) == 1
     assert len(data["comments"]) == 1
+    assert len(data["connections"]) == 1
 
     res = client.post("/api/v1/projects/import", json={"workspace_id": ws, "data": data})
     assert res.status_code == 201, res.text
@@ -36,6 +48,7 @@ def test_project_export_import_round_trips(client):
     assert len(copy["phases"]) == 1
     assert len(copy["decisions"]) == 1
     assert len(copy["comments"]) == 1
+    assert len(copy["connections"]) == 1
     assert {t["id"] for t in copy["tasks"]}.isdisjoint({t["id"] for t in data["tasks"]})
     # task→phase FK remapped into the copy's own phase
     copy_phase_ids = {p["id"] for p in copy["phases"]}
@@ -44,6 +57,59 @@ def test_project_export_import_round_trips(client):
     assert linked[0]["phase_id"] in copy_phase_ids
     # comment→task polymorphic remap: entity_id points at a copy task
     assert copy["comments"][0]["entity_id"] in {t["id"] for t in copy["tasks"]}
+    copy_task_ids = {t["id"] for t in copy["tasks"]}
+    assert copy["connections"][0]["source_entity_id"] in copy_task_ids
+    assert copy["connections"][0]["target_entity_id"] in copy_task_ids
+
+
+def test_import_drops_a_connection_whose_endpoints_are_not_in_the_payload(client):
+    """A forged endpoint must never reach the new project (#87 drop semantics).
+
+    `copy_graph` resolves both endpoints through this copy's own id map and skips
+    the row when either is missing — the same rule comments and links follow. The
+    property under test is that the forged ids are not written through: an import
+    that quietly attached the new project to `tsk_missing` would be the bug.
+    """
+    ws, proj = seed(client, "exp-connection-forge")
+    data = client.get(f"/api/v1/projects/{proj}/export").json()
+    data["connections"] = [
+        {
+            "id": "con_forged",
+            "project_id": proj,
+            "relation_type": "depends_on",
+            "source_entity_type": "task",
+            "source_entity_id": "tsk_missing",
+            "target_entity_type": "task",
+            "target_entity_id": "tsk_missing_2",
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+        }
+    ]
+    response = client.post("/api/v1/projects/import", json={"workspace_id": ws, "data": data})
+    assert response.status_code == 201, response.text
+    copy = client.get(f"/api/v1/projects/{response.json()['id']}/export").json()
+    assert copy["connections"] == []
+
+
+def test_import_rejects_a_connection_the_relation_matrix_forbids(client):
+    """`row_check` runs before the first row is written, so nothing is created."""
+    ws, proj = seed(client, "exp-connection-illegal")
+    data = client.get(f"/api/v1/projects/{proj}/export").json()
+    data["connections"] = [
+        {
+            "id": "con_illegal",
+            "project_id": proj,
+            "relation_type": "mitigates",  # task -> risk only
+            "source_entity_type": "doc",
+            "source_entity_id": "doc_1",
+            "target_entity_type": "doc",
+            "target_entity_id": "doc_2",
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+        }
+    ]
+    response = client.post("/api/v1/projects/import", json={"workspace_id": ws, "data": data})
+    assert response.status_code == 422, response.text
 
 
 def test_import_coerces_priority_to_the_allowed_scale(client):

@@ -208,6 +208,25 @@ def test_unrecognized_version_is_still_rejected():
         export_service.validate_import_payload({"planarus_export": 99})
 
 
+# An entity with a `row_check` rejects a row that is merely well-bounded, so the
+# bounds test needs one row per collection that its own check accepts. Add an
+# entry here when you add a `row_check`; the failure names the collection.
+_VALID_ROWS: dict[str, dict] = {
+    "connections": {
+        "id": "con_x",
+        "relation_type": "depends_on",
+        "source_entity_type": "task",
+        "source_entity_id": "tsk_a",
+        "target_entity_type": "task",
+        "target_entity_id": "tsk_b",
+    },
+}
+
+
+def _minimal_row(payload_key: str) -> dict:
+    return _VALID_ROWS.get(payload_key, {"id": "x"})
+
+
 def test_every_graph_entity_is_bounded():
     """The bounds are derived from project_graph, so a new entity cannot slip in
     unbounded — this pins that the derivation actually covers the registry."""
@@ -220,11 +239,11 @@ def test_every_graph_entity_is_bounded():
     payload = {
         "planarus_export": export_service.EXPORT_VERSION,
         "project": {"title": "P"},
-        **{k: [{"id": "x"}] for k in keys},
+        **{k: [_minimal_row(k)] for k in keys},
     }
     export_service.validate_import_payload(payload)  # a valid one passes
     for key in keys:
         over = dict(payload)
-        over[key] = [{"id": "x"}] * (export_service.MAX_ROWS_PER_ENTITY + 1)
+        over[key] = [_minimal_row(key)] * (export_service.MAX_ROWS_PER_ENTITY + 1)
         with pytest.raises(ValueError, match="over the"):
             export_service.validate_import_payload(over)

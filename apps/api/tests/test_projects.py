@@ -259,6 +259,20 @@ def test_duplicate_deep_copies_children_with_remapped_ids(client: TestClient) ->
         f"/api/v1/projects/{pid}/comments",
         json={"entity_type": "task", "entity_id": task["id"], "body": "note"},
     )
+    other_task = client.post(
+        f"/api/v1/projects/{pid}/tasks", json={"title": "T2"}
+    ).json()
+    connection = client.post(
+        f"/api/v1/projects/{pid}/connections",
+        json={
+            "relation_type": "depends_on",
+            "source_entity_type": "task",
+            "source_entity_id": task["id"],
+            "target_entity_type": "task",
+            "target_entity_id": other_task["id"],
+        },
+    )
+    assert connection.status_code == 201
 
     dup = client.post(f"/api/v1/projects/{pid}/duplicate")
     assert dup.status_code == 201
@@ -269,21 +283,27 @@ def test_duplicate_deep_copies_children_with_remapped_ids(client: TestClient) ->
     assert new["status"] == "idea"
 
     new_tasks = client.get(f"/api/v1/projects/{new['id']}/tasks").json()
-    assert len(new_tasks) == 1
-    assert new_tasks[0]["id"] != task["id"]  # remapped
+    assert len(new_tasks) == 2
+    assert {row["id"] for row in new_tasks}.isdisjoint({task["id"], other_task["id"]})
 
     new_phases = client.get(f"/api/v1/projects/{new['id']}/phases").json()
-    assert new_tasks[0]["phase_id"] == new_phases[0]["id"]  # internal FK remapped
+    phased_task = next(row for row in new_tasks if row["phase_id"] is not None)
+    assert phased_task["phase_id"] == new_phases[0]["id"]  # internal FK remapped
 
     new_chk = client.get(
-        f"/api/v1/tasks/{new_tasks[0]['id']}/checklist-items"
+        f"/api/v1/tasks/{phased_task['id']}/checklist-items"
     ).json()
     assert len(new_chk) == 1
 
     new_comments = client.get(f"/api/v1/projects/{new['id']}/comments").json()
     assert len(new_comments) == 1
     # Polymorphic entity_id points at the COPIED task, not the source task.
-    assert new_comments[0]["entity_id"] == new_tasks[0]["id"]
+    assert new_comments[0]["entity_id"] == phased_task["id"]
+
+    copied_connections = client.get(f"/api/v1/projects/{new['id']}/connections").json()
+    assert len(copied_connections) == 1
+    assert copied_connections[0]["source_entity_id"] in {row["id"] for row in new_tasks}
+    assert copied_connections[0]["target_entity_id"] in {row["id"] for row in new_tasks}
 
 
 def test_duplicate_remaps_parent_task_id(client: TestClient) -> None:

@@ -7,7 +7,7 @@ from app.models.phase import Phase
 from app.models.project import Project
 from app.models.risk import Risk
 from app.schemas.risk import RiskCreate, RiskUpdate
-from app.services import status_option_service
+from app.services import entity_connection_service, status_option_service
 from app.services.audit_service import create_audit_event
 from app.services.planning_reorder import apply_reorder
 
@@ -109,6 +109,7 @@ def delete_risk(session: Session, risk_id: str) -> bool:
     if risk is None:
         return False
     project_id = risk.project_id
+    entity_connection_service.delete_for_entity(session, project_id, "risk", risk_id)
     session.delete(risk)
     create_audit_event(
         session,

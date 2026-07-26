@@ -260,6 +260,36 @@ export interface Link {
   created_at: string
 }
 
+/** A constrained, same-project planning relationship (Phase 25). */
+export type ConnectionEntityType = 'phase' | 'task' | 'decision' | 'risk' | 'milestone' | 'doc'
+export type ConnectionRelationType =
+  | 'depends_on'
+  | 'implements'
+  | 'mitigates'
+  | 'contributes_to'
+  | 'references'
+  | 'related_to'
+
+export interface EntityConnection {
+  id: string
+  project_id: string
+  relation_type: ConnectionRelationType
+  source_entity_type: ConnectionEntityType
+  source_entity_id: string
+  target_entity_type: ConnectionEntityType
+  target_entity_id: string
+  created_at: string
+  updated_at: string
+}
+
+export interface EntityConnectionCreate {
+  relation_type: ConnectionRelationType
+  source_entity_type: ConnectionEntityType
+  source_entity_id: string
+  target_entity_type: ConnectionEntityType
+  target_entity_id: string
+}
+
 export interface DocSummary {
   id: string
   project_id: string
@@ -1311,6 +1341,18 @@ export const api = {
     },
     create: (projectId: string, data: { entity_type: string; entity_id: string; url: string; title?: string }) =>
       request<Link>(`/projects/${projectId}/links`, { method: 'POST', body: JSON.stringify(data) }),
+  },
+  connections: {
+    list: (projectId: string, params?: { entity_type?: ConnectionEntityType; entity_id?: string }) => {
+      const q = new URLSearchParams()
+      if (params?.entity_type) q.set('entity_type', params.entity_type)
+      if (params?.entity_id) q.set('entity_id', params.entity_id)
+      const qs = q.toString()
+      return request<EntityConnection[]>(`/projects/${projectId}/connections${qs ? `?${qs}` : ''}`)
+    },
+    create: (projectId: string, data: EntityConnectionCreate) =>
+      request<EntityConnection>(`/projects/${projectId}/connections`, { method: 'POST', body: JSON.stringify(data) }),
+    remove: (id: string) => request<void>(`/entity-connections/${id}`, { method: 'DELETE' }),
   },
   docs: {
     list: (projectId: string, params?: { doc_type?: string; status?: string; include_archived?: boolean; q?: string }) => {

@@ -24,14 +24,15 @@ from app.services.audit_service import create_audit_event
 from app.services.project_service import _unique_slug
 
 #: Version written by ``export_project``. Bumped to 2 when status options,
-#: calendar events and todos joined the graph (#87): a v2 file carries entities a
-#: v1 reader would silently drop, so an older build must refuse it rather than
-#: import a quietly incomplete project.
-EXPORT_VERSION = 2
+#: calendar events and todos joined the graph (#87), and to 3 when typed entity
+#: connections did (Phase 25): a file carries entities an older reader would
+#: silently drop, so that reader must refuse it rather than import a quietly
+#: incomplete project. Adding an entity to ``project_graph.ENTITIES`` bumps this.
+EXPORT_VERSION = 3
 
-#: Versions ``import_project`` accepts. v1 files predate those three entities and
-#: simply have no such keys, so they still import correctly.
-SUPPORTED_EXPORT_VERSIONS = (1, 2)
+#: Versions ``import_project`` accepts. An older file predates the entities added
+#: since, and simply has no such keys, so it still imports correctly.
+SUPPORTED_EXPORT_VERSIONS = (1, 2, 3)
 
 
 # --- #117: bounds for an imported payload -----------------------------------
@@ -129,6 +130,8 @@ def validate_import_payload(data: dict) -> None:
                         f"{entity.payload_key}.{column} must be valid JSON"
                     ) from None
                 check_rich_content(parsed, f"{entity.payload_key}.{column}")
+            if entity.row_check is not None:
+                entity.row_check(row)
 
 
 def export_project(session: Session, project_id: str) -> Optional[dict]:

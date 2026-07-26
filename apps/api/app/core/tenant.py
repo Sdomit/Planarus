@@ -143,6 +143,7 @@ def _build_resolvers() -> dict:
     from app.models.context_file import ContextFile
     from app.models.decision import Decision
     from app.models.doc import Doc
+    from app.models.entity_connection import EntityConnection
     from app.models.milestone import Milestone
     from app.models.notification_rule import NotificationRule
     from app.models.phase import Phase
@@ -175,6 +176,7 @@ def _build_resolvers() -> dict:
         "event_id": lambda s, v: _project_id_via(s, CalendarEvent, v),
         "option_id": lambda s, v: _project_id_via(s, StatusOption, v),
         "connection_id": lambda s, v: _project_id_via(s, CalendarConnection, v),
+        "entity_connection_id": lambda s, v: _project_id_via(s, EntityConnection, v),
     }
 
 

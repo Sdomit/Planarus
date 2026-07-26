@@ -38,6 +38,7 @@ from app.models.checklist_item import ChecklistItem
 from app.models.comment import Comment
 from app.models.decision import Decision
 from app.models.doc import Doc
+from app.models.entity_connection import EntityConnection
 from app.models.link import Link
 from app.models.milestone import Milestone
 from app.models.phase import Phase
@@ -46,6 +47,7 @@ from app.models.stage import Stage
 from app.models.status_option import StatusOption
 from app.models.task import Task
 from app.models.todo import Todo
+from app.services import entity_connection_service
 
 
 @dataclass(frozen=True)
@@ -75,8 +77,9 @@ class GraphEntity:
     #: columns blanked only when importing: attribution FKs whose users exist on
     #: the source instance and nowhere else.
     drop_on_import: tuple[str, ...] = ()
-    #: rows whose target is (entity_type, entity_id) rather than a typed FK.
-    polymorphic: bool = False
+    #: (type column, id column) pairs whose target is named by kind rather than
+    #: reached by a typed FK. A connection has two of them, one per endpoint.
+    polymorphic: tuple[tuple[str, str], ...] = ()
     #: columns holding a single hyperlink, checked against the #118 URI policy on
     #: import. Declared here rather than in the importer for the same reason the
     #: FK remaps are: a new entity with a URL column gets the check the day it is
@@ -85,6 +88,10 @@ class GraphEntity:
     #: columns holding a rich-document JSON string whose href/src attributes are
     #: swept by the same policy.
     rich_fields: tuple[str, ...] = ()
+    #: an entity-specific check for one payload row, run by the importer before
+    #: anything is written. Declared here for the same reason ``uri_fields`` is:
+    #: a request goes through the endpoint's schema, an import file does not.
+    row_check: Optional[Callable[[dict], object]] = None
     in_duplicate: bool = True
     in_export: bool = True
     in_manifest: bool = True
@@ -144,8 +151,26 @@ ENTITIES: tuple[GraphEntity, ...] = (
         drop_on_import=("updated_by",),
         rich_fields=("content_json",),
     ),
-    GraphEntity("comment", Comment, polymorphic=True, drop_on_import=("author_id",)),
-    GraphEntity("link", Link, polymorphic=True, uri_fields=("url",)),
+    GraphEntity(
+        "comment",
+        Comment,
+        polymorphic=(("entity_type", "entity_id"),),
+        drop_on_import=("author_id",),
+    ),
+    GraphEntity("link", Link, polymorphic=(("entity_type", "entity_id"),), uri_fields=("url",)),
+    # Phase 25. Both endpoints are polymorphic, so a connection is only copied
+    # when both of the entities it joins are in the same copy — a half-remapped
+    # connection would silently point the new project at a source record.
+    GraphEntity(
+        "entity_connection",
+        EntityConnection,
+        json_key="connections",
+        polymorphic=(
+            ("source_entity_type", "source_entity_id"),
+            ("target_entity_type", "target_entity_id"),
+        ),
+        row_check=entity_connection_service.validate_connection_shape,
+    ),
 )
 
 _BY_KEY = {e.key: e for e in ENTITIES}
@@ -239,11 +264,15 @@ def copy_graph(
                 data[column] = target
             else:
                 data["project_id"] = new_project_id
-            if entity.polymorphic:
-                resolved = idmap.get(data.get("entity_type"), {}).get(data.get("entity_id"))
+            unresolved = False
+            for type_column, id_column in entity.polymorphic:
+                resolved = idmap.get(data.get(type_column), {}).get(data.get(id_column))
                 if resolved is None:
-                    continue
-                data["entity_id"] = resolved
+                    unresolved = True
+                    break
+                data[id_column] = resolved
+            if unresolved:
+                continue
             for column, target_key in entity.fk_remap.items():
                 if data.get(column) is not None:
                     data[column] = idmap.get(target_key, {}).get(data[column])

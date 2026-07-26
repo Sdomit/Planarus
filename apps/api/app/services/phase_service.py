@@ -13,7 +13,7 @@ from app.models.risk import Risk
 from app.models.stage import Stage
 from app.models.task import Task
 from app.schemas.phase import PhaseCreate, PhaseUpdate
-from app.services import status_option_service
+from app.services import entity_connection_service, status_option_service
 from app.services.audit_service import create_audit_event
 from app.services.planning_reorder import apply_reorder
 
@@ -146,6 +146,8 @@ def delete_phase(session: Session, phase_id: str) -> bool:
         session.add(risk)
     for stage in session.exec(select(Stage).where(Stage.phase_id == phase_id)).all():
         session.delete(stage)
+
+    entity_connection_service.delete_for_entity(session, project_id, "phase", phase_id)
 
     # Flush the child unlinks + stage deletes so no row references the phase
     # when its own DELETE is issued (FK constraints are enforced).

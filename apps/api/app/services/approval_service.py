@@ -30,19 +30,26 @@ from app.models.approval_request import ApprovalRequest
 from app.models.audit_event import AuditEvent
 from app.models.decision import Decision
 from app.models.doc import Doc
+from app.models.entity_connection import EntityConnection
 from app.models.phase import Phase
 from app.models.project import Project
 from app.models.stage import Stage
 from app.models.task import Task
 from app.policy import allowlist, binding, handlers
 from app.prompt import secrets as secret_scan
+from app.services import entity_connection_service
 from app.services.audit_service import create_audit_event
 
 # Proposals expire 24h after creation. Expiry is a backstop; the patch checksum +
 # target fingerprint compare-and-swap is the real freshness guard.
 APPROVAL_TTL_HOURS: float = 24.0
 
-_TARGET_MODELS = {"task": Task, "decision": Decision, "doc": Doc}
+_TARGET_MODELS = {
+    "task": Task,
+    "decision": Decision,
+    "doc": Doc,
+    "entity_connection": EntityConnection,
+}
 _TERMINAL = ("applied", "rejected", "expired", "invalidated", "failed")
 # A proposal is "active" (still blocks an identical idempotent duplicate) while it
 # can still be applied. "failed" is included because apply() treats it as
@@ -134,6 +141,17 @@ def _validate_dependencies(
     detection; never mutates. Also runs at approve/apply time via ``_revalidate``
     (where the returned set is ignored).
     """
+    if action_type == "connection.create":
+        try:
+            entity_connection_service.validate_connection_values(
+                session, project_id, patch
+            )
+        except LookupError:
+            raise PolicyError("referenced connection endpoint is not valid in this project")
+        except ValueError as exc:
+            raise PolicyError(str(exc))
+        return frozenset({"source_entity_id", "target_entity_id"})
+
     reference_fields = policy.reference_fields
     if not reference_fields:
         return frozenset()
@@ -192,6 +210,8 @@ def _revalidate(
         return "stored patch is unreadable"
     try:
         normalized = allowlist.normalize_patch(ar.action_type, patch)
+        if ar.action_type == "connection.create":
+            normalized = entity_connection_service.normalize_connection_patch(normalized)
     except PolicyError:
         return "patch no longer satisfies policy"
     if binding.patch_checksum(normalized) != ar.patch_checksum:
@@ -262,6 +282,8 @@ def create_proposal(
 
     policy = allowlist.get_policy(action_type)
     normalized = allowlist.normalize_patch(action_type, patch)
+    if action_type == "connection.create":
+        normalized = entity_connection_service.normalize_connection_patch(normalized)
 
     serialized = binding.canonical_json(normalized)
     if len(serialized.encode("utf-8")) > policy.max_patch_bytes:

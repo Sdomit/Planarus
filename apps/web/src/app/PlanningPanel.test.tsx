@@ -29,6 +29,8 @@ vi.mock('../api/client', () => ({
     blockers: { list: vi.fn(), create: vi.fn() },
     comments: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
     links: { list: vi.fn(), create: vi.fn() },
+    connections: { list: vi.fn(), create: vi.fn(), remove: vi.fn() },
+    docs: { list: vi.fn() },
     checklistItems: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
     statusOptions: { list: vi.fn(async () => []), create: vi.fn(), update: vi.fn(), reorder: vi.fn(), remove: vi.fn() },
     members: { list: vi.fn(async () => []) },
@@ -49,6 +51,8 @@ const mockApi = api as unknown as {
   blockers: { list: Fn; create: Fn }
   comments: { list: Fn; create: Fn; update: Fn; remove: Fn }
   links: { list: Fn; create: Fn }
+  connections: { list: Fn; create: Fn; remove: Fn }
+  docs: { list: Fn }
   checklistItems: { list: Fn; create: Fn; update: Fn; remove: Fn }
   statusOptions: { list: Fn; create: Fn; update: Fn; reorder: Fn; remove: Fn }
 }
@@ -74,6 +78,8 @@ function setupEmpty() {
   mockApi.blockers.list.mockResolvedValue([])
   mockApi.comments.list.mockResolvedValue([])
   mockApi.links.list.mockResolvedValue([])
+  mockApi.connections.list.mockResolvedValue([])
+  mockApi.docs.list.mockResolvedValue([])
 }
 
 beforeEach(() => {
@@ -82,6 +88,8 @@ beforeEach(() => {
   mockApi.milestones.list.mockResolvedValue([])
   mockApi.comments.list.mockResolvedValue([])
   mockApi.links.list.mockResolvedValue([])
+  mockApi.connections.list.mockResolvedValue([])
+  mockApi.docs.list.mockResolvedValue([])
   mockApi.checklistItems.list.mockResolvedValue([])
   mockApi.statusOptions.list.mockResolvedValue([])
 })
@@ -136,6 +144,33 @@ describe('PlanningPanel', () => {
     expect(screen.getByText('Sam Rivera')).toBeTruthy()
   })
 
+  it('shows a task connection from the project-wide collection without another detail read', async () => {
+    setupEmpty()
+    mockApi.tasks.list.mockResolvedValue([{
+      id: 'tsk_1', project_id: 'proj_1', phase_id: null, stage_id: null, parent_task_id: null,
+      title: 'Build release notes', description: null, status: 'ready', priority: null,
+      due_at: null, sort_order: 0, assignee_id: null, assignee_display: null, created_at: 'x', updated_at: 'x',
+    }])
+    mockApi.decisions.list.mockResolvedValue([{
+      id: 'dec_1', project_id: 'proj_1', phase_id: null, title: 'Keep the release local', decision: 'Local first.',
+      context: null, status: 'accepted', sort_order: 0, created_at: 'x', updated_at: 'x',
+    }])
+    mockApi.connections.list.mockResolvedValue([{
+      id: 'con_1', project_id: 'proj_1', relation_type: 'implements',
+      source_entity_type: 'task', source_entity_id: 'tsk_1', target_entity_type: 'decision', target_entity_id: 'dec_1',
+      created_at: 'x', updated_at: 'x',
+    }])
+
+    render(<PlanningPanel projectId="proj_1" initialTab="tasks" />)
+    expect(await screen.findByText('Build release notes')).toBeTruthy()
+    expect(screen.getByLabelText('1 connection; open Build release notes details')).toBeTruthy()
+    fireEvent.click(screen.getByText('Build release notes').closest('button')!)
+    expect(await screen.findByText('Connections · 1')).toBeTruthy()
+    expect(screen.getByText('Implements')).toBeTruthy()
+    expect(screen.getByText('Keep the release local')).toBeTruthy()
+    expect(mockApi.connections.list).toHaveBeenCalledTimes(1)
+  })
+
   it('sets a due date on create and flags an overdue task (#90)', async () => {
     setupEmpty()
     mockApi.tasks.list.mockResolvedValue([
@@ -181,6 +216,45 @@ describe('PlanningPanel', () => {
     render(<PlanningPanel projectId="proj_1" initialTab="comments" />)
     await screen.findByText('Test Project')
     expect(await screen.findByText(/Sam Rivera/)).toBeTruthy()
+  })
+
+  it('provides a live finder in each requested Planning collection', async () => {
+    setupEmpty()
+    mockApi.tasks.list.mockResolvedValue([{ id: 'tsk_1', project_id: 'proj_1', phase_id: null, stage_id: null, parent_task_id: null, title: 'Ship release', description: null, status: 'ready', priority: null, due_at: null, sort_order: 0, assignee_id: null, assignee_display: null, created_at: 'x', updated_at: 'x' }])
+    mockApi.milestones.list.mockResolvedValue([{ id: 'mil_1', project_id: 'proj_1', phase_id: null, title: 'Release milestone', description: null, status: 'planned', target_date: null, sort_order: 0, created_at: 'x', updated_at: 'x' }])
+    mockApi.decisions.list.mockResolvedValue([{ id: 'dec_1', project_id: 'proj_1', phase_id: null, title: 'Keep local', decision: 'Local only', context: null, status: 'accepted', sort_order: 0, created_at: 'x', updated_at: 'x' }])
+    mockApi.risks.list.mockResolvedValue([{ id: 'rsk_1', project_id: 'proj_1', phase_id: null, title: 'Release delay', description: null, severity: 'high', status: 'open', mitigation: null, sort_order: 0, created_at: 'x', updated_at: 'x' }])
+    mockApi.comments.list.mockResolvedValue([{ id: 'cmt_1', project_id: 'proj_1', entity_type: 'task', entity_id: 'tsk_1', body: 'Ready now', author_type: 'human', author_id: null, author_display: null, status: 'active', created_at: 'x', updated_at: null }])
+    mockApi.links.list.mockResolvedValue([{ id: 'lnk_1', project_id: 'proj_1', entity_type: 'task', entity_id: 'tsk_1', title: 'Release checklist', url: 'https://example.test/release', created_at: 'x' }])
+
+    render(<PlanningPanel projectId="proj_1" initialTab="tasks" />)
+    expect(await screen.findByLabelText('Search tasks')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Search tasks'), { target: { value: 'SHIP' } })
+    expect(screen.getByText('Ship release')).toBeTruthy()
+
+    for (const [tab, search] of [
+      ['Milestones', 'Search milestones'], ['Decisions', 'Search decisions'], ['Risks', 'Search risks'],
+      ['Comments', 'Search comments'], ['Links', 'Search links'],
+    ]) {
+      fireEvent.click(screen.getByRole('tab', { name: tab }))
+      expect(await screen.findByLabelText(search)).toBeTruthy()
+    }
+  })
+
+  it('filters decisions to a selected related task', async () => {
+    setupEmpty()
+    mockApi.tasks.list.mockResolvedValue([{ id: 'tsk_1', project_id: 'proj_1', phase_id: null, stage_id: null, parent_task_id: null, title: 'Ship release', description: null, status: 'ready', priority: null, due_at: null, sort_order: 0, assignee_id: null, assignee_display: null, created_at: 'x', updated_at: 'x' }])
+    mockApi.decisions.list.mockResolvedValue([
+      { id: 'dec_1', project_id: 'proj_1', phase_id: null, title: 'Keep local', decision: 'Local only', context: null, status: 'accepted', sort_order: 0, created_at: 'x', updated_at: 'x' },
+      { id: 'dec_2', project_id: 'proj_1', phase_id: null, title: 'Use a CDN', decision: 'Remote asset', context: null, status: 'proposed', sort_order: 1, created_at: 'x', updated_at: 'x' },
+    ])
+    mockApi.connections.list.mockResolvedValue([{ id: 'con_1', project_id: 'proj_1', relation_type: 'implements', source_entity_type: 'task', source_entity_id: 'tsk_1', target_entity_type: 'decision', target_entity_id: 'dec_1', created_at: 'x', updated_at: 'x' }])
+
+    render(<PlanningPanel projectId="proj_1" initialTab="decisions" />)
+    expect(await screen.findByText('Keep local')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Filter decisions by related to item'), { target: { value: 'Task · Ship release' } })
+    expect(screen.getByText('Keep local')).toBeTruthy()
+    expect(screen.queryByText('Use a CDN')).toBeNull()
   })
 
   it('renders milestones with target date when present', async () => {

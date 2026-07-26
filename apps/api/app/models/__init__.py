@@ -11,6 +11,7 @@ from app.models.context_file import ContextFile  # noqa: F401
 from app.models.decision import Decision  # noqa: F401
 from app.models.doc import Doc  # noqa: F401
 from app.models.email_log import EmailLog  # noqa: F401
+from app.models.entity_connection import EntityConnection  # noqa: F401
 from app.models.link import Link  # noqa: F401
 from app.models.milestone import Milestone  # noqa: F401
 from app.models.notification_rule import NotificationRule  # noqa: F401
@@ -53,6 +54,7 @@ __all__ = [
     "ChecklistItem",
     "Comment",
     "Link",
+    "EntityConnection",
     "User",
     "UserIdentity",
     "WorkspaceMember",

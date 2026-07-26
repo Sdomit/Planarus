@@ -17,7 +17,7 @@ from app.core.constants import (
 )
 from app.core.exceptions import PolicyError
 
-POLICY_VERSION: int = 1
+POLICY_VERSION: int = 2
 
 # Default hard cap on the serialized patch to bound memory/DoS. Small string
 # patches (task/decision) never need more than this.
@@ -104,6 +104,30 @@ ACTION_POLICIES: dict[str, ActionPolicy] = {
         required_fields=frozenset({"content_json"}),
         reference_fields=frozenset(),
         max_patch_bytes=DOC_UPDATE_MAX_PATCH_BYTES,
+    ),
+    "connection.create": ActionPolicy(
+        action_type="connection.create",
+        target_entity_type="entity_connection",
+        is_create=True,
+        allowed_fields=frozenset(
+            {
+                "relation_type",
+                "source_entity_type",
+                "source_entity_id",
+                "target_entity_type",
+                "target_entity_id",
+            }
+        ),
+        required_fields=frozenset(
+            {
+                "relation_type",
+                "source_entity_type",
+                "source_entity_id",
+                "target_entity_type",
+                "target_entity_id",
+            }
+        ),
+        reference_fields=frozenset({"source_entity_id", "target_entity_id"}),
     ),
 }
 

@@ -15,7 +15,7 @@ from app.core.utils import new_id, now_utc
 from app.models.decision import Decision
 from app.models.doc import Doc
 from app.models.task import Task
-from app.services import status_option_service
+from app.services import entity_connection_service, status_option_service
 
 
 def _check_status(session: Session, project_id: str, status: str, entity_type: str) -> None:
@@ -116,6 +116,15 @@ def _apply_doc_update(session: Session, target_id: str, patch: dict) -> tuple[st
     return "doc", doc.id
 
 
+def _apply_connection_create(
+    session: Session, project_id: str, patch: dict
+) -> tuple[str, str]:
+    connection = entity_connection_service.create_connection(
+        session, project_id, patch, commit=False, audit=False
+    )
+    return "entity_connection", connection.id
+
+
 def apply_action(
     session: Session,
     *,
@@ -137,4 +146,6 @@ def apply_action(
         if target_entity_id is None:
             raise LookupError("doc.update requires a target entity id")
         return _apply_doc_update(session, target_entity_id, patch)
+    if action_type == "connection.create":
+        return _apply_connection_create(session, project_id, patch)
     raise LookupError(f"no apply handler for action {action_type!r}")

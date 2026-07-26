@@ -229,6 +229,66 @@ def test_0029_adds_phase_link_to_decision_and_risk(tmp_path):
         con.close()
 
 
+def test_0033_adds_connections_and_refuses_to_drop_live_connection_data(tmp_path):
+    db_path = tmp_path / "connections.db"
+    cfg = _config(db_path)
+    command.upgrade(cfg, "head")
+
+    con = sqlite3.connect(db_path)
+    try:
+        columns = {row[1] for row in con.execute("PRAGMA table_info(entity_connection)")}
+        assert {
+            "id",
+            "project_id",
+            "relation_type",
+            "source_entity_type",
+            "source_entity_id",
+            "target_entity_type",
+            "target_entity_id",
+        } <= columns
+        indexes = {row[1] for row in con.execute("PRAGMA index_list(entity_connection)")}
+        assert {
+            "ix_entity_connection_project_id",
+            "ix_entity_connection_project_source",
+            "ix_entity_connection_project_target",
+        } <= indexes
+        table_sql = con.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='entity_connection'"
+        ).fetchone()[0]
+        assert "uq_entity_connection_canonical" in table_sql
+
+        con.execute(
+            "INSERT INTO entity_connection "
+            "(id,project_id,relation_type,source_entity_type,source_entity_id,"
+            "target_entity_type,target_entity_id,created_at,updated_at) "
+            "VALUES ('con_1','proj_1','depends_on','task','tsk_1','task','tsk_2','n','n')"
+        )
+        con.execute(
+            "INSERT INTO approvalrequest "
+            "(id,workspace_id,project_id,origin,action_type,proposed_patch_json,"
+            "patch_checksum,policy_version,risk_level,status,created_at,expires_at) "
+            "VALUES ('apr_con','ws_1','proj_1','mcp','connection.create','{}','c',2,'low',"
+            "'pending','n','later')"
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    with pytest.raises(RuntimeError, match="refusing to downgrade 0033"):
+        command.downgrade(cfg, "0029")
+
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute("DELETE FROM entity_connection")
+        con.execute("DELETE FROM approvalrequest WHERE action_type = 'connection.create'")
+        con.commit()
+    finally:
+        con.close()
+    command.downgrade(cfg, "0029")
+    assert "entity_connection" not in _tables(db_path)
+    command.upgrade(cfg, "head")
+
+
 def test_no_model_migration_drift(tmp_path):
     """`alembic check`: a fresh upgrade-to-head schema matches the models (#89).
 

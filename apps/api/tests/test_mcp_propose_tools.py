@@ -6,6 +6,7 @@ from app.models.approval_request import ApprovalRequest
 from app.models.audit_event import AuditEvent
 from app.models.decision import Decision
 from app.models.doc import Doc
+from app.models.entity_connection import EntityConnection
 from app.models.task import Task
 from app.schemas.task import TaskCreate
 from app.services import approval_service, task_service
@@ -263,3 +264,37 @@ def test_proposal_then_human_apply_mutates(client: TestClient, session: Session)
     approval_service.apply(session, apr_id)
     tasks = list(session.exec(select(Task).where(Task.project_id == pid)).all())
     assert len(tasks) == 1 and tasks[0].title == "via approval"
+
+
+def test_connection_proposal_stays_pending_until_human_apply(
+    client: TestClient, session: Session
+) -> None:
+    ws, pid = seed(client, "connection")
+    first = task_service.create_task(session, pid, TaskCreate(title="First"))
+    second = task_service.create_task(session, pid, TaskCreate(title="Second"))
+    cap = propose_cap(ws, pid)
+    result = propose.create_connection_proposal(
+        session,
+        cap,
+        propose.CreateConnectionProposalArgs(
+            project_id=pid,
+            relation_type="depends_on",
+            source_entity_type="task",
+            source_entity_id=first.id,
+            target_entity_type="task",
+            target_entity_id=second.id,
+        ),
+    )
+    assert result.metadata["action_type"] == "connection.create"
+    assert session.exec(select(EntityConnection).where(EntityConnection.project_id == pid)).all() == []
+
+    approval_service.approve(session, result.metadata["approval_id"])
+    approval_service.apply(session, result.metadata["approval_id"])
+    connections = session.exec(
+        select(EntityConnection).where(EntityConnection.project_id == pid)
+    ).all()
+    assert len(connections) == 1
+    assert (connections[0].source_entity_id, connections[0].target_entity_id) == (
+        first.id,
+        second.id,
+    )

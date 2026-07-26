@@ -102,6 +102,7 @@ def test_global_route_allowlist_has_no_stale_entries():
 def _seed(session, project_id):
     """One row per newly-registered resolver, created straight through the services."""
     from app.models.calendar_connection import CalendarConnection
+    from app.models.entity_connection import EntityConnection
     from app.schemas.calendar_event import CalendarEventCreate
     from app.schemas.comment import CommentCreate
     from app.schemas.status_option import StatusOptionCreate
@@ -118,6 +119,18 @@ def _seed(session, project_id):
         updated_at=now,
     )
     session.add(conn)
+    entity_connection = EntityConnection(
+        id=f"con-{project_id}",
+        project_id=project_id,
+        relation_type="related_to",
+        source_entity_type="task",
+        source_entity_id="tsk-source",
+        target_entity_type="task",
+        target_entity_id="tsk-target",
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(entity_connection)
     session.commit()
     return {
         "comment_id": comment_service.create_comment(
@@ -132,6 +145,7 @@ def _seed(session, project_id):
             session, project_id, StatusOptionCreate(entity_type="task", label="Percolating")
         ).id,
         "connection_id": conn.id,
+        "entity_connection_id": entity_connection.id,
     }
 
 
