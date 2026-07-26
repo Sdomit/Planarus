@@ -30,6 +30,11 @@ from app.prompt.secrets import (
 MAX_LIST_ROWS = 100
 MAX_FIELD_CHARS = 500
 MAX_DOC_EXCERPT_CHARS = 4000
+# #92: the cap for a single-item detail read. List rows stay clipped at
+# MAX_FIELD_CHARS to bound a 100-row page; before get_item there was no tool at
+# any larger cap, so an agent told "truncated, 1400 more chars" had no way to
+# read the rest and would propose an update from the first 500 characters.
+MAX_DETAIL_CHARS = 4000
 
 _PLACEHOLDER = "«redacted:{label}»"
 

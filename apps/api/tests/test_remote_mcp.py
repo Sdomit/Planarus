@@ -2,7 +2,7 @@
 
 Drives the real MCP client against the mounted app over an in-process ASGI
 transport, proving: agbk_ auth is required, tools are scope-gated exactly like
-the REST API (read key → 9 read tools and no propose reach; propose key → 13),
+the REST API (read key → 10 read tools and no propose reach; propose key → 14),
 the surface is disabled-by-default, and a scoped read returns real data.
 
 A session manager's run() is single-use per instance, so each test uses its own
@@ -18,6 +18,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 
 from tests.external_util import auth, issue_key, seed
+from tests.mcp_util import EXPECTED_ALL_TOOLS, EXPECTED_READ_TOOLS
 
 # Trailing slash: the mounted ASGI app's canonical path (the bare form 307s to it).
 URL = f"http://127.0.0.1{MOUNT_PATH}/"
@@ -90,7 +91,7 @@ def test_remote_mcp_read_key_sees_read_tools_only(client, external_api, monkeypa
     ws, proj = seed(client, "rmcpread")
     _meta, key = issue_key(client, ws, [proj], can_read=True, can_propose=False)
     names, probe_err, _text = anyio.run(lambda: _run(mgr, auth(key), probe="create_task_proposal"))
-    assert len(names) == 9
+    assert set(names) == EXPECTED_READ_TOOLS
     assert "list_projects" in names
     assert "create_task_proposal" not in names
     # A read key cannot reach a propose tool even by naming it directly.
@@ -102,7 +103,7 @@ def test_remote_mcp_propose_key_sees_all_tools(client, external_api, monkeypatch
     ws, proj = seed(client, "rmcpprop")
     _meta, key = issue_key(client, ws, [proj], can_read=True, can_propose=True)
     names, _e, _t = anyio.run(lambda: _run(mgr, auth(key)))
-    assert len(names) == 13
+    assert set(names) == EXPECTED_ALL_TOOLS
     assert {"create_task_proposal", "update_canvas_proposal"} <= set(names)
 
 

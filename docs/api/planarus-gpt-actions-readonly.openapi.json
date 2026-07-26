@@ -219,6 +219,15 @@
             "description": "Planarus project id, exactly as returned by a prior scoped read. Do not invent ids."
           },
           {
+            "name": "phase_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional phase id filter, from a prior scoped read."
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -286,6 +295,15 @@
               "type": "string"
             },
             "description": "Planarus project id, exactly as returned by a prior scoped read. Do not invent ids."
+          },
+          {
+            "name": "phase_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional phase id filter, from a prior scoped read."
           },
           {
             "name": "limit",

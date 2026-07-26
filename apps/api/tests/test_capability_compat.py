@@ -12,6 +12,8 @@ from app.mcp.capabilities import (
 )
 from app.mcp.registry import PROPOSE_TOOL_NAMES, READ_TOOL_NAMES
 
+from tests.mcp_util import EXPECTED_PROPOSE_TOOLS, EXPECTED_READ_TOOLS
+
 
 def _env(tier):
     import json
@@ -46,8 +48,8 @@ def test_legacy_capability_construction_still_derives_booleans():
 
 
 def test_registry_sets_are_unchanged():
-    assert len(READ_TOOL_NAMES) == 9
-    assert len(PROPOSE_TOOL_NAMES) == 4  # Phase 13c added update_canvas_proposal
+    assert READ_TOOL_NAMES == EXPECTED_READ_TOOLS
+    assert PROPOSE_TOOL_NAMES == EXPECTED_PROPOSE_TOOLS
     # No approve/apply-style tool exists anywhere.
     forbidden = ("approve", "apply", "reject", "invalidate", "delete")
     for name in set(READ_TOOL_NAMES) | set(PROPOSE_TOOL_NAMES):

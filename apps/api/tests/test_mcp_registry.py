@@ -5,23 +5,10 @@ import app.mcp
 from app.mcp import capabilities, registry
 from app.mcp.capabilities import Capability
 
-_READ = {
-    "list_projects",
-    "get_project_summary",
-    "get_active_work",
-    "list_tasks",
-    "list_decisions",
-    "list_risks",
-    "list_docs",
-    "get_doc_excerpt",
-    "get_approval_status",
-}
-_PROPOSE = {
-    "create_task_proposal",
-    "update_task_proposal",
-    "create_decision_proposal",
-    "update_canvas_proposal",
-}
+from tests.mcp_util import EXPECTED_PROPOSE_TOOLS, EXPECTED_READ_TOOLS
+
+_READ = EXPECTED_READ_TOOLS
+_PROPOSE = EXPECTED_PROPOSE_TOOLS
 
 
 def test_exact_read_names():
@@ -43,7 +30,7 @@ def test_propose_tier_sees_all_tools():
     cap = Capability(tier="propose", workspace_id="w", project_ids=frozenset({"p"}), label="l")
     names = registry.visible_names(cap)
     assert names == _READ | _PROPOSE
-    assert len(names) == 13  # 9 read + 4 propose
+    assert len(names) == len(_READ) + len(_PROPOSE)  # tiers stay disjoint
 
 
 def test_default_deny_sees_nothing():
