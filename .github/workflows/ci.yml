@@ -319,7 +319,7 @@ jobs:
             $script:out = & cmd /c 'scripts\run-planarus.bat' 2>&1 | Out-String
           }
           Write-Host $script:out
-          if ($script:out -notmatch 'already running') {
+          if ($script:out -notmatch 'Planarus is already running') {
             throw "a second launch did not detect the running instance"
           }
           if ($elapsed.TotalSeconds -gt 30) {
@@ -328,16 +328,25 @@ jobs:
 
       # A port record left behind by a crash must not be believed. If it were,
       # the launcher would refuse to start and send the user to a dead page.
+      # It has to be a real launch: `help` returns from :usage before
+      # :detect_running is ever reached, so it asserts nothing. Match the reopen
+      # banner in full, too - the usage text says "Already running?" and -match
+      # is case-insensitive, so the short phrase matched the help screen.
       - name: A stale port record does not block a start
         shell: pwsh
+        timeout-minutes: 10
         run: |
           & cmd /c 'scripts\stop-planarus.bat' | Out-Null
           $dir = Join-Path $env:LOCALAPPDATA 'Planarus'
           New-Item -ItemType Directory -Path $dir -Force | Out-Null
           "API=8099`r`nWEB=5199" | Set-Content -Path (Join-Path $dir 'local.ports')
-          $out = & cmd /c 'scripts\run-planarus.bat help' 2>&1 | Out-String
-          if ($out -match 'already running') {
+          $out = & cmd /c 'scripts\run-planarus.bat' 2>&1 | Out-String
+          Write-Host $out
+          if ($out -match 'Planarus is already running') {
             throw "a stale port record was treated as a live instance"
+          }
+          if ($out -notmatch 'Starting Planarus') {
+            throw "the launcher never got past the running-instance check"
           }
 
       - name: Stop
