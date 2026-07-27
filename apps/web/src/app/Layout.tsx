@@ -21,7 +21,20 @@ import { SidebarTodos } from './SidebarTodos'
 import { useAuthInfo } from './auth'
 import { Icon } from './Icon'
 import { api, type NotificationItem, type Project } from '../api/client'
+import { captureTitle, parseCapture, type Capture, type CaptureType } from './capture'
 import './layout.css'
+
+
+/** Where each clip type lands, and which Planning tab it opens (D66: the type
+ *  is chosen in the context menu, so the app never has to ask). */
+const CAPTURE_ROUTE: Record<CaptureType, { view: MainView; planningTab?: PlanningTabKey }> = {
+  task: { view: 'planning', planningTab: 'tasks' },
+  phase: { view: 'planning', planningTab: 'phases' },
+  decision: { view: 'planning', planningTab: 'decisions' },
+  risk: { view: 'planning', planningTab: 'risks' },
+  todo: { view: 'dashboard' },  // the todo list is in the sidebar, on every view
+  doc: { view: 'docs' },
+}
 
 type MainView =
   | 'dashboard' | 'cockpit' | 'planning' | 'roadmap' | 'timeline' | 'calendar' | 'docs'
@@ -201,6 +214,10 @@ export default function Layout() {
   // #95: which row Planning should scroll to and mark, when we got there from a
   // notification about one specific item.
   const [planningFocus, setPlanningFocus] = useState<string | undefined>(undefined)
+  // #106: a clip handed over by the extension, waiting for its panel to consume
+  // it. Held here because Layout is what reads the fragment and what decides
+  // which panel opens.
+  const [capture, setCapture] = useState<Capture | null>(null)
   const [projMenuOpen, setProjMenuOpen] = useState(false)
   const [acctMenuOpen, setAcctMenuOpen] = useState(false)
   const [projects, setProjects] = useState<Project[] | null>(null)
@@ -280,6 +297,21 @@ export default function Layout() {
   useEffect(() => {
     // A restored project that has since been deleted would leave every reload broken.
     if (project) api.projects.get(project.id).catch(() => setProject(null))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // #106: the extension's whole API is this fragment. Read once on mount, then
+  // strip it — otherwise a refresh re-fires the same clip and files it twice.
+  // Anything malformed parses to null and the app boots normally (D65: the
+  // extension holds no credential, so this fragment is entirely untrusted).
+  useEffect(() => {
+    const clip = parseCapture(window.location.hash)
+    window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    if (!clip) return
+    const route = CAPTURE_ROUTE[clip.type]
+    setCapture(clip)
+    if (route.planningTab) setPlanningTab(route.planningTab)
+    setMainView(route.view)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -450,7 +482,12 @@ export default function Layout() {
             </nav>
           ))}
 
-          {project && <SidebarTodos projectId={project.id} />}
+          {project && (
+            <SidebarTodos
+              projectId={project.id}
+              captureLabel={capture?.type === 'todo' ? captureTitle(capture) : undefined}
+            />
+          )}
         </div>
 
         <div className="ab-side-foot">
@@ -598,11 +635,23 @@ export default function Layout() {
                   onOpenPlanning={tab => navigate('planning', { planningTab: tab })}
                 />
               ) : placeholder)}
-              {mainView === 'planning' && (project ? <PlanningPanel projectId={project.id} initialTab={planningTab} focusEntityId={planningFocus} /> : placeholder)}
+              {mainView === 'planning' && (project ? (
+                <PlanningPanel
+                  projectId={project.id} initialTab={planningTab}
+                  focusEntityId={planningFocus}
+                  capture={capture?.type === 'todo' || capture?.type === 'doc' ? null : capture}
+                  onCaptureConsumed={() => setCapture(null)}
+                />
+              ) : placeholder)}
               {mainView === 'roadmap' && (project ? <RoadmapPanel projectId={project.id} onOpenPlanning={() => navigate('planning', { planningTab: 'tasks' })} /> : placeholder)}
               {mainView === 'timeline' && (project ? <TimelinePanel projectId={project.id} /> : placeholder)}
               {mainView === 'calendar' && (project ? <CalendarPanel projectId={project.id} onOpenPlanning={() => navigate('planning', { planningTab: 'tasks' })} /> : placeholder)}
-              {mainView === 'docs' && (project ? <DocsPanel projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
+              {mainView === 'docs' && (project ? (
+                <DocsPanel
+                  projectId={project.id} onClose={() => setMainView('dashboard')}
+                  captureTitle={capture?.type === 'doc' ? captureTitle(capture) : undefined}
+                />
+              ) : placeholder)}
               {mainView === 'notes' && (project ? <DocsPanel key="notes" projectId={project.id} docType="note" onClose={() => setMainView('dashboard')} /> : placeholder)}
               {mainView === 'canvas' && (project ? <CanvasPanel projectId={project.id} onBack={() => setMainView('cockpit')} /> : placeholder)}
               {mainView === 'context-pack' && (project ? <ContextPackBuilder projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}

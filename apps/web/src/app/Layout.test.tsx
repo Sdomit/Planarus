@@ -216,3 +216,43 @@ describe('notificationTarget (#95)', () => {
     expect(notificationTarget(item('task_overdue:', 'task_overdue')).focusEntityId).toBeUndefined()
   })
 })
+
+describe('capture intake (#106)', () => {
+  const NAV = { view: 'dashboard', project: { id: 'p1', title: 'Planarus', slug: 'planarus' } }
+
+  function open(payload: unknown) {
+    localStorage.setItem(NAV_KEY, JSON.stringify(NAV))
+    window.location.hash = `#capture=${encodeURIComponent(JSON.stringify(payload))}`
+    return render(<Layout />)
+  }
+
+  afterEach(() => { window.location.hash = '' })
+
+  // Layout owns the routing decision and the fragment lifecycle; what each panel
+  // then does with the clip is asserted in that panel's own tests, where the API
+  // is mocked properly (this file's mock deliberately leaves panels loading).
+  it('opens the surface the clip type belongs to', async () => {
+    open({ type: 'risk', text: 'Vendor may miss the date', url: 'https://example.com/a' })
+    // The type is picked in the native context menu (D66), so the app never asks.
+    expect(await screen.findByRole('heading', { name: 'Planning' })).toBeTruthy()
+  })
+
+  it('sends a doc clip to Docs, not to Planning', async () => {
+    open({ type: 'doc', text: 'Notes on the vendor call' })
+    expect(await screen.findByRole('heading', { name: 'Docs' })).toBeTruthy()
+  })
+
+  it('strips the fragment so a refresh cannot file the same clip twice', async () => {
+    open({ type: 'task', text: 'Ship the beta' })
+    await screen.findByRole('heading', { name: 'Planning' })
+    expect(window.location.hash).toBe('')
+  })
+
+  it('boots normally on a malformed fragment', async () => {
+    localStorage.setItem(NAV_KEY, JSON.stringify(NAV))
+    window.location.hash = '#capture=%7Bnot-json'
+    render(<Layout />)
+    // No crash, no navigation — the view the user left is what they get.
+    expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeTruthy()
+  })
+})

@@ -3,6 +3,7 @@ import {
   api, Blocker, ChecklistItem, Comment, Decision, DocSummary, EntityConnection, Link, MemberRead, Milestone, Phase, Project, Risk, Stage, StatusOption, Task,
 } from '../api/client'
 import { StatusBadge, type ToneKind } from './StatusBadge'
+import { captureBody, captureTitle, type Capture } from './capture'
 import { EmptyState } from './EmptyState'
 import { Icon } from './Icon'
 import { InlineStatusSelect } from './InlineStatusSelect'
@@ -213,12 +214,17 @@ export default function PlanningPanel({
   projectId,
   initialTab = 'phases',
   focusEntityId,
+  capture = null,
+  onCaptureConsumed,
 }: {
   projectId: string
   initialTab?: TabKey
   /** #95: the row a notification was about, so click-through lands on the item
    *  rather than on the tab that contains it somewhere. */
   focusEntityId?: string
+  /** #106: a clip from the browser extension, to prefill the create form. */
+  capture?: Capture | null
+  onCaptureConsumed?: () => void
 }) {
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
@@ -340,14 +346,43 @@ export default function PlanningPanel({
     setPhaseStatuses(phSto); setRiskStatuses(rkSto); setMilestoneStatuses(mlSto); setDecisionStatuses(dcSto)
   }
 
+  // #106: a clip from the extension prefills the create form for its type and
+  // opens it, so the human lands on a filled form rather than an empty tab.
+  useEffect(() => {
+    if (!capture) return
+    const title = captureTitle(capture)
+    if (capture.type === 'task') setTaskForm(f => ({ ...f, title }))
+    else if (capture.type === 'phase') setPhaseForm(f => ({ ...f, title }))
+    else if (capture.type === 'decision')
+      setDecisionForm(f => ({ ...f, title, decision: captureBody(capture) }))
+    else if (capture.type === 'risk') setRiskForm(f => ({ ...f, title }))
+    else return
+    setShowCreate(true)
+  }, [capture])
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     if (!project) return
     setCreating(true); setCreateError(null)
+    // Where the clip came from, kept as a real link on the new entity: the
+    // task/phase/risk create forms have no body field to hold it, and losing
+    // the source is what makes a clipping tool useless a week later.
+    const attachSource = async (entityType: string, entityId: string) => {
+      if (!capture?.url) return
+      try {
+        await api.links.create(project.id, {
+          entity_type: entityType, entity_id: entityId,
+          url: capture.url, title: capture.title || 'Captured from the web',
+        })
+      } catch {
+        /* the entity is created; a missing source link is not worth failing on */
+      }
+    }
     try {
       if (tab === 'phases') {
         const ph = await api.phases.create(project.id, { title: phaseForm.title, status: phaseForm.status })
         setPhases(prev => [...prev, ph]); setPhaseForm({ title: '', status: 'planned' })
+        await attachSource('phase', ph.id)
       } else if (tab === 'tasks') {
         const tk = await api.tasks.create(project.id, {
           title: taskForm.title,
@@ -359,6 +394,7 @@ export default function PlanningPanel({
         })
         setTasks(prev => [...prev, tk])
         setTaskForm({ title: '', status: 'backlog', priority: '', phase_id: '', stage_id: '', due_at: '' })
+        await attachSource('task', tk.id)
       } else if (tab === 'milestones') {
         const mil = await api.milestones.create(project.id, {
           title: milestoneForm.title, status: milestoneForm.status,
@@ -372,12 +408,14 @@ export default function PlanningPanel({
           phase_id: decisionForm.phase_id || undefined,
         })
         setDecisions(prev => [dec, ...prev]); setDecisionForm({ title: '', decision: '', status: 'proposed', phase_id: '' })
+        await attachSource('decision', dec.id)
       } else if (tab === 'risks') {
         const rsk = await api.risks.create(project.id, {
           title: riskForm.title, severity: riskForm.severity, status: riskForm.status,
           phase_id: riskForm.phase_id || undefined,
         })
         setRisks(prev => [...prev, rsk]); setRiskForm({ title: '', severity: 'medium', status: 'open', phase_id: '' })
+        await attachSource('risk', rsk.id)
       } else if (tab === 'comments') {
         const cmt = await api.comments.create(project.id, { entity_type: 'project', entity_id: project.id, body: commentForm.body })
         setComments(prev => [...prev, cmt]); setCommentForm({ body: '' })
@@ -388,6 +426,7 @@ export default function PlanningPanel({
         setLinks(prev => [...prev, lnk]); setLinkForm({ url: '', title: '' })
       }
       setShowCreate(false)
+      onCaptureConsumed?.()  // filed — a later tab switch must not refill the form
     } catch (e) {
       setCreateError(String(e))
     } finally {
