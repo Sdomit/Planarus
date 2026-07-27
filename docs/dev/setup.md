@@ -110,22 +110,61 @@ python3 scripts/seed_planarus_project.py
 The milestone titles in that seed are maintained by hand and are a snapshot, not
 a live feed — treat it as demo data rather than the current roadmap.
 
-### Optional: the demo project
+### The demo project (seeded for you on first launch)
 
-A second seed builds a throwaway **"Planarus Demo — How We Built Planarus"**
-project that uses every planning entity the tool has — phases, stages, tasks
-with subtasks and checklists, milestones, risks, blockers, decisions, docs of
-every type, comments, todos, links, calendar events, entity connections, a
-custom status option and agent-run telemetry — so one project shows the whole
-feature surface. It also gives `@` mentions something real to point at.
+The launchers run this one themselves, so a fresh install opens on a populated
+cockpit instead of an empty dashboard. `run-planarus.bat` / `run-planarus.sh`
+call it with `--auto` between `alembic upgrade head` and `uvicorn`.
+
+It builds a throwaway **"Planarus Demo — How We Built Planarus"** project that
+exercises the whole feature surface in one place:
+
+| | |
+| --- | --- |
+| Planning graph | phases, stages, tasks, sub-tasks, checklists, nested todos |
+| Knowledge | documents of every type, a nested doc tree, `@` mentions and the backlinks they derive, an Excalidraw canvas whose cards link back to real entities |
+| Governance | decisions, risks, blockers, milestones, and a custom status for each of the five entity types that support them |
+| Time | calendar events (all-day, daily, weekly, monthly), task due dates, milestone targets |
+| AI surfaces | pending, applied and rejected approval proposals, agent-run telemetry, external API keys |
+| Operations | notification rules, an email send log, the generated on-disk context pack |
+
+Dates that a view filters on are computed relative to today, so the calendar
+has events in it and the notifications bell has something in it whenever the
+demo is seeded — not only in the month this script was written.
+
+Run it by hand if you want it sooner, or on a database the launcher never
+touched:
 
 ```bash
 # from apps/api
 python3 scripts/seed_demo_project.py
 ```
 
-Idempotent at the project level: once `planarus-demo` exists, re-running does
-nothing. Delete the project in the app to start over.
+Idempotent twice over. The project is only created once, and a `demo_seeded`
+marker in the `setting` table means **deleting the demo project does not bring
+it back** on the next launch. To get it back after deleting it:
+
+```bash
+python3 scripts/seed_demo_project.py --force
+```
+
+To never seed it at all, set `PLANARUS_SEED_DEMO=0` before launching. It is
+also skipped automatically in team/hosted mode (`PLANARUS_AUTH_ENABLED=true`),
+where workspaces are claimed by an admin during bootstrap and a pre-owned demo
+project would get in the way — run it by hand there if you want it.
+
+Two things the demo deliberately leaves empty, because they cannot be faked
+usefully: **team members and assignees** (local mode has no accounts, and
+inventing some would interfere with the team-mode sign-up flow) and **external
+calendar connections** (they need real Google/Microsoft OAuth). Webhook rows
+are seeded only when `PLANARUS_WEBHOOK_ENC_KEY` is configured, and the seeded
+subscription is created **disabled** so the demo never sends real outbound
+traffic.
+
+The demo's on-disk context pack is written under the app's own data directory
+(`%LOCALAPPDATA%\Planarus\demo-project` on Windows,
+`~/.local/share/planarus/demo-project` elsewhere) rather than anywhere in your
+Documents. Delete that folder along with the project to clean up fully.
 
 ## Frontend (apps/web)
 

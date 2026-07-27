@@ -122,7 +122,13 @@ REM vite.config.ts reads both variables; strictPort prevents a silent port drift
 set "VITE_PORT=%WEB_PORT%"
 set "VITE_API_TARGET=http://localhost:%API_PORT%"
 
-set "API_CMD=call .venv\Scripts\activate.bat && alembic upgrade head && uvicorn app.main:app --reload --reload-dir app --port %API_PORT%"
+REM The demo seed runs between the migration and the server so that a first
+REM launch opens on a populated cockpit instead of an empty dashboard. --auto
+REM makes it a no-op on every later start (a marker in the database survives
+REM deleting the demo project), skips team mode entirely, and never returns
+REM nonzero - a welcome mat is not worth failing a boot over. Opt out for good
+REM with PLANARUS_SEED_DEMO=0.
+set "API_CMD=call .venv\Scripts\activate.bat && alembic upgrade head && python scripts\seed_demo_project.py --auto && uvicorn app.main:app --reload --reload-dir app --port %API_PORT%"
 set "WEB_CMD=call %PNPM_CMD% dev:web"
 
 REM Where a failure will have left its explanation. Set before the wait loops

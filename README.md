@@ -124,6 +124,15 @@ anything, then creates the virtual environment, installs dependencies, migrates
 the database, picks free ports if 5173 or 8000 are taken, waits for both
 services to answer, and opens the browser.
 
+The first launch also seeds a **demo project** — "Planarus Demo — How We Built
+Planarus" — so the app opens on a populated cockpit rather than an empty
+dashboard. It tours every surface the product has: the task board, the roadmap,
+documents with `@` mentions and backlinks, a canvas, the calendar, agent-run
+telemetry, and an approval queue with proposals waiting for you. Delete the
+project when you have finished looking and it stays deleted; set
+`PLANARUS_SEED_DEMO=0` to never seed it at all. See
+[docs/dev/setup.md](docs/dev/setup.md#the-demo-project-seeded-for-you-on-first-launch).
+
 ```
 scripts\stop-planarus.bat        Stop it again
 scripts\planarus-tray.bat        Start, stop and open from the notification area

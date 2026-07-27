@@ -99,8 +99,15 @@ trap cleanup EXIT INT TERM
 # Force the external API off regardless of what is exported in your shell.
 export PLANARUS_EXTERNAL_API_ENABLED=false
 # --reload-dir app: watch only source, not the thousands of files in .venv.
+# The demo seed runs between the migration and the server so that a first
+# launch opens on a populated cockpit instead of an empty dashboard. --auto
+# makes it a no-op on every later start (a marker in the database survives
+# deleting the demo project), skips team mode entirely, and never exits nonzero
+# - a welcome mat is not worth failing a boot over. Opt out with
+# PLANARUS_SEED_DEMO=0.
 (cd "$ROOT/apps/api" \
   && .venv/bin/alembic upgrade head \
+  && .venv/bin/python scripts/seed_demo_project.py --auto \
   && .venv/bin/uvicorn app.main:app --reload --reload-dir app --port "$API_PORT") &
 API_PID=$!
 

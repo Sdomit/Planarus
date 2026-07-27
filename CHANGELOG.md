@@ -65,6 +65,21 @@ starting point rather than an empty file.
   `stop-planarus.bat`, `planarus-tray.bat` for a notification-area icon that
   starts, stops and opens the app, and `create-shortcuts.bat` for Desktop
   shortcuts.
+- **A demo project, seeded on first launch.** The app now opens on a populated
+  cockpit instead of an empty dashboard. "Planarus Demo — How We Built Planarus"
+  tours every surface in one project: phases, stages, tasks with sub-tasks and
+  checklists, nested todos, decisions, risks, blockers, milestones, a custom
+  status for each entity type that supports one, documents of every type in a
+  nested tree with `@` mentions and the backlinks they derive, an Excalidraw
+  canvas whose cards link back to real entities, recurring calendar events, the
+  generated on-disk context pack, agent-run telemetry, notification rules and
+  their send log, external API keys, and an approval queue holding pending,
+  applied and rejected proposals. Dates are computed relative to the day it is
+  seeded, so the calendar and the notifications bell are populated whenever you
+  install rather than only in the month the seed was written. Deleting the demo
+  project keeps it deleted; `PLANARUS_SEED_DEMO=0` skips it entirely; team and
+  hosted mode skip it automatically. `scripts/seed_demo_project.py --force`
+  brings it back.
 - **`update-planarus.bat`.** Rebases onto `origin/main` and refreshes both
   dependency trees, which a plain `git pull` does not: a moved lockfile leaves
   `node_modules` and the virtual environment stale, and the resulting failures
