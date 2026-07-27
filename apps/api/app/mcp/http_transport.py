@@ -60,6 +60,7 @@ def _build_http_server() -> Server:
                 name=spec.name,
                 description=spec.description,
                 inputSchema=spec.input_model.model_json_schema(),
+                outputSchema=spec.output_schema,
             )
             for spec in visible_specs(cap)
         ]

@@ -138,6 +138,7 @@ def build_server(capability: Capability) -> Server:
                 name=spec.name,
                 description=spec.description,
                 inputSchema=spec.input_model.model_json_schema(),
+                outputSchema=spec.output_schema,
             )
             for spec in visible_specs(capability)
         ]
