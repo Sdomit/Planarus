@@ -1,8 +1,9 @@
 import { useEffect, useState, type CSSProperties } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router'
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router'
 import { api, type DocSummary } from '../api/client'
 import { EmptyState } from './EmptyState'
 import Layout, { isProjectScopedView, type MainView, type SelectedProject } from './Layout'
+import { isPlanningTabKey, type TabKey as PlanningTabKey } from './PlanningPanel'
 
 const FULL_PAGE_CENTER: CSSProperties = {
   minHeight: '100dvh',
@@ -43,6 +44,7 @@ function projectPath(project: SelectedProject): string {
  */
 export default function ProjectRoute() {
   const { workspaceSlug, projectSlug, view: viewParam, approvalId, taskId, docSlug } = useParams()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [state, setState] = useState<ResolveState>({ status: 'loading' })
 
@@ -130,12 +132,21 @@ export default function ProjectRoute() {
 
   const detailId = approvalId ?? taskId ?? (docSlug ? docs?.find(d => d.slug === docSlug)?.id : undefined)
 
-  const onNavigate = (nextView: MainView, nextProject: SelectedProject) => {
+  // #183 step 4: Planning's own sub-tab, via `?tab=`. An absent/unrecognised
+  // value defaults to 'phases' inside Layout — no redirect, unlike an invalid
+  // :view segment, since a stray query param isn't structurally wrong the way
+  // an unknown path segment is.
+  const tabParam = searchParams.get('tab')
+  const planningTab = view === 'planning' && tabParam && isPlanningTabKey(tabParam) ? tabParam : undefined
+
+  const onNavigate = (nextView: MainView, nextProject: SelectedProject, nextPlanningTab?: PlanningTabKey) => {
     if (nextView === 'dashboard') return navigate('/')
     if (nextView === 'settings') return navigate('/settings')
     if (nextView === 'team') return navigate('/team')
     const base = projectPath(nextProject)
-    navigate(nextView === 'cockpit' ? base : `${base}/${nextView}`)
+    const path = nextView === 'cockpit' ? base : `${base}/${nextView}`
+    const qs = nextView === 'planning' && nextPlanningTab && nextPlanningTab !== 'phases' ? `?tab=${nextPlanningTab}` : ''
+    navigate(`${path}${qs}`)
   }
 
   // Which nested detail shape applies depends on the *current* view — each
@@ -151,5 +162,16 @@ export default function ProjectRoute() {
     }
   }
 
-  return <Layout routed={{ project: state.project, view, onNavigate, detailId, onSelectDetail }} />
+  // A switch between Planning's own sub-tabs, with the view unchanged —
+  // separate from onNavigate above, which always carries a view transition.
+  const onPlanningTabChange = (tab: PlanningTabKey) => {
+    const base = `${projectPath(state.project)}/planning`
+    navigate(tab === 'phases' ? base : `${base}?tab=${tab}`)
+  }
+
+  return (
+    <Layout
+      routed={{ project: state.project, view, onNavigate, detailId, onSelectDetail, planningTab, onPlanningTabChange }}
+    />
+  )
 }

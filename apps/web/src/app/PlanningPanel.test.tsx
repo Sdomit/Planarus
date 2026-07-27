@@ -128,6 +128,41 @@ describe('PlanningPanel', () => {
     expect(screen.getByText('No tasks yet')).toBeTruthy()
   })
 
+  it('#183 step 4: clicking a tab calls onTabChange, for the URL to follow', async () => {
+    setupEmpty()
+    const onTabChange = vi.fn()
+    render(<PlanningPanel projectId="proj_1" onTabChange={onTabChange} />)
+    await screen.findByText('Test Project')
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Risks' }))
+
+    expect(onTabChange).toHaveBeenCalledWith('risks')
+    expect(screen.getByRole('tab', { name: 'Risks' }).getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('#183 step 4: arrow-key tab navigation also calls onTabChange', async () => {
+    setupEmpty()
+    const onTabChange = vi.fn()
+    render(<PlanningPanel projectId="proj_1" onTabChange={onTabChange} />)
+    await screen.findByText('Test Project')
+
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Phases' }), { key: 'ArrowRight' })
+
+    expect(onTabChange).toHaveBeenCalledWith('tasks')
+  })
+
+  it('#183 step 4: initialTab changing (the URL-driven direction) does not call onTabChange', async () => {
+    setupEmpty()
+    const onTabChange = vi.fn()
+    const { rerender } = render(<PlanningPanel projectId="proj_1" initialTab="phases" onTabChange={onTabChange} />)
+    await screen.findByText('Test Project')
+
+    rerender(<PlanningPanel projectId="proj_1" initialTab="risks" onTabChange={onTabChange} />)
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Risks' }).getAttribute('aria-selected')).toBe('true'))
+
+    expect(onTabChange).not.toHaveBeenCalled()
+  })
+
   it('scrolls to and marks the row a notification was about (#95)', async () => {
     setupEmpty()
     mockApi.tasks.list.mockResolvedValue([

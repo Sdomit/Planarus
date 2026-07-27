@@ -92,6 +92,14 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'links', label: 'Links' },
 ]
 
+/** #183 step 4: the sweep found Planning's own sub-tabs unlinkable — the view
+ *  itself got a route in step 2, but "send someone the Risks tab" still had
+ *  no URL. Exported so ProjectRoute can validate the `?tab=` query param
+ *  against real tab keys without duplicating this list. */
+export function isPlanningTabKey(v: string): v is TabKey {
+  return TABS.some(t => t.key === v)
+}
+
 const PHASE_STATUSES = ['planned', 'active', 'blocked', 'done', 'canceled']
 const TASK_STATUSES = ['backlog', 'ready', 'in_progress', 'waiting', 'needs_review', 'blocked', 'done', 'canceled']
 const TASK_PRIORITIES = ['', 'low', 'med', 'high', 'urgent']
@@ -218,6 +226,7 @@ export default function PlanningPanel({
   onCaptureConsumed,
   initialTaskId,
   onTaskSelected,
+  onTabChange,
 }: {
   projectId: string
   initialTab?: TabKey
@@ -230,6 +239,10 @@ export default function PlanningPanel({
   /** #183 step 3: the nested /planning/task/:taskId route. */
   initialTaskId?: string
   onTaskSelected?: (id: string | null) => void
+  /** #183 step 4: every user-driven tab switch, so a routed parent can keep
+   *  the URL's `?tab=` in sync. Not fired by the initialTab-sync effect below
+   *  — that runs in the other direction, seeding the tab FROM the URL. */
+  onTabChange?: (tab: TabKey) => void
 }) {
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
@@ -238,6 +251,7 @@ export default function PlanningPanel({
   // The panel stays mounted across navigations, so a notification arriving while
   // Planning is already open has to move the tab, not just seed it once.
   useEffect(() => { setTab(initialTab) }, [initialTab])
+  const changeTab = (next: TabKey) => { setTab(next); onTabChange?.(next) }
 
   // #95: click-through used to land on the Tasks tab generally — no scroll-to,
   // no highlight — leaving you to find the row the alert was about. Waits for
@@ -488,7 +502,7 @@ export default function PlanningPanel({
     if (event.key === 'Home') next = 0
     else if (event.key === 'End') next = TABS.length - 1
     else next = (index + (event.key === 'ArrowRight' ? 1 : -1) + TABS.length) % TABS.length
-    setTab(TABS[next].key)
+    changeTab(TABS[next].key)
     setShowCreate(false)
     setCreateError(null)
     event.currentTarget.parentElement
@@ -527,7 +541,7 @@ export default function PlanningPanel({
               aria-controls={`planning-panel-${t.key}`}
               tabIndex={tab === t.key ? 0 : -1}
               className={`tab${tab === t.key ? ' active' : ''}`}
-              onClick={() => { setTab(t.key); setShowCreate(false); setCreateError(null) }}
+              onClick={() => { changeTab(t.key); setShowCreate(false); setCreateError(null) }}
               onKeyDown={event => handleTabKeyDown(event, index)}
             >
               {t.label}
@@ -675,10 +689,10 @@ export default function PlanningPanel({
             projectId={project.id} setPhases={setPhases} onAddFirst={() => setShowCreate(true)}
             statuses={phaseStatuses} reloadStatuses={reloadStatuses.phase}
             addStatus={addStatusFor('phase')}
-            onOpenInPhase={(nextTab, phaseId) => { setPhaseFilter(phaseId); setTab(nextTab) }}
+            onOpenInPhase={(nextTab, phaseId) => { setPhaseFilter(phaseId); changeTab(nextTab) }}
             onAddInPhase={(nextTab, phaseId) => {
               setPhaseFilter(phaseId)
-              setTab(nextTab)
+              changeTab(nextTab)
               // Pre-fill the phase so the create form opens already scoped —
               // the whole point is not having to re-find the phase you were in.
               if (nextTab === 'tasks') setTaskForm(f => ({ ...f, phase_id: phaseId, stage_id: '' }))

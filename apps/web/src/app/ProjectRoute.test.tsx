@@ -17,14 +17,17 @@ type RoutedProps = {
   routed?: {
     project: StubProject
     view: string
-    onNavigate: (view: string, project: StubProject) => void
+    onNavigate: (view: string, project: StubProject, planningTab?: string) => void
     detailId?: string
     onSelectDetail?: (id: string) => void
+    planningTab?: string
+    onPlanningTabChange?: (tab: string) => void
   }
 }
 
-let lastOnNavigate: ((view: string, project: StubProject) => void) | undefined
+let lastOnNavigate: ((view: string, project: StubProject, planningTab?: string) => void) | undefined
 let lastOnSelectDetail: ((id: string) => void) | undefined
+let lastOnPlanningTabChange: ((tab: string) => void) | undefined
 
 // ProjectRoute's job is resolving the URL to a project + view and wiring
 // navigation — its own contract, not Layout's (Layout.test.tsx covers
@@ -33,9 +36,11 @@ vi.mock('./Layout', () => ({
   default: ({ routed }: RoutedProps) => {
     lastOnNavigate = routed?.onNavigate
     lastOnSelectDetail = routed?.onSelectDetail
+    lastOnPlanningTabChange = routed?.onPlanningTabChange
     return (
       <div data-testid="layout-stub">
         {routed?.project.title} / {routed?.view}{routed?.detailId ? ` / ${routed.detailId}` : ''}
+        {routed?.planningTab ? ` / tab=${routed.planningTab}` : ''}
       </div>
     )
   },
@@ -57,6 +62,7 @@ afterEach(() => {
   vi.clearAllMocks()
   lastOnNavigate = undefined
   lastOnSelectDetail = undefined
+  lastOnPlanningTabChange = undefined
 })
 
 function renderAt(path: string) {
@@ -210,5 +216,86 @@ describe('ProjectRoute — nested approval detail (#183 step 3)', () => {
     renderAt('/w/acme/p/launch/approvals')
 
     await waitFor(() => expect(screen.getByTestId('layout-stub').textContent).toBe('Launch / approvals'))
+  })
+})
+
+describe('ProjectRoute — Planning sub-tab via ?tab= (#183 step 4)', () => {
+  it('resolves ?tab=risks to a planningTab', async () => {
+    workspaces.mockResolvedValue([{ id: 'ws1', slug: 'acme' }])
+    projects.mockResolvedValue([{ id: 'p1', slug: 'launch', title: 'Launch' }])
+
+    renderAt('/w/acme/p/launch/planning?tab=risks')
+
+    await waitFor(() =>
+      expect(screen.getByTestId('layout-stub').textContent).toBe('Launch / planning / tab=risks'),
+    )
+  })
+
+  it('a bare /planning (no query) has no planningTab', async () => {
+    workspaces.mockResolvedValue([{ id: 'ws1', slug: 'acme' }])
+    projects.mockResolvedValue([{ id: 'p1', slug: 'launch', title: 'Launch' }])
+
+    renderAt('/w/acme/p/launch/planning')
+
+    await waitFor(() => expect(screen.getByTestId('layout-stub').textContent).toBe('Launch / planning'))
+  })
+
+  it('an unrecognised ?tab= value is ignored rather than passed through', async () => {
+    workspaces.mockResolvedValue([{ id: 'ws1', slug: 'acme' }])
+    projects.mockResolvedValue([{ id: 'p1', slug: 'launch', title: 'Launch' }])
+
+    renderAt('/w/acme/p/launch/planning?tab=not-a-real-tab')
+
+    await waitFor(() => expect(screen.getByTestId('layout-stub').textContent).toBe('Launch / planning'))
+  })
+
+  it('onNavigate into planning with a tab pushes both in one URL', async () => {
+    workspaces.mockResolvedValue([{ id: 'ws1', slug: 'acme' }])
+    projects.mockResolvedValue([{ id: 'p1', slug: 'launch', title: 'Launch' }])
+    renderAt('/w/acme/p/launch/roadmap')
+    await waitFor(() => expect(screen.getByTestId('layout-stub')).toBeTruthy())
+
+    const project = { id: 'p1', title: 'Launch', slug: 'launch', workspaceSlug: 'acme' }
+    lastOnNavigate!('planning', project, 'tasks')
+    await waitFor(() =>
+      expect(screen.getByTestId('layout-stub').textContent).toBe('Launch / planning / tab=tasks'),
+    )
+    expect(screen.getByTestId('location').textContent).toBe('/w/acme/p/launch/planning')
+  })
+
+  it('onNavigate into planning omits the query for the default "phases" tab', async () => {
+    workspaces.mockResolvedValue([{ id: 'ws1', slug: 'acme' }])
+    projects.mockResolvedValue([{ id: 'p1', slug: 'launch', title: 'Launch' }])
+    renderAt('/w/acme/p/launch/roadmap')
+    await waitFor(() => expect(screen.getByTestId('layout-stub')).toBeTruthy())
+
+    const project = { id: 'p1', title: 'Launch', slug: 'launch', workspaceSlug: 'acme' }
+    lastOnNavigate!('planning', project, 'phases')
+    await waitFor(() => expect(screen.getByTestId('layout-stub').textContent).toBe('Launch / planning'))
+  })
+
+  it('onPlanningTabChange updates the query param without changing the path', async () => {
+    workspaces.mockResolvedValue([{ id: 'ws1', slug: 'acme' }])
+    projects.mockResolvedValue([{ id: 'p1', slug: 'launch', title: 'Launch' }])
+    renderAt('/w/acme/p/launch/planning')
+    await waitFor(() => expect(screen.getByTestId('layout-stub')).toBeTruthy())
+
+    lastOnPlanningTabChange!('decisions')
+    await waitFor(() =>
+      expect(screen.getByTestId('layout-stub').textContent).toBe('Launch / planning / tab=decisions'),
+    )
+    expect(screen.getByTestId('location').textContent).toBe('/w/acme/p/launch/planning')
+  })
+
+  it('onPlanningTabChange back to "phases" clears the query param', async () => {
+    workspaces.mockResolvedValue([{ id: 'ws1', slug: 'acme' }])
+    projects.mockResolvedValue([{ id: 'p1', slug: 'launch', title: 'Launch' }])
+    renderAt('/w/acme/p/launch/planning?tab=risks')
+    await waitFor(() =>
+      expect(screen.getByTestId('layout-stub').textContent).toBe('Launch / planning / tab=risks'),
+    )
+
+    lastOnPlanningTabChange!('phases')
+    await waitFor(() => expect(screen.getByTestId('layout-stub').textContent).toBe('Launch / planning'))
   })
 })
