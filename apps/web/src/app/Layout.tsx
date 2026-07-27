@@ -194,6 +194,50 @@ function initials(s: string): string {
   )
 }
 
+// Is the API answering? The page itself proves nothing: Vite keeps serving a
+// perfectly good shell after uvicorn has died, so "the tab is open" and "the app
+// works" are different claims. /info is the cheapest route that touches the API
+// and needs no session, which matters because this has to keep reporting after
+// one expires. A minute is deliberately slow - this reports a service being
+// down, not latency.
+function useApiHealth(): boolean | null {
+  const [healthy, setHealthy] = useState<boolean | null>(null)
+  useEffect(() => {
+    let live = true
+    const ping = () =>
+      api.info.get().then(
+        () => { if (live) setHealthy(true) },
+        () => { if (live) setHealthy(false) },
+      )
+    void ping()
+    const timer = setInterval(() => void ping(), 60_000)
+    return () => { live = false; clearInterval(timer) }
+  }, [])
+  return healthy
+}
+
+function HealthDot({ healthy }: { healthy: boolean | null }) {
+  const state = healthy === null ? 'unknown' : healthy ? 'ok' : 'down'
+  const label =
+    healthy === null ? 'Checking the API' : healthy ? 'API healthy' : 'The API is not answering'
+  return <span className={`ab-health ab-health--${state}`} role="img" aria-label={label} title={label} />
+}
+
+// This line said "local" whether or not it was, so the one place a signed-in
+// teammate could confirm which server they were on was the account menu. Mode
+// comes from the session (an account exists only when the gate is on) and the
+// health dot rides along, because "team mode" and "still answering" are the two
+// things a window opened from the tray cannot work out for itself.
+function BrandEnv({ team, healthy }: { team: boolean; healthy: boolean | null }) {
+  return (
+    <div className="ab-brand-env">
+      <HealthDot healthy={healthy} />
+      {team ? 'team' : 'local'} · :{window.location.port || '80'}
+      <LanAddress />
+    </div>
+  )
+}
+
 // The address a teammate types to reach this machine. The port comes from the
 // browser; the IP has to come from the API, since a page served over loopback
 // cannot see which adapter is on the LAN. Hidden when the box has no LAN route.
@@ -268,6 +312,9 @@ export interface LayoutProps {
 
 export default function Layout({ initialView, routed }: LayoutProps = {}) {
   const { me, signOut } = useAuthInfo()
+  // One poller for the whole shell: the sidebar and the account menu are making
+  // the same claim, and two intervals would let them disagree.
+  const apiHealthy = useApiHealth()
   const [internalMainView, setInternalMainView] = useState<MainView>(
     () => routed?.view ?? initialView ?? loadNav().view ?? 'dashboard',
   )
@@ -527,7 +574,7 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
           <img className="ab-brand-mark" src="/planarus-icon.png" alt="" aria-hidden="true" />
           <div>
             <div className="ab-brand-name">Planarus</div>
-            <div className="ab-brand-env">local · :{window.location.port || '80'}<LanAddress /></div>
+            <BrandEnv team={!!me} healthy={apiHealthy} />
           </div>
         </div>
 
@@ -641,7 +688,7 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
                   {me ? (
                     `Signed in · ${me.memberships[0]?.role ?? 'member'}`
                   ) : (
-                    <><span className="live-dot" title="Connected" /> Local mode · no sign-in</>
+                    <><HealthDot healthy={apiHealthy} /> Local mode · no sign-in</>
                   )}
                 </div>
                 {ACCOUNT_MENU.filter(it => it.view !== 'team' || me).map(it => (

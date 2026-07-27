@@ -36,6 +36,16 @@ html, body { height: 100%; margin: 0; }
   }
   .ab-brand-name { font-weight: 800; font-size: var(--text-md); letter-spacing: -0.02em; color: var(--text-primary); }
   .ab-brand-env { font-family: var(--font-mono); font-size: 10px; color: var(--text-tertiary); letter-spacing: 0.04em; }
+  /* Colour is not the only signal: the title and aria-label carry the same
+     state in words, so this reads the same to a screen reader and to anyone who
+     cannot tell the green from the red. */
+  .ab-health {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    margin-right: 5px; vertical-align: baseline;
+  }
+  .ab-health--ok { background: var(--status-success-fg); }
+  .ab-health--down { background: var(--status-danger-fg); }
+  .ab-health--unknown { background: var(--text-tertiary); opacity: 0.5; }
   .ab-brand-ip {
     font: inherit; letter-spacing: inherit; color: var(--text-tertiary);
     background: none; border: 0; padding: 0; cursor: pointer;

@@ -111,6 +111,24 @@ describe('LAN address', () => {
   })
 })
 
+describe('mode and health in the sidebar', () => {
+  it('says local, and reports the API healthy once /info answers', async () => {
+    const { container } = render(<Layout />)
+
+    expect(container.querySelector('.ab-brand-env')?.textContent).toContain('local')
+    expect(await screen.findAllByLabelText('API healthy')).toBeTruthy()
+  })
+
+  it('says team when there is a signed-in account', () => {
+    auth = { me, signOut: vi.fn() }
+    const { container } = render(<Layout />)
+
+    const env = container.querySelector('.ab-brand-env')?.textContent
+    expect(env).toContain('team')
+    expect(env).not.toContain('local')
+  })
+})
+
 describe('Cosmo theme', () => {
   it('renders the approved brand mark', () => {
     const { container } = render(<Layout />)

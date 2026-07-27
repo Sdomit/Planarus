@@ -226,6 +226,7 @@ $itemStop.Add_Click({ Invoke-Action 'stop' { Stop-Planarus }; Update-Menu })
 $itemExit.Add_Click({
         # Hide before exiting: an unhidden NotifyIcon leaves a ghost in the
         # notification area until the user hovers over it.
+        Write-TrayLog 'tray : exit requested from the menu'
         $notify.Visible = $false
         [System.Windows.Forms.Application]::Exit()
     })
@@ -246,6 +247,18 @@ Update-Menu
 $notify.Visible = $true
 Write-TrayLog 'tray : icon visible, entering message loop'
 
-[System.Windows.Forms.Application]::Run([System.Windows.Forms.ApplicationContext]::new())
-
-$notify.Dispose()
+# A vanished tray icon is the one failure nobody can report usefully: this host
+# is a hidden PowerShell, so a crash in the message loop takes the icon away
+# without a window, a dialog or a line anywhere. The log is the only place left
+# to say what happened, and "the icon is gone and the log ends at startup" was
+# indistinguishable from "someone clicked Exit tray".
+try {
+    [System.Windows.Forms.Application]::Run([System.Windows.Forms.ApplicationContext]::new())
+    Write-TrayLog 'tray : message loop ended, exiting'
+} catch {
+    Write-TrayLog "tray : CRASHED - $($_.Exception.Message)"
+    throw
+} finally {
+    $notify.Visible = $false
+    $notify.Dispose()
+}
