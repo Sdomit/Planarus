@@ -216,6 +216,8 @@ export default function PlanningPanel({
   focusEntityId,
   capture = null,
   onCaptureConsumed,
+  initialTaskId,
+  onTaskSelected,
 }: {
   projectId: string
   initialTab?: TabKey
@@ -225,6 +227,9 @@ export default function PlanningPanel({
   /** #106: a clip from the browser extension, to prefill the create form. */
   capture?: Capture | null
   onCaptureConsumed?: () => void
+  /** #183 step 3: the nested /planning/task/:taskId route. */
+  initialTaskId?: string
+  onTaskSelected?: (id: string | null) => void
 }) {
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
@@ -689,7 +694,8 @@ export default function PlanningPanel({
             addTaskStatus={addStatusFor('task')} reorderable={!phaseFilter}
             onTaskUpdated={updated =>
               setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))
-            } />
+            }
+            initialTaskId={initialTaskId} onTaskSelected={onTaskSelected} />
         )}
         {tab === 'milestones' && (
           <MilestonesSection milestones={inPhase(milestones)} projectId={project.id} setMilestones={setMilestones}
@@ -1032,6 +1038,13 @@ interface TasksListProps {
   /** Off while a phase filter narrows the rows: sort_order is project-global,
    *  so reordering a filtered subset would persist a partial set. See #86. */
   reorderable?: boolean
+  // #183 step 3: the nested /planning/task/:taskId route. The dialog this
+  // opens is the one place a task has a real "detail view" (List's own
+  // expandable row is a lighter inline disclosure, deliberately left alone) —
+  // rendered here, one level up from the board, so a deep link opens it
+  // regardless of which of List/Board happens to be the active sub-view.
+  initialTaskId?: string
+  onTaskSelected?: (id: string | null) => void
 }
 
 /** The task status keys in effect — the project's options (built-in ∪ custom)
@@ -1046,7 +1059,10 @@ function promptNewStatus(add: (label: string) => Promise<void>): void {
   if (label) void add(label)
 }
 
-function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, taskStatuses, addTaskStatus, reloadStatuses, onAddFirst, reorderable = true }: TasksListProps) {
+function TasksList({
+  tasks, phases, stages, projectId, onTaskUpdated, setTasks, taskStatuses, addTaskStatus,
+  reloadStatuses, onAddFirst, reorderable = true, initialTaskId, onTaskSelected,
+}: TasksListProps) {
   const statusKeys = statusKeysOf(taskStatuses)
   const colorOf = colorMapOf(taskStatuses)
   const mgr = useStatusManager({ projectId, entityType: 'task', kind: 'task', statuses: taskStatuses, reload: reloadStatuses })
@@ -1054,6 +1070,11 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
   const [view, setView] = useState<'list' | 'board'>('list')
   const [filter, setFilter] = useState('open')
   const [mineOnly, setMineOnly] = useState(false)
+  const [openId, setOpenId] = useState<string | null>(initialTaskId ?? null)
+  useEffect(() => { if (initialTaskId) setOpenId(initialTaskId) }, [initialTaskId])
+  const openTask = tasks.find(t => t.id === openId) ?? null
+  const selectTask = (id: string) => { setOpenId(id); onTaskSelected?.(id) }
+  const closeTask = () => { setOpenId(null); onTaskSelected?.(null) }
   const { myId } = useContext(TeamContext)  // P16.3: "assigned to me" (team mode)
   const finder = usePlanningFinder({
     label: 'tasks', items: tasks, entityType: 'task',
@@ -1123,7 +1144,8 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
 
       {view === 'board' ? (
         <TaskBoard tasks={finderItems} reorderTasks={tasks} phases={phases} stages={stages} projectId={projectId} onTaskUpdated={onTaskUpdated}
-          setTasks={setTasks} taskStatuses={taskStatuses} addTaskStatus={addTaskStatus} reorderable={reorderable} />
+          setTasks={setTasks} taskStatuses={taskStatuses} addTaskStatus={addTaskStatus} reorderable={reorderable}
+          onOpenTask={selectTask} />
       ) : shown.length === 0 ? (
         <p style={EMPTY}>No tasks match this filter.</p>
       ) : (() => {
@@ -1153,6 +1175,10 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
           </ul>
         )
       })()}
+      {openTask && (
+        <TaskDialog task={openTask} phases={phases} stages={stages} projectId={projectId} statusKeys={statusKeys}
+          onClose={closeTask} onTaskUpdated={onTaskUpdated} />
+      )}
     </>
   )
 }
@@ -1163,9 +1189,11 @@ function TasksList({ tasks, phases, stages, projectId, onTaskUpdated, setTasks, 
 // computed from a subset is the #86 corruption. `reorderable` is the other half
 // of that — the parent sets it false when it has already narrowed the list it
 // passed, so there is no whole list left here to reorder against.
-function TaskBoard({ tasks, reorderTasks = tasks, phases, stages, projectId, onTaskUpdated, setTasks, taskStatuses, addTaskStatus, reorderable = true }: TasksListProps & { reorderTasks?: Task[] }) {
+function TaskBoard({
+  tasks, reorderTasks = tasks, phases, projectId, onTaskUpdated, setTasks, taskStatuses,
+  addTaskStatus, reorderable = true, onOpenTask,
+}: TasksListProps & { reorderTasks?: Task[]; onOpenTask: (id: string) => void }) {
   const [group, setGroup] = useState<'flow' | 'status'>('flow')
-  const [openId, setOpenId] = useState<string | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
   const [overCol, setOverCol] = useState<string | null>(null)
   const statusKeys = statusKeysOf(taskStatuses)
@@ -1174,7 +1202,6 @@ function TaskBoard({ tasks, reorderTasks = tasks, phases, stages, projectId, onT
   // buckets plus "Other" for whatever they don't cover.
   const cols = group === 'flow' ? flowCols(statusKeys, tasks.map(t => t.status), dots) : statusCols(statusKeys, dots)
   const phaseTitle = new Map(phases.map(phase => [phase.id, phase.title]))
-  const openTask = tasks.find(t => t.id === openId) ?? null
   const { reorder } = useListReorder(reorderTasks, next => setTasks?.(next), ids => api.tasks.reorder(projectId, ids))
   const { run, node: errorNode } = useSectionMutate()
 
@@ -1244,8 +1271,8 @@ function TaskBoard({ tasks, reorderTasks = tasks, phases, stages, projectId, onT
                     onDragEnd={() => { setDragId(null); setOverCol(null) }}
                     onDragOver={e => { e.preventDefault(); e.stopPropagation() }}
                     onDrop={e => { e.preventDefault(); e.stopPropagation(); dropOnCard(t.id) }}
-                    onClick={() => setOpenId(t.id)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); setOpenId(t.id) } }}
+                    onClick={() => onOpenTask(t.id)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onOpenTask(t.id) } }}
                   >
                     <div className="ab-task-title">{t.title}</div>
                     <div className="ab-task-foot">
@@ -1268,10 +1295,6 @@ function TaskBoard({ tasks, reorderTasks = tasks, phases, stages, projectId, onT
           )}
         </div>
       </div>
-      {openTask && (
-        <TaskDialog task={openTask} phases={phases} stages={stages} projectId={projectId} statusKeys={statusKeys}
-          onClose={() => setOpenId(null)} onTaskUpdated={onTaskUpdated} />
-      )}
     </>
   )
 }
@@ -1283,7 +1306,9 @@ function TaskDialog({ task, phases, stages, projectId, onClose, onTaskUpdated, s
 }) {
   const ref = useRef<HTMLDialogElement>(null)
   useEffect(() => { ref.current?.showModal?.() }, [])
-  const close = () => ref.current?.close()
+  // jsdom has no close(); fall back to the onClose callback directly so the
+  // dismiss path is still exercisable under test (mirrors StatusManager's close).
+  const close = () => { const d = ref.current; if (d?.close) d.close(); else onClose() }
   return (
     <dialog
       ref={ref}

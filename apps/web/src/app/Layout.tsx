@@ -242,7 +242,10 @@ export interface LayoutProps {
      * view — Layout just forwards it to whichever panel is currently active.
      */
     detailId?: string
-    onSelectDetail?: (id: string) => void
+    // string | null rather than just string: a task's TaskDialog can be
+    // explicitly closed (unlike the approvals master-detail, which has no
+    // close affordance today), and null means "back to the bare view".
+    onSelectDetail?: (id: string | null) => void
   }
 }
 
@@ -736,10 +739,15 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
               ) : placeholder)}
               {mainView === 'planning' && (project ? (
                 <PlanningPanel
-                  projectId={project.id} initialTab={planningTab}
+                  projectId={project.id}
+                  // #183 step 3: /planning/task/:taskId implies the Tasks tab,
+                  // same as the #106/#95 routes into it already do.
+                  initialTab={routed?.detailId ? 'tasks' : planningTab}
                   focusEntityId={planningFocus}
                   capture={capture?.type === 'todo' || capture?.type === 'doc' ? null : capture}
                   onCaptureConsumed={() => setCapture(null)}
+                  initialTaskId={routed?.detailId}
+                  onTaskSelected={routed?.onSelectDetail}
                 />
               ) : placeholder)}
               {mainView === 'roadmap' && (project ? <RoadmapPanel projectId={project.id} onOpenPlanning={() => navigate('planning', { planningTab: 'tasks' })} /> : placeholder)}
