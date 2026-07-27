@@ -180,13 +180,14 @@ def list_tasks(
     status: Optional[str] = None,
     phase_id: Optional[str] = None,
     limit: int = Query(default=MAX_LIST_ROWS, ge=1, le=MAX_LIST_ROWS),
+    offset: int = Query(default=0, ge=0),
     cap: Capability = Depends(require_external_read),
     session: Session = Depends(get_session),
 ) -> dict:
     return _run_read(
         session, cap, read_tools.list_tasks,
         read_tools.ListTasksArgs(
-            project_id=project_id, status=status, phase_id=phase_id, limit=limit
+            project_id=project_id, status=status, phase_id=phase_id, limit=limit, offset=offset
         ),
     )
 
@@ -196,13 +197,14 @@ def list_decisions(
     project_id: str,
     phase_id: Optional[str] = None,
     limit: int = Query(default=MAX_LIST_ROWS, ge=1, le=MAX_LIST_ROWS),
+    offset: int = Query(default=0, ge=0),
     cap: Capability = Depends(require_external_read),
     session: Session = Depends(get_session),
 ) -> dict:
     return _run_read(
         session, cap, read_tools.list_decisions,
         read_tools.ListPhaseScopedArgs(
-            project_id=project_id, phase_id=phase_id, limit=limit
+            project_id=project_id, phase_id=phase_id, limit=limit, offset=offset
         ),
     )
 
@@ -212,13 +214,14 @@ def list_risks(
     project_id: str,
     phase_id: Optional[str] = None,
     limit: int = Query(default=MAX_LIST_ROWS, ge=1, le=MAX_LIST_ROWS),
+    offset: int = Query(default=0, ge=0),
     cap: Capability = Depends(require_external_read),
     session: Session = Depends(get_session),
 ) -> dict:
     return _run_read(
         session, cap, read_tools.list_risks,
         read_tools.ListPhaseScopedArgs(
-            project_id=project_id, phase_id=phase_id, limit=limit
+            project_id=project_id, phase_id=phase_id, limit=limit, offset=offset
         ),
     )
 
@@ -227,12 +230,13 @@ def list_risks(
 def list_docs(
     project_id: str,
     limit: int = Query(default=MAX_LIST_ROWS, ge=1, le=MAX_LIST_ROWS),
+    offset: int = Query(default=0, ge=0),
     cap: Capability = Depends(require_external_read),
     session: Session = Depends(get_session),
 ) -> dict:
     return _run_read(
         session, cap, read_tools.list_docs,
-        read_tools.ListScopedArgs(project_id=project_id, limit=limit),
+        read_tools.ListScopedArgs(project_id=project_id, limit=limit, offset=offset),
     )
 
 
@@ -240,12 +244,13 @@ def list_docs(
 def doc_excerpt(
     doc_id: str,
     max_chars: int = Query(default=MAX_DOC_EXCERPT_CHARS, ge=1, le=MAX_DOC_EXCERPT_CHARS),
+    offset: int = Query(default=0, ge=0),
     cap: Capability = Depends(require_external_read),
     session: Session = Depends(get_session),
 ) -> dict:
     return _run_read(
         session, cap, read_tools.get_doc_excerpt,
-        read_tools.DocExcerptArgs(doc_id=doc_id, max_chars=max_chars),
+        read_tools.DocExcerptArgs(doc_id=doc_id, max_chars=max_chars, offset=offset),
     )
 
 

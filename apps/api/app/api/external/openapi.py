@@ -89,6 +89,15 @@ _MAX_CHARS_DESC = (
     f"Maximum excerpt characters (1-{MAX_DOC_EXCERPT_CHARS}, default "
     f"{MAX_DOC_EXCERPT_CHARS})."
 )
+# #176: rows/chars beyond one page were otherwise unreachable from this surface —
+# the same gap #92 closed on the MCP tier. `next_offset` in the response metadata
+# (never declared as a schema property — metadata is additionalProperties:True,
+# safe scalars only) tells the caller what to pass next; null means the last page.
+_OFFSET_DESC = (
+    "Rows (or, for getDocExcerpt, characters) to skip. Pass the previous "
+    "response's `next_offset` metadata value to continue; omit or use 0 for the "
+    "first page."
+)
 
 # Optional task fields shared by the create and update request schemas, in the same
 # order as the live models.
@@ -221,6 +230,16 @@ def _limit_param() -> dict:
             "default": MAX_LIST_ROWS,
         },
         "description": _LIMIT_DESC,
+    }
+
+
+def _offset_param() -> dict:
+    return {
+        "name": "offset",
+        "in": "query",
+        "required": False,
+        "schema": {"type": "integer", "minimum": 0, "default": 0},
+        "description": _OFFSET_DESC,
     }
 
 
@@ -469,6 +488,7 @@ def _read_paths() -> dict:
                     _query_str("status", "Optional task status filter (e.g. in_progress)."),
                     _query_str("phase_id", "Optional phase id filter, from a prior scoped read."),
                     _limit_param(),
+                    _offset_param(),
                 ],
             )
         },
@@ -488,6 +508,7 @@ def _read_paths() -> dict:
                     # pairs and bounds, so the gap was structurally invisible.
                     _query_str("phase_id", "Optional phase id filter, from a prior scoped read."),
                     _limit_param(),
+                    _offset_param(),
                 ],
             )
         },
@@ -505,6 +526,7 @@ def _read_paths() -> dict:
                     # #93: same drift as listDecisions above.
                     _query_str("phase_id", "Optional phase id filter, from a prior scoped read."),
                     _limit_param(),
+                    _offset_param(),
                 ],
             )
         },
@@ -518,7 +540,11 @@ def _read_paths() -> dict:
                 success_status=200,
                 success_response=_read_success(),
                 error_statuses=_READ_ERRORS_WITH_PARAMS,
-                parameters=[_path_param("project_id", _PROJECT_ID_DESC), _limit_param()],
+                parameters=[
+                    _path_param("project_id", _PROJECT_ID_DESC),
+                    _limit_param(),
+                    _offset_param(),
+                ],
             )
         },
         "/docs/{doc_id}/excerpt": {
@@ -537,6 +563,7 @@ def _read_paths() -> dict:
                         "Planarus document id from a prior listDocs response. Do not invent ids.",
                     ),
                     _max_chars_param(),
+                    _offset_param(),
                 ],
             )
         },

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 from app.core.utils import new_id, now_utc
 from app.models.decision import Decision
+from app.models.doc import Doc
 from app.models.task import Task
 from app.prompt.boundary import PRECEDENCE_SENTENCE
 from app.services import approval_service, task_service
@@ -180,3 +181,85 @@ def test_external_decisions_and_risks_accept_phase_filter(env, client, session):
         assert kept in body["text"]
         if dropped:
             assert dropped not in body["text"]
+
+
+def test_list_tasks_offset_pages_through_without_gaps_or_repeats(client, external_api, session):
+    """#176: rows past the first page were previously unreachable from this
+    surface at all — `offset` here must behave exactly like the MCP tier's
+    (#92), including the `next_offset` metadata that tells the caller when to
+    stop."""
+    ws, proj = seed(client, "offset-tasks")
+    now = now_utc()
+    for i in range(5):
+        session.add(
+            Task(
+                id=new_id("tsk"), project_id=proj, title=f"Task {i}",
+                status="backlog", sort_order=i, created_at=now, updated_at=now,
+            )
+        )
+    session.commit()
+    _, raw = issue_key(client, ws, [proj], can_read=True, can_propose=False)
+
+    seen_ids: list[str] = []
+    offset = 0
+    for _ in range(10):  # generous cap so a broken loop fails instead of hanging
+        res = client.get(
+            f"/api/external/v1/projects/{proj}/tasks?limit=2&offset={offset}",
+            headers=auth(raw),
+        )
+        assert res.status_code == 200
+        meta = res.json()["metadata"]
+        assert meta["offset"] == offset
+        assert meta["limit"] == 2
+        seen_ids.extend(meta["task_ids"])
+        if meta["next_offset"] is None:
+            break
+        offset = meta["next_offset"]
+    else:
+        pytest.fail("paging never terminated")
+
+    assert len(seen_ids) == 5
+    assert len(set(seen_ids)) == 5  # no row repeated across pages
+    # An offset past the end is the natural terminator, not an error.
+    res = client.get(f"/api/external/v1/projects/{proj}/tasks?offset=999", headers=auth(raw))
+    assert res.status_code == 200
+    assert res.json()["metadata"]["count"] == 0
+
+
+def test_doc_excerpt_offset_continues_past_max_chars(client, external_api, session):
+    """#176: the excerpt route had no way to reach characters past the first
+    `max_chars` window; `offset` mirrors get_doc_excerpt's MCP-tier behavior."""
+    ws, proj = seed(client, "offset-doc")
+    now = now_utc()
+    first_half, second_half = "zqzqzqzqzqzqzqzqzqzqzqzqzqzqzq", "wkwkwkwkwkwkwkwkwkwkwkwkwkwkwk"
+    body = first_half + second_half
+    doc_id = new_id("doc")
+    session.add(
+        Doc(
+            id=doc_id, project_id=proj, title="Long doc", slug="long-doc",
+            doc_type="reference", markdown_cache=body,
+            created_at=now, updated_at=now,
+        )
+    )
+    session.commit()
+    _, raw = issue_key(client, ws, [proj], can_read=True, can_propose=False)
+
+    first = client.get(
+        f"/api/external/v1/docs/{doc_id}/excerpt?max_chars=30", headers=auth(raw),
+    )
+    assert first.status_code == 200
+    meta = first.json()["metadata"]
+    assert meta["full_length"] == 60
+    assert meta["next_offset"] == 30
+    assert first_half in first.json()["text"]
+    assert second_half not in first.json()["text"]
+
+    second = client.get(
+        f"/api/external/v1/docs/{doc_id}/excerpt?max_chars=30&offset={meta['next_offset']}",
+        headers=auth(raw),
+    )
+    assert second.status_code == 200
+    meta2 = second.json()["metadata"]
+    assert meta2["next_offset"] is None  # last page
+    assert second_half in second.json()["text"]
+    assert first_half not in second.json()["text"]
