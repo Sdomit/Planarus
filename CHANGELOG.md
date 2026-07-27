@@ -16,6 +16,19 @@ starting point rather than an empty file.
   stages, milestones, tasks and sub-tasks, decisions, risks, checklists,
   comments, links, todos, documents and canvases, over board, roadmap, timeline
   and calendar views. SQLite in WAL mode, on your own project folders.
+- **Notion-style document editor.** A `/` menu inserts headings, quotes,
+  dividers, lists, toggles, callouts and tables. Sub-pages live inline: a page
+  block opens a child document, "convert to page" turns a line of text into one,
+  and removing the block detaches the child rather than deleting it. The document
+  list is an indented, collapsible tree with drag-to-reparent, and the editor
+  shows a breadcrumb up the parent chain.
+- **`@` mentions and backlinks.** Type `@` in a document to reference a task,
+  decision, risk, milestone, phase or another document. Each referenced item's
+  detail view lists the documents that mention it. References are derived from
+  the document body on save rather than maintained by hand, so they cannot drift
+  from what the document actually says, and they survive project duplication and
+  export. Mentions and sub-pages both export as ordinary Markdown links, so the
+  exported files stay readable in any viewer.
 - **The approval boundary.** Every agent-originated write becomes a pending
   approval request carrying a diff. Approving, applying, rejecting and
   invalidating require a local control token, so no external agent can approve
