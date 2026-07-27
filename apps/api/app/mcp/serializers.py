@@ -35,6 +35,13 @@ MAX_DOC_EXCERPT_CHARS = 4000
 # any larger cap, so an agent told "truncated, 1400 more chars" had no way to
 # read the rest and would propose an update from the first 500 characters.
 MAX_DETAIL_CHARS = 4000
+# #184: the cap for a whole-doc MCP resource read. The point of a resource is to
+# sidestep get_doc_excerpt's pagination for the common case, so this is
+# generous — but still bounded, so a pathological doc degrades to a truncation
+# marker (same "…(truncated, N more chars)" shape as everywhere else) rather
+# than an unbounded read. A doc past this cap still has get_doc_excerpt to page
+# through it; a resource read is additive, not a replacement.
+MAX_RESOURCE_CHARS = 60_000
 
 _PLACEHOLDER = "«redacted:{label}»"
 

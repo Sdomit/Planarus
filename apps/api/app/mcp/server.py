@@ -20,11 +20,15 @@ import sys
 import anyio
 from mcp import types
 from mcp.server.lowlevel import Server
+from mcp.server.lowlevel.helper_types import ReadResourceContents
 from mcp.server.stdio import stdio_server
+from mcp.shared.exceptions import McpError
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlmodel import Session
 
 from app.db.session import engine
+from app.mcp import prompts as mcp_prompts
+from app.mcp import resources as mcp_resources
 from app.mcp.capabilities import Capability, resolve_capability
 from app.mcp.errors import (
     CODE_FORBIDDEN,
@@ -37,6 +41,12 @@ from app.mcp.registry import ToolSpec, get_spec, visible_specs
 from app.prompt import boundary
 
 logger = logging.getLogger("planarus.mcp")
+
+# The MCP spec's conventional "Resource not found" code (outside the range the
+# SDK names constants for). Used for both a genuinely missing resource and an
+# unparseable URI — never distinguished from "out of scope", same anti-
+# enumeration rule tool handlers already follow for a missing/forbidden doc.
+_RESOURCE_NOT_FOUND = -32002
 
 SERVER_NAME = "planarus"
 
@@ -117,6 +127,15 @@ def _run_tool(spec: ToolSpec, capability: Capability, arguments: dict):
     )
 
 
+def _read_doc_resource(capability: Capability, doc_id: str) -> str:
+    """Same session/DB-unavailable handling as _run_tool, for a resource read."""
+    try:
+        with Session(engine) as session:
+            return mcp_resources.read_doc_resource(session, capability, doc_id)
+    except (OperationalError, ProgrammingError):
+        raise MCPToolError(CODE_UNAVAILABLE, "Planarus data is unavailable")
+
+
 def _error(code: str, message: str) -> "types.CallToolResult":
     """Structured error with the protocol-level isError flag set, so a client can
     detect a denial without string-parsing the body."""
@@ -157,6 +176,59 @@ def build_server(capability: Capability) -> Server:
         except Exception:  # noqa: BLE001 — never leak a traceback over the wire
             logger.exception("unexpected MCP tool error in %s", name)
             return _error(CODE_INTERNAL, "internal error")
+
+    @server.list_resource_templates()
+    async def _list_resource_templates() -> list[types.ResourceTemplate]:
+        if not capability.valid:
+            return []
+        return [types.ResourceTemplate(**mcp_resources.DOC_RESOURCE_TEMPLATE)]
+
+    @server.read_resource()
+    async def _read_resource(uri) -> list[ReadResourceContents]:
+        doc_id = mcp_resources.parse_doc_id(str(uri)) if capability.valid else None
+        if doc_id is None:
+            raise McpError(
+                types.ErrorData(code=_RESOURCE_NOT_FOUND, message="resource not found")
+            )
+        try:
+            text = await anyio.to_thread.run_sync(
+                lambda: _read_doc_resource(capability, doc_id)
+            )
+        except MCPToolError:
+            raise McpError(
+                types.ErrorData(code=_RESOURCE_NOT_FOUND, message="resource not found")
+            )
+        except Exception:  # noqa: BLE001 — never leak a traceback over the wire
+            logger.exception("unexpected MCP resource error reading %s", uri)
+            raise McpError(
+                types.ErrorData(code=types.INTERNAL_ERROR, message="internal error")
+            )
+        return [ReadResourceContents(content=text, mime_type="text/markdown")]
+
+    @server.list_prompts()
+    async def _list_prompts() -> list[types.Prompt]:
+        if not capability.valid:
+            return []
+        return [
+            types.Prompt(name=name, description=mcp_prompts.prompt_description(name))
+            for name in mcp_prompts.prompt_names()
+        ]
+
+    @server.get_prompt()
+    async def _get_prompt(name: str, arguments: dict[str, str] | None) -> types.GetPromptResult:
+        text = mcp_prompts.render_prompt(name) if capability.valid else None
+        if text is None:
+            raise McpError(
+                types.ErrorData(code=types.INVALID_PARAMS, message="unknown prompt")
+            )
+        return types.GetPromptResult(
+            description=mcp_prompts.prompt_description(name),
+            messages=[
+                types.PromptMessage(
+                    role="user", content=types.TextContent(type="text", text=text)
+                )
+            ],
+        )
 
     return server
 

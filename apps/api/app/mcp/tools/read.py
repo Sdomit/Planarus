@@ -527,8 +527,16 @@ def list_docs(session: Session, cap: Capability, args: ListScopedArgs) -> ToolRe
     return build_result(metadata, blocks)
 
 
-def get_doc_excerpt(session: Session, cap: Capability, args: DocExcerptArgs) -> ToolResult:
-    doc = session.get(Doc, args.doc_id)
+def doc_excerpt_result(
+    session: Session, cap: Capability, doc_id: str, max_chars: int, offset: int
+) -> ToolResult:
+    """Shared by the get_doc_excerpt tool (bounded by DocExcerptArgs' Field cap)
+    and the doc resource read (#184 — a much larger internal cap, since a
+    resource read is meant to sidestep pagination for the common case rather
+    than page through it). Same not_found/redact/wrap pipeline either way —
+    a resource is not a lower-scrutiny path than a tool call.
+    """
+    doc = session.get(Doc, doc_id)
     # Generic not_found for missing OR out-of-scope — never reveal existence.
     if doc is None or not cap.allows_project(doc.project_id):
         raise MCPToolError(CODE_NOT_FOUND, "document not found")
@@ -549,28 +557,32 @@ def get_doc_excerpt(session: Session, cap: Capability, args: DocExcerptArgs) -> 
     # the true remainder. `window` below is only for the paging scalars. An offset
     # at or past the end yields an empty excerpt rather than an error — the natural
     # "you have read it all" terminator for a paging loop.
-    tail = body[args.offset :]
-    window = tail[: args.max_chars]
-    has_more = args.offset + len(window) < full_length
+    tail = body[offset:]
+    window = tail[:max_chars]
+    has_more = offset + len(window) < full_length
     metadata = {
         "doc_id": doc.id,
         "project_id": doc.project_id,
         "doc_type": doc.doc_type,
         "status": doc.status,
         "version": doc.version,
-        "max_chars": args.max_chars,
-        "offset": args.offset,
+        "max_chars": max_chars,
+        "offset": offset,
         "full_length": full_length,
         "excerpt_length": len(window),
-        "next_offset": args.offset + len(window) if has_more else None,
+        "next_offset": offset + len(window) if has_more else None,
     }
     block = wrap_block(
         f"doc:{doc.id}",
         "doc",
         [f"id: {doc.id}", f"doc_type: {doc.doc_type}", f"version: {doc.version}"],
-        [("title", doc.title, MAX_FIELD_CHARS), ("excerpt", tail, args.max_chars)],
+        [("title", doc.title, MAX_FIELD_CHARS), ("excerpt", tail, max_chars)],
     )
     return build_result(metadata, [block])
+
+
+def get_doc_excerpt(session: Session, cap: Capability, args: DocExcerptArgs) -> ToolResult:
+    return doc_excerpt_result(session, cap, args.doc_id, args.max_chars, args.offset)
 
 
 # kind -> (model, scalar-line builder, text fields to render at MAX_DETAIL_CHARS).

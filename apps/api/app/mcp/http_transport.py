@@ -27,8 +27,10 @@ import anyio
 from fastapi import FastAPI
 from mcp import types
 from mcp.server.lowlevel import Server
+from mcp.server.lowlevel.helper_types import ReadResourceContents
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.server.transport_security import TransportSecuritySettings
+from mcp.shared.exceptions import McpError
 from starlette.types import Receive, Scope, Send
 
 from app.api.external.auth import _authenticate, _rate_and_concurrency
@@ -36,10 +38,19 @@ from app.api.external.middleware import _send_problem
 from app.api.external.problems import ExternalProblem
 from app.core.rate_limit import limiter
 from app.db.session import get_session
+from app.mcp import prompts as mcp_prompts
+from app.mcp import resources as mcp_resources
 from app.mcp.capabilities import Capability
 from app.mcp.errors import CODE_FORBIDDEN, CODE_INTERNAL, MCPToolError
 from app.mcp.registry import get_spec, visible_specs
-from app.mcp.server import SERVER_NAME, _error, _run_tool, instructions_for
+from app.mcp.server import (
+    _RESOURCE_NOT_FOUND,
+    SERVER_NAME,
+    _error,
+    _read_doc_resource,
+    _run_tool,
+    instructions_for,
+)
 
 MOUNT_PATH = "/api/external/v1/mcp"
 
@@ -79,6 +90,60 @@ def _build_http_server() -> Server:
             return _error(exc.code, exc.message)
         except Exception:  # noqa: BLE001 — never leak a traceback over the wire
             return _error(CODE_INTERNAL, "internal error")
+
+    @server.list_resource_templates()
+    async def _list_resource_templates() -> list[types.ResourceTemplate]:
+        cap = _capability.get()
+        if not cap.valid:
+            return []
+        return [types.ResourceTemplate(**mcp_resources.DOC_RESOURCE_TEMPLATE)]
+
+    @server.read_resource()
+    async def _read_resource(uri) -> list[ReadResourceContents]:
+        cap = _capability.get()
+        doc_id = mcp_resources.parse_doc_id(str(uri)) if cap.valid else None
+        if doc_id is None:
+            raise McpError(
+                types.ErrorData(code=_RESOURCE_NOT_FOUND, message="resource not found")
+            )
+        try:
+            text = await anyio.to_thread.run_sync(lambda: _read_doc_resource(cap, doc_id))
+        except MCPToolError:
+            raise McpError(
+                types.ErrorData(code=_RESOURCE_NOT_FOUND, message="resource not found")
+            )
+        except Exception:  # noqa: BLE001 — never leak a traceback over the wire
+            raise McpError(
+                types.ErrorData(code=types.INTERNAL_ERROR, message="internal error")
+            )
+        return [ReadResourceContents(content=text, mime_type="text/markdown")]
+
+    @server.list_prompts()
+    async def _list_prompts() -> list[types.Prompt]:
+        cap = _capability.get()
+        if not cap.valid:
+            return []
+        return [
+            types.Prompt(name=name, description=mcp_prompts.prompt_description(name))
+            for name in mcp_prompts.prompt_names()
+        ]
+
+    @server.get_prompt()
+    async def _get_prompt(name: str, arguments: dict[str, str] | None) -> types.GetPromptResult:
+        cap = _capability.get()
+        text = mcp_prompts.render_prompt(name) if cap.valid else None
+        if text is None:
+            raise McpError(
+                types.ErrorData(code=types.INVALID_PARAMS, message="unknown prompt")
+            )
+        return types.GetPromptResult(
+            description=mcp_prompts.prompt_description(name),
+            messages=[
+                types.PromptMessage(
+                    role="user", content=types.TextContent(type="text", text=text)
+                )
+            ],
+        )
 
     return server
 
