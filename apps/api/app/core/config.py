@@ -48,6 +48,13 @@ class Settings(BaseSettings):
     git_fetch_enabled: bool = Field(
         default=False, validation_alias="PLANARUS_GIT_FETCH_ENABLED"
     )
+    # Phase 12d explicit commit/merge. DISABLED by default, separately from fetch:
+    # these touch the working tree and local history, which fetch never does. Both
+    # remain human-clicked, control-token-gated, audited actions in the local UI —
+    # agents and the external API still have no mutating Git path at all.
+    git_write_enabled: bool = Field(
+        default=False, validation_alias="PLANARUS_GIT_WRITE_ENABLED"
+    )
 
     # Phase 10.1 (hosted mode) — identity/auth. DISABLED by default: when off, the
     # /api/v1/auth/* and workspace members routes 404 and the app is the same

@@ -1,8 +1,12 @@
 """Read-only Git metadata service (Phase 8).
 
-This is the ONLY place in the codebase that shells out to Git, and it runs
-nothing but allowlisted read-only commands. There is no mutating Git path
-anywhere: no commit, push, checkout, reset, merge, add, rm, or config write.
+This is the ONLY place in the codebase that shells out to Git. The default
+surface is allowlisted read-only commands; the sole mutations are the gated,
+human-clicked exceptions at the bottom of this file — fetch (Phase 12b, refs
+only) and commit/merge (Phase 12d, working tree/history) — each behind its own
+off-by-default env flag, the local control token and an audit event. There is
+still no push, checkout, reset, rm, or config write, and no mutating Git path
+reachable by agents, MCP or the external API.
 
 Safety model:
 - No ``shell=True`` and no string interpolation — every command is a fixed argv
@@ -30,7 +34,9 @@ from app.core.exceptions import ConflictError
 from app.core.utils import now_utc
 from app.schemas.git import (
     GitBranch,
+    GitCommitResult,
     GitFetchResult,
+    GitMergeResult,
     GitRepoLink,
     GitSnapshot,
     GitWorkingTree,
@@ -542,3 +548,167 @@ def fetch(project_id: str, folder_path: Optional[str]) -> GitFetchResult:
     # cached snapshot is stale — drop it and recompute fresh for the response.
     _snapshot_cache.pop(project_id, None)
     return _result("ok", None, remote)
+
+
+# --- Phase 12d: gated commit + merge -----------------------------------------
+#
+# Same doctrine as fetch, wider blast radius, so a separate flag: these touch
+# the working tree and local history. Both run only from a human click in the
+# local UI, behind PLANARUS_GIT_WRITE_ENABLED (off by default) plus the local
+# control token, and every attempt is audited at the endpoint. Agents, MCP and
+# the external API still have no mutating Git path.
+#
+# The write allowlist is as closed as the read one: add, commit, merge. No
+# push, checkout, reset, rm. A conflicted merge is aborted server-side so the
+# cockpit never leaves a half-merged tree behind.
+
+_WRITE_TIMEOUT_S = 30  # hooks and big merges are slower than 5s reads
+_WRITE_VERBS = frozenset({"add", "commit", "merge"})
+
+
+def _run_write(repo_path: str, argv: tuple[str, ...]) -> tuple[int, str]:
+    """Run one allowlisted mutating command. Mirrors ``_run`` but against the
+    write allowlist, with the longer timeout; stderr wins for the message."""
+    if not argv or argv[0] not in _WRITE_VERBS:
+        raise ValueError(f"refusing non-allowlisted git write verb: {argv!r}")
+    proc = subprocess.run(
+        ["git", "-C", repo_path, *_HARDENING, *argv],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=_WRITE_TIMEOUT_S,
+        env=_ENV,
+        check=False,
+    )
+    return proc.returncode, (proc.stderr or proc.stdout).strip()
+
+
+def _write_preamble(folder_path: Optional[str]) -> Optional[str]:
+    """Shared repo checks for commit/merge; a message means "refuse with it"."""
+    if not settings.git_write_enabled:
+        raise ConflictError(
+            "git commit/merge is disabled — set PLANARUS_GIT_WRITE_ENABLED=true "
+            "to allow the explicit, human-clicked working-tree actions"
+        )
+    if not folder_path or not os.path.isdir(folder_path):
+        return "Project folder is missing or not on disk."
+    try:
+        rc, _ = _run(folder_path, _READ_ONLY_GIT["toplevel"])
+    except FileNotFoundError:
+        return "Git is not installed or not on PATH."
+    except subprocess.TimeoutExpired:
+        return "Git command timed out."
+    if rc != 0:
+        return "Folder is not a Git repository."
+    return None
+
+
+def commit(project_id: str, folder_path: Optional[str], message: str) -> GitCommitResult:
+    """Stage everything and commit with ``message``. Raises ``ConflictError``
+    when the env gate is off; otherwise degrades to a status like fetch does."""
+
+    def _result(status: str, msg: Optional[str], sha: Optional[str] = None) -> GitCommitResult:
+        if status == "ok":
+            _snapshot_cache.pop(project_id, None)
+        return GitCommitResult(
+            project_id=project_id, status=status, message=msg, sha=sha,
+            snapshot=snapshot(project_id, folder_path),
+        )
+
+    refusal = _write_preamble(folder_path)
+    if refusal:
+        return _result("failed", refusal)
+    assert folder_path is not None  # narrowed by _write_preamble
+
+    text = message.strip()
+    if not text:
+        return _result("failed", "Commit message is empty.")
+
+    porcelain = _read_argv(folder_path, _READ_ONLY_GIT["status"])
+    if porcelain is not None and porcelain == "":
+        return _result("clean", "Nothing to commit — the working tree is clean.")
+
+    try:
+        rc, out = _run_write(folder_path, ("add", "-A"))
+        if rc != 0:
+            return _result("failed", (out or "git add returned non-zero.")[:300])
+        rc, out = _run_write(folder_path, ("commit", "-m", text))
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        return _result("failed", f"Commit failed: {type(exc).__name__}.")
+    if rc != 0:
+        # Typical causes worth surfacing verbatim (trimmed): missing user.name /
+        # user.email identity, a failing hook, or a race that emptied the stage.
+        return _result("failed", (out or "git commit returned non-zero.")[:300])
+
+    sha = _read_argv(folder_path, ("rev-parse", "--short", "HEAD"))
+    return _result("ok", None, sha)
+
+
+def merge(project_id: str, folder_path: Optional[str], branch: str) -> GitMergeResult:
+    """Merge local ``branch`` into the current branch. Refuses on a dirty tree;
+    aborts and reports on conflict. Raises ``ConflictError`` when gated off."""
+
+    def _result(status: str, msg: Optional[str], sha: Optional[str] = None) -> GitMergeResult:
+        if status == "ok":
+            _snapshot_cache.pop(project_id, None)
+        return GitMergeResult(
+            project_id=project_id, status=status, message=msg, sha=sha,
+            snapshot=snapshot(project_id, folder_path),
+        )
+
+    refusal = _write_preamble(folder_path)
+    if refusal:
+        return _result("failed", refusal)
+    assert folder_path is not None  # narrowed by _write_preamble
+
+    name = branch.strip()
+    # A ref name can never start with '-'; refuse anything git could read as a
+    # flag, then require it to be a real local branch (also kills typos).
+    if not name or name.startswith("-"):
+        return _result("failed", f"Refusing suspicious branch name: {name!r}")
+    heads = _read_argv(
+        folder_path, ("for-each-ref", "--format=%(refname:short)", "refs/heads")
+    )
+    if heads is None:
+        return _result("failed", "Could not read the local branch list.")
+    if name not in heads.splitlines():
+        return _result("failed", f"'{name}' is not a local branch.")
+
+    current = _read_argv(folder_path, _READ_ONLY_GIT["branch"])
+    if not current:
+        return _result("failed", "Cannot merge onto a detached HEAD.")
+    if name == current:
+        return _result("failed", f"'{name}' is already the current branch.")
+
+    porcelain = _read_argv(folder_path, _READ_ONLY_GIT["status"])
+    if porcelain is None:
+        return _result("failed", "Could not read the working-tree state.")
+    if porcelain != "":
+        return _result(
+            "dirty", "The working tree has uncommitted changes — commit or stash first."
+        )
+
+    try:
+        rc, out = _run_write(folder_path, ("merge", "--no-edit", name))
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        # State unknown after a timeout mid-merge: try to abort, best-effort.
+        try:
+            _run_write(folder_path, ("merge", "--abort"))
+        except (subprocess.TimeoutExpired, OSError, ValueError):
+            pass
+        return _result("failed", f"Merge failed: {type(exc).__name__}.")
+
+    if rc != 0:
+        # Conflict (or any refusal after the merge started): abort so the tree
+        # is never left half-merged. MERGE_HEAD may not exist when git refused
+        # up front — the abort then fails harmlessly.
+        try:
+            _run_write(folder_path, ("merge", "--abort"))
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+        status = "conflict" if "CONFLICT" in out else "failed"
+        return _result(status, (out or "git merge returned non-zero.")[:300])
+
+    sha = _read_argv(folder_path, ("rev-parse", "--short", "HEAD"))
+    return _result("ok", None, sha)

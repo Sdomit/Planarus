@@ -12,6 +12,18 @@ starting point rather than an empty file.
 
 ### Added
 
+- **Browse for folders, and gated commit/merge in the repo cockpit.** The
+  Repository panel and the New project form gain a **Browse** button — a
+  server-side, directories-only folder picker (local mode only, control-token
+  gated), so pointing a project at a repo no longer means hand-typing an
+  absolute path; repo roots are badged in the listing. The cockpit also gains
+  two human-clicked working-tree actions behind a new off-by-default
+  `PLANARUS_GIT_WRITE_ENABLED` flag: **Commit all** (stage everything, commit
+  with your message) and **Merge into the default branch** (offered only for
+  branches that trail it while it is checked out; a dirty tree is refused and
+  a conflicted merge is aborted server-side, so the repo is never left
+  half-merged). Both are audited like fetch. Agents, MCP and the external API
+  still have no Git or filesystem path at all.
 - **Local-first planner, complete with no agent connected.** Projects, phases,
   stages, milestones, tasks and sub-tasks, decisions, risks, checklists,
   comments, links, todos, documents and canvases, over board, roadmap, timeline

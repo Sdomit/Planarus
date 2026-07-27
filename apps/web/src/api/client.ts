@@ -437,6 +437,39 @@ export interface GitFetchResult {
   snapshot: GitSnapshot | null
 }
 
+// Phase 12d: gated, human-clicked commit/merge (PLANARUS_GIT_WRITE_ENABLED).
+export interface GitCommitResult {
+  project_id: string
+  status: 'ok' | 'clean' | 'failed'
+  message: string | null
+  sha: string | null
+  snapshot: GitSnapshot | null
+}
+
+export interface GitMergeResult {
+  project_id: string
+  status: 'ok' | 'dirty' | 'conflict' | 'failed'
+  message: string | null
+  sha: string | null
+  snapshot: GitSnapshot | null
+}
+
+// Phase 12d: local folder picker listing (local mode only, control-token gated).
+export interface FsDir {
+  name: string
+  path: string
+  is_git: boolean
+}
+
+export interface FsListing {
+  path: string
+  parent: string | null
+  is_git: boolean
+  dirs: FsDir[]
+  roots: string[]
+  message: string | null
+}
+
 // Phase 12c: read-only open-PR list via the local GitHub CLI (zero stored tokens).
 export interface GitPullRequest {
   number: number
@@ -472,6 +505,7 @@ export interface ProjectCreate {
   slug: string
   summary?: string
   status?: string
+  folder_path?: string
 }
 
 // --- Context Pack Builder (Phase 6A) ---------------------------------------
@@ -1468,6 +1502,23 @@ export const api = {
     // through controlRequest (attaches X-Planarus-Local-Token).
     fetchNow: (projectId: string) =>
       controlRequest<GitFetchResult>(`/projects/${projectId}/git/fetch`, { method: 'POST' }),
+    // Phase 12d: working-tree actions — control-token gated here, env-gated
+    // (PLANARUS_GIT_WRITE_ENABLED) server-side; a 409 message explains how.
+    commit: (projectId: string, message: string) =>
+      controlRequest<GitCommitResult>(`/projects/${projectId}/git/commit`, {
+        method: 'POST',
+        body: JSON.stringify({ message }),
+      }),
+    merge: (projectId: string, branch: string) =>
+      controlRequest<GitMergeResult>(`/projects/${projectId}/git/merge`, {
+        method: 'POST',
+        body: JSON.stringify({ branch }),
+      }),
+  },
+  fs: {
+    // Phase 12d: directory names only, local mode only, for the folder picker.
+    dirs: (path?: string) =>
+      controlRequest<FsListing>(`/fs/dirs${path ? `?path=${encodeURIComponent(path)}` : ''}`),
   },
   contextPack: {
     profiles: () => request<ContextPackProfilesResponse>('/context-pack/profiles'),

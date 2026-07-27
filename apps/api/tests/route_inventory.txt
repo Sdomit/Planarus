@@ -58,6 +58,7 @@ tenant               DELETE  /api/v1/docs/{doc_id}/presence
 tenant               GET     /api/v1/docs/{doc_id}/presence
 tenant               PUT     /api/v1/docs/{doc_id}/presence
 tenant               DELETE  /api/v1/entity-connections/{entity_connection_id}
+local-control        GET     /api/v1/fs/dirs
 global               GET     /api/v1/info
 global               GET     /api/v1/integrations/gpt-openapi
 global               GET     /api/v1/integrations/mcp
@@ -101,7 +102,9 @@ tenant-self-enforced POST    /api/v1/projects/{project_id}/duplicate
 tenant               GET     /api/v1/projects/{project_id}/email-log
 tenant-self-enforced GET     /api/v1/projects/{project_id}/export
 tenant               GET     /api/v1/projects/{project_id}/git
+tenant               POST    /api/v1/projects/{project_id}/git/commit
 tenant               POST    /api/v1/projects/{project_id}/git/fetch
+tenant               POST    /api/v1/projects/{project_id}/git/merge
 tenant               GET     /api/v1/projects/{project_id}/git/prs
 tenant               GET     /api/v1/projects/{project_id}/git/snapshot
 tenant               GET     /api/v1/projects/{project_id}/links

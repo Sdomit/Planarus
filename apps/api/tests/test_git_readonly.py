@@ -1,11 +1,21 @@
-"""Guards the near-total no-mutation rule for Git (Phase 8), plus its ONE
-documented exception — the Phase 12b explicit fetch.
+"""Guards the near-total no-mutation rule for Git (Phase 8), plus its documented
+exceptions — the Phase 12b explicit fetch and the Phase 12d explicit
+commit/merge.
 
-The invariant is unchanged for everything except a human-clicked, gated fetch of
-remote-tracking refs: no commit/push/checkout/reset/merge/pull/… path exists
-anywhere in app source, and the read-only `_run` gate still refuses `fetch`
-itself. The single blessed mutation lives in the separate `_run_fetch` path and
-is exercised by test_git_fetch.py."""
+The rule that has not moved: no push/checkout/reset/rebase/pull/rm/config-write
+path exists anywhere in app source, and the read-only `_run` gate refuses every
+mutating verb — including the blessed ones, which must go through their own
+separate gates.
+
+What Phase 12d widened, and the price it pays for it: `add`, `commit` and
+`merge` are now reachable, but only from inside git_service's `_run_write`,
+only behind `PLANARUS_GIT_WRITE_ENABLED` (off by default), only with the local
+control token, and only with an audit event per attempt. Those gates are
+exercised by test_git_write.py; what this file guards is that the *set* stays
+exactly that small and stays confined to git_service.
+
+Verbs are matched as quoted argv tokens, which is exact here: no app module
+outside git_service contains a quoted "add"/"commit"/"merge"/"fetch"."""
 from pathlib import Path
 
 import pytest
@@ -14,22 +24,26 @@ from app.services import git_service
 APP_DIR = Path(git_service.__file__).resolve().parents[1]  # app/
 GIT_SERVICE = Path(git_service.__file__).resolve()
 
-# Git verbs that change repo / index / worktree / refs / config. None of these
-# may appear as a quoted argv token anywhere in app source.
-#
-# Phase 12b exception: `fetch` (with `--prune`) is the sole allowed mutation, and
-# only inside git_service's dedicated `_run_fetch` path. It is intentionally
-# absent from this set so every OTHER mutating verb stays banned everywhere.
+# Git verbs that change repo / index / worktree / refs / config and have NO
+# blessed path. None of these may appear as a quoted argv token anywhere in app
+# source, git_service included. Shrinking this tuple is how a new mutation gets
+# allowed, so it should be a deliberate, reviewed edit — never a quick fix for a
+# red test.
 MUTATING_VERBS = (
-    "commit", "push", "checkout", "reset", "merge", "rebase", "pull",
-    "clone", "add", "rm", "mv", "stash", "cherry-pick", "revert", "tag", "init",
+    "push", "checkout", "reset", "rebase", "pull",
+    "clone", "rm", "mv", "stash", "cherry-pick", "revert", "tag", "init",
     "apply", "am", "restore", "switch", "gc", "prune", "update-ref",
     "symbolic-ref", "worktree", "submodule", "notes", "filter-branch",
     "sparse-checkout", "config",
 )
 
-# The one blessed mutation, allowed to appear ONLY in git_service (the fetch path).
+# The blessed mutations, allowed to appear ONLY in git_service, each behind its
+# own off-by-default env flag, the local control token and an audit event:
+#   fetch          Phase 12b — remote-tracking refs only, never the worktree
+#   add/commit/merge  Phase 12d — worktree and local history
 FETCH_ONLY_VERBS = ("fetch",)
+WRITE_ONLY_VERBS = ("add", "commit", "merge")
+GIT_SERVICE_ONLY_VERBS = FETCH_ONLY_VERBS + WRITE_ONLY_VERBS
 
 _SUBPROCESS_TOKENS = (
     "subprocess", "Popen", "os.system", "os.exec", "os.spawn", "os.popen",
@@ -73,19 +87,48 @@ def test_git_service_has_no_mutating_argv() -> None:
     assert present == [], f"mutating git verb(s) in argv: {present}"
 
 
-def test_fetch_is_the_only_mutation_and_only_in_git_service() -> None:
-    """The blessed fetch verb may appear ONLY in git_service — nowhere else in
-    app source may an argv shell out `git fetch`."""
-    for verb in FETCH_ONLY_VERBS:
-        assert f'"{verb}"' in GIT_SERVICE.read_text(encoding="utf-8"), verb
+def test_blessed_mutations_appear_only_in_git_service() -> None:
+    """fetch, add, commit and merge may appear ONLY in git_service — nowhere
+    else in app source may an argv shell out a mutating git command."""
+    src = GIT_SERVICE.read_text(encoding="utf-8")
+    for verb in GIT_SERVICE_ONLY_VERBS:
+        assert f'"{verb}"' in src, verb
     offenders = []
     for path in _app_py_files():
         if path == GIT_SERVICE:
             continue
-        src = path.read_text(encoding="utf-8")
-        if any(f'"{v}"' in src or f"'{v}'" in src for v in FETCH_ONLY_VERBS):
-            offenders.append(str(path.relative_to(APP_DIR)))
-    assert offenders == [], f"git fetch argv outside git_service: {offenders}"
+        text = path.read_text(encoding="utf-8")
+        present = [
+            v
+            for v in GIT_SERVICE_ONLY_VERBS
+            if f'"{v}"' in text or f"'{v}'" in text
+        ]
+        if present:
+            offenders.append(f"{path.relative_to(APP_DIR)}: {present}")
+    assert offenders == [], f"mutating git argv outside git_service: {offenders}"
+
+
+def test_write_allowlist_is_exactly_the_phase_12d_set() -> None:
+    """The write gate may not quietly grow. Anything added here is a new way for
+    the app to change a user's repository, so it has to be an explicit edit."""
+    assert git_service._WRITE_VERBS == frozenset(WRITE_ONLY_VERBS)
+    # The two gates stay disjoint: a read verb can never mutate, and a write
+    # verb can never slip through the read path (which is the wider surface —
+    # it backs every unauthenticated cockpit read).
+    assert git_service._WRITE_VERBS.isdisjoint(git_service._READ_ONLY_VERBS)
+    # And nothing in the never-blessed set is reachable through either gate.
+    assert git_service._WRITE_VERBS.isdisjoint(MUTATING_VERBS)
+    assert "fetch" not in git_service._WRITE_VERBS
+
+
+def test_writes_are_off_by_default() -> None:
+    """Cloning the repo and running it must not give the app write access to
+    any repository. Both gates default off, and independently of each other."""
+    from app.core.config import Settings
+
+    fresh = Settings(_env_file=None)
+    assert fresh.git_write_enabled is False
+    assert fresh.git_fetch_enabled is False
 
 
 def test_run_rejects_mutating_verb_at_call_time(tmp_path) -> None:

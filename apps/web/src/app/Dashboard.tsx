@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { api, Project, Workspace, Task, Risk } from '../api/client'
+import FolderPicker from './FolderPicker'
 import { StatusBadge } from './StatusBadge'
 import { Icon } from './Icon'
 import {
@@ -44,7 +45,8 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
   const [error, setError] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [form, setForm] = useState({ title: '', slug: '', status: 'idea', summary: '' })
+  const [form, setForm] = useState({ title: '', slug: '', status: 'idea', summary: '', folder: '' })
+  const [pickingFolder, setPickingFolder] = useState(false)
 
   // Manage-project state
   const [showArchived, setShowArchived] = useState(false)
@@ -115,9 +117,10 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
         slug: form.slug,
         status: form.status,
         summary: form.summary || undefined,
+        folder_path: form.folder.trim() || undefined,
       })
       setShowCreate(false)
-      setForm({ title: '', slug: '', status: 'idea', summary: '' })
+      setForm({ title: '', slug: '', status: 'idea', summary: '', folder: '' })
       loadData()
     } catch (e) {
       setError(String(e))
@@ -382,6 +385,18 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
                   <input id="np-sum" className="input" value={form.summary}
                     onChange={(e) => setForm((f) => ({ ...f, summary: e.target.value }))} placeholder="Optional" />
                 </div>
+                <div className="form-field">
+                  <label className="form-label" htmlFor="np-folder">Folder / repository</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input id="np-folder" className="input" style={{ fontFamily: 'var(--font-mono, monospace)' }}
+                      value={form.folder}
+                      onChange={(e) => setForm((f) => ({ ...f, folder: e.target.value }))}
+                      placeholder="Optional — absolute path, e.g. C:\Users\you\repo" spellCheck={false} />
+                    <button type="button" className="btn btn-outline btn-sm" onClick={() => setPickingFolder(true)}>
+                      Browse…
+                    </button>
+                  </div>
+                </div>
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowCreate(false)}>Cancel</button>
@@ -390,6 +405,14 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
             </form>
           </div>
         </div>
+      )}
+
+      {pickingFolder && (
+        <FolderPicker
+          title="Choose the project folder"
+          onClose={() => setPickingFolder(false)}
+          onSelect={(path) => { setPickingFolder(false); setForm((f) => ({ ...f, folder: path })) }}
+        />
       )}
 
       {editFor && (

@@ -14,9 +14,10 @@ const baseSnap = {
 
 vi.mock('../api/client', () => ({
   api: {
-    git: { snapshot: vi.fn(), fetchNow: vi.fn(), prs: vi.fn() },
+    git: { snapshot: vi.fn(), fetchNow: vi.fn(), prs: vi.fn(), commit: vi.fn(), merge: vi.fn() },
     projects: { update: vi.fn() },
     links: { create: vi.fn() },
+    fs: { dirs: vi.fn() },
   },
 }))
 
@@ -26,6 +27,9 @@ beforeEach(() => {
   vi.mocked(api.projects.update).mockReset().mockResolvedValue({} as never)
   vi.mocked(api.git.prs).mockReset()
   vi.mocked(api.links.create).mockReset()
+  vi.mocked(api.git.commit).mockReset()
+  vi.mocked(api.git.merge).mockReset()
+  vi.mocked(api.fs.dirs).mockReset()
 })
 
 afterEach(cleanup)  // unmount between tests so ambiguous queries stay unambiguous
@@ -76,6 +80,118 @@ describe('GitSnapshotPanel — Phase 12b fetch', () => {
     )
     // onSaved → force reload: snapshot fetched again after the initial mount read.
     await waitFor(() => expect(vi.mocked(api.git.snapshot).mock.calls.length).toBeGreaterThan(1))
+  })
+})
+
+describe('GitSnapshotPanel — Phase 12d gated commit / merge', () => {
+  const dirty = {
+    ...baseSnap,
+    working_tree: { staged: 1, unstaged: 2, untracked: 0, conflicted: 0, ahead: 0, behind: 0 },
+  }
+
+  it('offers nothing when the tree is clean and no branch trails the default', async () => {
+    render(<GitSnapshotPanel projectId="proj_1" />)
+    await screen.findByRole('button', { name: /fetch now/i })
+    // The whole point of the gate: no write affordance appears unless there is
+    // something to write. baseSnap is clean with needs_merge: [].
+    expect(screen.queryByRole('button', { name: /commit all/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /merge into/i })).toBeNull()
+  })
+
+  it('commits the working tree and adopts the returned snapshot', async () => {
+    vi.mocked(api.git.snapshot).mockResolvedValue({ ...dirty })
+    vi.mocked(api.git.commit).mockResolvedValue({
+      project_id: 'proj_1', status: 'ok', message: null, sha: 'def5678',
+      snapshot: { ...baseSnap, last_commit_sha: 'def5678' },
+    })
+    render(<GitSnapshotPanel projectId="proj_1" />)
+    const input = await screen.findByPlaceholderText(/commit message/i)
+    fireEvent.change(input, { target: { value: 'Save the plan' } })
+    fireEvent.click(screen.getByRole('button', { name: /commit all/i }))
+    await waitFor(() => expect(screen.getByText(/committed def5678/i)).toBeTruthy())
+    expect(api.git.commit).toHaveBeenCalledWith('proj_1', 'Save the plan')
+    // The response snapshot replaces the panel's state — no refetch needed, and
+    // the now-clean tree withdraws the commit control.
+    await waitFor(() => expect(screen.queryByRole('button', { name: /commit all/i })).toBeNull())
+  })
+
+  it('will not commit an empty message', async () => {
+    vi.mocked(api.git.snapshot).mockResolvedValue({ ...dirty })
+    render(<GitSnapshotPanel projectId="proj_1" />)
+    const btn = await screen.findByRole('button', { name: /commit all/i })
+    expect(btn.hasAttribute('disabled')).toBe(true)
+    fireEvent.click(btn)
+    expect(api.git.commit).not.toHaveBeenCalled()
+  })
+
+  it('surfaces the disabled (409) flag message instead of failing silently', async () => {
+    vi.mocked(api.git.snapshot).mockResolvedValue({ ...dirty })
+    vi.mocked(api.git.commit).mockRejectedValue(
+      new Error('git commit/merge is disabled — set PLANARUS_GIT_WRITE_ENABLED=true'),
+    )
+    render(<GitSnapshotPanel projectId="proj_1" />)
+    fireEvent.change(await screen.findByPlaceholderText(/commit message/i), {
+      target: { value: 'anything' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /commit all/i }))
+    await waitFor(() => expect(screen.getByText(/PLANARUS_GIT_WRITE_ENABLED/)).toBeTruthy())
+  })
+
+  it('hides merge unless the default branch is the one checked out', async () => {
+    // Branches trail the default, but HEAD is elsewhere. The server merges into
+    // the CURRENT branch, so offering "Merge into feat/x" would do something the
+    // row does not say.
+    vi.mocked(api.git.snapshot).mockResolvedValue({
+      ...baseSnap, current_branch: 'feat/x', default_branch: 'main', needs_merge: ['feat/y'],
+    })
+    render(<GitSnapshotPanel projectId="proj_1" />)
+    await screen.findByRole('button', { name: /fetch now/i })
+    expect(screen.queryByRole('button', { name: /merge into/i })).toBeNull()
+  })
+
+  it('merges a trailing branch into the checked-out default', async () => {
+    vi.mocked(api.git.snapshot).mockResolvedValue({ ...baseSnap, needs_merge: ['feat/x'] })
+    vi.mocked(api.git.merge).mockResolvedValue({
+      project_id: 'proj_1', status: 'ok', message: null, sha: 'aaa1111',
+      snapshot: { ...baseSnap, needs_merge: [] },
+    })
+    render(<GitSnapshotPanel projectId="proj_1" />)
+    const select = await screen.findByRole('combobox')
+    fireEvent.change(select, { target: { value: 'feat/x' } })
+    fireEvent.click(screen.getByRole('button', { name: /merge into main/i }))
+    await waitFor(() => expect(screen.getByText(/merged into main at aaa1111/i)).toBeTruthy())
+    expect(api.git.merge).toHaveBeenCalledWith('proj_1', 'feat/x')
+  })
+
+  it('reports a conflict as a warning rather than a success', async () => {
+    vi.mocked(api.git.snapshot).mockResolvedValue({ ...baseSnap, needs_merge: ['feat/x'] })
+    vi.mocked(api.git.merge).mockResolvedValue({
+      project_id: 'proj_1', status: 'conflict', sha: null,
+      message: 'CONFLICT (content): Merge conflict in app.py',
+      snapshot: { ...baseSnap, needs_merge: ['feat/x'] },
+    })
+    render(<GitSnapshotPanel projectId="proj_1" />)
+    fireEvent.change(await screen.findByRole('combobox'), { target: { value: 'feat/x' } })
+    fireEvent.click(screen.getByRole('button', { name: /merge into main/i }))
+    await waitFor(() => expect(screen.getByText(/merge conflict in app\.py/i)).toBeTruthy())
+    // The server aborted it, so the branch is still offered to try again.
+    expect(screen.getByRole('button', { name: /merge into main/i })).toBeTruthy()
+  })
+})
+
+describe('GitSnapshotPanel — Phase 12d Browse', () => {
+  it('saves the folder the picker returns without any typing', async () => {
+    vi.mocked(api.git.snapshot).mockResolvedValue({ ...baseSnap, repo_path: null, is_repo: false })
+    vi.mocked(api.fs.dirs).mockResolvedValue({
+      path: '/srv', parent: '/', is_git: false, roots: ['/'], message: null,
+      dirs: [{ name: 'repo', path: '/srv/repo', is_git: true }],
+    })
+    render(<GitSnapshotPanel projectId="proj_1" />)
+    fireEvent.click(await screen.findByRole('button', { name: /browse/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /use this folder/i }))
+    await waitFor(() =>
+      expect(api.projects.update).toHaveBeenCalledWith('proj_1', { folder_path: '/srv' }),
+    )
   })
 })
 

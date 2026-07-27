@@ -221,8 +221,10 @@ them intact:
   so there is a single governance and audit path.
 - **Approval-gated external writes.** Only an authenticated local human action
   applies canonical state.
-- **Deny-by-default power.** No shell execution, no arbitrary filesystem
-  browsing, no Git mutation, no auto-apply.
+- **Deny-by-default power.** No shell execution, no auto-apply, and no Git or
+  filesystem access for agents — ever. The human-facing exceptions are narrow,
+  off by default and audited: an env-gated fetch/commit/merge in the repo
+  cockpit, and a directories-only folder picker in local mode.
 - **Everything is audited.** Each state change writes an `AuditEvent`, mirrored
   to `.planarus/audit-log.jsonl`.
 
@@ -354,6 +356,7 @@ and
 | <img src="https://img.shields.io/badge/-alerts-7A63C7.svg?style=flat-square" height="20" alt="" /> Notifications and backups | OS-scheduled reminders and verified local database snapshots | [Notifications and backups](docs/guide/notifications-and-backup.md) |
 | <img src="https://img.shields.io/badge/-roles-7A63C7.svg?style=flat-square" height="20" alt="" /> Team administration | Roles, invitations, and attribution for LAN deployments | [Team administration](docs/guide/team-administration.md) |
 | <img src="https://img.shields.io/badge/-hosted-7A63C7.svg?style=flat-square" height="20" alt="" /> Hosted go-live | The documented path for deliberately enabling a hosted deployment | [Hosted go-live](docs/guide/hosted-go-live.md) |
+| <img src="https://img.shields.io/badge/-git-7A63C7.svg?style=flat-square" height="20" alt="" /> Git actions | Human-clicked fetch (`PLANARUS_GIT_FETCH_ENABLED`) and commit/merge (`PLANARUS_GIT_WRITE_ENABLED`) in the repo cockpit — agents keep zero Git access | [Developer setup](docs/dev/setup.md#the-repo-cockpit-and-its-gated-git-actions) |
 
 ---
 
@@ -380,7 +383,7 @@ workflow.
 > [!TIP]
 > Planarus is a working, pre-1.0, local-first application used daily by its
 > author. Phases 1–19 and 22 are built: planning entities, structured docs,
-approval workflows, MCP and API boundaries, LAN team mode, the read-only Git
+approval workflows, MCP and API boundaries, LAN team mode, the repo Git
 cockpit, offline canvas, the integration hub, notifications, verified backups,
 the planning graph, and entity attachments.
 

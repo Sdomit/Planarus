@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { api, type GitBranch, type GitFetchResult, type GitPrSummary, type GitSnapshot } from '../api/client'
+import FolderPicker from './FolderPicker'
 import { Icon } from './Icon'
 import { agoLabel, dayLabel } from './date'
 
@@ -73,7 +74,7 @@ export default function GitSnapshotPanel({ projectId }: { projectId: string }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 'var(--space-3)', flexWrap: 'wrap' }}>
       <Icon name="code" />
       <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>Repository</span>
-      <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>read-only</span>
+      <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }} title="Agents and integrations can never mutate Git; human actions here are explicit and gated">agents read-only</span>
       {snap?.is_repo && (
         <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-tertiary)' }}>
           {snap.last_fetched_at
@@ -151,6 +152,7 @@ export default function GitSnapshotPanel({ projectId }: { projectId: string }) {
           </Row>
         )}
       </dl>
+      <WriteActions snap={snap} projectId={projectId} onSnap={(s) => setSnap(s)} />
       <BranchTable snap={snap} />
       <PrSection projectId={projectId} />
     </div>
@@ -271,21 +273,22 @@ function PrSection({ projectId }: { projectId: string }) {
   )
 }
 
-// Point the project at a repo folder so the live status can be read. A native
-// folder picker can't hand back an absolute path (browser security), so this is
-// a plain text field — the server validates it must be absolute and existing.
+// Point the project at a repo folder so the live status can be read. Browse
+// (Phase 12d) lists server-side folders in a picker; the text field stays for
+// paste/typing, and the server still validates absolute-and-existing either way.
 function FolderField({ projectId, current, onSaved }: {
   projectId: string; current: string | null; onSaved: () => void
 }) {
   const [editing, setEditing] = useState(current == null)
+  const [picking, setPicking] = useState(false)
   const [value, setValue] = useState(current ?? '')
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
-  const save = async () => {
+  const saveWith = async (path: string) => {
     setSaving(true); setErr(null)
     try {
-      await api.projects.update(projectId, { folder_path: value.trim() || null })
+      await api.projects.update(projectId, { folder_path: path.trim() || null })
       setEditing(false)
       onSaved()
     } catch (e) {
@@ -295,6 +298,14 @@ function FolderField({ projectId, current, onSaved }: {
     }
   }
 
+  const picker = picking && (
+    <FolderPicker
+      title="Choose the repository folder"
+      onClose={() => setPicking(false)}
+      onSelect={(path) => { setPicking(false); setValue(path); void saveWith(path) }}
+    />
+  )
+
   if (!editing) {
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -302,6 +313,7 @@ function FolderField({ projectId, current, onSaved }: {
         <button type="button" className="btn btn-outline btn-sm" onClick={() => { setValue(current ?? ''); setEditing(true) }}>
           Change
         </button>
+        {picker}
       </span>
     )
   }
@@ -316,9 +328,12 @@ function FolderField({ projectId, current, onSaved }: {
         spellCheck={false}
         autoFocus
         onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') void save() }}
+        onKeyDown={(e) => { if (e.key === 'Enter') void saveWith(value) }}
       />
-      <button type="button" className="btn btn-solid btn-sm" onClick={() => void save()} disabled={saving}>
+      <button type="button" className="btn btn-outline btn-sm" onClick={() => setPicking(true)} disabled={saving}>
+        Browse…
+      </button>
+      <button type="button" className="btn btn-solid btn-sm" onClick={() => void saveWith(value)} disabled={saving}>
         {saving ? 'Saving…' : 'Save'}
       </button>
       {current != null && (
@@ -327,7 +342,127 @@ function FolderField({ projectId, current, onSaved }: {
         </button>
       )}
       {err && <span style={{ width: '100%', fontSize: 'var(--text-xs)', color: 'var(--status-danger-fg)' }}>{err}</span>}
+      {picker}
     </span>
+  )
+}
+
+// Phase 12d: the two gated working-tree actions. Both are refused server-side
+// with an explanatory 409 unless PLANARUS_GIT_WRITE_ENABLED=true, so the UI can
+// always offer them and stay honest. Commit appears only when the tree is
+// dirty; merge only when branches trail the default branch AND the default is
+// checked out (the server merges into the current branch, so anything else
+// would do something the row does not say).
+function WriteActions({ snap, projectId, onSnap }: {
+  snap: GitSnapshot; projectId: string; onSnap: (s: GitSnapshot) => void
+}) {
+  const [message, setMessage] = useState('')
+  const [branch, setBranch] = useState('')
+  const [busy, setBusy] = useState<'commit' | 'merge' | null>(null)
+  const [note, setNote] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null)
+
+  const tree = snap.working_tree
+  const dirty = !!tree && tree.staged + tree.unstaged + tree.untracked + tree.conflicted > 0
+  const onDefault = snap.default_branch != null && snap.current_branch === snap.default_branch
+  const mergeable = onDefault ? snap.needs_merge : []
+
+  // `&& !note` matters: a successful commit or merge is exactly what makes the
+  // tree clean and empties needs_merge, so returning null on that alone would
+  // unmount the confirmation in the same render that earned it — the one path
+  // where the user most needs to be told what happened, and the only one where
+  // the failure messages below would never be seen.
+  if (!dirty && mergeable.length === 0 && !note) return null
+
+  const doCommit = async () => {
+    setBusy('commit'); setNote(null)
+    try {
+      const res = await api.git.commit(projectId, message)
+      if (res.snapshot) onSnap(res.snapshot)
+      if (res.status === 'ok') {
+        setMessage('')
+        setNote({ tone: 'ok', text: `Committed ${res.sha ?? ''}.` })
+      } else {
+        setNote({ tone: 'warn', text: res.message ?? 'Commit did not complete.' })
+      }
+    } catch (e) {
+      setNote({ tone: 'warn', text: e instanceof Error ? e.message : 'Commit failed.' })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const doMerge = async () => {
+    if (!branch) return
+    setBusy('merge'); setNote(null)
+    try {
+      const res = await api.git.merge(projectId, branch)
+      if (res.snapshot) onSnap(res.snapshot)
+      if (res.status === 'ok') {
+        setBranch('')
+        setNote({ tone: 'ok', text: `Merged into ${snap.current_branch} at ${res.sha ?? 'HEAD'}.` })
+      } else {
+        setNote({ tone: 'warn', text: res.message ?? 'Merge did not complete.' })
+      }
+    } catch (e) {
+      setNote({ tone: 'warn', text: e instanceof Error ? e.message : 'Merge failed.' })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+      {dirty && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <input
+            className="input input-sm"
+            style={{ flex: '1 1 240px' }}
+            placeholder="Commit message for everything in the working tree"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && message.trim()) void doCommit() }}
+          />
+          <button
+            type="button"
+            className="btn btn-solid btn-sm"
+            disabled={busy != null || !message.trim()}
+            onClick={() => void doCommit()}
+            title="git add -A && git commit — explicit and gated (PLANARUS_GIT_WRITE_ENABLED)"
+          >
+            {busy === 'commit' ? <span className="spinner spinner-sm" /> : <Icon name="check" className="ic-14" />}
+            {busy === 'commit' ? ' Committing…' : ' Commit all'}
+          </button>
+        </div>
+      )}
+      {mergeable.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <select
+            className="input select input-sm"
+            style={{ width: 'auto' }}
+            value={branch}
+            onChange={(e) => setBranch(e.target.value)}
+          >
+            <option value="">Merge a branch…</option>
+            {mergeable.map((name) => <option key={name} value={name}>{name}</option>)}
+          </select>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            disabled={busy != null || !branch}
+            onClick={() => void doMerge()}
+            title={`git merge into ${snap.current_branch} — refused on a dirty tree, aborted on conflict`}
+          >
+            {busy === 'merge' ? <span className="spinner spinner-sm" /> : <Icon name="layers" className="ic-14" />}
+            {busy === 'merge' ? ' Merging…' : ` Merge into ${snap.current_branch}`}
+          </button>
+        </div>
+      )}
+      {note && (
+        <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: note.tone === 'ok' ? 'var(--text-secondary)' : 'var(--status-warning-fg)' }}>
+          {note.text}
+        </p>
+      )}
+    </div>
   )
 }
 

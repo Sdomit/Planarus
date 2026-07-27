@@ -6,7 +6,16 @@ from sqlmodel import Session
 from app.core.security import require_local_control
 from app.db.session import get_session
 from app.fsmemory.project_root import resolve_project_root_or_none
-from app.schemas.git import GitFetchResult, GitPrSummary, GitRepoLink, GitSnapshot
+from app.schemas.git import (
+    GitCommitRequest,
+    GitCommitResult,
+    GitFetchResult,
+    GitMergeRequest,
+    GitMergeResult,
+    GitPrSummary,
+    GitRepoLink,
+    GitSnapshot,
+)
 from app.services import gh_service, git_service, project_service
 from app.services.audit_service import create_audit_event
 
@@ -88,6 +97,80 @@ def fetch_project_git(
             entity_id=project.id,
             project_id=project.id,
             payload_json=json.dumps({"status": result.status, "remote": result.remote}),
+        )
+        session.commit()
+    return result
+
+
+@router.post(
+    "/projects/{project_id}/git/commit",
+    response_model=GitCommitResult,
+    # Phase 12d: control-token-gated like fetch; additionally env-gated in the
+    # service (PLANARUS_GIT_WRITE_ENABLED, 409 when off). Local UI only — never
+    # mounted on MCP or the external API, so agents cannot reach it.
+    dependencies=[Depends(require_local_control)],
+)
+def commit_project_git(
+    project_id: str,
+    body: GitCommitRequest,
+    session: Session = Depends(get_session),
+) -> GitCommitResult:
+    """Explicit, human-clicked stage-all + commit in the project's repo. Every
+    attempt that ran (or tried to run) git is audited, like fetch."""
+    project = project_service.get_project(session, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    result = git_service.commit(
+        project.id, resolve_project_root_or_none(project), body.message
+    )
+
+    if result.status in ("ok", "failed"):
+        create_audit_event(
+            session,
+            event_type="git_commit",
+            actor_type="human",
+            entity_type="project",
+            entity_id=project.id,
+            project_id=project.id,
+            payload_json=json.dumps({"status": result.status, "sha": result.sha}),
+        )
+        session.commit()
+    return result
+
+
+@router.post(
+    "/projects/{project_id}/git/merge",
+    response_model=GitMergeResult,
+    dependencies=[Depends(require_local_control)],
+)
+def merge_project_git(
+    project_id: str,
+    body: GitMergeRequest,
+    session: Session = Depends(get_session),
+) -> GitMergeResult:
+    """Explicit, human-clicked merge of a local branch into the current branch
+    (Phase 12d). Dirty trees are refused; conflicts are aborted server-side so
+    the repo is never left half-merged. Audited like fetch and commit."""
+    project = project_service.get_project(session, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    result = git_service.merge(
+        project.id, resolve_project_root_or_none(project), body.branch
+    )
+
+    if result.status in ("ok", "conflict", "failed"):
+        create_audit_event(
+            session,
+            event_type="git_merge",
+            actor_type="human",
+            entity_type="project",
+            entity_id=project.id,
+            project_id=project.id,
+            payload_json=json.dumps(
+                {"status": result.status, "branch": body.branch, "sha": result.sha}
+            ),
         )
         session.commit()
     return result

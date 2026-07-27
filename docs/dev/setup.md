@@ -182,6 +182,29 @@ overlap the running application would put its own source code inside a
 generated-file tree. Point the project at the folder you actually want managed,
 not at Planarus itself.
 
+### The repo cockpit and its gated Git actions
+
+The Cockpit's Repository panel reads live Git state from the project folder —
+branches, working tree, needs-merge, open PRs via your own `gh`. Reads are
+always on; the folder can be picked with **Browse** (a server-side,
+directories-only listing, local mode only) or typed as an absolute path, both
+in the Repository panel and on the New project form.
+
+The mutations are separate, human-clicked, audited, and each behind its own
+off-by-default flag:
+
+```bash
+PLANARUS_GIT_FETCH_ENABLED=true   # "Fetch now" — remote-tracking refs only
+PLANARUS_GIT_WRITE_ENABLED=true   # "Commit all" and "Merge into <branch>"
+```
+
+Commit stages everything and commits with your message. Merge only offers
+branches that trail the default branch while the default branch is checked
+out; it refuses a dirty tree and aborts on conflict, so the repo is never left
+half-merged — resolve real conflicts in your editor or terminal, where they
+belong. Agents, MCP and the external API have no Git or filesystem path at
+all, flags or no flags.
+
 ## Frontend (apps/web)
 
 ```bash

@@ -123,6 +123,56 @@ class GitPrSummary(BaseModel):
     checked_at: str
 
 
+class GitCommitRequest(BaseModel):
+    """Body of the gated commit action. ``message`` is the commit subject/body;
+    everything currently in the working tree is staged (``git add -A``) — partial
+    staging is a Git-GUI feature this cockpit deliberately does not grow."""
+
+    message: str
+
+
+class GitCommitResult(BaseModel):
+    """Outcome of a human-clicked commit (Phase 12d). ``status``:
+
+    - ``ok``       — commit created; ``sha`` is the new HEAD
+    - ``clean``    — nothing to commit; no command ran beyond the status read
+    - ``failed``   — attempted but errored (hooks, identity, …; see message)
+
+    ``snapshot`` is always the current cockpit state, like ``GitFetchResult``.
+    """
+
+    project_id: str
+    status: str
+    message: Optional[str] = None
+    sha: Optional[str] = None
+    snapshot: Optional[GitSnapshot] = None
+
+
+class GitMergeRequest(BaseModel):
+    """Body of the gated merge action: merge ``branch`` into the current branch."""
+
+    branch: str
+
+
+class GitMergeResult(BaseModel):
+    """Outcome of a human-clicked merge (Phase 12d). ``status``:
+
+    - ``ok``       — merged (fast-forward or merge commit); ``sha`` is new HEAD
+    - ``dirty``    — refused: the working tree has uncommitted changes
+    - ``conflict`` — merge hit conflicts and was aborted; the tree is clean again
+    - ``failed``   — attempted but errored (see message)
+
+    A conflicted merge is always aborted server-side: the cockpit never leaves
+    the repo in a half-merged state for the user to discover later.
+    """
+
+    project_id: str
+    status: str
+    message: Optional[str] = None
+    sha: Optional[str] = None
+    snapshot: Optional[GitSnapshot] = None
+
+
 class GitFetchResult(BaseModel):
     """Outcome of the one gated exception (Phase 12b): a human-clicked fetch of
     remote-tracking refs. ``status``:
