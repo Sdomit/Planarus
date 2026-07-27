@@ -222,6 +222,8 @@ jobs:
         run: |
           call scripts\run-planarus.bat help || exit /b 1
           call scripts\run-planarus.bat bogus && exit /b 1
+          call scripts\run-planarus-team.bat help || exit /b 1
+          call scripts\run-planarus-team.bat bogus && exit /b 1
           call scripts\stop-planarus.bat || exit /b 1
           call scripts\update-planarus.bat help || exit /b 1
           call scripts\update-planarus.bat bogus && exit /b 1
