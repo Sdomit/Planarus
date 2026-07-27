@@ -347,6 +347,11 @@ def test_feed_query_count_does_not_scale_with_projects(
     """
     for i in range(3):
         _seed_feed_project(client, f"nf{i}")
+    # Warm-up, discarded: the assertion compares two feed calls, so anything that
+    # happens only on the first one in a process — a statement compiled, a module
+    # imported lazily — would land entirely in `few` and read as growth. Measure
+    # steady state, which is what the O(projects) claim is about.
+    _feed_query_counts(client, engine)
     few = _feed_query_counts(client, engine)
 
     for i in range(3, 9):
