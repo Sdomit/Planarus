@@ -24,7 +24,17 @@ const OPEN_FILTER = OPEN_STATES.join(',')
 // NotificationsBell, which was already polling while this panel was not.
 const POLL_MS = 60_000
 
-interface ApprovalQueuePanelProps { projectId: string; onClose: () => void }
+interface ApprovalQueuePanelProps {
+  projectId: string
+  onClose: () => void
+  // #183 step 3: the nested /approvals/:approvalId route. Opens this detail on
+  // mount and whenever it changes (a browser Back/Forward between two detail
+  // URLs re-fires this without unmounting the panel); onSelect fires on every
+  // openDetail so the URL follows a row click, matching the "detail state is a
+  // route, not a modal flag" rule the whole migration is built on.
+  initialApprovalId?: string
+  onSelect?: (id: string) => void
+}
 
 function targetLabel(a: ApprovalSummary): string {
   if (a.target_title) return a.target_title
@@ -38,7 +48,9 @@ function renderValue(v: unknown): string {
   return JSON.stringify(v)
 }
 
-export default function ApprovalQueuePanel({ projectId }: ApprovalQueuePanelProps) {
+export default function ApprovalQueuePanel({
+  projectId, initialApprovalId, onSelect,
+}: ApprovalQueuePanelProps) {
   const [openItems, setOpenItems] = useState<ApprovalSummary[]>([])
   const [historyItems, setHistoryItems] = useState<ApprovalSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -98,6 +110,11 @@ export default function ApprovalQueuePanel({ projectId }: ApprovalQueuePanelProp
       .then(([d, a]) => { setSelected(d); setAudit(a) })
       .catch((e: Error) => setDetailError(e.message))
   }, [])
+
+  useEffect(() => {
+    if (initialApprovalId) openDetail(initialApprovalId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialApprovalId])
 
   const runAction = useCallback((id: string, fn: () => Promise<ApprovalSummary>) => {
     setBusy(true); setActionError(null); actingRef.current = true
@@ -163,7 +180,7 @@ export default function ApprovalQueuePanel({ projectId }: ApprovalQueuePanelProp
       <button
         key={a.id} type="button"
         className={`aqp-row${selected?.id === a.id ? ' aqp-row-selected' : ''}`}
-        onClick={() => openDetail(a.id)}
+        onClick={() => { openDetail(a.id); onSelect?.(a.id) }}
       >
         <span className={`aqp-origin${a.origin === 'api' ? ' api' : ''}`}>{a.origin}</span>
         <span className="aqp-row-action">{a.action_type}</span>

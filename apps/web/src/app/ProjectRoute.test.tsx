@@ -18,10 +18,13 @@ type RoutedProps = {
     project: StubProject
     view: string
     onNavigate: (view: string, project: StubProject) => void
+    detailId?: string
+    onSelectDetail?: (id: string) => void
   }
 }
 
 let lastOnNavigate: ((view: string, project: StubProject) => void) | undefined
+let lastOnSelectDetail: ((id: string) => void) | undefined
 
 // ProjectRoute's job is resolving the URL to a project + view and wiring
 // navigation — its own contract, not Layout's (Layout.test.tsx covers
@@ -29,9 +32,10 @@ let lastOnNavigate: ((view: string, project: StubProject) => void) | undefined
 vi.mock('./Layout', () => ({
   default: ({ routed }: RoutedProps) => {
     lastOnNavigate = routed?.onNavigate
+    lastOnSelectDetail = routed?.onSelectDetail
     return (
       <div data-testid="layout-stub">
-        {routed?.project.title} / {routed?.view}
+        {routed?.project.title} / {routed?.view}{routed?.detailId ? ` / ${routed.detailId}` : ''}
       </div>
     )
   },
@@ -52,6 +56,7 @@ afterEach(() => {
   cleanup()
   vi.clearAllMocks()
   lastOnNavigate = undefined
+  lastOnSelectDetail = undefined
 })
 
 function renderAt(path: string) {
@@ -61,6 +66,7 @@ function renderAt(path: string) {
       <Routes>
         <Route path="/w/:workspaceSlug/p/:projectSlug" element={<ProjectRoute />} />
         <Route path="/w/:workspaceSlug/p/:projectSlug/:view" element={<ProjectRoute />} />
+        <Route path="/w/:workspaceSlug/p/:projectSlug/approvals/:approvalId" element={<ProjectRoute />} />
         <Route path="/" element={<div data-testid="dashboard-stub" />} />
         <Route path="/settings" element={<div data-testid="settings-stub" />} />
         <Route path="/team" element={<div data-testid="team-stub" />} />
@@ -169,5 +175,40 @@ describe('ProjectRoute — onNavigate', () => {
     await ready()
     lastOnNavigate!('dashboard', project)
     await waitFor(() => expect(screen.getByTestId('dashboard-stub')).toBeTruthy())
+  })
+})
+
+describe('ProjectRoute — nested approval detail (#183 step 3)', () => {
+  it('resolves /approvals/:approvalId to the approvals view with a detailId', async () => {
+    workspaces.mockResolvedValue([{ id: 'ws1', slug: 'acme' }])
+    projects.mockResolvedValue([{ id: 'p1', slug: 'launch', title: 'Launch' }])
+
+    renderAt('/w/acme/p/launch/approvals/apr_123')
+
+    await waitFor(() =>
+      expect(screen.getByTestId('layout-stub').textContent).toBe('Launch / approvals / apr_123'),
+    )
+  })
+
+  it('onSelectDetail navigates to the nested approval URL', async () => {
+    workspaces.mockResolvedValue([{ id: 'ws1', slug: 'acme' }])
+    projects.mockResolvedValue([{ id: 'p1', slug: 'launch', title: 'Launch' }])
+
+    renderAt('/w/acme/p/launch/approvals')
+    await waitFor(() => expect(screen.getByTestId('layout-stub')).toBeTruthy())
+
+    lastOnSelectDetail!('apr_456')
+    await waitFor(() =>
+      expect(screen.getByTestId('location').textContent).toBe('/w/acme/p/launch/approvals/apr_456'),
+    )
+  })
+
+  it('the bare /approvals view (no detail) has no detailId', async () => {
+    workspaces.mockResolvedValue([{ id: 'ws1', slug: 'acme' }])
+    projects.mockResolvedValue([{ id: 'p1', slug: 'launch', title: 'Launch' }])
+
+    renderAt('/w/acme/p/launch/approvals')
+
+    await waitFor(() => expect(screen.getByTestId('layout-stub').textContent).toBe('Launch / approvals'))
   })
 })

@@ -82,6 +82,25 @@ describe('ApprovalQueuePanel', () => {
     expect(screen.getByText(/History \(0\)/)).toBeTruthy()
   })
 
+  it('#183 step 3: clicking a row calls onSelect with its id, for the URL to follow', async () => {
+    mockApi.approvals.listPaged.mockResolvedValue({ items: [PENDING], total: 1, hasMore: false })
+    mockApi.approvals.get.mockResolvedValue(DETAIL)
+    mockApi.approvals.audit.mockResolvedValue([])
+    const onSelect = vi.fn()
+    render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} onSelect={onSelect} />)
+    await waitFor(() => screen.getByText('task.create'))
+    fireEvent.click(screen.getByText('task.create'))
+    await waitFor(() => expect(onSelect).toHaveBeenCalledWith('apr_1'))
+  })
+
+  it('#183 step 3: initialApprovalId opens that detail on mount, for a deep link', async () => {
+    mockApi.approvals.listPaged.mockResolvedValue({ items: [PENDING], total: 1, hasMore: false })
+    mockApi.approvals.get.mockResolvedValue(DETAIL)
+    mockApi.approvals.audit.mockResolvedValue([])
+    render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} initialApprovalId="apr_1" />)
+    await waitFor(() => expect(mockApi.approvals.get).toHaveBeenCalledWith('apr_1'))
+  })
+
   it('says so when the server clipped the list (#103)', async () => {
     mockApi.approvals.listPaged.mockResolvedValue({
       items: [PENDING], total: 250, hasMore: true,

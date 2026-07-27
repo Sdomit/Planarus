@@ -41,7 +41,7 @@ function projectPath(project: SelectedProject): string {
  * rather than guessing.
  */
 export default function ProjectRoute() {
-  const { workspaceSlug, projectSlug, view: viewParam } = useParams()
+  const { workspaceSlug, projectSlug, view: viewParam, approvalId } = useParams()
   const navigate = useNavigate()
   const [state, setState] = useState<ResolveState>({ status: 'loading' })
 
@@ -89,7 +89,9 @@ export default function ProjectRoute() {
   }
 
   const { project } = state
-  const view: MainView = viewParam === undefined ? 'cockpit' : (viewParam as MainView)
+  // The /approvals/:approvalId route carries no :view segment of its own —
+  // its presence implies the view.
+  const view: MainView = approvalId ? 'approvals' : viewParam === undefined ? 'cockpit' : (viewParam as MainView)
   if (viewParam !== undefined && !isProjectScopedView(viewParam)) {
     // Unknown segment, or one of dashboard/settings/team typed onto a project
     // URL by hand — neither belongs here. Redirect rather than guess.
@@ -104,5 +106,7 @@ export default function ProjectRoute() {
     navigate(nextView === 'cockpit' ? base : `${base}/${nextView}`)
   }
 
-  return <Layout routed={{ project, view, onNavigate }} />
+  const onSelectDetail = (id: string) => navigate(`${projectPath(project)}/approvals/${id}`)
+
+  return <Layout routed={{ project, view, onNavigate, detailId: approvalId, onSelectDetail }} />
 }
