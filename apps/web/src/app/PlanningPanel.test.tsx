@@ -156,6 +156,63 @@ describe('PlanningPanel', () => {
       .not.toContain('pp-row-focus')
   })
 
+  it('prefills the create form from a captured clip (#106)', async () => {
+    setupEmpty()
+    render(
+      <PlanningPanel
+        projectId="proj_1" initialTab="tasks"
+        capture={{ type: 'task', text: 'Ship the beta\nsecond line', url: 'https://example.com/a', title: 'Example' }}
+      />,
+    )
+    await screen.findByText('Test Project')
+    // The form opens by itself — landing on an empty tab would waste the clip.
+    const title = await screen.findByLabelText('Task title')
+    expect((title as HTMLInputElement).value).toBe('Ship the beta')
+  })
+
+  it('puts the clip body and its source in a decision, which has a body field (#106)', async () => {
+    setupEmpty()
+    render(
+      <PlanningPanel
+        projectId="proj_1" initialTab="decisions"
+        capture={{ type: 'decision', text: 'Use Postgres', url: 'https://example.com/a', title: 'Example' }}
+      />,
+    )
+    await screen.findByText('Test Project')
+    const body = await screen.findByLabelText('Decision details')
+    expect((body as HTMLTextAreaElement).value)
+      .toBe('Use Postgres\n\nSource: Example — https://example.com/a')
+  })
+
+  it('attaches the source as a link on entities whose form has no body (#106)', async () => {
+    setupEmpty()
+    mockApi.tasks.create.mockResolvedValue({
+      id: 'tsk_new', project_id: 'proj_1', phase_id: null, stage_id: null, parent_task_id: null,
+      title: 'Ship the beta', description: null, status: 'backlog', priority: null,
+      due_at: null, sort_order: 0, assignee_id: null, assignee_display: null,
+      created_at: 'x', updated_at: 'x',
+    })
+    mockApi.links.create.mockResolvedValue({ id: 'lnk_1' })
+    const onCaptureConsumed = vi.fn()
+    render(
+      <PlanningPanel
+        projectId="proj_1" initialTab="tasks"
+        capture={{ type: 'task', text: 'Ship the beta', url: 'https://example.com/a', title: 'Example' }}
+        onCaptureConsumed={onCaptureConsumed}
+      />,
+    )
+    await screen.findByText('Test Project')
+    await screen.findByLabelText('Task title')
+    fireEvent.click(screen.getByText('Save'))
+    // Losing where a clip came from is what makes a clipping tool useless later.
+    await waitFor(() =>
+      expect(mockApi.links.create).toHaveBeenCalledWith('proj_1', expect.objectContaining({
+        entity_type: 'task', entity_id: 'tsk_new', url: 'https://example.com/a',
+      })),
+    )
+    expect(onCaptureConsumed).toHaveBeenCalled()
+  })
+
   it('shows the assignee name on an assigned task (P16.3)', async () => {
     setupEmpty()
     mockApi.tasks.list.mockResolvedValue([

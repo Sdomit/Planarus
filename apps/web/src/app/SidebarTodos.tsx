@@ -41,10 +41,12 @@ function TodoRow({ node, depth, onToggle, onAddChild, onRename, onDelete }: RowP
   )
 }
 
-export function SidebarTodos({ projectId }: { projectId: string }) {
+export function SidebarTodos({ projectId, captureLabel }: { projectId: string; captureLabel?: string }) {
   const [todos, setTodos] = useState<Todo[]>([])
   const [collapsed, setCollapsed] = useState(false)
-  const [newLabel, setNewLabel] = useState('')
+  // #106: a `todo` clip lands in the add box, not straight in the list — the
+  // human still presses Add, so a fragment can never write on page load.
+  const [newLabel, setNewLabel] = useState(captureLabel ?? '')
 
   const refresh = useCallback(() => {
     api.todos.list(projectId).then(setTodos).catch(() => { /* keep last */ })

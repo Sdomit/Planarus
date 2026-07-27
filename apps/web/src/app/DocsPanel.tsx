@@ -341,10 +341,12 @@ interface CreateDocFormProps {
   onCreated: (doc: Doc) => void
   onCancel: () => void
   lockedType?: string
+  /** #106: first line of a captured clip, prefilled as the title. */
+  initialTitle?: string
 }
 
-function CreateDocForm({ projectId, onCreated, onCancel, lockedType }: CreateDocFormProps) {
-  const [title, setTitle] = useState('')
+function CreateDocForm({ projectId, onCreated, onCancel, lockedType, initialTitle = '' }: CreateDocFormProps) {
+  const [title, setTitle] = useState(initialTitle)
   const [docType, setDocType] = useState<string>(lockedType ?? 'note')
   const { Noun } = nouns(lockedType)
   const [saving, setSaving] = useState(false)
@@ -883,10 +885,16 @@ function useDocConnections(projectId: string, enabled: boolean) {
 // ---------------------------------------------------------------------------
 
 /** `docType` locks the panel to one type — the Notes view is this panel with docType="note". */
-interface DocsPanelProps { projectId: string; onClose: () => void; docType?: string }
+interface DocsPanelProps {
+  projectId: string
+  onClose: () => void
+  docType?: string
+  /** #106: a `doc` clip opens straight into the create form, titled. */
+  captureTitle?: string
+}
 
-export default function DocsPanel({ projectId, onClose, docType }: DocsPanelProps) {
-  const [view, setView] = useState<'list' | 'new' | 'editor'>('list')
+export default function DocsPanel({ projectId, onClose, docType, captureTitle }: DocsPanelProps) {
+  const [view, setView] = useState<'list' | 'new' | 'editor'>(captureTitle ? 'new' : 'list')
   const [selected, setSelected] = useState<{ id: string; format: string } | null>(null)
 
   // Fetched only once a document is actually open — browsing the list costs
@@ -911,7 +919,7 @@ export default function DocsPanel({ projectId, onClose, docType }: DocsPanelProp
   return (
     <div className="dp-panel">
       {view === 'list' && <DocList projectId={projectId} onSelect={handleSelect} onNew={() => setView('new')} onClose={onClose} docType={docType} onRemoved={handleRemoved} />}
-      {view === 'new' && <CreateDocForm projectId={projectId} onCreated={handleCreated} onCancel={() => setView('list')} lockedType={docType} />}
+      {view === 'new' && <CreateDocForm projectId={projectId} onCreated={handleCreated} onCancel={() => setView('list')} lockedType={docType} initialTitle={captureTitle} />}
       {/* Mounted unconditionally, and `ready` carries the loading state instead.
           Wrapping the editor only once loaded would change the element type at
           this position and remount it — see ConnectionProvider's `ready` doc. */}
