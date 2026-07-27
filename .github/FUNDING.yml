@@ -1,0 +1,4 @@
+# Renders the "Sponsor" button on the repository page and in the sidebar.
+# GitHub strips <script> from rendered Markdown, so the Ko-fi overlay widget
+# cannot run in README.md — this is the supported equivalent.
+ko_fi: sarmaddomit
