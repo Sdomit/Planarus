@@ -6,6 +6,7 @@ import { useEditor, EditorContent, ReactNodeViewRenderer, ReactRenderer, NodeVie
 import type { Editor, NodeViewProps } from '@tiptap/core'
 import { Extension, Node, mergeAttributes } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
+import { Placeholder } from '@tiptap/extensions'
 import Highlight from '@tiptap/extension-highlight'
 import Subscript from '@tiptap/extension-subscript'
 import Superscript from '@tiptap/extension-superscript'
@@ -1227,6 +1228,9 @@ function DocEditor({ docId, onBack, onRemoved, onOpenDoc }: DocEditorProps) {
           isAllowedUri: (url: string) => isAllowedLink(url, { allowRelative: true }),
         },
       }),
+      // The only discoverability the "/" and "@" menus have: an empty line says
+      // what opens them. showOnlyCurrent (default) keeps it to the focused line.
+      Placeholder.configure({ placeholder: "Type '/' for blocks, '@' to mention" }),
       TextStyle,
       Color,
       Highlight,

@@ -24,6 +24,13 @@
 }
 .dp-tiptap { outline: none; }
 .dp-tiptap .ProseMirror { outline: none; min-height: 200px; }
+/* Placeholder writes data-placeholder + .is-empty; the text itself is CSS-only,
+   so it never enters the document and cannot be saved or exported. */
+.dp-tiptap .ProseMirror .is-empty::before {
+  content: attr(data-placeholder);
+  float: left; height: 0; pointer-events: none;
+  color: var(--text-tertiary);
+}
 
 /* Status bar */
 .dp-statusbar {
