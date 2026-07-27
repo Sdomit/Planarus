@@ -23,12 +23,15 @@
 </p>
 
 <p align="center">
-  <a href="#quickstart"><b>Quickstart</b></a> ·
-  <a href="#the-trust-model"><b>Trust model</b></a> ·
-  <a href="#architecture"><b>Architecture</b></a> ·
-  <a href="#connect-an-agent"><b>Connect an agent</b></a> ·
-  <a href="#documentation-map"><b>Docs</b></a> ·
-  <a href="#contributing"><b>Contributing</b></a>
+  <!-- Each section heading opens with a badge <img>, so its text content starts
+       with a space and GitHub generates an id with a leading hyphen
+       (#-quickstart, not #quickstart). These hrefs match the emitted ids. -->
+  <a href="#-quickstart"><b>Quickstart</b></a> ·
+  <a href="#-the-trust-model"><b>Trust model</b></a> ·
+  <a href="#-architecture"><b>Architecture</b></a> ·
+  <a href="#-connect-an-agent"><b>Connect an agent</b></a> ·
+  <a href="#-documentation-map"><b>Docs</b></a> ·
+  <a href="#-contributing"><b>Contributing</b></a>
 </p>
 
 <p align="center">
