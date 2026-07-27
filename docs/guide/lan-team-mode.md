@@ -69,6 +69,20 @@ Two hard rules, both enforced:
 
 ## 2. Serve it to the LAN
 
+**Option A0 — the Windows launcher (steps 1 and 2 in one command):**
+
+```bat
+scripts\run-planarus-team.bat lan
+scripts\run-planarus-team.bat lan 192.168.1.50
+```
+
+`lan` turns on the account gate, LAN mode and the Host allowlist, and binds both
+servers past loopback. With no address it uses this machine's own LAN address —
+the one teammates would type — and says which it picked; pass one explicitly for
+a hostname, a second address, or a comma-separated list. It implies team mode,
+because the API refuses to start with LAN mode and no sign-in (D25). It does not
+touch the firewall: Windows prompts on first bind, and that prompt is the switch.
+
 **Option A — dev processes (simplest on one workstation):**
 
 ```bash

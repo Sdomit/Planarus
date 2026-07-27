@@ -224,6 +224,12 @@ jobs:
           call scripts\run-planarus.bat bogus && exit /b 1
           call scripts\run-planarus-team.bat help || exit /b 1
           call scripts\run-planarus-team.bat bogus && exit /b 1
+          REM "lan" takes an optional address, so the parser has to tell an
+          REM address from the next argument: "lan help" is help, not a host
+          REM named help, and a stray word after it is still an error.
+          call scripts\run-planarus-team.bat lan 192.168.1.50 help || exit /b 1
+          call scripts\run-planarus-team.bat lan help || exit /b 1
+          call scripts\run-planarus.bat lan verify bogus && exit /b 1
           call scripts\stop-planarus.bat || exit /b 1
           call scripts\update-planarus.bat help || exit /b 1
           call scripts\update-planarus.bat bogus && exit /b 1

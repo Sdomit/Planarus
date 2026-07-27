@@ -14,6 +14,11 @@ export default defineConfig({
   },
   server: {
     port: Number(process.env.VITE_PORT) || 5173,
+    // Loopback unless the launcher's "lan" argument says otherwise. Opening the
+    // dev server to the network is a decision, not a default, and this keeps it
+    // in the same place as every other launcher-owned setting rather than in a
+    // pnpm flag nobody can see from the batch file.
+    host: process.env.VITE_HOST || false,
     // Only strict when the launcher picked the port: it already proved the port
     // free and printed URLs using it, so Vite's silent +1 fallback would send
     // you to a dead address. Plain `pnpm dev` keeps the friendly fallback.

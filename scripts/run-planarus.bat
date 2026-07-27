@@ -30,6 +30,9 @@ set "API_PY=%API_DIR%\.venv\Scripts\python.exe"
 set "PNPM_CMD=pnpm"
 set "TEAM_MODE=0"
 set "VERIFY_MODE=0"
+set "LAN_MODE=0"
+set "LAN_HOSTS="
+set "API_HOST_ARG="
 REM Silent by default. The visible pair of consoles is a debugging aid, not the
 REM everyday experience, and "visible" turns it back on.
 set "SILENT_MODE=1"
@@ -59,11 +62,39 @@ if /i "%~1"=="visible" (
   shift
   goto parse_args
 )
+if /i "%~1"=="lan" goto arg_lan
 if /i "%~1"=="help" goto usage
 if /i "%~1"=="--help" goto usage
 if /i "%~1"=="-h" goto usage
 echo [ERROR] Unknown argument: %~1
 goto usage_error
+
+REM "lan" takes an optional address: the exact host teammates will type. Parsed
+REM with labels rather than a parenthesised block because the block is expanded
+REM once, before the shift, so %~1 inside it would still be "lan".
+:arg_lan
+set "LAN_MODE=1"
+shift
+if "%~1"=="" goto parse_args
+call :is_arg_keyword "%~1"
+if errorlevel 1 goto parse_args
+set "LAN_HOSTS=%~1"
+shift
+goto parse_args
+
+:is_arg_keyword
+REM Exit 1 when the token is one of this script's own arguments, so that
+REM "run-planarus.bat lan verify" reads as two arguments rather than silently
+REM allowlisting a host called "verify".
+if /i "%~1"=="team" exit /b 1
+if /i "%~1"=="verify" exit /b 1
+if /i "%~1"=="silent" exit /b 1
+if /i "%~1"=="visible" exit /b 1
+if /i "%~1"=="lan" exit /b 1
+if /i "%~1"=="help" exit /b 1
+if /i "%~1"=="--help" exit /b 1
+if /i "%~1"=="-h" exit /b 1
+exit /b 0
 
 :args_done
 REM --- already running? -------------------------------------------------------
@@ -93,6 +124,12 @@ if "%VERIFY_MODE%"=="1" (
   if errorlevel 1 goto failed
 )
 
+REM "lan" is team mode plus a network, never a network on its own: the API
+REM refuses to start with LAN mode and no account gate (D25), and it is right to
+REM - the local control token is not an identity, and the alternative is handing
+REM the whole database to anyone on the network.
+if "%LAN_MODE%"=="1" set "TEAM_MODE=1"
+
 REM --- local-only runtime policy ---------------------------------------------
 REM setlocal means these override only this launcher and its child processes.
 REM A plain run must stay anonymous even if a parent shell had team mode set.
@@ -112,6 +149,34 @@ REM it out of the checkout, and let a value from the environment win - a real
 REM team server puts this on the drive with the room, not in a profile.
 if "%TEAM_MODE%"=="1" if not defined PLANARUS_PROJECTS_ROOT set "PLANARUS_PROJECTS_ROOT=%LOG_DIR%\projects"
 if "%TEAM_MODE%"=="1" if not exist "%PLANARUS_PROJECTS_ROOT%" mkdir "%PLANARUS_PROJECTS_ROOT%" >nul 2>&1
+
+REM --- LAN mode -----------------------------------------------------------------
+if not "%LAN_MODE%"=="1" goto lan_done
+REM The allowlist is the Host header teammates will actually type, and requests
+REM for anything else get a 403 - that is the DNS-rebinding defence, so it is
+REM kept tight rather than opened to a wildcard. With no address given, this
+REM machine's own LAN address is the one they will type, so detect it and say so
+REM out loud instead of guessing quietly.
+if defined LAN_HOSTS goto lan_hosts_ready
+for /f "usebackq tokens=* delims=" %%A in (`powershell -NoProfile -Command "$s=[System.Net.Sockets.UdpClient]::new(); try { $s.Connect('192.0.2.1',1); $ip=$s.Client.LocalEndPoint.Address.IPAddressToString } catch { $ip='' } finally { $s.Dispose() }; if ($ip -and -not $ip.StartsWith('127.') -and $ip -ne '0.0.0.0') { $ip }"`) do set "LAN_HOSTS=%%A"
+if not defined LAN_HOSTS (
+  echo [ERROR] "lan" needs an address and this machine has no local-network one.
+  echo         Pass it explicitly: scripts\run-planarus-team.bat lan 192.168.1.50
+  goto failed
+)
+echo [LAN] No address given - using this machine's own: %LAN_HOSTS%
+
+:lan_hosts_ready
+set "PLANARUS_LAN_MODE_ENABLED=true"
+set "PLANARUS_LAN_ALLOWED_HOSTS=%LAN_HOSTS%"
+REM Binding past loopback is the launcher's job, not the app's: the API never
+REM widens its own socket, precisely so that opening it stays a decision someone
+REM made on purpose. Vite reads VITE_HOST from its config for the same reason.
+set "API_HOST_ARG=--host 0.0.0.0"
+set "VITE_HOST=0.0.0.0"
+set "MODE=team on the LAN (sign-in required)"
+
+:lan_done
 
 REM --- pick free loopback ports ------------------------------------------------
 REM netstat is built in. The colon anchor prevents :8000 matching :18000; omit
@@ -138,7 +203,7 @@ REM makes it a no-op on every later start (a marker in the database survives
 REM deleting the demo project), skips team mode entirely, and never returns
 REM nonzero - a welcome mat is not worth failing a boot over. Opt out for good
 REM with PLANARUS_SEED_DEMO=0.
-set "API_CMD=call .venv\Scripts\activate.bat && alembic upgrade head && python scripts\seed_demo_project.py --auto && uvicorn app.main:app --reload --reload-dir app --port %API_PORT%"
+set "API_CMD=call .venv\Scripts\activate.bat && alembic upgrade head && python scripts\seed_demo_project.py --auto && uvicorn app.main:app --reload --reload-dir app --port %API_PORT% %API_HOST_ARG%"
 set "WEB_CMD=call %PNPM_CMD% dev:web"
 
 REM Where a failure will have left its explanation. Set before the wait loops
@@ -213,6 +278,21 @@ echo Planarus is ready.
 echo   UI:       http://localhost:%WEB_PORT%
 echo   API docs: http://localhost:%API_PORT%/docs
 echo   Mode:     %MODE%
+REM The address teammates type, printed because it is the one thing they cannot
+REM work out from this machine. The two warnings are not boilerplate: the
+REM firewall prompt is the OS-level on switch and is easy to dismiss by reflex,
+REM and plain HTTP on the LAN is a documented tradeoff (D26) rather than an
+REM oversight - anyone who can sniff the network can read the session cookies.
+if "%LAN_MODE%"=="1" (
+  echo   Team URL: http://%LAN_HOSTS%:%WEB_PORT%
+  echo   Allowed:  %LAN_HOSTS%  ^(any other Host gets 403^)
+  echo.
+  echo   [LAN] Windows will prompt to allow inbound access - that prompt is the
+  echo         firewall switch, and declining it keeps teammates out.
+  echo   [LAN] Traffic is plain HTTP. Anyone who can sniff this network can read
+  echo         it, session cookies included. Put a TLS proxy in front if that is
+  echo         not acceptable here.
+)
 REM Silent mode has no windows to close, so offering that as the alternative
 REM would be advice the user cannot follow.
 if "%SILENT_MODE%"=="1" echo   Stop:     scripts\stop-planarus.bat  (or the tray icon)
@@ -511,7 +591,7 @@ endlocal & set "%~2=%_p%"
 exit /b 0
 
 :usage
-echo Usage: scripts\run-planarus.bat [team] [verify] [visible]
+echo Usage: scripts\run-planarus.bat [team] [lan [address]] [verify] [visible]
 echo.
 echo   scripts\run-planarus.bat          Bootstrap and start the app, then open it.
 echo                                     No service windows; output goes to
@@ -522,6 +602,10 @@ echo   scripts\run-planarus.bat visible  Same, but keep the two service consoles
 echo                                     Use this when a service will not start.
 echo   scripts\run-planarus.bat verify   Run API and web checks, then start the app.
 echo   scripts\run-planarus.bat team     Start local team mode with sign-in enabled.
+echo   scripts\run-planarus.bat lan      Team mode, reachable from this network.
+echo                                     Add an address to set the Host allowlist
+echo                                     ^(lan 192.168.1.50^); without one this
+echo                                     machine's own LAN address is used.
 echo.
 echo Arguments can be combined: scripts\run-planarus.bat team verify
 echo.

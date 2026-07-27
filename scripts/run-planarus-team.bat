@@ -12,6 +12,11 @@ REM Everything else still works, because the remaining arguments are passed
 REM straight through:
 REM   scripts\run-planarus-team.bat verify    checks first, then starts
 REM   scripts\run-planarus-team.bat visible   keeps the two service consoles
+REM   scripts\run-planarus-team.bat lan       also reachable from this network,
+REM                                           on this machine's LAN address
+REM   scripts\run-planarus-team.bat lan 192.168.1.50
+REM                                           same, with the address teammates
+REM                                           type spelled out for the allowlist
 REM
 REM Team mode is loopback-plus-LAN with local accounts; see
 REM docs/guide/lan-team-mode.md for what to set up on the first sign-in.
