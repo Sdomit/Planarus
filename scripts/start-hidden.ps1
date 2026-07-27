@@ -46,8 +46,23 @@ if (-not (Test-Path -LiteralPath $dir)) {
 
 # Truncate per run. These logs answer "why did it not come up just now", and an
 # ever-growing file makes that answer harder to find, not easier.
-"=== $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') === $commandLine" |
-    Set-Content -LiteralPath $logFile -Encoding utf8
+#
+# Failing to truncate must not stop the launch, though. An earlier service still
+# holding this file open for append makes Set-Content throw, and with
+# $ErrorActionPreference = 'Stop' that aborted the whole start:
+#
+#   Set-Content : The process cannot access the file '...\api.log'
+#   because it is being used by another process.
+#
+# Trading the app for a tidy log file is the wrong way round. Append instead,
+# and if even that is refused, start anyway - a launch that works and logs badly
+# beats one that refuses to run.
+$header = "=== $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') === $commandLine"
+try {
+    $header | Set-Content -LiteralPath $logFile -Encoding utf8
+} catch {
+    try { $header | Add-Content -LiteralPath $logFile -Encoding utf8 } catch { }
+}
 
 # Redirection is written into the command cmd runs rather than passed as
 # -RedirectStandardOutput: that parameter cannot be combined with a hidden
