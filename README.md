@@ -112,11 +112,32 @@ Open <http://localhost:5173>.
 | Port conflict | `PLANARUS_PORT=5174 docker compose up --build` |
 | Shutdown | `docker compose down` |
 
+### Windows without Docker — double-click and go
+
+```
+scripts\run-planarus.bat
+```
+
+That is the whole thing. On a machine with neither Node nor Python it offers to
+install each one through `winget` (built into Windows 11), asks before touching
+anything, then creates the virtual environment, installs dependencies, migrates
+the database, picks free ports if 5173 or 8000 are taken, waits for both
+services to answer, and opens the browser.
+
+```
+scripts\stop-planarus.bat        Stop it again
+scripts\create-shortcuts.bat     Put Start/Stop shortcuts on the Desktop (run once)
+```
+
+Answering "no" to an install prompt leaves the machine untouched and tells you
+what to install by hand.
+
 ### Native development with hot reload
 
 **Prerequisites:** Python 3.11, Node.js 22+ (24 is what CI runs and `.nvmrc`
 pins), and the pnpm version pinned by the repository (`corepack enable` is the
-recommended route).
+recommended route). On Windows `scripts\run-planarus.bat` above installs the
+first two for you; the steps below are the manual equivalent.
 
 ```bash
 # Once per checkout, from the repository root

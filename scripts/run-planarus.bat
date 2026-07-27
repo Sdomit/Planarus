@@ -10,7 +10,11 @@ REM the account gate. Arguments can be combined in either order.
 REM ============================================================================
 setlocal EnableExtensions DisableDelayedExpansion
 REM The script lives in scripts\; everything it drives is relative to the repo
-REM root one level up. %~f resolves the ".." so ROOT stays a clean absolute path.
+REM root one level up. The %%~fI below resolves the ".." so ROOT stays a clean
+REM absolute path. Both percent signs are doubled on purpose: cmd expands
+REM parameter references inside REM lines too, and a bare %%~f there is not a
+REM valid reference, so it aborted this script on every run with "The following
+REM usage of the path operator in batch-parameter substitution is invalid".
 for %%I in ("%~dp0..") do set "ROOT=%%~fI\"
 set "API_DIR=%ROOT%apps\api"
 set "API_PY=%API_DIR%\.venv\Scripts\python.exe"
@@ -125,15 +129,17 @@ echo Planarus is ready.
 echo   UI:       http://localhost:%WEB_PORT%
 echo   API docs: http://localhost:%API_PORT%/docs
 echo   Mode:     %MODE%
-echo Close the Planarus API and Web windows to stop the local app.
+echo   Stop:     scripts\stop-planarus.bat  (or close the two Planarus windows)
 exit /b 0
 
 REM --- subroutines -------------------------------------------------------------
 :ensure_pnpm
 where node >nul 2>&1
 if errorlevel 1 (
-  echo [ERROR] Node.js 22+ is required but was not found on PATH.
-  exit /b 1
+  call :offer_install "Node.js (LTS)" "OpenJS.NodeJS.LTS"
+  if errorlevel 1 exit /b 1
+  call :recheck_tool node "Node.js"
+  if errorlevel 1 exit /b 1
 )
 where pnpm >nul 2>&1
 if not errorlevel 1 (
@@ -189,13 +195,80 @@ if not "%_setup_status%"=="0" (
 exit /b 0
 
 :find_python311
-py -3.11 -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 11) else 1)" >nul 2>&1
+call :probe_python311
+if not errorlevel 1 goto found_python311
+call :offer_install "Python 3.11" "Python.Python.3.11"
+if errorlevel 1 exit /b 1
+call :probe_python311
 if errorlevel 1 (
-  echo [ERROR] Python 3.11 is required to create apps\api\.venv.
-  echo         Install Python 3.11 from python.org, ensure the Python Launcher is enabled, then rerun this file.
+  echo [ERROR] Python 3.11 still is not answering after the install.
+  echo         Close this window and run this file again - a new window picks
+  echo         up the updated PATH. If it still fails, install Python 3.11 from
+  echo         python.org with the Python Launcher option enabled.
   exit /b 1
 )
+:found_python311
 set "BOOTSTRAP_PY=py -3.11"
+exit /b 0
+
+:probe_python311
+py -3.11 -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 11) else 1)" >nul 2>&1
+exit /b %ERRORLEVEL%
+
+REM --- winget bootstrap ---------------------------------------------------------
+REM %1 = human name, %2 = winget package id. Installing software is not something
+REM a launcher should do behind your back, so this always asks first and a plain
+REM "no" leaves the machine untouched.
+:offer_install
+where winget >nul 2>&1
+if errorlevel 1 (
+  echo [ERROR] %~1 is required but was not found on PATH, and winget is not
+  echo         available to install it. Install %~1 manually, then rerun this file.
+  exit /b 1
+)
+echo.
+echo [SETUP] %~1 is required and is not installed.
+choice /c YN /n /m "        Install it now with winget? [Y/N] "
+if errorlevel 2 (
+  echo [ERROR] %~1 is required. Install it, then run this file again.
+  exit /b 1
+)
+echo [SETUP] Installing %~1 - this can take a few minutes...
+winget install -e --id %~2 --accept-package-agreements --accept-source-agreements
+if errorlevel 1 (
+  echo [ERROR] winget could not install %~1.
+  exit /b 1
+)
+call :refresh_path
+exit /b 0
+
+REM Re-probe a command after installing it. %1 = executable, %2 = human name.
+:recheck_tool
+where %~1 >nul 2>&1
+if not errorlevel 1 exit /b 0
+echo [ERROR] %~2 installed, but this window cannot see it yet.
+echo         Close this window and run this file again - a new window picks up
+echo         the updated PATH.
+exit /b 1
+
+:refresh_path
+REM winget writes the persisted environment; this already-running shell still
+REM holds the PATH it started with, so a freshly installed tool is invisible
+REM until the window is reopened. Rebuilding PATH from the registry avoids that
+REM round trip. Those values are REG_EXPAND_SZ and can contain %%SystemRoot%%
+REM style references, so "call set" is used for the extra expansion pass that
+REM turns them into real directories - a plain set would store them literally.
+REM
+REM Appended, never assigned over the top: the persisted value does not include
+REM whatever the shell that launched this script added to its own PATH, and
+REM replacing would silently drop it. Duplicated entries are harmless, and this
+REM runs at most once per install.
+set "_sys_path="
+set "_usr_path="
+for /f "skip=2 tokens=2,*" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "_sys_path=%%B"
+for /f "skip=2 tokens=2,*" %%A in ('reg query "HKCU\Environment" /v Path 2^>nul') do set "_usr_path=%%B"
+if defined _sys_path call set "PATH=%PATH%;%_sys_path%"
+if defined _usr_path call set "PATH=%PATH%;%_usr_path%"
 exit /b 0
 
 :ensure_web_environment
@@ -273,6 +346,9 @@ echo   scripts\run-planarus.bat verify   Run API and web checks, then start the 
 echo   scripts\run-planarus.bat team     Start local team mode with sign-in enabled.
 echo.
 echo Arguments can be combined: scripts\run-planarus.bat team verify
+echo.
+echo   scripts\stop-planarus.bat         Stop the running local app.
+echo   scripts\create-shortcuts.bat      Desktop Start/Stop shortcuts (run once).
 exit /b 0
 
 :usage_error
