@@ -235,6 +235,14 @@ export interface LayoutProps {
     project: SelectedProject
     view: MainView
     onNavigate: (view: MainView, project: SelectedProject) => void
+    /**
+     * #183 step 3: the nested detail routes (approvals -> tasks -> docs, in
+     * that order of value). At most one view has a detail id at a time, so a
+     * single generic slot covers all three rather than one typed prop per
+     * view — Layout just forwards it to whichever panel is currently active.
+     */
+    detailId?: string
+    onSelectDetail?: (id: string) => void
   }
 }
 
@@ -748,7 +756,14 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
               {mainView === 'context-pack' && (project ? <ContextPackBuilder projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
               {mainView === 'context-files' && (project ? <ContextFilesPanel projectId={project.id} /> : placeholder)}
               {mainView === 'preview' && (project ? <MarkdownPreviewPanel projectId={project.id} /> : placeholder)}
-              {mainView === 'approvals' && (project ? <ApprovalQueuePanel projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
+              {mainView === 'approvals' && (project ? (
+                <ApprovalQueuePanel
+                  projectId={project.id}
+                  onClose={() => setMainView('dashboard')}
+                  initialApprovalId={routed?.detailId}
+                  onSelect={routed?.onSelectDetail}
+                />
+              ) : placeholder)}
               {mainView === 'agent-runs' && (project ? <AgentRunsPanel projectId={project.id} /> : placeholder)}
               {mainView === 'reminders' && (project ? <RemindersPanel projectId={project.id} /> : placeholder)}
               {mainView === 'team' && <TeamPanel />}

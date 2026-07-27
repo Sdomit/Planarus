@@ -20,6 +20,14 @@ export default function App() {
               ProjectRoute, which also owns the routed<->URL wiring. */}
           <Route path="/w/:workspaceSlug/p/:projectSlug" element={<ProjectRoute />} />
           <Route path="/w/:workspaceSlug/p/:projectSlug/:view" element={<ProjectRoute />} />
+          {/* #183 step 3: nested detail routes, in order of value (approvals ->
+              tasks -> docs). More specific than the :view route above, so
+              React Router matches this first for a path with the extra
+              segment. */}
+          <Route
+            path="/w/:workspaceSlug/p/:projectSlug/approvals/:approvalId"
+            element={<ProjectRoute />}
+          />
           {/* Bare `/` (dashboard) and anything this migration hasn't reached
               yet keep rendering Layout exactly as it always has. */}
           <Route path="/*" element={<Layout />} />
