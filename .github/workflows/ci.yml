@@ -326,6 +326,26 @@ jobs:
             throw "second launch took $($elapsed.TotalSeconds)s - it is not short-circuiting"
           }
 
+      # What the stale-port test hid while it was passing against the help
+      # screen: stop killed the pid holding the port, which for the API is the
+      # uvicorn worker, and the --reload supervisor above it started another one.
+      # Stop reported success and the app was still serving.
+      - name: Stop actually frees the ports
+        shell: pwsh
+        run: |
+          $recorded = @()
+          foreach ($line in Get-Content (Join-Path $env:LOCALAPPDATA 'Planarus\local.ports')) {
+            if ($line -match '^\s*(API|WEB)\s*=\s*(\d+)') { $recorded += [int]$Matches[2] }
+          }
+          if ($recorded.Count -ne 2) { throw "expected an API and a WEB port on record, got: $recorded" }
+          & cmd /c 'scripts\stop-planarus.bat'
+          Start-Sleep -Seconds 3
+          foreach ($port in $recorded) {
+            if (Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue) {
+              throw "port $port is still being served after stop-planarus.bat"
+            }
+          }
+
       # A port record left behind by a crash must not be believed. If it were,
       # the launcher would refuse to start and send the user to a dead page.
       # It has to be a real launch: `help` returns from :usage before
@@ -336,7 +356,10 @@ jobs:
         shell: pwsh
         timeout-minutes: 10
         run: |
-          & cmd /c 'scripts\stop-planarus.bat' | Out-Null
+          # Not piped to Out-Null: a stop that half-worked leaves a service on
+          # the port this step is about to reuse, and swallowing its output is
+          # why that was invisible the first time.
+          & cmd /c 'scripts\stop-planarus.bat'
           $dir = Join-Path $env:LOCALAPPDATA 'Planarus'
           New-Item -ItemType Directory -Path $dir -Force | Out-Null
           "API=8099`r`nWEB=5199" | Set-Content -Path (Join-Path $dir 'local.ports')

@@ -150,9 +150,9 @@ echo     %LOG_DIR%\api.log
 echo     %LOG_DIR%\web.log
 set "WHERE_API=%LOG_DIR%\api.log"
 set "WHERE_WEB=%LOG_DIR%\web.log"
-call :start_hidden "%API_DIR%" "%API_CMD%" "%LOG_DIR%\api.log"
+call :start_hidden "%API_DIR%" "%API_CMD%" "%LOG_DIR%\api.log" API_PID
 if errorlevel 1 goto failed
-call :start_hidden "%ROOT%" "%WEB_CMD%" "%LOG_DIR%\web.log"
+call :start_hidden "%ROOT%" "%WEB_CMD%" "%LOG_DIR%\web.log" WEB_PID
 if errorlevel 1 goto failed
 
 :wait_for_ready
@@ -295,7 +295,8 @@ py -3.11 -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 11) e
 exit /b %ERRORLEVEL%
 
 :start_hidden
-REM %1 = working directory, %2 = command line, %3 = log file.
+REM %1 = working directory, %2 = command line, %3 = log file, %4 = the key to
+REM record the new process id under in local.ports.
 REM Delegated to start-hidden.ps1 rather than done here: the command contains
 REM quotes, && and a redirect, and escaping that through cmd's parser is the
 REM exact shape of the faults this script has already shipped once.
@@ -307,14 +308,21 @@ REM is never re-parsed.
 REM
 REM stderr deliberately not sent to nul: swallowing it is what reduced both of
 REM those failures to "could not start a background service" with no reason.
+REM The process id it prints is recorded rather than discarded, because it is the
+REM only handle that stops a silent service. Killing whatever holds the port
+REM kills the uvicorn worker, and the --reload supervisor above it holds no port,
+REM survives, and has a replacement listening again within the second. This id is
+REM the cmd hosting both, so stop-planarus can take the whole tree.
 set "PLANARUS_HIDDEN_WORKDIR=%~1"
 set "PLANARUS_HIDDEN_CMD=%~2"
 set "PLANARUS_HIDDEN_LOG=%~3"
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start-hidden.ps1" >nul
-if errorlevel 1 (
+set "_hidden_pid="
+for /f "usebackq tokens=* delims=" %%P in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start-hidden.ps1"`) do set "_hidden_pid=%%P"
+if not defined _hidden_pid (
   echo [ERROR] Could not start a background service. See the error above and %~3
   exit /b 1
 )
+>>"%LOG_DIR%\local.ports" echo %~4=%_hidden_pid%
 exit /b 0
 
 REM --- winget bootstrap ---------------------------------------------------------

@@ -39,13 +39,45 @@ if "%_stopped%"=="0" (
 exit /b 0
 
 :kill_by_ports
-REM Reads the ports run-planarus.bat recorded, then kills whatever is listening
-REM on them. Absent file means nothing was started by the launcher, which is not
-REM an error - the title pass below still covers a session started before this
-REM record existed.
+REM Reads what run-planarus.bat recorded - the ports, and in silent mode the id
+REM of the process hosting each service - and kills both. Absent file means
+REM nothing was started by the launcher, which is not an error: the title pass
+REM below still covers a session started before this record existed.
 set "_ports_file=%LOCALAPPDATA%\Planarus\local.ports"
 if not exist "%_ports_file%" exit /b 0
-for /f "usebackq tokens=1,2 delims==" %%K in ("%_ports_file%") do call :kill_port "%%L" "%%K"
+REM Recorded process ids first, ports second. The id is the top of the tree and
+REM the port is a leaf of it, so doing it the other way round both reports the
+REM same service twice and, for the API, kills a worker that is immediately
+REM replaced. After the tree is gone the port pass finds nothing and stays quiet.
+for /f "usebackq tokens=1,2 delims==" %%K in ("%_ports_file%") do call :kill_pid_entry "%%L" "%%K"
+for /f "usebackq tokens=1,2 delims==" %%K in ("%_ports_file%") do call :kill_port_entry "%%L" "%%K"
+exit /b 0
+
+:kill_pid_entry
+if /i "%~2"=="API_PID" call :kill_pid_tree "%~1" "API"
+if /i "%~2"=="WEB_PID" call :kill_pid_tree "%~1" "Web"
+exit /b 0
+
+:kill_port_entry
+if /i "%~2"=="API" call :kill_port "%~1" "API"
+if /i "%~2"=="WEB" call :kill_port "%~1" "Web"
+exit /b 0
+
+:kill_pid_tree
+REM %1 = process id the launcher recorded, %2 = label.
+REM Stopping the API by port alone does not work: the pid holding :8000 is the
+REM uvicorn worker, and its --reload supervisor holds no port, so netstat cannot
+REM see it, it survives the kill and starts another worker. This pid is the cmd
+REM that hosts the pair, and /T takes the tree with it.
+REM The image name is checked first because this record outlives a crash and
+REM Windows reuses process ids - killing whoever inherited the number is not on.
+if "%~1"=="" exit /b 0
+tasklist /FI "PID eq %~1" /FI "IMAGENAME eq cmd.exe" 2>nul | find /i "cmd.exe" >nul 2>&1
+if errorlevel 1 exit /b 0
+taskkill /PID %~1 /T /F >nul 2>&1
+if errorlevel 1 exit /b 0
+echo   Stopped the Planarus %~2 service.
+set "_stopped=1"
 exit /b 0
 
 :kill_port
