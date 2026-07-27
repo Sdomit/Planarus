@@ -32,7 +32,9 @@ function splitName(title: string): { code: string; rest: string } {
 const stop = (e: MouseEvent) => e.stopPropagation()
 
 interface ProjAgg { project: Project; tasks: Task[]; risks: Risk[]; done: number; total: number; pct: number }
-interface DashboardProps { onSelectProject?: (p: { id: string; title: string; slug: string }) => void }
+interface DashboardProps {
+  onSelectProject?: (p: { id: string; title: string; slug: string; workspaceSlug: string }) => void
+}
 
 export default function Dashboard({ onSelectProject }: DashboardProps) {
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
@@ -267,7 +269,9 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
             const nm = splitName(p.title)
             const cat = categoryOf(p.id)
             const archived = !!p.archived_at
-            const open = () => onSelectProject?.({ id: p.id, title: p.title, slug: p.slug })
+            // Every project here was loaded scoped to `workspace` (api.projects.list(ws.id, ...)
+            // above), so its slug is always this workspace's — no separate lookup needed.
+            const open = () => onSelectProject?.({ id: p.id, title: p.title, slug: p.slug, workspaceSlug: workspace.slug })
             return (
               <article
                 key={p.id}

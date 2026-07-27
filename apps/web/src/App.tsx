@@ -8,10 +8,20 @@ export default function App() {
     <AuthGate>
       <BrowserRouter>
         <Routes>
-          {/* #183 step 1: one project-scoped route (D63's workspace-qualified
-              shape). Every other path — including a bare `/` and anything not
-              yet migrated — keeps rendering Layout exactly as before it. */}
+          {/* #183 step 2: dashboard, settings and team are their own routes but
+              stay uncontrolled (seeded once via initialView, NAV_KEY-backed) —
+              they aren't project-scoped, so there's no URL to keep in sync as
+              you navigate around from them (that's the 14 routes below). */}
+          <Route path="/settings" element={<Layout initialView="settings" />} />
+          <Route path="/team" element={<Layout initialView="team" />} />
+          {/* The 14 project-scoped views (D63's workspace-qualified shape).
+              Bare project route = cockpit (the project home); the :view
+              segment covers the rest. Both resolve through the same
+              ProjectRoute, which also owns the routed<->URL wiring. */}
           <Route path="/w/:workspaceSlug/p/:projectSlug" element={<ProjectRoute />} />
+          <Route path="/w/:workspaceSlug/p/:projectSlug/:view" element={<ProjectRoute />} />
+          {/* Bare `/` (dashboard) and anything this migration hasn't reached
+              yet keep rendering Layout exactly as it always has. */}
           <Route path="/*" element={<Layout />} />
         </Routes>
       </BrowserRouter>
