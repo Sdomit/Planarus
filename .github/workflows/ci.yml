@@ -227,16 +227,20 @@ jobs:
           call scripts\update-planarus.bat bogus && exit /b 1
           exit /b 0
 
-      - name: Tray script parses
+      - name: PowerShell scripts parse
         shell: pwsh
         run: |
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path scripts/planarus-tray.ps1), [ref]$null, [ref]$errors) | Out-Null
-          if ($errors -and $errors.Count) {
-            $errors | ForEach-Object { Write-Host "line $($_.Extent.StartLineNumber): $($_.Message)" }
-            throw "planarus-tray.ps1 does not parse"
+          $bad = $false
+          foreach ($file in 'scripts/planarus-tray.ps1', 'scripts/start-hidden.ps1') {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $file), [ref]$null, [ref]$errors) | Out-Null
+            if ($errors -and $errors.Count) {
+              $bad = $true
+              $errors | ForEach-Object { Write-Host "${file} line $($_.Extent.StartLineNumber): $($_.Message)" }
+            }
           }
+          if ($bad) { throw "a PowerShell script does not parse" }
 
       # An unescaped ">" in an echo is a redirect, and this is what caught it:
       # the script reported success while writing junk files named after its own
@@ -259,7 +263,7 @@ jobs:
         run: |
           $ports = Join-Path $env:LOCALAPPDATA 'Planarus\local.ports'
           Remove-Item $ports -Force -ErrorAction SilentlyContinue
-          Start-Process cmd -ArgumentList '/c', 'scripts\run-planarus.bat' -WorkingDirectory $PWD
+          Start-Process cmd -ArgumentList '/c', 'scripts\run-planarus.bat', 'silent' -WorkingDirectory $PWD
           $deadline = (Get-Date).AddMinutes(12)
           while ((Get-Date) -lt $deadline -and -not (Test-Path $ports)) { Start-Sleep -Seconds 5 }
           if (-not (Test-Path $ports)) {

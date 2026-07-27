@@ -21,6 +21,8 @@ set "API_PY=%API_DIR%\.venv\Scripts\python.exe"
 set "PNPM_CMD=pnpm"
 set "TEAM_MODE=0"
 set "VERIFY_MODE=0"
+set "SILENT_MODE=0"
+set "LOG_DIR=%LOCALAPPDATA%\Planarus"
 
 :parse_args
 if "%~1"=="" goto args_done
@@ -31,6 +33,11 @@ if /i "%~1"=="team" (
 )
 if /i "%~1"=="verify" (
   set "VERIFY_MODE=1"
+  shift
+  goto parse_args
+)
+if /i "%~1"=="silent" (
+  set "SILENT_MODE=1"
   shift
   goto parse_args
 )
@@ -84,14 +91,44 @@ if "%VERIFY_MODE%"=="1" echo Verification passed; starting the local app.
 echo.
 
 REM --- start backend + frontend ------------------------------------------------
-REM The API window applies migrations before uvicorn starts. A failure remains
-REM visible there, while this launcher exits nonzero instead of opening a dead UI.
-start "Planarus API (:%API_PORT%)" /D "%API_DIR%" cmd /k "call .venv\Scripts\activate.bat && alembic upgrade head && uvicorn app.main:app --reload --reload-dir app --port %API_PORT%"
-
 REM vite.config.ts reads both variables; strictPort prevents a silent port drift.
 set "VITE_PORT=%WEB_PORT%"
 set "VITE_API_TARGET=http://localhost:%API_PORT%"
-start "Planarus Web (:%WEB_PORT%)" /D "%ROOT%" cmd /k "call %PNPM_CMD% dev:web"
+
+set "API_CMD=call .venv\Scripts\activate.bat && alembic upgrade head && uvicorn app.main:app --reload --reload-dir app --port %API_PORT%"
+set "WEB_CMD=call %PNPM_CMD% dev:web"
+
+REM Where a failure will have left its explanation. Set before the wait loops
+REM below, which read it, so that the value is present by the time those
+REM parenthesised blocks are parsed.
+set "WHERE_API=the Planarus API window"
+set "WHERE_WEB=the Planarus Web window"
+
+if "%SILENT_MODE%"=="1" goto start_silent
+
+REM The API window applies migrations before uvicorn starts. A failure remains
+REM visible there, while this launcher exits nonzero instead of opening a dead UI.
+start "Planarus API (:%API_PORT%)" /D "%API_DIR%" cmd /k "%API_CMD%"
+start "Planarus Web (:%WEB_PORT%)" /D "%ROOT%" cmd /k "%WEB_CMD%"
+goto wait_for_ready
+
+:start_silent
+REM No windows at all - the tray is the whole interface. The output that a
+REM console would have shown goes to a log per service instead, because a hidden
+REM service that dies without leaving a reason is unsupportable. stop-planarus
+REM finds these by listening port, not by window title, precisely because there
+REM is no longer a title to find.
+echo   Silent mode. Service output:
+echo     %LOG_DIR%\api.log
+echo     %LOG_DIR%\web.log
+set "WHERE_API=%LOG_DIR%\api.log"
+set "WHERE_WEB=%LOG_DIR%\web.log"
+call :start_hidden "%API_DIR%" "%API_CMD%" "%LOG_DIR%\api.log"
+if errorlevel 1 goto failed
+call :start_hidden "%ROOT%" "%WEB_CMD%" "%LOG_DIR%\web.log"
+if errorlevel 1 goto failed
+
+:wait_for_ready
 
 REM --- wait for real readiness -------------------------------------------------
 set /a _tries=0
@@ -101,7 +138,7 @@ if not errorlevel 1 goto api_up
 set /a _tries+=1
 if %_tries% geq 120 (
   echo [ERROR] API did not pass /health on :%API_PORT% after 120 seconds.
-  echo         Check the Planarus API window for the migration or startup error.
+  echo         Check %WHERE_API% for the migration or startup error.
   goto failed
 )
 call :wait_one_second
@@ -116,7 +153,7 @@ if not errorlevel 1 goto web_up
 set /a _tries+=1
 if %_tries% geq 60 (
   echo [ERROR] Web app did not answer on :%WEB_PORT% after 60 seconds.
-  echo         Check the Planarus Web window for the Vite startup error.
+  echo         Check %WHERE_WEB% for the Vite startup error.
   goto failed
 )
 call :wait_one_second
@@ -124,13 +161,19 @@ goto wait_web
 
 :web_up
 echo   Web is up   http://localhost:%WEB_PORT%
-start "" "http://localhost:%WEB_PORT%"
+REM Silent means silent: a browser tab appearing unasked is the thing being
+REM avoided. The tray's Open item, or a double-click on its icon, is how the UI
+REM gets opened in that mode.
+if "%SILENT_MODE%"=="0" start "" "http://localhost:%WEB_PORT%"
 echo.
 echo Planarus is ready.
 echo   UI:       http://localhost:%WEB_PORT%
 echo   API docs: http://localhost:%API_PORT%/docs
 echo   Mode:     %MODE%
-echo   Stop:     scripts\stop-planarus.bat  (or close the two Planarus windows)
+REM Silent mode has no windows to close, so offering that as the alternative
+REM would be advice the user cannot follow.
+if "%SILENT_MODE%"=="1" echo   Stop:     scripts\stop-planarus.bat  (or the tray icon)
+if "%SILENT_MODE%"=="0" echo   Stop:     scripts\stop-planarus.bat  (or close the two Planarus windows)
 exit /b 0
 
 REM --- subroutines -------------------------------------------------------------
@@ -223,6 +266,29 @@ exit /b 0
 :probe_python311
 py -3.11 -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 11) else 1)" >nul 2>&1
 exit /b %ERRORLEVEL%
+
+:start_hidden
+REM %1 = working directory, %2 = command line, %3 = log file.
+REM Delegated to start-hidden.ps1 rather than done here: the command contains
+REM quotes, && and a redirect, and escaping that through cmd's parser is the
+REM exact shape of the faults this script has already shipped once.
+REM Handed over in environment variables rather than on the command line. The
+REM command contains spaces, quotes and &&, and passing it as a parameter gave
+REM cmd and powershell.exe a parser each - they disagreed twice, once over the
+REM name -Command and once over where the quoting ended. An inherited variable
+REM is never re-parsed.
+REM
+REM stderr deliberately not sent to nul: swallowing it is what reduced both of
+REM those failures to "could not start a background service" with no reason.
+set "PLANARUS_HIDDEN_WORKDIR=%~1"
+set "PLANARUS_HIDDEN_CMD=%~2"
+set "PLANARUS_HIDDEN_LOG=%~3"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start-hidden.ps1" >nul
+if errorlevel 1 (
+  echo [ERROR] Could not start a background service. See the error above and %~3
+  exit /b 1
+)
+exit /b 0
 
 REM --- winget bootstrap ---------------------------------------------------------
 REM %1 = human name, %2 = winget package id. Installing software is not something
@@ -364,11 +430,13 @@ endlocal & set "%~2=%_p%"
 exit /b 0
 
 :usage
-echo Usage: scripts\run-planarus.bat [team] [verify]
+echo Usage: scripts\run-planarus.bat [team] [verify] [silent]
 echo.
 echo   scripts\run-planarus.bat          Bootstrap and start the local anonymous app.
 echo   scripts\run-planarus.bat verify   Run API and web checks, then start the app.
 echo   scripts\run-planarus.bat team     Start local team mode with sign-in enabled.
+echo   scripts\run-planarus.bat silent   No service windows and no browser tab;
+echo                                     output goes to %%LOCALAPPDATA%%\Planarus\*.log
 echo.
 echo Arguments can be combined: scripts\run-planarus.bat team verify
 echo.
