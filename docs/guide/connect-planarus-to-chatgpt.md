@@ -12,7 +12,7 @@ every step yourself; nothing here happens automatically.
 
 ## What you need before you start
 
-- **Planarus running locally** on this PC (`run-planarus.sh` on macOS/Linux, `run-planarus.bat` on Windows — opens the API on
+- **Planarus running locally** on this PC (`scripts/run-planarus.sh` on macOS/Linux, `scripts\run-planarus.bat` on Windows — opens the API on
   `:8000` and the UI on `:5173`).
 - **A domain name you own**, added to a **free Cloudflare account**
   (e.g. `example.com` — you'll use a subdomain like `planarus.example.com`).
@@ -119,7 +119,7 @@ In PowerShell:
 now — the external door stays locked while you prepare the key.
 
 Then **close every Planarus window and its terminal, open a fresh terminal, and
-relaunch it (`run-planarus.sh` / `run-planarus.bat`)** so the new setting takes effect (the app reads
+relaunch it (`scripts/run-planarus.sh` / `scripts\run-planarus.bat`)** so the new setting takes effect (the app reads
 these values once at startup).
 
 ---
@@ -155,7 +155,7 @@ to restart. (Manual equivalent, if you prefer:
 `[Environment]::SetEnvironmentVariable("PLANARUS_EXTERNAL_API_ENABLED","true","User")`.)
 
 Then **restart Planarus** (close its windows, open a fresh terminal, run
-`run-planarus.sh` / `run-planarus.bat`).
+`scripts/run-planarus.sh` / `scripts\run-planarus.bat`).
 
 ✅ **Verify from the public address** (replace the key):
 

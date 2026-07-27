@@ -9,7 +9,9 @@ REM run the complete local API/web checks before launch; add "team" to opt in to
 REM the account gate. Arguments can be combined in either order.
 REM ============================================================================
 setlocal EnableExtensions DisableDelayedExpansion
-set "ROOT=%~dp0"
+REM The script lives in scripts\; everything it drives is relative to the repo
+REM root one level up. %~f resolves the ".." so ROOT stays a clean absolute path.
+for %%I in ("%~dp0..") do set "ROOT=%%~fI\"
 set "API_DIR=%ROOT%apps\api"
 set "API_PY=%API_DIR%\.venv\Scripts\python.exe"
 set "PNPM_CMD=pnpm"
@@ -264,13 +266,13 @@ endlocal & set "%~2=%_p%"
 exit /b 0
 
 :usage
-echo Usage: run-planarus.bat [team] [verify]
+echo Usage: scripts\run-planarus.bat [team] [verify]
 echo.
-echo   run-planarus.bat          Bootstrap and start the local anonymous app.
-echo   run-planarus.bat verify   Run API and web checks, then start the app.
-echo   run-planarus.bat team     Start local team mode with sign-in enabled.
+echo   scripts\run-planarus.bat          Bootstrap and start the local anonymous app.
+echo   scripts\run-planarus.bat verify   Run API and web checks, then start the app.
+echo   scripts\run-planarus.bat team     Start local team mode with sign-in enabled.
 echo.
-echo Arguments can be combined: run-planarus.bat team verify
+echo Arguments can be combined: scripts\run-planarus.bat team verify
 exit /b 0
 
 :usage_error

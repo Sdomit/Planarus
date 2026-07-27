@@ -20,23 +20,33 @@ but the board, canvas, and timeline surfaces assume a wide viewport.
 
 ## Understanding the design
 
-| Doc | What it covers |
-|---|---|
-| [plan/00-OVERVIEW.md](plan/00-OVERVIEW.md) | Index of the architecture and product plan |
-| [plan/01-product-and-scope.md](plan/01-product-and-scope.md) | What Planarus is and isn't, and how it compares |
-| [plan/02-architecture.md](plan/02-architecture.md) | Stack rationale |
-| [plan/03-data-model.md](plan/03-data-model.md) | Entities and relationships |
-| [plan/06-governance-mcp-api-chatgpt.md](plan/06-governance-mcp-api-chatgpt.md) | The approval boundary and agent access |
-| [plan/10-risks-and-decisions.md](plan/10-risks-and-decisions.md) | Decision log |
+The architecture is described where it is enforced rather than in a parallel
+set of documents: the entity model in `apps/api/app/models/`, the approval
+boundary in `apps/api/app/policy/` and `apps/api/app/services/approval_service.py`,
+and the external contract in [api/](api/), which holds the generated OpenAPI
+documents. The test suite under `apps/api/tests/` is the executable spec.
 
-## Build history
+Source comments occasionally cite `docs/plan/*.md` — the working design notes.
+Those are maintainer-local and not published; see "What is not in this repo"
+below.
 
-`dev/phase-*.md` is a per-phase record of how each slice was built and why —
-useful archaeology when you're wondering why something is the way it is, and
-safe to ignore otherwise. `api/` holds the generated OpenAPI contracts.
+## API contracts
+
+`api/` holds the generated OpenAPI documents for the external surface — the
+read-only contract and the read-plus-propose contract used by the ChatGPT
+actions integration.
+
+## What is not in this repo
+
+Three kinds of working material are deliberately kept off the published tree:
+the agent operating pack (`CLAUDE.md`, `AGENTS.md`, `context/`), the design
+notes (`docs/plan/`), and the per-phase build record (`docs/dev/phase-*.md`).
+
+They describe how Planarus is developed, not what it ships, and several of them
+are point-in-time snapshots that would be stale on arrival. Excluding them keeps
+the published repo to the things a reader can actually act on: the code, the
+tests, the deploy artifacts, and the guides above.
 
 ## Contributing
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md). If you're an AI agent working in this
-repo, start at [CLAUDE.md](../CLAUDE.md) instead — this repo is itself managed
-as an Planarus project and `context/` is a live context pack.
+See [CONTRIBUTING.md](../.github/CONTRIBUTING.md).

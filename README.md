@@ -133,8 +133,8 @@ starts the API and the Vite app, waits for both, opens the UI, and keeps the
 external API disabled:
 
 ```bash
-./run-planarus.sh   # macOS / Linux
-run-planarus.bat    # Windows
+./scripts/run-planarus.sh   # macOS / Linux
+scripts\run-planarus.bat    # Windows
 ```
 
 | Service | Address |
@@ -248,16 +248,18 @@ flowchart LR
 apps/web/     React + TS + Vite application
 apps/api/     FastAPI service — api · models · schemas · services · fsmemory
               prompt · policy · mcp · db · core, plus alembic and tests
-context/      Living context pack: rules, architecture, decisions, risks, next step
-docs/plan/    Accepted architecture and product plan, one file per section
-docs/dev/     Build history, one document per phase
 docs/guide/   User guides: ChatGPT, calendar, LAN team mode, notifications, go-live
+docs/api/     Generated OpenAPI contracts for the external surface
+docs/dev/     Developer setup
 deploy/       Hosted deployment compose files and notes
+scripts/      One-command launchers for macOS/Linux and Windows
+.github/      CI, issue templates, and the contribution and security policies
 ```
 
 The monorepo is `apps/web` + `apps/api`. The database is authoritative for
 structured data; versioned editor `content_json` is authoritative for free-form
-docs; exported Markdown and `context/*` are derived. Postgres portability is
+docs; exported Markdown and the generated `context/*` pack inside each managed
+project folder are derived. Postgres portability is
 kept through portable models plus an explicit application-level ETL — not a URL
 switch. Tauri 2 desktop packaging is planned and not yet started.
 
@@ -310,7 +312,8 @@ pnpm build:web
 ```
 
 CI additionally verifies the Postgres migration path and a Docker Compose smoke
-test. See [Contributing](CONTRIBUTING.md) for the focused pull-request workflow.
+test. See [Contributing](.github/CONTRIBUTING.md) for the focused pull-request
+workflow.
 
 ---
 
@@ -334,15 +337,16 @@ additive layer rather than a rewrite.
 
 | Document | Read it for |
 | --- | --- |
-| [context/PROJECT_CONTEXT.md](context/PROJECT_CONTEXT.md) | The dense brief — what Planarus is, in one page |
-| [docs/plan/00-OVERVIEW.md](docs/plan/00-OVERVIEW.md) | Accepted architecture and product plan, section by section |
-| [docs/plan/01-product-and-scope.md](docs/plan/01-product-and-scope.md) | Product definition, competitive wedge, MVP boundary |
-| [context/DECISIONS.md](context/DECISIONS.md) · [context/RISKS.md](context/RISKS.md) | Why the system looks the way it does, and what could bite |
+| [docs/README.md](docs/README.md) | Index of everything below |
 | [docs/dev/setup.md](docs/dev/setup.md) | Prerequisites, hot reload, API, tests |
 | [docs/guide/](docs/guide/) | ChatGPT, calendar, LAN team mode, notifications, backups, go-live |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution workflow and non-negotiable safety invariants |
-| [SECURITY.md](SECURITY.md) | Private vulnerability reporting and scope |
+| [docs/api/](docs/api/) | Generated OpenAPI contracts for the external surface |
+| [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md) | Contribution workflow and non-negotiable safety invariants |
+| [.github/SECURITY.md](.github/SECURITY.md) | Private vulnerability reporting and scope |
 | [CHANGELOG.md](CHANGELOG.md) | Release-level history |
+
+The design notes and per-phase build record are maintainer-local and not
+published; the reasoning that outlives them lives in the code and its tests.
 
 ---
 
@@ -350,12 +354,12 @@ additive layer rather than a rewrite.
 
 Contributions are welcome. Keep the trust model intact: external AI clients may
 read data and create pending proposals, and must never directly approve or apply
-canonical changes. Read [CONTRIBUTING.md](CONTRIBUTING.md) and
-[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before opening a pull request.
+canonical changes. Read [CONTRIBUTING.md](.github/CONTRIBUTING.md) and
+[CODE_OF_CONDUCT.md](.github/CODE_OF_CONDUCT.md) before opening a pull request.
 
 > [!CAUTION]
 > For vulnerabilities, **do not open a public issue** — use
-> [private vulnerability reporting](SECURITY.md).
+> [private vulnerability reporting](.github/SECURITY.md).
 
 ## <img src="https://img.shields.io/badge/-12-2D6CC8.svg?style=flat-square" height="18" alt="" /> License
 

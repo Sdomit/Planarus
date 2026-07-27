@@ -20,8 +20,8 @@ account, or an admin.
 ## 0. The first ten minutes
 
 ```
-run-planarus.bat team          # Windows
-./run-planarus.sh team         # macOS / Linux
+scripts\run-planarus.bat team          # Windows
+./scripts/run-planarus.sh team         # macOS / Linux
 ```
 
 That flag is the whole environment — it sets `PLANARUS_AUTH_ENABLED` and

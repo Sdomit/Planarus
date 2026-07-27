@@ -4,5 +4,5 @@ contact_links:
     url: https://github.com/Sdomit/Planarus/security/policy
     about: Do not report security vulnerabilities in public issues. Follow SECURITY.md.
   - name: Support and setup guidance
-    url: https://github.com/Sdomit/Planarus/blob/main/SUPPORT.md
+    url: https://github.com/Sdomit/Planarus/blob/main/.github/SUPPORT.md
     about: Review the support policy and setup guides before opening an issue.

@@ -3,12 +3,11 @@
 # own pull requests.
 * @Sdomit
 
+# SECURITY.md, CONTRIBUTING.md, SUPPORT.md and CODE_OF_CONDUCT.md live under
+# .github/ and are covered by the first entry below.
 /.github/ @Sdomit
 /LICENSE @Sdomit
 /NOTICE @Sdomit
-/SECURITY.md @Sdomit
-/CONTRIBUTING.md @Sdomit
-/SUPPORT.md @Sdomit
 /TRADEMARKS.md @Sdomit
 /CHANGELOG.md @Sdomit
 /package.json @Sdomit
