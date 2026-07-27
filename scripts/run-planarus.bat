@@ -76,6 +76,7 @@ call :free_port 8000 API_PORT
 call :free_port 5173 WEB_PORT
 if not "%API_PORT%"=="8000" echo [PORT] 8000 busy - API moved to :%API_PORT%
 if not "%WEB_PORT%"=="5173" echo [PORT] 5173 busy - Web moved to :%WEB_PORT%
+call :write_ports
 
 echo.
 echo Starting Planarus ^| API :%API_PORT%  Web :%WEB_PORT%  Mode: %MODE%
@@ -312,6 +313,19 @@ set "_verify_status=%ERRORLEVEL%"
 :verify_web_done
 popd
 if not "%_verify_status%"=="0" exit /b 1
+exit /b 0
+
+:write_ports
+REM Record the ports for the tray. The tray cannot discover them by inspecting
+REM windows: enumerating them needs either a child process (tasklist), which a
+REM hidden console-less host cannot reliably spawn, or MainWindowTitle, which
+REM comes back empty for these console windows often enough not to trust. A file
+REM is boring and it works. The tray still TCP-probes the port before believing
+REM it, so a file left behind by a crash reads as "stopped" rather than a lie.
+set "STATE_DIR=%LOCALAPPDATA%\Planarus"
+if not exist "%STATE_DIR%" mkdir "%STATE_DIR%" >nul 2>&1
+> "%STATE_DIR%\local.ports" echo API=%API_PORT%
+>>"%STATE_DIR%\local.ports" echo WEB=%WEB_PORT%
 exit /b 0
 
 :probe_url

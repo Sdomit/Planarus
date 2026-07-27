@@ -20,6 +20,10 @@ set "_stopped=0"
 call :kill_window "Planarus API*" "API"
 call :kill_window "Planarus Web*" "Web"
 
+REM Drop the port record run-planarus.bat left for the tray. Harmless if absent,
+REM and leaving it behind would only make the tray probe a port nothing answers.
+del /q "%LOCALAPPDATA%\Planarus\local.ports" >nul 2>&1
+
 echo.
 if "%_stopped%"=="0" (
   echo Planarus was not running.

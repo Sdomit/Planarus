@@ -23,31 +23,54 @@ $StopScript = Join-Path $PSScriptRoot 'stop-planarus.bat'
 
 # --- state -------------------------------------------------------------------
 
-# The launcher moves off 5173/8000 when they are busy and records whichever port
-# it settled on in the window title ("Planarus Web (:5174)"). Reading it back
-# from there keeps the tray correct without a state file to write, and without
-# the launcher having to know the tray exists.
-function Get-PlanarusPort {
-    param([string]$TitlePrefix)
+# Where run-planarus.bat records the ports it settled on. It moves off 5173/8000
+# when they are busy, so the tray cannot assume the defaults.
+$PortsFile = Join-Path $env:LOCALAPPDATA 'Planarus\local.ports'
 
-    # tasklist rather than Get-Process: MainWindowTitle comes back empty for
-    # these console windows in some sessions, and the /V column does not.
-    $rows = & tasklist /FI "WINDOWTITLE eq $TitlePrefix*" /FO CSV /V 2>$null
-    if (-not $rows -or $rows.Count -lt 2) { return $null }
-
-    foreach ($row in $rows | Select-Object -Skip 1) {
-        if ($row -match '\(:(\d+)\)') { return [int]$Matches[1] }
+# Nothing in here starts a child process, and that is deliberate rather than
+# tidiness. An earlier version read the ports out of the launcher's window titles
+# via tasklist, which meant Get-Status shelled out on every call - including from
+# the ContextMenuStrip Opening handler. A tray runs as a hidden, console-less
+# PowerShell, spawning a console child from one is not dependable, and when it
+# stalled it took the whole tray with it: the menu never opened and the icon
+# never appeared, because the call that hung was the one before Visible = true.
+# File read plus a socket connect, both in-process, cannot do that.
+function Test-Port {
+    param([int]$Port)
+    $client = [System.Net.Sockets.TcpClient]::new()
+    try {
+        # Short timeout: this runs while the user is waiting for a menu to open,
+        # and both ports are probed, so the budget is half of what feels instant.
+        # Loopback either answers immediately or is not there.
+        return $client.ConnectAsync('127.0.0.1', $Port).Wait(250)
+    } catch {
+        return $false
+    } finally {
+        $client.Dispose()
     }
-    return $null
 }
 
 function Get-Status {
-    $webPort = Get-PlanarusPort -TitlePrefix 'Planarus Web'
-    $apiPort = Get-PlanarusPort -TitlePrefix 'Planarus API'
+    $webPort = $null
+    $apiPort = $null
+
+    if (Test-Path $PortsFile) {
+        foreach ($line in (Get-Content -Path $PortsFile -ErrorAction SilentlyContinue)) {
+            if ($line -match '^\s*API\s*=\s*(\d+)') { $apiPort = [int]$Matches[1] }
+            elseif ($line -match '^\s*WEB\s*=\s*(\d+)') { $webPort = [int]$Matches[1] }
+        }
+    }
+
+    # The file says where it would be, not that it is there. A crash or a hard
+    # window close leaves the file behind, and reporting "running" off a stale
+    # file would offer an Open that goes nowhere.
+    $webUp = ($null -ne $webPort) -and (Test-Port $webPort)
+    $apiUp = ($null -ne $apiPort) -and (Test-Port $apiPort)
+
     [PSCustomObject]@{
-        Running = ($null -ne $webPort) -or ($null -ne $apiPort)
-        WebPort = $webPort
-        ApiPort = $apiPort
+        Running = $webUp -or $apiUp
+        WebPort = if ($webUp) { $webPort } else { $null }
+        ApiPort = if ($apiUp) { $apiPort } else { $null }
     }
 }
 
@@ -106,7 +129,6 @@ $notify = [System.Windows.Forms.NotifyIcon]::new()
 $notify.Icon = Get-TrayIcon
 $notify.ContextMenuStrip = $menu
 $notify.Text = 'Planarus'
-$notify.Visible = $true
 
 function Update-Menu {
     $status = Get-Status
@@ -138,7 +160,13 @@ $notify.Add_MouseDoubleClick({ Open-Planarus })
 # no polling, and the state is never stale at the moment it is looked at.
 $menu.Add_Opening({ Update-Menu })
 
+# Set the tooltip BEFORE showing the icon. The shell caches the text it is given
+# when the icon is registered, so doing this the other way round left the tray
+# reading a bare "Planarus" for the whole session while the status text the code
+# had carefully computed went nowhere.
 Update-Menu
+$notify.Visible = $true
+
 [System.Windows.Forms.Application]::Run([System.Windows.Forms.ApplicationContext]::new())
 
 $notify.Dispose()
