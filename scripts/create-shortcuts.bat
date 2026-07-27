@@ -17,9 +17,11 @@ if not defined DESKTOP (
   exit /b 1
 )
 
-call :make "Planarus.lnk"      "run-planarus.bat"  "Start Planarus"
+call :make "Planarus.lnk"      "run-planarus.bat"   "Start Planarus"
 if errorlevel 1 exit /b 1
-call :make "Stop Planarus.lnk" "stop-planarus.bat" "Stop Planarus"
+call :make "Stop Planarus.lnk" "stop-planarus.bat"  "Stop Planarus"
+if errorlevel 1 exit /b 1
+call :make "Planarus Tray.lnk" "planarus-tray.bat"  "Planarus in the notification area"
 if errorlevel 1 exit /b 1
 
 echo.

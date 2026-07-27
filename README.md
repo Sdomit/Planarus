@@ -126,11 +126,17 @@ services to answer, and opens the browser.
 
 ```
 scripts\stop-planarus.bat        Stop it again
-scripts\create-shortcuts.bat     Put Start/Stop shortcuts on the Desktop (run once)
+scripts\planarus-tray.bat        Start, stop and open from the notification area
+scripts\create-shortcuts.bat     Put shortcuts on the Desktop (run once)
 ```
 
 Answering "no" to an install prompt leaves the machine untouched and tells you
 what to install by hand.
+
+The tray is the no-console option: right-click its icon to start, stop or open
+Planarus, double-click to open the UI, and "Exit tray" removes the icon without
+touching a running app. It reads the port back out of the launcher's own window
+title, so it stays correct when 5173 is busy and the app moves to 5174.
 
 ### Native development with hot reload
 

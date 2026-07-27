@@ -348,7 +348,8 @@ echo.
 echo Arguments can be combined: scripts\run-planarus.bat team verify
 echo.
 echo   scripts\stop-planarus.bat         Stop the running local app.
-echo   scripts\create-shortcuts.bat      Desktop Start/Stop shortcuts (run once).
+echo   scripts\planarus-tray.bat         Start/stop/open from the notification area.
+echo   scripts\create-shortcuts.bat      Desktop shortcuts (run once).
 exit /b 0
 
 :usage_error
