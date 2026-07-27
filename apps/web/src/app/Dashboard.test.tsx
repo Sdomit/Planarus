@@ -127,3 +127,34 @@ describe('Dashboard project edit (#158)', () => {
     expect(api.projects.update).not.toHaveBeenCalled()
   })
 })
+
+describe('Dashboard project delete', () => {
+  it('offers delete on a live project and gates it behind typing the title', async () => {
+    vi.mocked(api.projects.remove).mockResolvedValue(undefined)
+    render(<Dashboard />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Project actions' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete permanently…' }))
+
+    const confirm = screen.getByRole('button', { name: 'Delete permanently' }) as HTMLButtonElement
+    expect(confirm.disabled).toBe(true)
+    fireEvent.click(confirm)
+    expect(api.projects.remove).not.toHaveBeenCalled()
+
+    fireEvent.change(screen.getByLabelText(/to confirm/), { target: { value: 'Not The Title' } })
+    expect((screen.getByRole('button', { name: 'Delete permanently' }) as HTMLButtonElement).disabled).toBe(true)
+
+    fireEvent.change(screen.getByLabelText(/to confirm/), { target: { value: 'Old Title' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }))
+    await waitFor(() => expect(api.projects.remove).toHaveBeenCalledWith('proj_1'))
+  })
+
+  it('cancelling leaves the project alone', async () => {
+    vi.mocked(api.projects.remove).mockReset()   // the file's beforeEach only resets update()
+    render(<Dashboard />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Project actions' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete permanently…' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByText('Delete project permanently')).toBeNull()
+    expect(api.projects.remove).not.toHaveBeenCalled()
+  })
+})

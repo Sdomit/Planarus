@@ -314,14 +314,14 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
                           {!archived && <MenuItem onClick={() => act(() => api.projects.update(p.id, { status: 'done' }))}>Set done</MenuItem>}
                           <MenuItem onClick={() => act(() => api.projects.duplicate(p.id))}>Duplicate</MenuItem>
                           <MenuItem onClick={() => { setMenuFor(null); setMoveFor(p) }}>Move to category…</MenuItem>
-                          {archived ? (
-                            <>
-                              <MenuItem onClick={() => act(() => api.projects.unarchive(p.id))}>Restore</MenuItem>
-                              <MenuItem danger onClick={() => { setMenuFor(null); setDelFor(p); setDelText('') }}>Delete permanently…</MenuItem>
-                            </>
-                          ) : (
-                            <MenuItem onClick={() => act(() => api.projects.archive(p.id))}>Archive</MenuItem>
-                          )}
+                          {archived
+                            ? <MenuItem onClick={() => act(() => api.projects.unarchive(p.id))}>Restore</MenuItem>
+                            : <MenuItem onClick={() => act(() => api.projects.archive(p.id))}>Archive</MenuItem>}
+                          {/* Archiving first is the recommended route, not a required
+                              one: a project created by mistake should not have to be
+                              filed away before it can go. The type-the-title modal is
+                              the guard either way. */}
+                          <MenuItem danger onClick={() => { setMenuFor(null); setDelFor(p); setDelText('') }}>Delete permanently…</MenuItem>
                         </div>
                       </>
                     )}
