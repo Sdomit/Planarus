@@ -8,6 +8,7 @@
   <img src="https://img.shields.io/badge/status-pre--1.0-7A63C7.svg?style=flat-square" alt="Pre-1.0" />
   <img src="https://img.shields.io/badge/local--first-no%20cloud%20required-374155.svg?style=flat-square" alt="Local-first" />
   <img src="https://img.shields.io/badge/AI%20writes-human%20approved-0D1220.svg?style=flat-square" alt="Human-approved AI writes" />
+  <a href="https://ko-fi.com/sarmaddomit"><img src="https://img.shields.io/badge/Ko--fi-support%20me-FF38B8.svg?style=flat-square&logo=ko-fi&logoColor=white" alt="Support Planarus on Ko-fi" /></a>
 </p>
 
 <p align="center">
