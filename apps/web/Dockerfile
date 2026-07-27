@@ -1,6 +1,6 @@
 # Build the React app, then serve the static bundle via nginx.
 # Build context is the repo ROOT (needs the pnpm workspace manifests).
-FROM node:20-slim AS build
+FROM node:24-slim AS build
 WORKDIR /repo
 # corepack reads the packageManager pin from package.json, so copy it first
 # and let it activate the one version this repo is tested against.
