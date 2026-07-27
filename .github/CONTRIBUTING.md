@@ -5,12 +5,12 @@ around one idea: **AI agents propose, humans approve.** Contributions that keep
 that promise intact are very welcome.
 
 By contributing you agree that your contributions are licensed under the
-project's [Apache License 2.0](LICENSE).
+project's [Apache License 2.0](../LICENSE).
 
 ## Getting set up
 
-- Full instructions: [docs/dev/setup.md](docs/dev/setup.md).
-- One-command local run: `./run-planarus.sh` (macOS/Linux) or `run-planarus.bat` (Windows).
+- Full instructions: [docs/dev/setup.md](../docs/dev/setup.md).
+- One-command local run: `./scripts/run-planarus.sh` (macOS/Linux) or `scripts\run-planarus.bat` (Windows).
 - Backend: `apps/api` — FastAPI + SQLModel + Alembic (Python).
 - Frontend: `apps/web` — React + TypeScript + Vite.
 
@@ -65,6 +65,7 @@ open an issue to discuss it first.
 
 ## Where to start reading
 
-- Humans: [docs/plan/00-OVERVIEW.md](docs/plan/00-OVERVIEW.md).
-- Agents (Claude Code, Cursor, etc.): [CLAUDE.md](CLAUDE.md) — read it first,
-  and don't scan the whole repo.
+- [../README.md](../README.md) for the trust model and the repository layout.
+- [../docs/README.md](../docs/README.md) for the documentation index.
+- [../docs/dev/setup.md](../docs/dev/setup.md) to get it running locally.
+- `apps/api/tests/` is the executable spec — start there before changing a rule.

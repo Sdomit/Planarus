@@ -24,7 +24,7 @@ shown in the calendar but are managed from Planning, not pushed out.
 
 ## What you need before you start
 
-- **Planarus running locally** (`run-planarus.sh` on macOS/Linux, `run-planarus.bat` on Windows —
+- **Planarus running locally** (`scripts/run-planarus.sh` on macOS/Linux, `scripts\run-planarus.bat` on Windows —
   opens the API on `:8000` and
   the UI on `:5173`).
 - A **Google** and/or **Microsoft** account.
@@ -104,7 +104,7 @@ Install the extra and restart the API (from `apps/api`):
 .\.venv\Scripts\pip.exe install -e ".[calendar-sync]"
 ```
 
-Then relaunch (`run-planarus.sh` on macOS/Linux, `run-planarus.bat` on Windows).
+Then relaunch (`scripts/run-planarus.sh` on macOS/Linux, `scripts\run-planarus.bat` on Windows).
 
 > **Both are required.** With no encryption key, or no client id, sync stays
 > off — the button below simply shows "not configured". A provider only appears

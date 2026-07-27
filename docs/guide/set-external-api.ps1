@@ -38,4 +38,4 @@ if ($enabled -and -not $allowed) {
 Write-Host ""
 Write-Host "Restart Planarus in a FRESH terminal for this to take effect:" -ForegroundColor Green
 Write-Host "  1. Close the Planarus API/Web windows."
-Write-Host "  2. Open a new terminal, run: run-planarus.bat"
+Write-Host "  2. Open a new terminal, run: scripts\run-planarus.bat"

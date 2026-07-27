@@ -14,8 +14,8 @@ phase: implementation (Phases 1–17 on main)
 From the repo root:
 
 ```bash
-./run-planarus.sh        # macOS / Linux
-run-planarus.bat      # Windows
+./scripts/run-planarus.sh        # macOS / Linux
+scripts\run-planarus.bat      # Windows
 ```
 
 Either one checks your venv and pnpm, runs `alembic upgrade head`, starts the
@@ -23,7 +23,7 @@ API and the Vite dev server, waits until both actually answer, then opens the
 UI. If 8000 or 5173 is busy it picks the next free port and passes it through
 everywhere. Local dev only — the external API stays disabled.
 
-On Windows, `run-planarus.bat` also creates `apps/api/.venv` with Python 3.11
+On Windows, `scripts\run-planarus.bat` also creates `apps/api/.venv` with Python 3.11
 and installs the local API/web dependencies if they are missing. It exits
 nonzero instead of opening a broken UI when bootstrap, migration, API health,
 or web readiness fails. A plain run explicitly keeps the app anonymous, even
@@ -32,12 +32,12 @@ if the parent shell previously enabled team-mode variables.
 Use the optional verification mode before a handoff or after a larger change:
 
 ```powershell
-run-planarus.bat verify
+scripts\run-planarus.bat verify
 ```
 
 It runs the complete API pytest suite and the web Vitest, typecheck, and
 production-build checks before it starts the local app. Add `team` only when
-you explicitly want local sign-in: `run-planarus.bat team verify`.
+you explicitly want local sign-in: `scripts\run-planarus.bat team verify`.
 
 ## Prerequisites
 
@@ -106,7 +106,8 @@ only the Markdown context pack. Idempotent (safe to re-run); honors
 python3 scripts/seed_planarus_project.py
 ```
 
-Kept in sync with `context/NEXT_STEP.md` each slice.
+The milestone titles in that seed are maintained by hand and are a snapshot, not
+a live feed — treat it as demo data rather than the current roadmap.
 
 ## Frontend (apps/web)
 

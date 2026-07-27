@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  Planarus — local dev launcher for macOS / Linux (the run-planarus.bat twin)
+#  Planarus — local dev launcher for macOS / Linux (the scripts\run-planarus.bat twin)
 #  Starts the FastAPI backend + Vite frontend, waits until both actually answer,
 #  then opens the UI. Commands mirror docs/dev/setup.md.
 #  NOTE: local dev only — the external (ChatGPT) API stays DISABLED.
@@ -9,7 +9,9 @@
 #  result, so the proxy and the URL below can never point at a dead port.
 # =============================================================================
 set -euo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The script lives in scripts/; everything it drives is relative to the repo
+# root one level up, so resolve that rather than the script's own directory.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # --- preflight ---------------------------------------------------------------
 if [ ! -x "$ROOT/apps/api/.venv/bin/python" ]; then
@@ -64,7 +66,7 @@ WEB_PORT=$(free_port 5173)
 [ "$API_PORT" = "8000" ] || echo "[PORT] 8000 busy — API moved to :$API_PORT"
 [ "$WEB_PORT" = "5173" ] || echo "[PORT] 5173 busy — Web moved to :$WEB_PORT"
 
-# --- optional team mode: ./run-planarus.sh team ------------------------------
+# --- optional team mode: ./scripts/run-planarus.sh team ------------------------------
 # Off by default (D25/D26): a plain run stays the single-user local tool with no
 # sign-in at all. "team" turns on the account gate and the password provider, so
 # the first account you create claims the server as its admin and you can add
