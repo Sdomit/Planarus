@@ -65,6 +65,11 @@ starting point rather than an empty file.
   `stop-planarus.bat`, `planarus-tray.bat` for a notification-area icon that
   starts, stops and opens the app, and `create-shortcuts.bat` for Desktop
   shortcuts.
+- **`update-planarus.bat`.** Rebases onto `origin/main` and refreshes both
+  dependency trees, which a plain `git pull` does not: a moved lockfile leaves
+  `node_modules` and the virtual environment stale, and the resulting failures
+  read like application bugs. Refuses to rebase over uncommitted work, and stops
+  rather than rebasing onto a branch that was force-pushed.
 
 ### Fixed
 
