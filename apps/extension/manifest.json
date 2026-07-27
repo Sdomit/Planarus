@@ -1,9 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Planarus select-to-capture",
-  "version": "0.1.0",
-  "description": "Right-click a selection and drop it into Planarus as a task, phase, decision, risk, todo or doc.",
-  "permissions": ["contextMenus"],
+  "version": "0.2.0",
+  "description": "Right-click a selection and drop it into Planarus as a task, phase, decision, risk, todo or doc. Optional toolbar badge for pending approvals.",
+  "permissions": ["contextMenus", "storage", "alarms"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "action": {},
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
   "background": {
     "service_worker": "background.js",
     "type": "module"

@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { captureUrl, CAPTURE_TYPES, MAX_TEXT } from '../../../extension/capture-url.js'
+import {
+  captureUrl,
+  CAPTURE_TYPES,
+  MAX_TEXT,
+  OPEN_APPROVALS_FRAGMENT as EXT_OPEN_APPROVALS_FRAGMENT,
+  openApprovalsUrl,
+} from '../../../extension/capture-url.js'
+import { OPEN_APPROVALS_FRAGMENT as APP_OPEN_APPROVALS_FRAGMENT } from './capture'
 
 /**
  * The extension (#107) and the app's parser (#106) are two halves of one
@@ -60,5 +67,17 @@ describe('extension → app capture contract (#107)', () => {
     const url = captureUrl(APP, { type: 'task', text: nasty })
     expect(url!.indexOf('#')).toBe(url!.lastIndexOf('#'))  // one fragment marker only
     expect(payloadOf(url!).text).toBe(nasty)
+  })
+})
+
+describe('extension → app badge click-through contract (#108)', () => {
+  it('the extension and the app agree on the exact same fragment literal', () => {
+    // Unlike #capture=, this is a true round-trip check: both halves are plain
+    // modules in this same test run, so there is no reason to only assert shape.
+    expect(EXT_OPEN_APPROVALS_FRAGMENT).toBe(APP_OPEN_APPROVALS_FRAGMENT)
+  })
+
+  it('openApprovalsUrl appends the fragment with no payload to encode', () => {
+    expect(openApprovalsUrl(APP)).toBe(`${APP}${EXT_OPEN_APPROVALS_FRAGMENT}`)
   })
 })

@@ -9,6 +9,11 @@
  * text is never sent to the server and never lands in an access log.
  */
 
+/** #108: the badge's whole click-through contract — no payload, just "open the
+ *  queue". Bare string compare, not JSON, so there is nothing here to parse or
+ *  reject; `apps/extension/capture-url.js` carries the other half. */
+export const OPEN_APPROVALS_FRAGMENT = '#open-approvals'
+
 export const CAPTURE_TYPES = ['task', 'phase', 'decision', 'risk', 'todo', 'doc'] as const
 
 export type CaptureType = (typeof CAPTURE_TYPES)[number]

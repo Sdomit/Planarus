@@ -658,6 +658,60 @@
           }
         }
       }
+    },
+    "/projects/{project_id}/approvals/pending-count": {
+      "get": {
+        "operationId": "getPendingApprovalCount",
+        "summary": "Count of PENDING approvals for a scoped project (a bare number). Read-only.",
+        "description": "Returns how many approvals are pending human review for one in-scope project. A scalar count only — never approval titles, diffs, or ids.",
+        "x-openai-isConsequential": false,
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Planarus project id, exactly as returned by a prior scoped read. Do not invent ids."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded, redacted, reference-only project data.",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Opaque per-request id; also echoed as the problem 'instance'.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
     }
   },
   "components": {

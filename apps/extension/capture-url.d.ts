@@ -5,8 +5,11 @@
 export declare const APP_URL: string
 export declare const MAX_TEXT: number
 export declare const CAPTURE_TYPES: ReadonlyArray<{ type: string; label: string }>
+export declare const OPEN_APPROVALS_FRAGMENT: string
 
 export declare function captureUrl(
   appUrl: string,
   clip: { type: string; text?: string; url?: string; title?: string },
 ): string | null
+
+export declare function openApprovalsUrl(appUrl: string): string

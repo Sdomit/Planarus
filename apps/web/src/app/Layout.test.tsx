@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react'
 import Layout, { notificationTarget } from './Layout'
+import { OPEN_APPROVALS_FRAGMENT } from './capture'
 
 // Every panel Layout renders hits the API on mount — stub the surfaces the
 // default (dashboard) view and the two sidebar menus actually touch.
@@ -13,7 +14,7 @@ vi.mock('../api/client', () => {
         get: (id: string) => id === 'gone' ? Promise.reject(new Error('404')) : Promise.resolve({ id, title: 'Planarus', slug: 'planarus' }),
       },
       workspaces: { list: () => Promise.resolve([]) },
-      approvals: { list: never },
+      approvals: { list: never, listPaged: never },
       tasks: { list: never },
       risks: { list: never },
       settings: { get: never },
@@ -254,5 +255,26 @@ describe('capture intake (#106)', () => {
     render(<Layout />)
     // No crash, no navigation — the view the user left is what they get.
     expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeTruthy()
+  })
+})
+
+describe('badge click-through intake (#108)', () => {
+  const NAV = { view: 'dashboard', project: { id: 'p1', title: 'Planarus', slug: 'planarus' } }
+
+  afterEach(() => { window.location.hash = '' })
+
+  it('opens the approval queue on the bare #open-approvals fragment', async () => {
+    localStorage.setItem(NAV_KEY, JSON.stringify(NAV))
+    window.location.hash = OPEN_APPROVALS_FRAGMENT
+    render(<Layout />)
+    expect(await screen.findByRole('heading', { name: 'Approval Queue' })).toBeTruthy()
+  })
+
+  it('strips the fragment so a refresh does not re-navigate', async () => {
+    localStorage.setItem(NAV_KEY, JSON.stringify(NAV))
+    window.location.hash = OPEN_APPROVALS_FRAGMENT
+    render(<Layout />)
+    await screen.findByRole('heading', { name: 'Approval Queue' })
+    expect(window.location.hash).toBe('')
   })
 })

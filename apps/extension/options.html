@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Planarus — pending-approval badge</title>
+  <style>
+    body { font: 14px system-ui, sans-serif; max-width: 32em; margin: 2em; color: #1a1a1a; }
+    h1 { font-size: 1.1em; }
+    p.hint { color: #555; }
+    label { display: block; margin-top: 1em; font-weight: 600; }
+    input { width: 100%; box-sizing: border-box; padding: 0.4em; margin-top: 0.3em; font: inherit; }
+    button { margin-top: 1.2em; padding: 0.5em 1em; font: inherit; cursor: pointer; }
+    #status { margin-top: 1em; min-height: 1.2em; }
+    #status.error { color: #b00020; }
+    #status.ok { color: #0a7a2f; }
+  </style>
+</head>
+<body>
+  <h1>Pending-approval badge</h1>
+  <p class="hint">
+    Optional (#108). Shows how many approvals are waiting for you, in the
+    toolbar, without opening Planarus. This is the one part of the extension
+    that holds a credential and calls the API — everything else
+    (select-to-capture) holds neither. Use a <strong>read-only</strong> API
+    key, issued from Planarus's Settings &rarr; API Clients.
+  </p>
+
+  <form id="form">
+    <label for="apiUrl">Planarus API URL</label>
+    <input id="apiUrl" type="text" placeholder="http://localhost:8000" autocomplete="off" />
+
+    <label for="apiKey">API key (read-only, <code>agbk_…</code>)</label>
+    <input id="apiKey" type="password" placeholder="agbk_..." autocomplete="off" />
+
+    <button type="submit">Save</button>
+  </form>
+  <p id="status"></p>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>

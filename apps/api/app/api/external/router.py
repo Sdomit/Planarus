@@ -266,6 +266,19 @@ def approval_status(
     )
 
 
+@router.get("/projects/{project_id}/approvals/pending-count")
+def pending_approval_count(
+    project_id: str,
+    cap: Capability = Depends(require_external_read),
+    session: Session = Depends(get_session),
+) -> dict:
+    """#108: what the browser-extension badge polls."""
+    return _run_read(
+        session, cap, read_tools.get_pending_approval_count,
+        read_tools.ProjectArgs(project_id=project_id),
+    )
+
+
 # --- proposal routes (require can_propose) -----------------------------------
 
 

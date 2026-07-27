@@ -57,7 +57,7 @@ PROPOSE_FILE = DOCS_API / "planarus-gpt-actions-read-propose.openapi.json"
 
 READ_OPERATION_IDS = {
     "listProjects", "getProjectSummary", "getActiveWork", "listTasks", "listDecisions",
-    "listRisks", "listDocs", "getDocExcerpt", "getApprovalStatus",
+    "listRisks", "listDocs", "getDocExcerpt", "getApprovalStatus", "getPendingApprovalCount",
 }
 PROPOSE_OPERATION_IDS = {"proposeTaskCreate", "proposeTaskUpdate", "proposeDecisionCreate"}
 
@@ -139,15 +139,15 @@ def test_builder_is_deterministic_and_independent():
 # --- 4/5: operation counts ----------------------------------------------------
 
 
-def test_readonly_profile_has_exactly_9_operations():
+def test_readonly_profile_has_exactly_10_operations():
     ro = build_readonly_openapi()
-    assert sum(len(item) for item in ro["paths"].values()) == 9
+    assert sum(len(item) for item in ro["paths"].values()) == 10
     assert {op["operationId"] for _, _, op in _operations(ro)} == READ_OPERATION_IDS
 
 
-def test_read_propose_profile_has_exactly_12_operations():
+def test_read_propose_profile_has_exactly_13_operations():
     rp = build_read_propose_openapi()
-    assert sum(len(item) for item in rp["paths"].values()) == 12
+    assert sum(len(item) for item in rp["paths"].values()) == 13
     assert {op["operationId"] for _, _, op in _operations(rp)} == (
         READ_OPERATION_IDS | PROPOSE_OPERATION_IDS
     )
@@ -433,6 +433,7 @@ def test_read_responses_match_contract_read_result_shape(world, client):
         "listDocs": f"{EXTERNAL_BASE}/projects/{world.proj}/docs",
         "getDocExcerpt": f"{EXTERNAL_BASE}/docs/{world.doc_id}/excerpt",
         "getApprovalStatus": f"{EXTERNAL_BASE}/approvals/{world.approval_id}/status",
+        "getPendingApprovalCount": f"{EXTERNAL_BASE}/projects/{world.proj}/approvals/pending-count",
     }
     for op_id, url in urls.items():
         res = client.get(url, headers=headers)
@@ -481,10 +482,12 @@ def test_no_runtime_external_route_added_or_served():
     pairs = {
         (m, r.path) for r in routes for m in (r.methods or set()) if m in {"GET", "POST"}
     }
-    # Exactly the 12 live external operations — nothing new mounted.
-    # 11 before #93 added getActiveWork, which is a deliberate, reviewed widening
-    # of this surface; any other change to this number is the bug this catches.
-    assert len(routes) == 12
+    # Exactly the 13 live external operations — nothing new mounted.
+    # 11 before #93 added getActiveWork (-> 12), then #108 added
+    # getPendingApprovalCount (-> 13) for the browser-extension badge; both are
+    # deliberate, reviewed widenings of this surface — any other change to this
+    # number is the bug this catches.
+    assert len(routes) == 13
     assert pairs == _live_external_pairs()
     # No served OpenAPI artifact / contract route was mounted on the external surface.
     for r in routes:
