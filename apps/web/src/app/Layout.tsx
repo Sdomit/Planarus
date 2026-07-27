@@ -20,7 +20,7 @@ import NotificationsBell from './NotificationsBell'
 import { SidebarTodos } from './SidebarTodos'
 import { useAuthInfo } from './auth'
 import { Icon } from './Icon'
-import { api, type NotificationItem, type Project } from '../api/client'
+import { api, type NotificationItem, type Project, type Workspace } from '../api/client'
 import { captureTitle, parseCapture, type Capture, type CaptureType } from './capture'
 import './layout.css'
 
@@ -45,6 +45,23 @@ export interface SelectedProject {
   id: string
   title: string
   slug: string
+  // #183 step 2: needed to rebuild a /w/:workspaceSlug/p/:projectSlug URL when
+  // routed. Unused (and never populated from a stale pre-migration NAV_KEY
+  // value) outside routed mode — uncontrolled Layout never constructs a URL.
+  workspaceSlug: string
+}
+
+/** The 14 views that live under a project's route (D63's URL shape). The
+ *  other three — dashboard, settings, team — are their own top-level routes,
+ *  not project-scoped (team's own panel takes no projectId). */
+export const PROJECT_SCOPED_VIEWS = [
+  'cockpit', 'planning', 'roadmap', 'timeline', 'calendar', 'docs', 'notes',
+  'canvas', 'context-pack', 'context-files', 'preview', 'approvals',
+  'agent-runs', 'reminders',
+] as const satisfies readonly MainView[]
+
+export function isProjectScopedView(v: string): v is (typeof PROJECT_SCOPED_VIEWS)[number] {
+  return (PROJECT_SCOPED_VIEWS as readonly string[]).includes(v)
 }
 
 /**
@@ -199,25 +216,62 @@ function LanAddress() {
 }
 
 export interface LayoutProps {
-  /** #183 step 1: when a URL route resolves a project, it seeds the initial
-   *  selection directly and Layout must not fall back to NAV_KEY for it (D64
-   *  — the URL wins on any path; NAV_KEY is written but never read there).
-   *  Every other view still keeps its current state mechanism (step 2). */
-  initialProject?: SelectedProject
+  /** Seeds mainView for an UNCONTROLLED mount — the bare `/` dashboard and the
+   *  standalone /settings and /team routes. NAV_KEY is still read as the
+   *  fallback exactly as before (D64: only a bare `/` visit consults it). */
   initialView?: MainView
+  /**
+   * #183 step 2: full URL control for the 14 project-scoped views. When
+   * present, `mainView`/`project` mirror `routed.view`/`routed.project`
+   * instead of local state, and every internal navigation call — the single
+   * `navigate()` choke point below, plus `setMainView`/`setProject` directly
+   * — calls `routed.onNavigate` instead of touching state, so the URL is the
+   * one source of truth (D64) and NAV_KEY is never read for it.
+   *
+   * Omitted entirely (tests; the three standalone routes above): Layout is
+   * the original, fully self-contained, NAV_KEY-backed component.
+   */
+  routed?: {
+    project: SelectedProject
+    view: MainView
+    onNavigate: (view: MainView, project: SelectedProject) => void
+  }
 }
 
-export default function Layout({ initialProject, initialView }: LayoutProps = {}) {
+export default function Layout({ initialView, routed }: LayoutProps = {}) {
   const { me, signOut } = useAuthInfo()
-  const [mainView, setMainView] = useState<MainView>(
-    // A route-resolved project always gets a view of its own (default:
-    // 'cockpit', the project home) — never NAV_KEY's, which belongs only to a
-    // bare `/` visit (D64).
-    () => initialView ?? (initialProject ? 'cockpit' : loadNav().view ?? 'dashboard'),
+  const [internalMainView, setInternalMainView] = useState<MainView>(
+    () => routed?.view ?? initialView ?? loadNav().view ?? 'dashboard',
   )
-  const [project, setProject] = useState<SelectedProject | null>(
-    () => initialProject ?? loadNav().project ?? null,
+  const [internalProject, setInternalProject] = useState<SelectedProject | null>(
+    () => routed?.project ?? loadNav().project ?? null,
   )
+  const mainView = routed?.view ?? internalMainView
+  const project = routed?.project ?? internalProject
+  // Every "set the view" call site below still calls this — routed mode
+  // redirects it into a URL change instead of a state write.
+  const setMainView = (v: MainView) => {
+    if (routed) routed.onNavigate(v, project!)
+    else setInternalMainView(v)
+  }
+  // A route-resolved project is always non-null; `p` is only ever null from
+  // the uncontrolled "clear selection" path (line ~453 below), which routed
+  // mode never takes (its dashboard/settings/team destinations don't clear
+  // the project, they just navigate away from it).
+  const setProject = (p: SelectedProject | null) => {
+    if (routed) { if (p) routed.onNavigate(mainView, p) }
+    else setInternalProject(p)
+  }
+  const [workspaces, setWorkspaces] = useState<Workspace[] | null>(null)
+  useEffect(() => {
+    api.workspaces.list().then(setWorkspaces).catch(() => setWorkspaces([]))
+  }, [])
+  // Resolves a *different* project's workspace slug when routed mode needs to
+  // rebuild the URL for it (switching projects, or a cross-project
+  // notification) — the picker/notification API responses carry workspace_id,
+  // not workspace_id's slug.
+  const workspaceSlugFor = (workspaceId: string): string | undefined =>
+    workspaces?.find(w => w.id === workspaceId)?.slug
   const [theme, setTheme] = useState<string>(
     () => document.documentElement.getAttribute('data-theme') || 'light-cosmo',
   )
@@ -312,7 +366,10 @@ export default function Layout({ initialProject, initialView }: LayoutProps = {}
 
   useEffect(() => {
     // A restored project that has since been deleted would leave every reload broken.
-    if (project) api.projects.get(project.id).catch(() => setProject(null))
+    // Routed mode skips this: ProjectRoute already re-resolved the slug into a
+    // live project moments before Layout mounted, so this would be a redundant
+    // fetch (and setProject(null) is a no-op there anyway — see setProject above).
+    if (!routed && project) api.projects.get(project.id).catch(() => setProject(null))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -333,15 +390,24 @@ export default function Layout({ initialProject, initialView }: LayoutProps = {}
 
   const closeMenu = () => setMobileMenuOpen(false)
 
+  // The one place a view (optionally with a different project) is applied —
+  // routed or not. `projectOverride` covers the two calls that jump to a
+  // project other than the current one (openNotification below).
   const navigate = (
     view: MainView,
     options?: { planningTab?: PlanningTabKey; focusEntityId?: string },
+    projectOverride?: SelectedProject,
   ) => {
     if (view === 'planning') {
       setPlanningTab(options?.planningTab ?? 'phases')
       setPlanningFocus(options?.focusEntityId)
     }
-    setMainView(view)
+    if (routed) {
+      routed.onNavigate(view, projectOverride ?? project!)
+    } else {
+      if (projectOverride) setInternalProject(projectOverride)
+      setInternalMainView(view)
+    }
     setSearchQuery('')
     setSearchOpen(false)
     if (mobileNavMode) menuBtnRef.current?.focus()
@@ -351,19 +417,25 @@ export default function Layout({ initialProject, initialView }: LayoutProps = {}
   // `open` = came from a Dashboard card, where the click means "take me into it".
   // Switching via the sidebar selector keeps you on whatever view you were reading.
   const selectProject = (p: SelectedProject, opts?: { open?: boolean }) => {
-    setProject(p)
-    if (opts?.open) setMainView('cockpit')
+    const nextView = opts?.open ? 'cockpit' : mainView
+    if (routed) {
+      routed.onNavigate(nextView, p)
+    } else {
+      setInternalProject(p)
+      if (opts?.open) setInternalMainView('cockpit')
+    }
     if (mobileNavMode) menuBtnRef.current?.focus()
     closeMenu()
   }
 
   const openNotification = async (item: NotificationItem) => {
+    let target = project ?? undefined
     if (project?.id !== item.project_id) {
-      const target = await api.projects.get(item.project_id)
-      setProject({ id: target.id, title: target.title, slug: target.slug })
+      const t = await api.projects.get(item.project_id)
+      target = { id: t.id, title: t.title, slug: t.slug, workspaceSlug: workspaceSlugFor(t.workspace_id) ?? '' }
     }
     const { view, ...options } = notificationTarget(item)
-    navigate(view, options)
+    navigate(view, options, target)
   }
 
   const placeholder = (
@@ -465,7 +537,10 @@ export default function Layout({ initialProject, initialView }: LayoutProps = {}
                     className="ab-projsel-item"
                     role="option"
                     aria-selected={project?.id === p.id}
-                    onClick={() => { selectProject({ id: p.id, title: p.title, slug: p.slug }); setProjMenuOpen(false) }}
+                    onClick={() => {
+                      selectProject({ id: p.id, title: p.title, slug: p.slug, workspaceSlug: workspaceSlugFor(p.workspace_id) ?? '' })
+                      setProjMenuOpen(false)
+                    }}
                   >
                     <span className="pj-name">{p.title}</span>
                     <span className="pj-sub">{p.slug}</span>
