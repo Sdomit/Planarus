@@ -8,6 +8,16 @@ REM ============================================================================
 setlocal EnableExtensions
 for %%I in ("%~dp0..") do set "ROOT=%%~fI"
 
+REM Without this every shortcut inherits the generic icon cmd.exe gives a .bat,
+REM so three identical grey cogs land on the Desktop. The .ico is committed
+REM rather than generated here: building one needs an image library, and
+REM requiring that at install time to decorate a shortcut is a poor trade.
+set "ICON=%ROOT%\assets\planarus.ico"
+if not exist "%ICON%" (
+  echo [WARN] %ICON% is missing; shortcuts will use the default .bat icon.
+  set "ICON="
+)
+
 REM The Desktop is not always %USERPROFILE%\Desktop - OneDrive's "back up my
 REM folders" redirects it, and writing to the literal path would put shortcuts
 REM somewhere the user never sees. Ask the shell where it actually is.
@@ -30,11 +40,15 @@ exit /b 0
 
 :make
 REM %1 = shortcut file name, %2 = target script, %3 = description.
+REM IconLocation takes "path,index"; 0 is the first icon in the file. Assigning
+REM an empty string would blank the icon rather than leave the default, so the
+REM missing-file case skips the line instead of setting it to nothing.
 powershell -NoProfile -Command ^
   "$s = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path '%DESKTOP%' '%~1'));" ^
   "$s.TargetPath = (Join-Path '%ROOT%' 'scripts\%~2');" ^
   "$s.WorkingDirectory = '%ROOT%';" ^
   "$s.Description = '%~3';" ^
+  "if ('%ICON%' -ne '') { $s.IconLocation = '%ICON%,0' };" ^
   "$s.Save()"
 if errorlevel 1 (
   echo [ERROR] Could not create %~1.
