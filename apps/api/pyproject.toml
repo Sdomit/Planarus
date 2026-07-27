@@ -3,7 +3,7 @@ name = "planarus-api"
 version = "0.2.0"
 requires-python = ">=3.11"
 dependencies = [
-    "fastapi>=0.139.2",
+    "fastapi>=0.140.0",
     "uvicorn[standard]>=0.51.0",
     "sqlmodel>=0.0.39",
     "pydantic-settings>=2.14.2",
@@ -49,7 +49,7 @@ webhooks = [
 # P10.3b: AWS SDK for the S3 storage backend. Only needed when
 # PLANARUS_STORAGE_BACKEND=s3; local/memory backends never import it.
 s3 = [
-    "boto3>=1.43.51",
+    "boto3>=1.43.56",
 ]
 
 [tool.pytest.ini_options]
