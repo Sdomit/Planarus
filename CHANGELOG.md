@@ -45,6 +45,48 @@ starting point rather than an empty file.
   sync, webhooks, scheduled reminders, and verified database backups.
 - **Docker Compose quickstart.** `docker compose up --build` with no Python,
   Node or pnpm on the host; loopback-only port publishing by default.
+- **Windows without Docker.** `scripts\run-planarus.bat` offers to install Node
+  and Python 3.11 through winget when they are missing, builds the virtual
+  environment, installs dependencies, migrates, moves off 5173/8000 if they are
+  busy, waits for both services and opens the browser. Alongside it:
+  `stop-planarus.bat`, `planarus-tray.bat` for a notification-area icon that
+  starts, stops and opens the app, and `create-shortcuts.bat` for Desktop
+  shortcuts.
+
+### Fixed
+
+Nothing here has been released, so these are not upgrade notes. They are
+recorded because each one made the Windows path unusable and none were caught
+by a green build:
+
+- `run-planarus.bat` aborted before its first command on every invocation. A
+  `%~f` inside a `REM` comment — cmd substitutes parameter references in
+  comments too — was reported as an invalid path operator.
+- It could never create `apps/api/.venv`. `%BOOTSTRAP_PY%` was read inside a
+  parenthesised block, so it was substituted at parse time, before the call that
+  sets it had run, and the line executed as `-m venv ...`. Every fresh checkout
+  failed at the first bootstrap step.
+- `create-shortcuts.bat` wrote junk files instead of printing. An unescaped `>`
+  in `echo ... -> ...` is a redirect.
+- The tray hung before it could show itself. It read ports by shelling out to
+  `tasklist`, which a hidden console-less PowerShell cannot depend on; the call
+  never returned, so the icon was never shown and the menu never opened. Ports
+  now come from a file the launcher writes, confirmed by a socket probe.
+- Tray menu actions failed silently, because WinForms discards exceptions thrown
+  in a click handler. They now log to `%LOCALAPPDATA%\Planarus\tray.log` and
+  raise a balloon on failure.
+
+CI gained a `windows-latest` job that runs these scripts, including a cold
+bootstrap on a checkout with no virtual environment. Nothing had executed them
+before, which is why all of the above shipped.
+
+### Changed
+
+- **Node 24.** CI, `.nvmrc` and the web Dockerfile move off Node 20, which
+  reached end of life in April 2026; `engines` now requires `>=22`.
+- **jsdom held at 29.** jsdom 30's rewritten CSS engine throws from
+  `getComputedStyle`, which testing-library calls on every visibility check.
+  Dependabot is told to hold the major until a 30.x patch lands.
 
 ### Known limitations
 
@@ -56,9 +98,15 @@ starting point rather than an empty file.
   to point at a different host.
 - **Hosted deployment is groundwork, not a supported path.** The stack under
   [`deploy/`](deploy/) has not been machine-validated end to end.
-- **No desktop installer.** Tauri packaging is planned and not started.
+- **No desktop installer.** Tauri packaging is planned and not started. The
+  Windows scripts above need the repository on disk first, so a reader still
+  needs Git or a ZIP download before anything can be double-clicked.
 - **Chrome and Edge only** for the extension; Firefox and Safari need their own
   pass.
+- **Never installed from a clean machine.** CI proves the Docker stack builds
+  and answers, and now that the Windows launcher bootstraps from a checkout with
+  no virtual environment. Neither is the same as someone cloning this repository
+  on a machine that has never run it.
 
 ### Release metadata
 
