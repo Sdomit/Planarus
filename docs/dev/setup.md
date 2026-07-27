@@ -164,7 +164,23 @@ traffic.
 The demo's on-disk context pack is written under the app's own data directory
 (`%LOCALAPPDATA%\Planarus\demo-project` on Windows,
 `~/.local/share/planarus/demo-project` elsewhere) rather than anywhere in your
-Documents. Delete that folder along with the project to clean up fully.
+Documents. That folder is also `git init`ed with the generated pack as its first
+commit, so the cockpit's read-only Repository card has a branch, a commit and a
+working-tree state to show instead of "Folder is not a Git repository". Both
+steps are best-effort: no Git on `PATH` just means an empty Repository card.
+Delete that folder along with the project to clean up fully.
+
+### Why you cannot point a project at the Planarus checkout
+
+Setting a project's folder to the repository you are running Planarus from is
+refused with `422 invalid folder_path: refusing the application directory`.
+That is `app/fsmemory/project_root.py` working as intended. Containment is
+checked with `commonpath` in **both** directions, so `apps/api` is refused and
+so is any ancestor of it — including the repository root, which contains it. A
+project root is a directory the app writes generated files into; letting that
+overlap the running application would put its own source code inside a
+generated-file tree. Point the project at the folder you actually want managed,
+not at Planarus itself.
 
 ## Frontend (apps/web)
 

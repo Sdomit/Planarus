@@ -49,6 +49,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -154,6 +155,39 @@ def _demo_folder() -> Optional[str]:
     except OSError:
         return None
     return path
+
+
+def _git_init(root: str) -> bool:
+    """Put the demo folder under Git, so the Repository panel has something.
+
+    The panel is read-only and reports branch, last commit and working-tree
+    state off the project's own folder. Without a repository there it can only
+    say "Folder is not a Git repository", and one of the cockpit's cards
+    demonstrates nothing.
+
+    A real project folder is normally a checkout, so this is the honest setup
+    rather than a prop: the generated context pack committed once, on a clean
+    tree. Editing anything in the demo makes it dirty by itself.
+
+    Identity is passed per-command so this works on a machine with no global
+    Git identity configured. Best-effort throughout: Git may not be installed,
+    and a demo is not worth failing over.
+    """
+    ident = ("-c", "user.name=Planarus Demo", "-c", "user.email=demo@planarus.local")
+    if os.path.isdir(os.path.join(root, ".git")):
+        return True
+    try:
+        for argv in (
+            ("git", "init", "-q", root),
+            ("git", "-C", root, *ident, "add", "-A"),
+            ("git", "-C", root, *ident, "commit", "-q", "-m",
+             "Planarus demo: generated context pack"),
+        ):
+            subprocess.run(argv, check=True, capture_output=True, timeout=60)
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"  Git demo skipped ({exc.__class__.__name__}); the Repository card will be empty.")
+        return False
+    return True
 
 
 # `@[Label](task:tsk_123)` in a demo line becomes a real Tiptap mention node,
@@ -1537,6 +1571,8 @@ def _seed(session: Session) -> Project:
             context_service.provision_and_regenerate(session, project)
         except Exception as exc:  # noqa: BLE001 — never fail the seed over disk
             print(f"  context pack regeneration skipped: {exc}")
+        # After the pack exists, so the initial commit has something in it.
+        _git_init(folder)
 
     return project
 

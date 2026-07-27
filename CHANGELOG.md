@@ -74,7 +74,10 @@ starting point rather than an empty file.
   canvas whose cards link back to real entities, recurring calendar events, the
   generated on-disk context pack, agent-run telemetry, notification rules and
   their send log, external API keys, and an approval queue holding pending,
-  applied and rejected proposals. Dates are computed relative to the day it is
+  applied and rejected proposals. The demo folder is put under Git with the
+  generated pack as its first commit, so the read-only Repository card shows a
+  branch and a working tree rather than "Folder is not a Git repository". Dates
+  are computed relative to the day it is
   seeded, so the calendar and the notifications bell are populated whenever you
   install rather than only in the month the seed was written. Deleting the demo
   project keeps it deleted; `PLANARUS_SEED_DEMO=0` skips it entirely; team and

@@ -175,6 +175,23 @@ def test_context_pack_is_written_to_disk(seeded):
     assert (context / "DECISIONS.md").exists()
 
 
+def test_the_demo_folder_is_a_git_repository(seeded):
+    """Otherwise the cockpit's Repository card can only say it is not one."""
+    import shutil
+
+    _seed, project, root = seeded
+    if shutil.which("git") is None:
+        pytest.skip("git is not on PATH")
+    assert (root / ".git").is_dir()
+
+    from app.services import git_service
+
+    link = git_service.collect(project.id, str(root))
+    assert link.is_repo
+    assert link.current_branch
+    assert link.last_commit_sha, "the initial commit gives the card something to show"
+
+
 def test_seeding_twice_is_a_no_op(seeded, session):
     """The launchers run this on every start; the second one must do nothing."""
     seed, _project, _root = seeded
