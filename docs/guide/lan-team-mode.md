@@ -46,6 +46,14 @@ absolute value. Already had projects with hand-picked folders? Bring them under
 the base with `python -m app.jobs adopt-roots --apply` (copies then repoints;
 the original is left in place).
 
+The launchers fill it in so that a first look at team mode needs no setup at
+all: `scripts\run-planarus-team.bat` (or `scripts\run-planarus.bat team`, or
+`./scripts/run-planarus.sh team`) defaults it to `%LOCALAPPDATA%\Planarus\projects`
+on Windows and `~/.local/share/planarus/projects` elsewhere, and a value already
+in the environment wins. For an actual team server, set it yourself — the
+default sits under one person's profile, which is the wrong place for everyone
+else's files.
+
 `PLANARUS_LAN_ALLOWED_HOSTS` is the exact Host names/IPs teammates will type
 into their browser (ports are ignored when matching; IPv6 literals use the
 bracket form). Requests for any other Host still get 403 — this is the

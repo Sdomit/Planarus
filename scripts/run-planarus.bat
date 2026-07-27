@@ -103,6 +103,16 @@ if "%TEAM_MODE%"=="1" (
   set "MODE=team (sign-in required)"
 )
 
+REM Auth-enabled mode refuses to start without an absolute base for project
+REM folders (#115): with accounts in play a project's root is server-owned and
+REM derived under it, never chosen by whoever created the project. Nothing set
+REM one, so "team" started an API that died on its own precondition and left the
+REM launcher waiting out the /health timeout. Default it next to the logs, keep
+REM it out of the checkout, and let a value from the environment win - a real
+REM team server puts this on the drive with the room, not in a profile.
+if "%TEAM_MODE%"=="1" if not defined PLANARUS_PROJECTS_ROOT set "PLANARUS_PROJECTS_ROOT=%LOG_DIR%\projects"
+if "%TEAM_MODE%"=="1" if not exist "%PLANARUS_PROJECTS_ROOT%" mkdir "%PLANARUS_PROJECTS_ROOT%" >nul 2>&1
+
 REM --- pick free loopback ports ------------------------------------------------
 REM netstat is built in. The colon anchor prevents :8000 matching :18000; omit
 REM -p tcp so IPv6 Vite listeners are not mistaken for free ports.

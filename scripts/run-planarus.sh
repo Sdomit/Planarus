@@ -74,6 +74,14 @@ WEB_PORT=$(free_port 5173)
 MODE="local (no sign-in)"
 if [ "${1:-}" = "team" ]; then
   export PLANARUS_AUTH_ENABLED=true PLANARUS_AUTH_PASSWORD_ENABLED=true
+  # Auth-enabled mode refuses to start without an absolute base for project
+  # folders (#115): with accounts in play a project's root is server-owned and
+  # derived under it, never chosen by whoever created the project. Nothing set
+  # one, so "team" started an API that died on its own precondition. A value
+  # from the environment wins — a real team server puts this on the drive with
+  # the room, not under a home directory.
+  export PLANARUS_PROJECTS_ROOT="${PLANARUS_PROJECTS_ROOT:-$HOME/.local/share/planarus/projects}"
+  mkdir -p "$PLANARUS_PROJECTS_ROOT"
   MODE="team (sign-in required)"
 fi
 
