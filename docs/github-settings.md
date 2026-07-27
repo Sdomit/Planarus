@@ -3,29 +3,65 @@
 This runbook covers controls that cannot be committed in a pull request. It
 does not authorize a visibility change, release, or licensing change.
 
-## Current state — public, rulesets available, not yet applied
+## Current state — applied, without the pull-request rule
 
-`Sdomit/Planarus` is **public**. Rulesets are free on public repositories, so
-the constraint this section used to describe — both the branch-protection and
-ruleset REST endpoints returning *"Upgrade to GitHub Pro or make this
-repository public to enable this feature"* — no longer applies. Confirm with:
+`Sdomit/Planarus` is **public**, so rulesets are free and the constraint this
+section used to describe — both the branch-protection and ruleset REST
+endpoints returning *"Upgrade to GitHub Pro or make this repository public to
+enable this feature"* — no longer applies.
+
+A ruleset named `main` is **active** on the default branch. Inspect it with:
 
 ```bash
-gh repo view Sdomit/Planarus --json visibility
+gh api repos/Sdomit/Planarus/rulesets
+gh api repos/Sdomit/Planarus/rulesets/19820906
 ```
 
-**`main` still has no required status checks until the ruleset below is
-applied, and the practical effect is worse than "unprotected".** `gh pr merge
---auto` does not wait for CI when there is no required check to wait *for* — it
-merges on the spot. That is how #135 merged while all four jobs were still
-queued. Until the ruleset lands, polling `gh pr checks` and merging only on four
-greens is the only gate that exists, and it is a habit rather than a control.
+What is enforced is exactly two rules: `deletion` and `non_fast_forward`.
+`main` cannot be deleted and cannot be force-pushed, by anyone, owner included
+(`bypass_actors: []`).
 
-## Ready to apply — the four required checks
+The `pull_request` rule from the payload below was dropped deliberately — this
+repository does not use pull requests, and that rule would require one for
+every change to `main`, with no owner exemption.
 
-Nothing gates this any more; it is the whole change. The contexts are the job
-names exactly as GitHub reports them; a typo creates a required check that
-never arrives, which blocks every pull request until the ruleset is edited.
+**`required_status_checks` is NOT part of it, and must not be added back while
+this repository pushes directly to `main`.** It was applied once and had to be
+removed within minutes. Required status checks are enforced on direct pushes,
+not only on pull-request merges:
+
+```
+remote: - 4 of 4 required status checks are expected.
+remote: ! [remote rejected] main -> main (push declined due to repository rule violations)
+```
+
+That is unsatisfiable here, not merely strict. CI triggers on `push` to `main`
+and on `pull_request` (see [ci.yml](../.github/workflows/ci.yml)), so a commit
+that has never been pushed to `main` and is not in a pull request has no check
+runs attached to it — and it cannot acquire any, because the push that would
+start them is the push being rejected. Pushing the branch elsewhere first does
+not help: no workflow triggers on other branches. The result is a locked branch
+with no path forward except deleting the rule.
+
+The two rules that are active have no such catch. They forbid things rather
+than require things, so nothing has to happen first.
+
+**What is therefore not gated.** Nothing stops a direct push to `main` that
+breaks CI; the run reports the breakage afterwards. That is the same gap the
+note about #135 described from the other side — `gh pr merge --auto` did not
+wait for CI because there was no required check to wait for. Only the
+`pull_request` rule closes it, and only together with status checks, because it
+is the pull request that gives the checks somewhere to run before the merge.
+Until then the real gate is running the suite locally before pushing.
+
+## The full payload, for reference
+
+The contexts are the job names exactly as GitHub reports them; a typo creates a
+required check that never arrives, which blocks every pull request until the
+ruleset is edited. To adopt the pull-request gate later, DELETE the current
+ruleset first (`gh api --method DELETE repos/Sdomit/Planarus/rulesets/19820906`)
+and POST this, or PATCH the `rules` array onto it — two rulesets both targeting
+the default branch stack rather than replace.
 
 ```bash
 gh api --method POST repos/Sdomit/Planarus/rulesets --input - <<'JSON'
@@ -58,16 +94,17 @@ gh api --method POST repos/Sdomit/Planarus/rulesets --input - <<'JSON'
 JSON
 ```
 
-**This ruleset requires that every pull request produce a CI run**, which is why
-[.github/workflows/ci.yml](../.github/workflows/ci.yml) no longer carries `paths`
-filters. It used to skip `**.md`, `docs/**` and `context/**` to conserve metered
-Actions minutes on the private repo; public repositories are not metered, so the
-saving is gone and the hazard is not. A filtered-out event produces no run at
-all, so a docs-only pull request would leave all four contexts permanently
-pending and could never merge. Do not reintroduce the filters without also
-adding a skip job that reports those same four context names and exits 0.
+[.github/workflows/ci.yml](../.github/workflows/ci.yml) no longer carries
+`paths` filters, and adopting the pull-request rule depends on that. The filters
+used to skip `**.md`, `docs/**` and `context/**` to conserve metered Actions
+minutes on the private repo; public repositories are not metered, so the saving
+is gone and the hazard is not. A filtered-out event produces no run at all, so
+with the pull-request rule on, a docs-only pull request would leave all four
+contexts permanently pending and could never merge. Do not reintroduce the
+filters without also adding a skip job that reports those same four context
+names and exits 0.
 
-Four decisions are baked into that payload, each deliberate:
+Decisions baked into that payload, each deliberate:
 
 - **`required_approving_review_count: 0`.** A PR author cannot approve their own
   PR, so any higher number would block every merge on a single-maintainer repo.
@@ -93,10 +130,13 @@ pull-request rule would reject the very push that seeds the repository.
 
 ## Main branch — target configuration
 
-Configure `main` as follows:
+Items 2, 4, 5 and 6 stand. Item 1 is the open question and item 3 only matters
+once item 1 is taken:
 
-1. Require pull requests, the full CI suite, up-to-date branches, and resolved
-   conversations.
+1. **Not adopted.** Requiring pull requests, the full CI suite, up-to-date
+   branches and resolved conversations is what the omitted `pull_request` rule
+   does. Revisit if a second contributor arrives, or if a bad direct push to
+   `main` ever costs more than the workflow does.
 2. Block force pushes and branch deletion; require linear history only after
    confirming squash merging is the normal strategy.
 3. Keep required approving reviews at **zero** until a second trusted reviewer
