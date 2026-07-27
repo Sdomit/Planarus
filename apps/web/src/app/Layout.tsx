@@ -36,12 +36,12 @@ const CAPTURE_ROUTE: Record<CaptureType, { view: MainView; planningTab?: Plannin
   doc: { view: 'docs' },
 }
 
-type MainView =
+export type MainView =
   | 'dashboard' | 'cockpit' | 'planning' | 'roadmap' | 'timeline' | 'calendar' | 'docs'
   | 'notes' | 'canvas' | 'context-pack' | 'context-files' | 'preview' | 'approvals'
   | 'agent-runs' | 'reminders' | 'team' | 'settings'
 
-interface SelectedProject {
+export interface SelectedProject {
   id: string
   title: string
   slug: string
@@ -198,10 +198,26 @@ function LanAddress() {
   )
 }
 
-export default function Layout() {
+export interface LayoutProps {
+  /** #183 step 1: when a URL route resolves a project, it seeds the initial
+   *  selection directly and Layout must not fall back to NAV_KEY for it (D64
+   *  — the URL wins on any path; NAV_KEY is written but never read there).
+   *  Every other view still keeps its current state mechanism (step 2). */
+  initialProject?: SelectedProject
+  initialView?: MainView
+}
+
+export default function Layout({ initialProject, initialView }: LayoutProps = {}) {
   const { me, signOut } = useAuthInfo()
-  const [mainView, setMainView] = useState<MainView>(() => loadNav().view ?? 'dashboard')
-  const [project, setProject] = useState<SelectedProject | null>(() => loadNav().project ?? null)
+  const [mainView, setMainView] = useState<MainView>(
+    // A route-resolved project always gets a view of its own (default:
+    // 'cockpit', the project home) — never NAV_KEY's, which belongs only to a
+    // bare `/` visit (D64).
+    () => initialView ?? (initialProject ? 'cockpit' : loadNav().view ?? 'dashboard'),
+  )
+  const [project, setProject] = useState<SelectedProject | null>(
+    () => initialProject ?? loadNav().project ?? null,
+  )
   const [theme, setTheme] = useState<string>(
     () => document.documentElement.getAttribute('data-theme') || 'light-cosmo',
   )
