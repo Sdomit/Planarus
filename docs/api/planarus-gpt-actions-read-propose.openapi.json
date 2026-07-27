@@ -214,6 +214,17 @@
               "default": 100
             },
             "description": "Maximum rows to return (1-100, default 100)."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            },
+            "description": "Rows (or, for getDocExcerpt, characters) to skip. Pass the previous response's `next_offset` metadata value to continue; omit or use 0 for the first page."
           }
         ],
         "responses": {
@@ -292,6 +303,17 @@
               "default": 100
             },
             "description": "Maximum rows to return (1-100, default 100)."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            },
+            "description": "Rows (or, for getDocExcerpt, characters) to skip. Pass the previous response's `next_offset` metadata value to continue; omit or use 0 for the first page."
           }
         ],
         "responses": {
@@ -370,6 +392,17 @@
               "default": 100
             },
             "description": "Maximum rows to return (1-100, default 100)."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            },
+            "description": "Rows (or, for getDocExcerpt, characters) to skip. Pass the previous response's `next_offset` metadata value to continue; omit or use 0 for the first page."
           }
         ],
         "responses": {
@@ -439,6 +472,17 @@
               "default": 100
             },
             "description": "Maximum rows to return (1-100, default 100)."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            },
+            "description": "Rows (or, for getDocExcerpt, characters) to skip. Pass the previous response's `next_offset` metadata value to continue; omit or use 0 for the first page."
           }
         ],
         "responses": {
@@ -508,6 +552,17 @@
               "default": 4000
             },
             "description": "Maximum excerpt characters (1-4000, default 4000)."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            },
+            "description": "Rows (or, for getDocExcerpt, characters) to skip. Pass the previous response's `next_offset` metadata value to continue; omit or use 0 for the first page."
           }
         ],
         "responses": {
