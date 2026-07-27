@@ -103,11 +103,29 @@ only the Markdown context pack. Idempotent (safe to re-run); honors
 `PLANARUS_DATABASE_URL`:
 
 ```bash
+# from apps/api, like every other backend command above
 python3 scripts/seed_planarus_project.py
 ```
 
 The milestone titles in that seed are maintained by hand and are a snapshot, not
 a live feed — treat it as demo data rather than the current roadmap.
+
+### Optional: the demo project
+
+A second seed builds a throwaway **"Planarus Demo — How We Built Planarus"**
+project that uses every planning entity the tool has — phases, stages, tasks
+with subtasks and checklists, milestones, risks, blockers, decisions, docs of
+every type, comments, todos, links, calendar events, entity connections, a
+custom status option and agent-run telemetry — so one project shows the whole
+feature surface. It also gives `@` mentions something real to point at.
+
+```bash
+# from apps/api
+python3 scripts/seed_demo_project.py
+```
+
+Idempotent at the project level: once `planarus-demo` exists, re-running does
+nothing. Delete the project in the app to start over.
 
 ## Frontend (apps/web)
 
