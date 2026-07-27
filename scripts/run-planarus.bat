@@ -162,16 +162,24 @@ if errorlevel 1 (
 exit /b 0
 
 :ensure_api_environment
-if not exist "%API_PY%" (
-  echo [SETUP] Creating the local Python 3.11 environment...
-  call :find_python311
-  if errorlevel 1 exit /b 1
-  %BOOTSTRAP_PY% -m venv "%API_DIR%\.venv"
-  if errorlevel 1 (
-    echo [ERROR] Could not create apps\api\.venv.
-    exit /b 1
-  )
+if exist "%API_PY%" goto api_venv_ready
+echo [SETUP] Creating the local Python 3.11 environment...
+call :find_python311
+if errorlevel 1 exit /b 1
+REM These three lines are deliberately NOT inside an "if not exist (...)" block.
+REM Delayed expansion is off, so every %VAR% inside a parenthesised block is
+REM substituted when the block is parsed - which is before anything in it has
+REM run. %BOOTSTRAP_PY% is set by :find_python311, called in that same block, so
+REM it expanded to nothing and the line ran as "-m venv ...". cmd then reported
+REM "'-m' is not recognized as an internal or external command" and the venv was
+REM never created, on every machine that did not already have one.
+%BOOTSTRAP_PY% -m venv "%API_DIR%\.venv"
+if errorlevel 1 (
+  echo [ERROR] Could not create apps\api\.venv.
+  exit /b 1
 )
+
+:api_venv_ready
 "%API_PY%" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 11) else 1)" >nul 2>&1
 if errorlevel 1 (
   echo [ERROR] apps\api\.venv must use Python 3.11.
