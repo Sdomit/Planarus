@@ -55,10 +55,10 @@ jobs:
       - uses: actions/checkout@v7
       # No version here on purpose: action-setup reads packageManager from
       # package.json, so the pin lives in exactly one place.
-      # That pin is pnpm 10.x, NOT 11.x: pnpm 11 requires Node >=22.13 (it
-      # imports node:sqlite) and this repo is on Node 20. 10.26+ is what makes
-      # pnpm-workspace.yaml's allowBuilds key meaningful. Raising Node to 22
-      # would let us move to pnpm 11 — a separate change.
+      # That pin is pnpm 10.x, NOT 11.x. 10.26+ is what makes
+      # pnpm-workspace.yaml's allowBuilds key meaningful. pnpm 11 needs
+      # Node >=22.13 (it imports node:sqlite), which Node 24 now satisfies, so
+      # moving to 11 is unblocked — but it is a separate change.
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:

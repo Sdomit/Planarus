@@ -22,7 +22,7 @@ if [ ! -x "$ROOT/apps/api/.venv/bin/python" ]; then
   exit 1
 fi
 if ! command -v pnpm >/dev/null 2>&1; then
-  echo "[ERROR] pnpm not found on PATH. Install Node 20+, then: corepack enable"
+  echo "[ERROR] pnpm not found on PATH. Install Node 22+, then: corepack enable"
   exit 1
 fi
 if [ ! -d "$ROOT/apps/web/node_modules" ]; then

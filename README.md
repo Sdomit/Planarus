@@ -114,8 +114,9 @@ Open <http://localhost:5173>.
 
 ### Native development with hot reload
 
-**Prerequisites:** Python 3.11, Node.js 20+, and the pnpm version pinned by the
-repository (`corepack enable` is the recommended route).
+**Prerequisites:** Python 3.11, Node.js 22+ (24 is what CI runs and `.nvmrc`
+pins), and the pnpm version pinned by the repository (`corepack enable` is the
+recommended route).
 
 ```bash
 # Once per checkout, from the repository root

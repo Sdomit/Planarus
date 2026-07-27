@@ -132,7 +132,7 @@ REM --- subroutines ------------------------------------------------------------
 :ensure_pnpm
 where node >nul 2>&1
 if errorlevel 1 (
-  echo [ERROR] Node.js 20+ is required but was not found on PATH.
+  echo [ERROR] Node.js 22+ is required but was not found on PATH.
   exit /b 1
 )
 where pnpm >nul 2>&1
@@ -142,7 +142,7 @@ if not errorlevel 1 (
 )
 where corepack >nul 2>&1
 if errorlevel 1 (
-  echo [ERROR] pnpm is unavailable. Install Node.js 20+ with Corepack, then run: corepack enable
+  echo [ERROR] pnpm is unavailable. Install Node.js 22+ with Corepack, then run: corepack enable
   exit /b 1
 )
 set "PNPM_CMD=corepack pnpm"
