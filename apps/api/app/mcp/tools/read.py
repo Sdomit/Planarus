@@ -688,3 +688,20 @@ def get_approval_status(
         "applied_at": ar.applied_at,
     }
     return status_only_result(metadata, note=f"Approval {ar.id} status: {ar.status}.")
+
+
+def get_pending_approval_count(
+    session: Session, cap: Capability, args: ProjectArgs
+) -> ToolResult:
+    """#108: what the browser-extension badge polls — a bare count, never the
+    approval rows themselves, so a read-only key's blast radius stays a number."""
+    _require_project_scope(cap, args.project_id)
+    if session.get(Project, args.project_id) is None:
+        raise MCPToolError(CODE_NOT_FOUND, "project not found")
+    count = approval_service.count_approvals(
+        session, project_id=args.project_id, status="pending"
+    )
+    metadata = {"project_id": args.project_id, "pending_count": count}
+    return status_only_result(
+        metadata, note=f"{count} approval(s) pending for project {args.project_id}."
+    )

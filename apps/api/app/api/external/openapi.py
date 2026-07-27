@@ -18,8 +18,8 @@ server URL is a placeholder, and Planarus never creates or manages a public
 endpoint, tunnel, or reverse proxy.
 
 Two profiles:
-  build_readonly_openapi()      -> 8 GET operations          (approved first-live profile)
-  build_read_propose_openapi()  -> those 8 + 3 POST proposals (future-gated profile)
+  build_readonly_openapi()      -> 10 GET operations           (approved first-live profile)
+  build_read_propose_openapi()  -> those 10 + 3 POST proposals (future-gated profile)
 
 The contract version (``CONTRACT_VERSION``) is intentionally independent of the
 application version, so the two never have to move together. The bounds and the
@@ -585,6 +585,19 @@ def _read_paths() -> dict:
                 ],
             )
         },
+        "/projects/{project_id}/approvals/pending-count": {
+            "get": _operation(
+                "getPendingApprovalCount",
+                "Count of PENDING approvals for a scoped project (a bare number). Read-only.",
+                "Returns how many approvals are pending human review for one in-scope "
+                "project. A scalar count only — never approval titles, diffs, or ids.",
+                consequential=False,
+                success_status=200,
+                success_response=_read_success(),
+                error_statuses=_READ_ERRORS,
+                parameters=[_path_param("project_id", _PROJECT_ID_DESC)],
+            )
+        },
     }
 
 
@@ -680,7 +693,7 @@ def _assemble(
 
 
 def build_readonly_openapi() -> dict:
-    """Approved first-live profile: the 8 GET read operations only."""
+    """Approved first-live profile: the 10 GET read operations only."""
     return _assemble(
         title_suffix="read-only profile",
         profile_note=READONLY_PROFILE_NOTE,
@@ -698,7 +711,7 @@ def build_readonly_openapi() -> dict:
 
 
 def build_read_propose_openapi() -> dict:
-    """Future-gated profile: the 8 GET reads plus the 3 POST pending-proposal ops."""
+    """Future-gated profile: the 10 GET reads plus the 3 POST pending-proposal ops."""
     return _assemble(
         title_suffix="read + propose profile",
         profile_note=PROPOSE_PROFILE_NOTE,

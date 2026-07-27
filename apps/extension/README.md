@@ -3,7 +3,10 @@
 Select text on any page → right-click → **Add to Planarus** → pick a type. A tab
 opens on your running Planarus with the create form already filled in.
 
-Three files, no build step, not part of the pnpm workspace. Chrome/Edge (MV3).
+Optionally, a toolbar badge shows how many approvals are waiting for you (#108,
+slice 18.2) — see [Badge](#badge-optional-108) below.
+
+Plain files, no build step, not part of the pnpm workspace. Chrome/Edge (MV3).
 
 ## Install (load unpacked)
 
@@ -52,11 +55,35 @@ options live.
 - **Icons.** Chrome shows a default placeholder in the toolbar and menu. Drop
   `icons/16.png`, `icons/48.png` and `icons/128.png` here and add an `"icons"`
   block to `manifest.json` to brand it.
-- **Pending-approval badge.** That is slice 18.2 (#108), deliberately deferred:
-  it needs a read-only API key and a polling network call, which is exactly what
-  this slice avoids.
 - **Firefox/Safari.** MV3 service workers and `chrome.*` differ enough to want
   their own pass.
+
+## Badge (optional, #108)
+
+Shows the number of approvals waiting for you in the toolbar, without opening
+Planarus. This is the *only* part of the extension that holds a credential and
+makes a network call — select-to-capture above holds neither (D65). Off by
+default; nothing is stored or requested until you fill in the options page.
+
+1. In Planarus: **Settings → API Clients** → issue a key with **Read** only
+   (no Propose) scoped to the project you want the count for.
+2. Right-click the extension's toolbar icon → **Options** (or open it from
+   `chrome://extensions`). Enter your Planarus API URL (e.g.
+   `http://localhost:8000`) and the key, then **Save**.
+3. Chrome will ask you to approve access to that one origin — this is
+   `optional_host_permissions` being requested for exactly the URL you typed,
+   not a broad grant taken at install.
+
+The badge polls in the background (`apps/extension/background.js` +
+`badge.js`) and clears itself — no count shown — the moment the key is
+missing, wrong, revoked, or the API is unreachable; it never shows a stale or
+guessed number. An unreachable API is polled less and less often (backoff, capped
+at 30 minutes) rather than hammered. Clicking the badge opens the Approval
+Queue in the app; there is deliberately **no approve/reject in a popup** — you
+review the same diff preview you always would (D65's whole point: the human
+seeing the preview is the product).
+
+To turn it off, clear both fields on the options page and Save.
 
 ## Contract
 

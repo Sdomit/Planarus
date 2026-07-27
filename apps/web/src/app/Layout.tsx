@@ -21,7 +21,7 @@ import { SidebarTodos } from './SidebarTodos'
 import { useAuthInfo } from './auth'
 import { Icon } from './Icon'
 import { api, type NotificationItem, type Project, type Workspace } from '../api/client'
-import { captureTitle, parseCapture, type Capture, type CaptureType } from './capture'
+import { OPEN_APPROVALS_FRAGMENT, captureTitle, parseCapture, type Capture, type CaptureType } from './capture'
 import './layout.css'
 
 
@@ -396,13 +396,20 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // #106: the extension's whole API is this fragment. Read once on mount, then
-  // strip it — otherwise a refresh re-fires the same clip and files it twice.
-  // Anything malformed parses to null and the app boots normally (D65: the
-  // extension holds no credential, so this fragment is entirely untrusted).
+  // #106/#108: the extension's whole API is this fragment. Read once on mount,
+  // then strip it — otherwise a refresh re-fires the same clip (or reopens the
+  // queue) twice. Anything malformed parses to null and the app boots normally
+  // (D65: the extension holds no credential, so this fragment is untrusted).
   useEffect(() => {
-    const clip = parseCapture(window.location.hash)
+    const hash = window.location.hash
     window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    // #108: the badge's click-through. No payload to validate — a bare marker,
+    // so there is nothing here an attacker-controlled fragment could smuggle.
+    if (hash === OPEN_APPROVALS_FRAGMENT) {
+      setMainView('approvals')
+      return
+    }
+    const clip = parseCapture(hash)
     if (!clip) return
     const route = CAPTURE_ROUTE[clip.type]
     setCapture(clip)

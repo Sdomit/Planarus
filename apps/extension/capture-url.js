@@ -10,6 +10,16 @@
 /** Where the app is served. One line to change for a LAN or hosted install. */
 export const APP_URL = 'http://localhost:5173'
 
+/** #108: the badge's click-through — must match `OPEN_APPROVALS_FRAGMENT` in
+ *  `apps/web/src/app/capture.ts` exactly; `extension-contract.test.ts` guards it. */
+export const OPEN_APPROVALS_FRAGMENT = '#open-approvals'
+
+/** URL the badge opens on click. No payload, so unlike `captureUrl` this never
+ *  returns null — there is nothing to validate. */
+export function openApprovalsUrl(appUrl) {
+  return `${appUrl}${OPEN_APPROVALS_FRAGMENT}`
+}
+
 /** Mirrors MAX_TEXT in the app's parser, which clips anything longer anyway. */
 export const MAX_TEXT = 4000
 
