@@ -32,6 +32,10 @@ export default function App() {
             path="/w/:workspaceSlug/p/:projectSlug/planning/task/:taskId"
             element={<ProjectRoute />}
           />
+          <Route
+            path="/w/:workspaceSlug/p/:projectSlug/docs/:docSlug"
+            element={<ProjectRoute />}
+          />
           {/* Bare `/` (dashboard) and anything this migration hasn't reached
               yet keep rendering Layout exactly as it always has. */}
           <Route path="/*" element={<Layout />} />
