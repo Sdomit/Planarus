@@ -7,6 +7,15 @@ REM starts FastAPI + Vite, and opens the UI only after both health checks pass.
 REM It is loopback-only and always disables the external API. Add "verify" to
 REM run the complete local API/web checks before launch; add "team" to opt in to
 REM the account gate. Arguments can be combined in either order.
+REM
+REM Silent is the default: the services run with no console window and their
+REM output goes to %%LOCALAPPDATA%%\Planarus\*.log. Add "visible" to get the two
+REM console windows back, which is worth doing when a service will not start.
+REM
+REM Running it a second time does not start a second copy. If Planarus is
+REM already answering, this reopens the page and exits - so the shortcut, the
+REM batch file and the tray all behave like "show me Planarus" rather than
+REM stacking instances on shifted ports.
 REM ============================================================================
 setlocal EnableExtensions DisableDelayedExpansion
 REM The script lives in scripts\; everything it drives is relative to the repo
@@ -21,7 +30,9 @@ set "API_PY=%API_DIR%\.venv\Scripts\python.exe"
 set "PNPM_CMD=pnpm"
 set "TEAM_MODE=0"
 set "VERIFY_MODE=0"
-set "SILENT_MODE=0"
+REM Silent by default. The visible pair of consoles is a debugging aid, not the
+REM everyday experience, and "visible" turns it back on.
+set "SILENT_MODE=1"
 set "LOG_DIR=%LOCALAPPDATA%\Planarus"
 
 :parse_args
@@ -36,8 +47,15 @@ if /i "%~1"=="verify" (
   shift
   goto parse_args
 )
+REM "silent" is still accepted so that existing shortcuts, the tray and CI keep
+REM working; it is now the default and therefore a no-op.
 if /i "%~1"=="silent" (
   set "SILENT_MODE=1"
+  shift
+  goto parse_args
+)
+if /i "%~1"=="visible" (
+  set "SILENT_MODE=0"
   shift
   goto parse_args
 )
@@ -48,6 +66,15 @@ echo [ERROR] Unknown argument: %~1
 goto usage_error
 
 :args_done
+REM --- already running? -------------------------------------------------------
+REM Checked before any bootstrap so that a second double-click is instant rather
+REM than spending a minute re-verifying dependencies to discover there is
+REM nothing to do. Without this the port scan would find 5173 busy, move to
+REM 5174, and quietly bring up a SECOND Planarus against the same database.
+set "ALREADY_RUNNING=0"
+call :detect_running
+if "%ALREADY_RUNNING%"=="1" goto reopen_existing
+
 REM --- prerequisites + first-run bootstrap -----------------------------------
 call :ensure_pnpm
 if errorlevel 1 goto failed
@@ -161,10 +188,10 @@ goto wait_web
 
 :web_up
 echo   Web is up   http://localhost:%WEB_PORT%
-REM Silent means silent: a browser tab appearing unasked is the thing being
-REM avoided. The tray's Open item, or a double-click on its icon, is how the UI
-REM gets opened in that mode.
-if "%SILENT_MODE%"=="0" start "" "http://localhost:%WEB_PORT%"
+REM Opened in both modes. Silent is about not leaving two consoles sitting on
+REM the desktop, not about withholding the thing the user asked for - starting
+REM Planarus and then not showing it would make the shortcut feel broken.
+start "" "http://localhost:%WEB_PORT%"
 echo.
 echo Planarus is ready.
 echo   UI:       http://localhost:%WEB_PORT%
@@ -392,6 +419,36 @@ popd
 if not "%_verify_status%"=="0" exit /b 1
 exit /b 0
 
+:reopen_existing
+echo.
+echo Planarus is already running.
+echo   UI:       http://localhost:%RUNNING_WEB%
+echo.
+echo Opening it rather than starting a second copy.
+start "" "http://localhost:%RUNNING_WEB%"
+exit /b 0
+
+:detect_running
+REM Trusts the port record only as a hint. The file survives a crash or a hard
+REM reboot, so it is confirmed with an actual request before being believed -
+REM otherwise a stale file would make the launcher refuse to start and send the
+REM user to a page nothing serves.
+set "RUNNING_WEB="
+if not exist "%LOG_DIR%\local.ports" exit /b 0
+for /f "usebackq tokens=1,2 delims==" %%K in ("%LOG_DIR%\local.ports") do call :read_web_port "%%K" "%%L"
+if not defined RUNNING_WEB exit /b 0
+call :probe_url "http://localhost:%RUNNING_WEB%"
+if errorlevel 1 (
+  set "RUNNING_WEB="
+  exit /b 0
+)
+set "ALREADY_RUNNING=1"
+exit /b 0
+
+:read_web_port
+if /i "%~1"=="WEB" set "RUNNING_WEB=%~2"
+exit /b 0
+
 :write_ports
 REM Record the ports for the tray. The tray cannot discover them by inspecting
 REM windows: enumerating them needs either a child process (tasklist), which a
@@ -430,13 +487,17 @@ endlocal & set "%~2=%_p%"
 exit /b 0
 
 :usage
-echo Usage: scripts\run-planarus.bat [team] [verify] [silent]
+echo Usage: scripts\run-planarus.bat [team] [verify] [visible]
 echo.
-echo   scripts\run-planarus.bat          Bootstrap and start the local anonymous app.
+echo   scripts\run-planarus.bat          Bootstrap and start the app, then open it.
+echo                                     No service windows; output goes to
+echo                                     %%LOCALAPPDATA%%\Planarus\*.log
+echo                                     Already running? Reopens the page instead
+echo                                     of starting a second copy.
+echo   scripts\run-planarus.bat visible  Same, but keep the two service consoles.
+echo                                     Use this when a service will not start.
 echo   scripts\run-planarus.bat verify   Run API and web checks, then start the app.
 echo   scripts\run-planarus.bat team     Start local team mode with sign-in enabled.
-echo   scripts\run-planarus.bat silent   No service windows and no browser tab;
-echo                                     output goes to %%LOCALAPPDATA%%\Planarus\*.log
 echo.
 echo Arguments can be combined: scripts\run-planarus.bat team verify
 echo.

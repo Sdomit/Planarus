@@ -151,11 +151,11 @@ function Start-Planarus {
     # creating a virtual environment or prompting to install Node, and its window
     # is where a failed migration is visible. Hiding it would turn a first run
     # into a tray that appears to do nothing for several minutes.
-    # "silent": no service windows and no browser tab. A tray whose Start throws
-    # two consoles onto the desktop is not doing the job the tray exists for.
-    # Service output goes to api.log / web.log beside this script's own log.
-    Write-TrayLog "start : launching $StartScript silent"
-    Start-Process -FilePath $env:ComSpec -ArgumentList '/c', "`"$StartScript`"", 'silent' -WorkingDirectory $Root
+    # No arguments: silent is the launcher's default now, and it also declines to
+    # start a second copy if one is already up. Passing "silent" explicitly would
+    # only suggest the flag still does something.
+    Write-TrayLog "start : launching $StartScript"
+    Start-Process -FilePath $env:ComSpec -ArgumentList '/c', "`"$StartScript`"" -WorkingDirectory $Root
 }
 
 function Stop-Planarus {

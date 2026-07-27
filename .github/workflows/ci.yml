@@ -263,13 +263,45 @@ jobs:
         run: |
           $ports = Join-Path $env:LOCALAPPDATA 'Planarus\local.ports'
           Remove-Item $ports -Force -ErrorAction SilentlyContinue
-          Start-Process cmd -ArgumentList '/c', 'scripts\run-planarus.bat', 'silent' -WorkingDirectory $PWD
+          Start-Process cmd -ArgumentList '/c', 'scripts\run-planarus.bat' -WorkingDirectory $PWD
           $deadline = (Get-Date).AddMinutes(12)
           while ((Get-Date) -lt $deadline -and -not (Test-Path $ports)) { Start-Sleep -Seconds 5 }
           if (-not (Test-Path $ports)) {
             throw "run-planarus.bat never reached :write_ports - it failed during bootstrap"
           }
           Get-Content $ports
+
+      # A second launch must reopen the page, not bring up another copy against
+      # the same database on shifted ports. Asserted on time as well as output:
+      # the whole point is that it answers before doing any bootstrap work.
+      - name: Second launch reopens instead of starting a second copy
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $elapsed = Measure-Command {
+            $script:out = & cmd /c 'scripts\run-planarus.bat' 2>&1 | Out-String
+          }
+          Write-Host $script:out
+          if ($script:out -notmatch 'already running') {
+            throw "a second launch did not detect the running instance"
+          }
+          if ($elapsed.TotalSeconds -gt 30) {
+            throw "second launch took $($elapsed.TotalSeconds)s - it is not short-circuiting"
+          }
+
+      # A port record left behind by a crash must not be believed. If it were,
+      # the launcher would refuse to start and send the user to a dead page.
+      - name: A stale port record does not block a start
+        shell: pwsh
+        run: |
+          & cmd /c 'scripts\stop-planarus.bat' | Out-Null
+          $dir = Join-Path $env:LOCALAPPDATA 'Planarus'
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          "API=8099`r`nWEB=5199" | Set-Content -Path (Join-Path $dir 'local.ports')
+          $out = & cmd /c 'scripts\run-planarus.bat help' 2>&1 | Out-String
+          if ($out -match 'already running') {
+            throw "a stale port record was treated as a live instance"
+          }
 
       - name: Stop
         if: always()
