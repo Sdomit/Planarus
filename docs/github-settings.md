@@ -3,38 +3,28 @@
 This runbook covers controls that cannot be committed in a pull request. It
 does not authorize a visibility change, release, or licensing change.
 
-## Current constraint — re-confirmed 25 July 2026
+## Current state — public, rulesets available, not yet applied
 
-Planarus is private. GitHub's branch-protection and ruleset REST endpoints
-both return: **"Upgrade to GitHub Pro or make this repository public to
-enable this feature."** No repository-protection setting has been changed.
+`Sdomit/Planarus` is **public**. Rulesets are free on public repositories, so
+the constraint this section used to describe — both the branch-protection and
+ruleset REST endpoints returning *"Upgrade to GitHub Pro or make this
+repository public to enable this feature"* — no longer applies. Confirm with:
 
+```bash
+gh repo view Sdomit/Planarus --json visibility
 ```
-$ gh api repos/Sdomit/Planarus/branches/main/protection   # 403
-$ gh api repos/Sdomit/Planarus/rulesets                   # 403
-```
 
-**`main` therefore has no required status checks, and the practical effect is
-worse than "unprotected".** `gh pr merge --auto` does not wait for CI when there
-is no required check to wait *for* — it merges on the spot. That is how #135
-merged while all four jobs were still queued. Until one of the paths below is
-taken, discipline is the only gate that exists: poll `gh pr checks` and merge
-only on four greens.
-
-The owner must choose one of these paths before enforcing the controls below:
-
-1. Keep Planarus private and upgrade the account to GitHub Pro (or move it to
-   an eligible Team/Enterprise plan).
-2. Make the repository public only after completing the OSS-launch privacy and
-   release review. Rulesets are free on public repositories, so this path costs
-   nothing — but it is gated behind #119.
-3. Keep the repository private without hosted branch protection for now, while
-   using the documented branch-and-PR workflow locally.
+**`main` still has no required status checks until the ruleset below is
+applied, and the practical effect is worse than "unprotected".** `gh pr merge
+--auto` does not wait for CI when there is no required check to wait *for* — it
+merges on the spot. That is how #135 merged while all four jobs were still
+queued. Until the ruleset lands, polling `gh pr checks` and merging only on four
+greens is the only gate that exists, and it is a habit rather than a control.
 
 ## Ready to apply — the four required checks
 
-The moment path 1 or 2 lands, this is the whole change. The contexts are the
-job names exactly as GitHub reports them; a typo creates a required check that
+Nothing gates this any more; it is the whole change. The contexts are the job
+names exactly as GitHub reports them; a typo creates a required check that
 never arrives, which blocks every pull request until the ruleset is edited.
 
 ```bash
@@ -68,22 +58,14 @@ gh api --method POST repos/Sdomit/Planarus/rulesets --input - <<'JSON'
 JSON
 ```
 
-**Before running that, delete the `paths` filters from
-[.github/workflows/ci.yml](../.github/workflows/ci.yml).** They were added while
-the July 2026 Actions allowance was exhausted, so that docs-only commits stop
-burning metered minutes — roughly half of recent commits touch nothing but
-`**.md`, `docs/**` and `context/**`. That is free today precisely *because* there
-are no required checks. Apply this ruleset with the filters still in place and a
-docs-only pull request produces no CI run at all, so all four contexts stay
-permanently pending and the PR can never merge — the same failure the paragraph
-above warns about, arrived at from the other direction. Either drop the filters
-or replace them with a skip job that reports the four context names and exits 0.
-
-Two paths under `docs/` are deliberately **not** skipped, and that is not
-cosmetic: `docs/api/**` holds the two committed GPT Actions contracts that
-`tests/test_openapi_contract.py` compares byte-for-byte against the builder.
-Skipping it would let CI report green on a change it never ran. If you rewrite
-these filters, keep the re-include last — in a `paths` list, later patterns win.
+**This ruleset requires that every pull request produce a CI run**, which is why
+[.github/workflows/ci.yml](../.github/workflows/ci.yml) no longer carries `paths`
+filters. It used to skip `**.md`, `docs/**` and `context/**` to conserve metered
+Actions minutes on the private repo; public repositories are not metered, so the
+saving is gone and the hazard is not. A filtered-out event produces no run at
+all, so a docs-only pull request would leave all four contexts permanently
+pending and could never merge. Do not reintroduce the filters without also
+adding a skip job that reports those same four context names and exits 0.
 
 Four decisions are baked into that payload, each deliberate:
 
@@ -105,12 +87,11 @@ Four decisions are baked into that payload, each deliberate:
   flip it back — one `PATCH` each way, and both are visible in the audit log.
 - **`non_fast_forward`.** Blocks force-pushes to `main`.
 
-**Ordering, if this is applied to the new public repository from #119:** create
-the repository, push the rewritten mirror, *then* POST the ruleset. Applied
-first, `non_fast_forward` and the pull-request rule would reject the very push
-that seeds the repository.
+**Ordering, if this is ever re-applied to a freshly seeded repository:** push
+first, *then* POST the ruleset. Applied first, `non_fast_forward` and the
+pull-request rule would reject the very push that seeds the repository.
 
-## Main branch after the plan constraint is resolved
+## Main branch — target configuration
 
 Configure `main` as follows:
 

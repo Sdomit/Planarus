@@ -18,6 +18,16 @@ import { badgeText, fetchPendingTotal, nextDelayMinutes } from './badge.js'
 const PARENT_ID = 'planarus-capture'
 const BADGE_ALARM = 'planarus-badge-poll'
 
+// Set on the options page for a LAN or hosted install; APP_URL is the localhost
+// default. Read per click rather than cached: a service worker restarts
+// constantly, so there is no cache to be worth keeping, and this way a change
+// on the options page takes effect on the very next capture. Opening a tab is a
+// navigation, so unlike the badge's API URL this needs no host permission.
+async function resolveAppUrl() {
+  const { appUrl } = await chrome.storage.local.get('appUrl')
+  return appUrl || APP_URL
+}
+
 // onInstalled only. A service worker restarts constantly, and re-registering a
 // menu that already exists throws "duplicate id".
 chrome.runtime.onInstalled.addListener(() => {
@@ -39,9 +49,9 @@ chrome.runtime.onInstalled.addListener(() => {
   refreshBadge()
 })
 
-chrome.contextMenus.onClicked.addListener((info, tab) => {
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (typeof info.menuItemId !== 'string' || !info.menuItemId.startsWith(`${PARENT_ID}:`)) return
-  const url = captureUrl(APP_URL, {
+  const url = captureUrl(await resolveAppUrl(), {
     type: info.menuItemId.slice(PARENT_ID.length + 1),
     text: info.selectionText,
     url: tab?.url,
@@ -93,6 +103,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // declared in the manifest, which is what makes this event fire at all;
 // approving/rejecting from a popup is an explicit non-goal (D65's "the human
 // seeing the preview is the product" — see plan 18.2).
-chrome.action.onClicked.addListener(() => {
-  chrome.tabs.create({ url: openApprovalsUrl(APP_URL) })
+chrome.action.onClicked.addListener(async () => {
+  chrome.tabs.create({ url: openApprovalsUrl(await resolveAppUrl()) })
 })

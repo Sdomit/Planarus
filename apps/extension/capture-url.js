@@ -7,7 +7,8 @@
  * #106) is the other half — if these two drift, capture silently stops working.
  */
 
-/** Where the app is served. One line to change for a LAN or hosted install. */
+/** Where the app is served, when the options page has not been given a value.
+ *  A LAN or hosted install sets its own there; nothing here needs editing. */
 export const APP_URL = 'http://localhost:5173'
 
 /** #108: the badge's click-through — must match `OPEN_APPROVALS_FRAGMENT` in

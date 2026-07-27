@@ -19,15 +19,18 @@ Reload the extension from that same page after editing any file here.
 
 ## Point it at your Planarus
 
-`APP_URL` at the top of [`capture-url.js`](capture-url.js) — one line:
+Defaults to `http://localhost:5173`, which is right for a normal single-machine
+install — nothing to configure.
 
-```js
-export const APP_URL = 'http://localhost:5173'
-```
+For a shared install on your network, or a hosted one, right-click the toolbar
+icon → **Options** and set **Planarus app URL** to that address
+(`http://192.168.1.42:5173`). The app's own "copy LAN address" button, in the
+account menu, gives you the exact value. Everyone on the team sets their own; no
+file is edited and the browser asks for no permission, because this only decides
+which tab gets opened.
 
-Change it to your LAN address (`http://192.168.1.42:5173`) or hosted origin. The
-app's own "copy LAN address" button, in the account menu, gives you the exact
-value.
+Leave it blank to fall back to the localhost default in
+[`capture-url.js`](capture-url.js).
 
 ## What it does and does not do
 

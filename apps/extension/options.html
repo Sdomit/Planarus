@@ -2,10 +2,11 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Planarus — pending-approval badge</title>
+  <title>Planarus — extension options</title>
   <style>
     body { font: 14px system-ui, sans-serif; max-width: 32em; margin: 2em; color: #1a1a1a; }
     h1 { font-size: 1.1em; }
+    h2 { font-size: 1em; margin: 2em 0 0; padding-top: 1em; border-top: 1px solid #ddd; }
     p.hint { color: #555; }
     label { display: block; margin-top: 1em; font-weight: 600; }
     input { width: 100%; box-sizing: border-box; padding: 0.4em; margin-top: 0.3em; font: inherit; }
@@ -16,16 +17,31 @@
   </style>
 </head>
 <body>
-  <h1>Pending-approval badge</h1>
-  <p class="hint">
-    Optional (#108). Shows how many approvals are waiting for you, in the
-    toolbar, without opening Planarus. This is the one part of the extension
-    that holds a credential and calls the API — everything else
-    (select-to-capture) holds neither. Use a <strong>read-only</strong> API
-    key, issued from Planarus's Settings &rarr; API Clients.
-  </p>
+  <h1>Planarus extension options</h1>
 
   <form id="form">
+    <h2>Where Planarus runs</h2>
+    <p class="hint">
+      The address you open Planarus at. Leave blank for
+      <code>http://localhost:5173</code>. For a shared install on your network,
+      put the LAN address here — the app's account menu has a
+      <strong>copy LAN address</strong> button that gives you the exact value.
+      This only decides which tab gets opened, so the browser asks for no
+      permission and the extension still makes no request of its own.
+    </p>
+
+    <label for="appUrl">Planarus app URL</label>
+    <input id="appUrl" type="text" placeholder="http://localhost:5173" autocomplete="off" />
+
+    <h2>Pending-approval badge (optional)</h2>
+    <p class="hint">
+      Shows how many approvals are waiting for you, in the toolbar, without
+      opening Planarus. This is the one part of the extension that holds a
+      credential and calls the API — select-to-capture holds neither. Use a
+      <strong>read-only</strong> key, issued from Planarus's Settings &rarr; API
+      Clients. Leave both fields blank to keep the badge off.
+    </p>
+
     <label for="apiUrl">Planarus API URL</label>
     <input id="apiUrl" type="text" placeholder="http://localhost:8000" autocomplete="off" />
 

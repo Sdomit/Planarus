@@ -1,52 +1,21 @@
 name: CI
 
-# Actions minutes are metered on this repo because it is private, and the Free
-# plan allowance is 2,000 Linux minutes/month. July 2026 blew past it (2,020 min)
-# and every job started failing with "the job was not started because ... your
-# spending limit needs to be increased". The two filters below are the cheap half
-# of the fix; the structural half is going public, which #119 still gates.
+# No `paths` filters: this repository is public, so Actions minutes on standard
+# runners are not metered and there is nothing to save by skipping a run.
 #
-# Skipping is safe here only because this repo has no required status checks
-# (branch protection is a Pro feature and this is a private repo on Free). If
-# protection is ever enabled, a docs-only PR would sit pending forever — either
-# drop these filters or add a skip job that reports the same check names.
-# Note also that GitHub Actions does not support YAML anchors, so the list is
-# duplicated rather than shared.
-#
-# `paths` with `!`, not `paths-ignore`: two paths under docs/ are test INPUTS,
-# not documentation, and skipping them would let CI pass on a change it never
-# saw. `paths-ignore` cannot express "ignore this subtree except that part" —
-# negation is only supported in `paths`, and the two filters cannot both apply
-# to one event. Order matters: later patterns win, so the re-includes must come
-# last.
-#   docs/api/**  — the two committed GPT Actions contracts, which
-#                  tests/test_openapi_contract.py compares byte-for-byte against
-#                  the builder. A hand-edit there is a broken contract, not a typo.
-#
-# `docs/plan/**` used to be re-included here for tests/test_docs_truth.py's
-# plan-doc numbering and index checks. Those documents are no longer published
-# and those checks are gone, so there is nothing left under docs/ that is a test
-# input except docs/api/.
-#
-# `context/**` stays in the exclusion list even though the directory is no longer
-# tracked: the pattern is harmless and keeps the filter correct if a context/
-# path is ever reintroduced.
+# They existed while the repo was private and the Free plan's 2,000 Linux
+# minutes/month had been exhausted, and they excluded `**.md` and `docs/**`.
+# That was never free of risk — parts of docs/ are test INPUTS rather than prose
+# (docs/api/** holds the two committed GPT Actions contracts that
+# tests/test_openapi_contract.py compares byte-for-byte against the builder),
+# and a filtered-out event produces no run at all, so any required status check
+# would sit pending forever on a docs-only pull request. Both hazards go away
+# with the filters. Do not reintroduce them without also adding a skip job that
+# reports the same check names.
 on:
   push:
     branches: [main]
-    paths:
-      - "**"
-      - "!**.md"
-      - "!docs/**"
-      - "!context/**"
-      - "docs/api/**"
   pull_request:
-    paths:
-      - "**"
-      - "!**.md"
-      - "!docs/**"
-      - "!context/**"
-      - "docs/api/**"
 
 # Supersede in-flight runs on a branch that gets pushed again. Deliberately not
 # applied to main: every commit that lands there should be verified on its own,
