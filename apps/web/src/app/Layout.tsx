@@ -234,7 +234,11 @@ export interface LayoutProps {
   routed?: {
     project: SelectedProject
     view: MainView
-    onNavigate: (view: MainView, project: SelectedProject) => void
+    // planningTab: only meaningful (and only ever passed) when view === 'planning' —
+    // carried here so a navigation INTO Planning and its tab land in one URL
+    // push, rather than two (see onPlanningTabChange below for a same-view
+    // tab switch, which is the other half of this).
+    onNavigate: (view: MainView, project: SelectedProject, planningTab?: PlanningTabKey) => void
     /**
      * #183 step 3: the nested detail routes (approvals -> tasks -> docs, in
      * that order of value). At most one view has a detail id at a time, so a
@@ -246,6 +250,14 @@ export interface LayoutProps {
     // explicitly closed (unlike the approvals master-detail, which has no
     // close affordance today), and null means "back to the bare view".
     onSelectDetail?: (id: string | null) => void
+    /**
+     * #183 step 4: the sweep's one fix — Planning's own sub-tabs, reflected
+     * in the URL as `?tab=`. Read from the query string by ProjectRoute
+     * (defaults to 'phases' when absent/unrecognised), and written back
+     * whenever PlanningPanel reports a tab change.
+     */
+    planningTab?: PlanningTabKey
+    onPlanningTabChange?: (tab: PlanningTabKey) => void
   }
 }
 
@@ -414,7 +426,7 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
       setPlanningFocus(options?.focusEntityId)
     }
     if (routed) {
-      routed.onNavigate(view, projectOverride ?? project!)
+      routed.onNavigate(view, projectOverride ?? project!, view === 'planning' ? (options?.planningTab ?? 'phases') : undefined)
     } else {
       if (projectOverride) setInternalProject(projectOverride)
       setInternalMainView(view)
@@ -741,13 +753,16 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
                 <PlanningPanel
                   projectId={project.id}
                   // #183 step 3: /planning/task/:taskId implies the Tasks tab,
-                  // same as the #106/#95 routes into it already do.
-                  initialTab={routed?.detailId ? 'tasks' : planningTab}
+                  // same as the #106/#95 routes into it already do. Otherwise,
+                  // routed mode reads the tab from the URL's `?tab=` (step 4)
+                  // rather than this component's own local planningTab state.
+                  initialTab={routed?.detailId ? 'tasks' : routed ? (routed.planningTab ?? 'phases') : planningTab}
                   focusEntityId={planningFocus}
                   capture={capture?.type === 'todo' || capture?.type === 'doc' ? null : capture}
                   onCaptureConsumed={() => setCapture(null)}
                   initialTaskId={routed?.detailId}
                   onTaskSelected={routed?.onSelectDetail}
+                  onTabChange={routed?.onPlanningTabChange}
                 />
               ) : placeholder)}
               {mainView === 'roadmap' && (project ? <RoadmapPanel projectId={project.id} onOpenPlanning={() => navigate('planning', { planningTab: 'tasks' })} /> : placeholder)}
