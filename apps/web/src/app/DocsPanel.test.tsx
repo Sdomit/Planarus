@@ -80,6 +80,16 @@ const DOC_FULL = {
   created_at: '2026-06-20T00:00:00+00:00',
 }
 
+// jsdom ships no layout engine, so Range has neither getClientRects nor
+// getBoundingClientRect — and ProseMirror asks a Range for both whenever a
+// command scrolls the selection into view (arming Edit focuses the doc). Zero
+// rects are enough: nothing here asserts on geometry.
+beforeAll(() => {
+  const proto = Range.prototype as unknown as Record<string, unknown>
+  proto.getClientRects = () => []
+  proto.getBoundingClientRect = () => ({ top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 })
+})
+
 beforeEach(() => {
   vi.clearAllMocks()
 })
@@ -364,6 +374,65 @@ describe('DocsPanel', () => {
     fireEvent.click(screen.getByText('Test Note'))
 
     await waitFor(() => expect(mockApi.docs.get).toHaveBeenCalledWith('doc_1'))
+  })
+
+  // The handles are hover-driven and positioned from bounding rects, so what is
+  // worth pinning here is the wiring: the pointed-at cell decides which column
+  // and row the commands hit, and the "+" appends at the far end of the table.
+  it('table hover handles add a column and delete the pointed-at row', async () => {
+    const cell = (type: string, text: string) =>
+      ({ type, content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] })
+    mockApi.docs.list.mockResolvedValue([DOC_SUMMARY])
+    // Leaving the editor flushes a save; without this the unmount path throws.
+    mockApi.docs.update.mockResolvedValue({ ...DOC_FULL, version: 2 })
+    mockApi.docs.get.mockResolvedValue({
+      ...DOC_FULL,
+      content_json: JSON.stringify({
+        type: 'doc',
+        content: [{
+          type: 'table',
+          content: [
+            { type: 'tableRow', content: [cell('tableHeader', 'A'), cell('tableHeader', 'B')] },
+            { type: 'tableRow', content: [cell('tableCell', '1'), cell('tableCell', '2')] },
+          ],
+        }],
+      }),
+    })
+
+    render(<DocsPanel projectId="proj_1" onClose={vi.fn()} />)
+    await waitFor(() => screen.getByText('Test Note'))
+    fireEvent.click(screen.getByText('Test Note'))
+    await waitFor(() => screen.getByLabelText('Title'))
+    fireEvent.click(screen.getByText('Edit'))
+
+    const bodyCell = await waitFor(() => {
+      const td = document.querySelector('.ab-prose td')
+      if (!td) throw new Error('table not rendered')
+      return td
+    })
+    // No handles until the pointer is actually over a cell.
+    expect(screen.queryByTitle('Add column right')).toBeNull()
+
+    fireEvent.mouseMove(bodyCell)
+    // Every handle hangs outside the table, so the pointer crosses non-cell
+    // ground to reach one. That must not be read as "left the table".
+    fireEvent.mouseMove(document.querySelector('.dp-tiptap-wrap')!)
+    fireEvent.click(screen.getByTitle('Add column right'))
+    await waitFor(() =>
+      expect(document.querySelectorAll('.ab-prose tr')[0].children.length).toBe(3))
+
+    fireEvent.mouseMove(document.querySelector('.ab-prose td')!)
+    fireEvent.click(screen.getByTitle('Delete row'))
+    await waitFor(() => expect(document.querySelectorAll('.ab-prose tr').length).toBe(1))
+
+    // Handle edits are ordinary transactions, so they sit in the same undo
+    // stack as typing — including from the toolbar, where the click has just
+    // taken focus off the editor.
+    fireEvent.click(screen.getByTitle('Undo (Ctrl+Z)'))
+    await waitFor(() => expect(document.querySelectorAll('.ab-prose tr').length).toBe(2))
+    fireEvent.click(screen.getByTitle('Undo (Ctrl+Z)'))
+    await waitFor(() =>
+      expect(document.querySelectorAll('.ab-prose tr')[0].children.length).toBe(2))
   })
 
   it('a doc opens read-only, and Edit arms the title, the toolbar and Save', async () => {
@@ -856,5 +925,37 @@ describe('serializeToMarkdown', () => {
     expect(md).toContain('| A | B |')
     expect(md).toContain('| --- | --- |')
     expect(md).toContain('| 1 | 2 |')
+  })
+
+  // What the toolbar's table buttons run. The serializer writes the GFM
+  // delimiter row from the header's cell count, so a table that grew a column
+  // has to keep the two in step or every downstream markdown reader sees a
+  // malformed table.
+  it('a table that gains a column and a row still serializes as valid GFM', () => {
+    act(() => {
+      editor.commands.setContent({
+        type: 'doc',
+        content: [{
+          type: 'table',
+          content: [
+            { type: 'tableRow', content: [
+              { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'A' }] }] },
+              { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'B' }] }] },
+            ] },
+            { type: 'tableRow', content: [
+              { type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: '1' }] }] },
+              { type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: '2' }] }] },
+            ] },
+          ],
+        }],
+      })
+    })
+    // pos 4 = inside the first header cell's paragraph; the table commands act
+    // on whichever cell holds the selection.
+    act(() => { editor.chain().setTextSelection(4).addColumnAfter().addRowAfter().run() })
+    const md = serializeToMarkdown(editor.state.doc)
+    expect(md).toContain('| A |  | B |')
+    expect(md).toContain('| --- | --- | --- |')
+    expect(md.split('\n').filter(l => l.startsWith('|'))).toHaveLength(4)
   })
 })

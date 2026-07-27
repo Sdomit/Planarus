@@ -145,6 +145,32 @@
 }
 .ab-prose table th { background: var(--bg-subtle); font-weight: var(--weight-semibold); }
 
+/* Hover handles on a table: a dot on the edge nearest the pointed-at column and
+ * row, opening on hover into "+" (insert beside it) and "✕" (drop it). Fixed, so
+ * they are placed from live bounding rects rather than fighting table layout;
+ * the padding is an invisible approach margin so the dot is not a 15px target. */
+.dp-tbl-handles {
+  position: fixed; z-index: 20; display: flex; gap: 2px;
+  padding: 5px; margin: -5px;
+}
+.dp-tbl-col { transform: translateX(-50%); }
+.dp-tbl-row { transform: translate(-100%, -50%); }
+.dp-tbl-dot {
+  width: 15px; height: 15px; border-radius: 50%;
+  background: var(--border-default); flex-shrink: 0;
+}
+.dp-tbl-handles:hover .dp-tbl-dot { display: none; }
+.dp-tbl-handle {
+  display: none; width: 15px; height: 15px; padding: 0;
+  align-items: center; justify-content: center;
+  border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+  background: var(--bg-surface); color: var(--text-tertiary); cursor: pointer; line-height: 1;
+}
+.dp-tbl-handles:hover .dp-tbl-handle { display: flex; }
+.dp-tbl-handle .ic { width: 11px; height: 11px; }
+.dp-tbl-handle:hover { background: var(--bg-muted); color: var(--text-primary); }
+.dp-tbl-handle.danger:hover { color: var(--status-danger-fg, var(--cd-500)); }
+
 /* #138 — toggle (details/summary/content) */
 .ab-prose details { margin: var(--space-2) 0; }
 .ab-prose details > div[data-type="detailsSummary"] { font-weight: var(--weight-semibold); cursor: pointer; }

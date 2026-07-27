@@ -2,8 +2,11 @@ import {
   createContext, forwardRef, lazy, Suspense, useCallback, useContext, useEffect, useImperativeHandle,
   useMemo, useRef, useState, type ReactNode,
 } from 'react'
-import { useEditor, EditorContent, ReactNodeViewRenderer, ReactRenderer, NodeViewWrapper, NodeViewContent } from '@tiptap/react'
-import type { Editor, NodeViewProps } from '@tiptap/core'
+import {
+  useEditor, useEditorState, EditorContent, ReactNodeViewRenderer, ReactRenderer,
+  NodeViewWrapper, NodeViewContent,
+} from '@tiptap/react'
+import type { ChainedCommands, Editor, NodeViewProps } from '@tiptap/core'
 import { Extension, Node, mergeAttributes } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { Placeholder } from '@tiptap/extensions'
@@ -23,6 +26,7 @@ import { MarkdownSerializer } from 'prosemirror-markdown'
 import { api, type Doc, type DocSummary, type EntityConnection } from '../api/client'
 import { StatusBadge } from './StatusBadge'
 import { Icon } from './Icon'
+import { Menu, MenuItem } from './Menu'
 import { usePresence } from './usePresence'
 import { agoLabel } from './date'
 import { isAllowedImageSrc, isAllowedLink, markdownTitle, markdownUrl } from './uri-policy'
@@ -485,6 +489,7 @@ const CALLOUT_ICON_NAME: Record<string, string> = {
 }
 
 function CalloutView({ node, updateAttributes }: NodeViewProps) {
+  const { editing } = useContext(DocEditorContext)
   const icon = (node.attrs.icon as string) || CALLOUT_ICONS[0]
   const cycleIcon = () => {
     const i = CALLOUT_ICONS.indexOf(icon)
@@ -492,7 +497,8 @@ function CalloutView({ node, updateAttributes }: NodeViewProps) {
   }
   return (
     <NodeViewWrapper className="dp-callout">
-      <button type="button" className="dp-callout-icon" contentEditable={false} title="Change icon" onClick={cycleIcon}>
+      <button type="button" className="dp-callout-icon" contentEditable={false} title="Change icon"
+        disabled={!editing} onClick={cycleIcon}>
         <Icon name={CALLOUT_ICON_NAME[icon] ?? CALLOUT_ICON_NAME[CALLOUT_ICONS[0]]} className="ic-18" />
       </button>
       <NodeViewContent className="dp-callout-body" />
@@ -940,6 +946,147 @@ function CreateDocForm({ projectId, onCreated, onCancel, lockedType, initialTitl
 // Tiptap toolbar
 // ---------------------------------------------------------------------------
 
+/**
+ * Row/column controls for the table block. Mounted only while the caret is
+ * inside a table: ProseMirror's table commands act on the cell holding the
+ * selection, so anywhere else they are dead buttons.
+ *
+ * The `useEditorState` subscription is what makes that reactive — `useEditor`
+ * is configured without `shouldRerenderOnTransaction`, so clicking into a table
+ * moves the selection without re-rendering the toolbar on its own.
+ *
+ * ponytail: one kebab of word labels, no icon row. Adding and deleting by hand
+ * is what the hover handles on the table are for; this is the path that works
+ * without a pointer, plus the operations the handles don't carry.
+ */
+function TableTools({ editor }: { editor: Editor }) {
+  const inTable = useEditorState({ editor, selector: ({ editor }) => editor.isActive('table') })
+  if (!inTable) return null
+  const cmd = (fn: (c: ChainedCommands) => ChainedCommands) => () => { fn(editor.chain().focus()).run() }
+  return (
+    <>
+      <span className="ab-tdiv" />
+      <Menu label="Table options">
+        <MenuItem onClick={cmd(c => c.addColumnAfter())}>Add column right</MenuItem>
+        <MenuItem onClick={cmd(c => c.addColumnBefore())}>Add column left</MenuItem>
+        <MenuItem onClick={cmd(c => c.addRowAfter())}>Add row below</MenuItem>
+        <MenuItem onClick={cmd(c => c.addRowBefore())}>Add row above</MenuItem>
+        <MenuItem onClick={cmd(c => c.toggleHeaderRow())}>Toggle header row</MenuItem>
+        <MenuItem danger onClick={cmd(c => c.deleteColumn())}>Delete column</MenuItem>
+        <MenuItem danger onClick={cmd(c => c.deleteRow())}>Delete row</MenuItem>
+        <MenuItem danger onClick={cmd(c => c.deleteTable())}>Delete table</MenuItem>
+      </Menu>
+    </>
+  )
+}
+
+/** How far outside the table the handles sit, plus room to travel to them. */
+const HANDLE_REACH = 44
+
+/**
+ * Notion-style handles on whichever table the pointer is over: a "+" past the
+ * right edge (column at the end), a "+" under the bottom edge (row at the end),
+ * and a "✕" over the hovered column and row.
+ *
+ * Every handle sits *outside* the table, so reaching one means leaving the cell
+ * that summoned it — and a table is full-width, so it usually means leaving the
+ * prose column too. Hence the two rules that keep them alive: a pointer still
+ * within HANDLE_REACH of the table keeps them, and leaving the host clears them
+ * on a short timer that hovering a handle cancels. Clearing on the first
+ * non-cell mouse move is what made them vanish mid-approach.
+ *
+ * ponytail: rects are read at render, so a scroll under a shown handle leaves it
+ * behind until the next mouse move. The alternative is a scroll listener + rAF
+ * per table; the drag-handle menu already lives with the same trade.
+ */
+function TableHandles({ editor, hostRef }: { editor: Editor; hostRef: { current: HTMLDivElement | null } }) {
+  const [cell, setCell] = useState<HTMLTableCellElement | null>(null)
+  const leaveTimer = useRef<number | null>(null)
+  const cancelLeave = useCallback(() => {
+    if (leaveTimer.current !== null) { clearTimeout(leaveTimer.current); leaveTimer.current = null }
+  }, [])
+
+  useEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+    const onMove = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target?.closest('.dp-tbl-handles')) return   // the dot and both buttons
+      cancelLeave()
+      setCell(prev => {
+        const next = (target?.closest('td, th') ?? null) as HTMLTableCellElement | null
+        if (next) return next === prev ? prev : next
+        const rect = prev?.closest('table')?.getBoundingClientRect()
+        const near = !!rect
+          && e.clientX >= rect.left - HANDLE_REACH && e.clientX <= rect.right + HANDLE_REACH
+          && e.clientY >= rect.top - HANDLE_REACH && e.clientY <= rect.bottom + HANDLE_REACH
+        return near ? prev : null
+      })
+    }
+    const onLeave = () => {
+      cancelLeave()
+      leaveTimer.current = window.setTimeout(() => setCell(null), 400)
+    }
+    host.addEventListener('mousemove', onMove)
+    host.addEventListener('mouseleave', onLeave)
+    return () => {
+      cancelLeave()
+      host.removeEventListener('mousemove', onMove)
+      host.removeEventListener('mouseleave', onLeave)
+    }
+  }, [hostRef, cancelLeave])
+
+  const table = cell?.closest('table')
+  if (!cell || !table) return null
+  const tRect = table.getBoundingClientRect()
+  const cRect = cell.getBoundingClientRect()
+
+  // Every table command acts on the cell holding the selection, so a handle
+  // first drops the caret into the hovered cell — posAtDOM(cell, 0) lands on its
+  // first paragraph, and +1 is inside it, where a text selection is legal.
+  // No .focus() in the chain: that would scroll the fresh selection into view,
+  // yanking the page away from the table the pointer is still on. The bare DOM
+  // focus afterwards is what keeps Ctrl+Z aimed at the editor rather than at the
+  // button that was just clicked.
+  const runInCell = (fn: (c: ChainedCommands) => ChainedCommands) => () => {
+    const pos = editor.view.posAtDOM(cell, 0)
+    if (pos < 0) return
+    fn(editor.chain().setTextSelection(pos + 1)).run()
+    editor.view.dom.focus({ preventScroll: true })
+    setCell(null)   // whatever was under the pointer may not exist any more
+  }
+
+  const handle = (label: string, icon: string, onClick: () => void) => (
+    <button type="button" className={`dp-tbl-handle${icon === 'x' ? ' danger' : ''}`}
+      title={label} aria-label={label}
+      onMouseDown={e => e.preventDefault()} onClick={onClick}>
+      <Icon name={icon} />
+    </button>
+  )
+
+  // One cluster per axis, parked on the edge nearest the hovered column and row.
+  // Each is a dot until the pointer reaches it, then opens into "+" (insert
+  // beside this column/row) and "✕" (drop it) — CSS does the swap, so nothing
+  // here re-renders on the way in. Anchored by transform rather than by
+  // subtracting half a width, since that width changes when it opens.
+  return (
+    <>
+      <div className="dp-tbl-handles dp-tbl-col" onMouseEnter={cancelLeave}
+        style={{ top: tRect.top - 19, left: cRect.left + cRect.width / 2 }}>
+        <span className="dp-tbl-dot" aria-hidden="true" />
+        {handle('Add column right', 'plus', runInCell(c => c.addColumnAfter()))}
+        {handle('Delete column', 'x', runInCell(c => c.deleteColumn()))}
+      </div>
+      <div className="dp-tbl-handles dp-tbl-row" onMouseEnter={cancelLeave}
+        style={{ top: cRect.top + cRect.height / 2, left: tRect.left - 6 }}>
+        <span className="dp-tbl-dot" aria-hidden="true" />
+        {handle('Add row below', 'plus', runInCell(c => c.addRowAfter()))}
+        {handle('Delete row', 'x', runInCell(c => c.deleteRow()))}
+      </div>
+    </>
+  )
+}
+
 function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
   if (!editor) return null
 
@@ -980,6 +1127,14 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
     // its native picker still opens.
     <div className="ab-toolbar" role="toolbar" aria-label="Editor toolbar"
       onMouseDown={(e) => { if ((e.target as HTMLElement).closest('button')) e.preventDefault() }}>
+      {/* StarterKit's history plugin covers every transaction the editor makes —
+          typing, the "/" menu, the drag handle, the table handles. Ctrl+Z does
+          the same thing; these are here for when focus sits on a button. */}
+      <button type="button" title="Undo (Ctrl+Z)" aria-label="Undo"
+        className="ab-tbtn" onClick={() => editor.chain().focus().undo().run()}><Icon name="undo" /></button>
+      <button type="button" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"
+        className="ab-tbtn" onClick={() => editor.chain().focus().redo().run()}><Icon name="redo" /></button>
+      <span className="ab-tdiv" />
       <button type="button" title="Bold" aria-label="Bold"
         className={`ab-tbtn${editor.isActive('bold') ? ' active' : ''}`}
         onClick={() => editor.chain().focus().toggleBold().run()}><Icon name="bold" /></button>
@@ -1034,6 +1189,7 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
       <input type="color" className="ab-tcolor" title="Font color" aria-label="Font color"
         value={(editor.getAttributes('textStyle').color as string) || '#000000'}
         onChange={(e) => editor.chain().focus().setColor(e.target.value).run()} />
+      <TableTools editor={editor} />
     </div>
   )
 }
@@ -1384,6 +1540,10 @@ function DocEditor({ docId, onBack, onRemoved, onOpenDoc, startEditing }: DocEdi
     // suggestion ones — mid-interaction.
   }, ['doc-editor'])
   editorRef.current = editor
+  // Host for the table hover handles. The scroll wrapper, not the prose column
+  // inside it: a table runs the full width of the prose, so the handles hanging
+  // off its edges would otherwise sit outside the element listening for them.
+  const tableHostRef = useRef<HTMLDivElement>(null)
   // The block currently under the drag handle (hover, not click) — read at
   // click time to build the "turn into / duplicate / delete" menu.
   const dragNodeRef = useRef<{ pos: number; typeName: string } | null>(null)
@@ -1468,7 +1628,15 @@ function DocEditor({ docId, onBack, onRemoved, onOpenDoc, startEditing }: DocEdi
           // setSaveState('saved') below wins the same React batch; anything
           // awaited between the two would make every doc *open* autosave,
           // bumping version and updated_by for a read.
-          if (parsed) editor.commands.setContent(parsed as never, { emitUpdate: false })
+          // addToHistory:false — loading a document is not an edit. Left in the
+          // undo stack, the first Ctrl+Z after opening a doc replaces the body
+          // with the empty document the editor started on, and the autosave then
+          // writes that emptiness back. The meta rides the chain's shared
+          // transaction, which is the only way to reach setContent's own tr.
+          if (parsed) {
+            editor.chain().setMeta('addToHistory', false)
+              .setContent(parsed as never, { emitUpdate: false }).run()
+          }
         }
         setSaveState('saved')
       })
@@ -1684,7 +1852,7 @@ function DocEditor({ docId, onBack, onRemoved, onOpenDoc, startEditing }: DocEdi
 
       {editing && <EditorToolbar editor={editor} />}
 
-      <div className="dp-tiptap-wrap">
+      <div className="dp-tiptap-wrap" ref={tableHostRef}>
         {showPreview
           ? <MarkdownPreview markdown={doc.markdown_cache} />
           : (
@@ -1704,6 +1872,7 @@ function DocEditor({ docId, onBack, onRemoved, onOpenDoc, startEditing }: DocEdi
                   const target = chip.getAttribute('data-target-id')
                   if (target) onOpenDocRef.current?.(target)
                 }}>
+                {editor && editing && <TableHandles editor={editor} hostRef={tableHostRef} />}
                 {editor && editing && (
                   <DragHandle editor={editor} onNodeChange={onDragNodeChange}>
                     <span className="dp-drag-handle" role="button" tabIndex={0} aria-label="Block menu"

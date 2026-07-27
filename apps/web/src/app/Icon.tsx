@@ -5,7 +5,7 @@ import {
   Inbox, Info, Italic, Layers, Lightbulb, Link, List, ListOrdered, ListTodo, Lock,
   MessageCircle, Minus, Moon, MoreHorizontal, Palette, Pilcrow, Pin, Plus, Quote,
   Search, Settings, Strikethrough, Subscript, Sun, Superscript, Table, TriangleAlert,
-  Trash2, Underline, Users, X, Zap,
+  Trash2, Underline, Undo2, Redo2, Users, X, Zap,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -55,6 +55,7 @@ const ICONS: Record<string, LucideIcon> = {
   pin: Pin,
   plus: Plus,
   quote: Quote,
+  redo: Redo2,
   search: Search,
   settings: Settings,
   strikethrough: Strikethrough,
@@ -64,6 +65,7 @@ const ICONS: Record<string, LucideIcon> = {
   table: Table,
   trash: Trash2,
   underline: Underline,
+  undo: Undo2,
   users: Users,
   x: X,
   zap: Zap,
