@@ -184,3 +184,88 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose down -v
+
+  # The only job that runs anything under scripts/ on Windows, and it exists
+  # because nothing did. Three separate faults shipped in run-planarus.bat and
+  # survived - a %~f inside a REM comment that aborted the file before its first
+  # command, a %BOOTSTRAP_PY% read inside a parenthesised block that made venv
+  # creation fail on every fresh checkout, and a "->" in an echo that cmd parsed
+  # as a redirect and turned into stray files. Every one of them was fatal on a
+  # clean machine, and every one was invisible to a suite that only exercised
+  # pytest, vitest and the Docker path.
+  windows-scripts:
+    name: Windows (launcher + tray scripts)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # Asserted separately so that an image without it fails here, with an
+      # obvious reason, rather than further down as "the launcher did not
+      # bootstrap" - the script resolves its interpreter through the launcher,
+      # not through whatever setup-python put on PATH.
+      - name: Python launcher resolves 3.11
+        shell: cmd
+        run: py -3.11 --version
+
+      # `help` alone would have caught the %~f fault: the file aborted on parse,
+      # so every invocation failed, including this one.
+      - name: Argument handling and exit codes
+        shell: cmd
+        run: |
+          call scripts\run-planarus.bat help || exit /b 1
+          call scripts\run-planarus.bat bogus && exit /b 1
+          call scripts\stop-planarus.bat || exit /b 1
+          exit /b 0
+
+      - name: Tray script parses
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path scripts/planarus-tray.ps1), [ref]$null, [ref]$errors) | Out-Null
+          if ($errors -and $errors.Count) {
+            $errors | ForEach-Object { Write-Host "line $($_.Extent.StartLineNumber): $($_.Message)" }
+            throw "planarus-tray.ps1 does not parse"
+          }
+
+      # An unescaped ">" in an echo is a redirect, and this is what caught it:
+      # the script reported success while writing junk files named after its own
+      # shortcuts into whatever directory it ran from.
+      - name: Shortcuts write nothing into the repository
+        shell: pwsh
+        run: |
+          cmd /c scripts\create-shortcuts.bat
+          if ($LASTEXITCODE -ne 0) { throw "create-shortcuts.bat exited $LASTEXITCODE" }
+          $dirty = git status --porcelain
+          if ($dirty) { Write-Host $dirty; throw "create-shortcuts.bat wrote files into the working tree" }
+
+      # The real bootstrap. Waiting on the port file rather than on a served
+      # page is deliberate: :write_ports runs after the environment is built and
+      # before either service starts, so this asserts the half that a fresh
+      # machine actually depends on without also waiting out two servers.
+      - name: Bootstrap from a checkout with no virtual environment
+        shell: pwsh
+        timeout-minutes: 15
+        run: |
+          $ports = Join-Path $env:LOCALAPPDATA 'Planarus\local.ports'
+          Remove-Item $ports -Force -ErrorAction SilentlyContinue
+          Start-Process cmd -ArgumentList '/c', 'scripts\run-planarus.bat' -WorkingDirectory $PWD
+          $deadline = (Get-Date).AddMinutes(12)
+          while ((Get-Date) -lt $deadline -and -not (Test-Path $ports)) { Start-Sleep -Seconds 5 }
+          if (-not (Test-Path $ports)) {
+            throw "run-planarus.bat never reached :write_ports - it failed during bootstrap"
+          }
+          Get-Content $ports
+
+      - name: Stop
+        if: always()
+        shell: cmd
+        run: call scripts\stop-planarus.bat

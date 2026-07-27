@@ -102,7 +102,8 @@ gh api --method POST repos/Sdomit/Planarus/rulesets --input - <<'JSON'
           { "context": "API (pytest)" },
           { "context": "API migrations (Postgres dialect)" },
           { "context": "Docker (compose build + smoke)" },
-          { "context": "Web (vitest + typecheck + lint + build)" } ] } }
+          { "context": "Web (vitest + typecheck + lint + build)" },
+          { "context": "Windows (launcher + tray scripts)" } ] } }
   ]
 }
 JSON
@@ -113,10 +114,14 @@ JSON
 used to skip `**.md`, `docs/**` and `context/**` to conserve metered Actions
 minutes on the private repo; public repositories are not metered, so the saving
 is gone and the hazard is not. A filtered-out event produces no run at all, so
-with the pull-request rule on, a docs-only pull request would leave all four
+with the pull-request rule on, a docs-only pull request would leave all five
 contexts permanently pending and could never merge. Do not reintroduce the
-filters without also adding a skip job that reports those same four context
+filters without also adding a skip job that reports those same five context
 names and exits 0.
+
+`Dependency audit` is deliberately not among them. It fails when a new advisory
+lands against a pinned version, which is worth a notification and is not a
+reason a change already written cannot merge.
 
 Decisions baked into that payload, each deliberate:
 

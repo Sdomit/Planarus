@@ -237,7 +237,10 @@ if errorlevel 1 (
 )
 echo.
 echo [SETUP] %~1 is required and is not installed.
-choice /c YN /n /m "        Install it now with winget? [Y/N] "
+REM /t 30 /d N so an unattended run - CI, a scheduled task, anything without a
+REM keyboard - declines after 30 seconds instead of waiting for an answer that
+REM is never coming. Installing software is the answer that needs a human.
+choice /c YN /n /t 30 /d N /m "        Install it now with winget? [Y/N] "
 if errorlevel 2 (
   echo [ERROR] %~1 is required. Install it, then run this file again.
   exit /b 1
