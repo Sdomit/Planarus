@@ -1,6 +1,6 @@
 @echo off
 REM ============================================================================
-REM Planarus - put Start and Stop shortcuts on the Desktop
+REM Planarus - put Start, Team, Stop and Tray shortcuts on the Desktop
 REM
 REM Run this once. The shortcuts point at this checkout, so moving or renaming
 REM the folder afterwards means running this again.
@@ -9,7 +9,7 @@ setlocal EnableExtensions
 for %%I in ("%~dp0..") do set "ROOT=%%~fI"
 
 REM Without this every shortcut inherits the generic icon cmd.exe gives a .bat,
-REM so three identical grey cogs land on the Desktop. The .ico is committed
+REM so a row of identical grey cogs lands on the Desktop. The .ico is committed
 REM rather than generated here: building one needs an image library, and
 REM requiring that at install time to decorate a shortcut is a poor trade.
 set "ICON=%ROOT%\assets\planarus.ico"
@@ -27,7 +27,9 @@ if not defined DESKTOP (
   exit /b 1
 )
 
-call :make "Planarus.lnk"      "run-planarus.bat"   "Start Planarus"
+call :make "Planarus.lnk"      "run-planarus.bat"      "Start Planarus"
+if errorlevel 1 exit /b 1
+call :make "Planarus Team.lnk" "run-planarus-team.bat" "Start Planarus with sign-in (team mode)"
 if errorlevel 1 exit /b 1
 call :make "Stop Planarus.lnk" "stop-planarus.bat"  "Stop Planarus"
 if errorlevel 1 exit /b 1
