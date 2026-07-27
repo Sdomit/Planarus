@@ -304,6 +304,23 @@ project folder are derived. Postgres portability is
 kept through portable models plus an explicit application-level ETL — not a URL
 switch. Tauri 2 desktop packaging is planned and not yet started.
 
+### Measured capacity
+
+A synthetic load test against one dev-mode instance — SQLite/WAL, a single
+uvicorn worker, a 30% write mix, every simulated user firing 4–5 requests per
+second, which is roughly ten times harder than a person actually clicks:
+
+| Concurrent simulated users | Throughput | p50 | p95 |
+| --- | --- | --- | --- |
+| 10 | 44 req/s | 24 ms | 47 ms |
+| 25 | 65 req/s | 94 ms | 650 ms |
+| 50 | 45 req/s | 800 ms | 1.8 s |
+
+Zero errors at every level: past saturation it degrades rather than breaks,
+and the knee is the SQLite single-writer lock behaving as designed. That is
+comfortable headroom for the small teams local and LAN team mode target, and
+the Postgres ETL above is the growth path beyond them.
+
 ---
 
 ## <img src="https://img.shields.io/badge/-06-2D6CC8.svg?style=flat-square" height="18" alt="" /> Connect an agent
