@@ -7,6 +7,10 @@ WORKDIR /repo
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 RUN corepack enable && corepack install
 COPY apps/web ./apps/web
+# extension-contract.test.ts imports capture-url.js directly from apps/extension
+# (outside the pnpm workspace on purpose - see apps/extension/README.md), so the
+# build context needs that file even though it's not a workspace package.
+COPY apps/extension ./apps/extension
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @planarus/web build
 
