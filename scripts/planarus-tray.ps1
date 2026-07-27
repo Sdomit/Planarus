@@ -6,6 +6,15 @@
 # stop-planarus.bat as everything else, so there is one start path and one stop
 # path, not three.
 #
+# "Exit tray" stops Planarus as well. In silent mode the services have no window
+# and this icon is the only interface they have, so an exit that left them
+# running would leave a Planarus nobody can see, stop or reach - holding its
+# ports until the next reboot or a hand-run stop-planarus.bat.
+#
+# The Logs submenu opens what the services actually wrote. A hidden service that
+# fails is otherwise a shrug: the reason is in a file the user has no obvious
+# route to.
+#
 # WinForms NotifyIcon rather than a Python tray library: it ships with Windows,
 # so the tray costs no dependency. pystray would have pulled Pillow into the
 # API's virtual environment, which is a runtime tree, for a developer
@@ -26,7 +35,8 @@ $StopScript = Join-Path $PSScriptRoot 'stop-planarus.bat'
 # menu item that did nothing - which is exactly how the first version shipped
 # broken. Every action is logged and every failure is also shown as a balloon,
 # so a user sees something went wrong and a maintainer can read why.
-$LogFile = Join-Path $env:LOCALAPPDATA 'Planarus\tray.log'
+$LogDir = Join-Path $env:LOCALAPPDATA 'Planarus'
+$LogFile = Join-Path $LogDir 'tray.log'
 
 function Write-TrayLog {
     param([string]$Message)
@@ -193,6 +203,18 @@ function Open-Planarus {
     Start-Process "http://localhost:$($status.WebPort)"
 }
 
+# Named explicitly rather than left to the shell: .log has no default handler on
+# a clean Windows install, so Start-Process on the file alone opens the "how do
+# you want to open this" dialog - from a tray, over whatever the user was doing.
+function Open-LogFile {
+    param([string]$Name)
+    $path = Join-Path $LogDir $Name
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "$Name does not exist yet - it appears once Planarus has been started"
+    }
+    Start-Process -FilePath 'notepad.exe' -ArgumentList $path
+}
+
 # --- tray --------------------------------------------------------------------
 
 $menu = [System.Windows.Forms.ContextMenuStrip]::new()
@@ -200,7 +222,21 @@ $itemOpen = $menu.Items.Add('Open Planarus')
 $itemStart = $menu.Items.Add('Start Planarus')
 $itemStop = $menu.Items.Add('Stop Planarus')
 $menu.Items.Add('-') | Out-Null
-$itemExit = $menu.Items.Add('Exit tray')
+
+# Three logs, because "it did not start" is answered by a different file than
+# "the icon vanished": the API log holds a failed migration, the web log holds a
+# Vite error, and the tray log holds what this script did about either. The
+# folder is the fourth entry so nothing here has to guess which one is wanted.
+$itemLogs = $menu.Items.Add('Logs')
+$menuLogs = [System.Windows.Forms.ToolStripMenuItem]$itemLogs
+$logApi = $menuLogs.DropDownItems.Add('API log')
+$logWeb = $menuLogs.DropDownItems.Add('Web log')
+$logTray = $menuLogs.DropDownItems.Add('Tray log')
+$menuLogs.DropDownItems.Add('-') | Out-Null
+$logFolder = $menuLogs.DropDownItems.Add('Open the logs folder')
+
+$menu.Items.Add('-') | Out-Null
+$itemExit = $menu.Items.Add('Exit tray (stops Planarus)')
 
 $notify = [System.Windows.Forms.NotifyIcon]::new()
 $notify.Icon = Get-TrayIcon
@@ -223,10 +259,25 @@ function Update-Menu {
 $itemOpen.Add_Click({ Invoke-Action 'open' { Open-Planarus } })
 $itemStart.Add_Click({ Invoke-Action 'start' { Start-Planarus }; Update-Menu })
 $itemStop.Add_Click({ Invoke-Action 'stop' { Stop-Planarus }; Update-Menu })
+$logApi.Add_Click({ Invoke-Action 'logs (api)' { Open-LogFile 'api.log' } })
+$logWeb.Add_Click({ Invoke-Action 'logs (web)' { Open-LogFile 'web.log' } })
+$logTray.Add_Click({ Invoke-Action 'logs (tray)' { Open-LogFile 'tray.log' } })
+$logFolder.Add_Click({ Invoke-Action 'logs (folder)' {
+            if (-not (Test-Path -LiteralPath $LogDir)) {
+                New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+            }
+            Start-Process -FilePath 'explorer.exe' -ArgumentList $LogDir
+        } })
 $itemExit.Add_Click({
+        # The tray is the whole interface in silent mode, so closing it has to
+        # take the services with it. Leaving them behind means a Planarus with no
+        # visible controls at all: no window, no icon, and a port still held.
+        # Stop runs BEFORE the icon goes, so the icon is still there while it
+        # happens rather than the tray vanishing on a click that takes seconds.
+        Write-TrayLog 'tray : exit requested from the menu, stopping Planarus first'
+        Invoke-Action 'stop (on exit)' { Stop-Planarus }
         # Hide before exiting: an unhidden NotifyIcon leaves a ghost in the
         # notification area until the user hovers over it.
-        Write-TrayLog 'tray : exit requested from the menu'
         $notify.Visible = $false
         [System.Windows.Forms.Application]::Exit()
     })

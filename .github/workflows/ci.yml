@@ -244,6 +244,28 @@ jobs:
           }
           if ($bad) { throw "a PowerShell script does not parse" }
 
+      # A tray is not drivable from CI - there is no message loop to click - so
+      # the two promises that would break silently are asserted against the
+      # source instead: that Exit still stops the services (otherwise silent mode
+      # leaves a Planarus with no interface at all), and that the log files it
+      # offers are the ones the launcher actually writes.
+      - name: The tray still stops on exit and points at real logs
+        shell: pwsh
+        run: |
+          $tray = Get-Content scripts/planarus-tray.ps1 -Raw
+          $bat = Get-Content scripts/run-planarus.bat -Raw
+          if ($tray -notmatch 'itemExit\.Add_Click\([\s\S]*?Stop-Planarus') {
+            throw "Exit tray no longer stops Planarus"
+          }
+          foreach ($log in 'api.log', 'web.log') {
+            if ($tray -notmatch [regex]::Escape("Open-LogFile '$log'")) {
+              throw "the tray no longer offers $log"
+            }
+            if ($bat -notmatch [regex]::Escape($log)) {
+              throw "run-planarus.bat no longer writes $log"
+            }
+          }
+
       # An unescaped ">" in an echo is a redirect, and this is what caught it:
       # the script reported success while writing junk files named after its own
       # shortcuts into whatever directory it ran from.

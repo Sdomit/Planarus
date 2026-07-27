@@ -143,9 +143,11 @@ Answering "no" to an install prompt leaves the machine untouched and tells you
 what to install by hand.
 
 The tray is the no-console option: right-click its icon to start, stop or open
-Planarus, double-click to open the UI, and "Exit tray" removes the icon without
-touching a running app. It reads the port back out of the launcher's own window
-title, so it stays correct when 5173 is busy and the app moves to 5174.
+Planarus, double-click to open the UI, and read the API, web and tray logs from
+the Logs submenu. "Exit tray" stops Planarus as well — with no service windows
+to close, the icon is the only interface those processes have. It reads the
+ports out of the file the launcher records them in, so it stays correct when
+5173 is busy and the app moves to 5174.
 
 ### Native development with hot reload
 

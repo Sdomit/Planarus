@@ -2,9 +2,9 @@
 REM ============================================================================
 REM Planarus - start the system tray launcher
 REM
-REM Double-click this to put Planarus in the notification area. Start, stop and
-REM open the app from there; "Exit tray" removes the icon and leaves whatever is
-REM running alone.
+REM Double-click this to put Planarus in the notification area. Start, stop, open
+REM the app and read its logs from there; "Exit tray" stops Planarus too, since
+REM in silent mode this icon is the only interface the services have.
 REM ============================================================================
 setlocal EnableExtensions
 
