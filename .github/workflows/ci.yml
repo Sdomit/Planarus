@@ -271,6 +271,43 @@ jobs:
           }
           Get-Content $ports
 
+      # The tray decides what to show from Test-Port, and a probe that disagrees
+      # with reality makes it report "stopped" on a running app with Open greyed
+      # out. That shipped once: vite listens on [::1] only while uvicorn listens
+      # on 127.0.0.1 only, and TcpClient's parameterless constructor is IPv4, so
+      # the probe could not see vite at all. The real function is pulled out of
+      # the tray script rather than copied, so this cannot pass against a stale
+      # duplicate of it.
+      - name: The tray's port probe agrees with the running services
+        shell: pwsh
+        run: |
+          $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path scripts/planarus-tray.ps1), [ref]$null, [ref]$null)
+          $fn = $ast.Find({
+              param($n)
+              $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Test-Port'
+            }, $true)
+          if (-not $fn) { throw 'Test-Port not found in planarus-tray.ps1' }
+          Invoke-Expression $fn.Extent.Text
+
+          $ports = Join-Path $env:LOCALAPPDATA 'Planarus\local.ports'
+          $web = $null
+          foreach ($line in Get-Content $ports) {
+            if ($line -match '^\s*WEB\s*=\s*(\d+)') { $web = [int]$Matches[1] }
+          }
+          if (-not $web) { throw "no WEB port recorded in $ports" }
+
+          # HTTP is the ground truth: it is what the user gets when they click
+          # Open, and unlike a raw socket it tries both address families.
+          $serving = $false
+          try { $serving = (Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 "http://localhost:$web").StatusCode -eq 200 } catch { }
+          if (-not $serving) { throw "the web app is not serving on :$web, so this cannot test the probe" }
+
+          if (-not (Test-Port $web)) {
+            throw "Test-Port says :$web is down while it is serving 200 - the tray would show 'stopped' on a running app"
+          }
+          Write-Host "Test-Port agrees with HTTP on :$web"
+
       # A second launch must reopen the page, not bring up another copy against
       # the same database on shifted ports. Asserted on time as well as output:
       # the whole point is that it answers before doing any bootstrap work.

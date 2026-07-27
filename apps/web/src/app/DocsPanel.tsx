@@ -1,6 +1,6 @@
 import {
   createContext, forwardRef, lazy, Suspense, useCallback, useContext, useEffect, useImperativeHandle,
-  useMemo, useRef, useState,
+  useMemo, useRef, useState, type ReactNode,
 } from 'react'
 import { useEditor, EditorContent, ReactNodeViewRenderer, ReactRenderer, NodeViewWrapper, NodeViewContent } from '@tiptap/react'
 import type { Editor, NodeViewProps } from '@tiptap/core'
@@ -22,6 +22,7 @@ import { Suggestion, type SuggestionOptions } from '@tiptap/suggestion'
 import { MarkdownSerializer } from 'prosemirror-markdown'
 import { api, type Doc, type DocSummary, type EntityConnection } from '../api/client'
 import { StatusBadge } from './StatusBadge'
+import { Icon } from './Icon'
 import { usePresence } from './usePresence'
 import { agoLabel } from './date'
 import { isAllowedImageSrc, isAllowedLink, markdownTitle, markdownUrl } from './uri-policy'
@@ -246,7 +247,9 @@ const SafeImage = Image.extend({
 /** One shared floating list for both the "@" mention picker and the "/" block
  * menu — same keyboard nav, same positioning (via @tiptap/suggestion's
  * `props.mount`, which owns Floating UI so neither caller has to). */
-interface SuggestionItem { key: string; label: string; icon?: string; sub?: string }
+// `icon` is a node, not a string, so the "/" menu can pass a lucide <Icon /> while
+// the "@" menu keeps the KIND_ICON glyph it shares with the canvas cards.
+interface SuggestionItem { key: string; label: string; icon?: ReactNode; sub?: string }
 interface SuggestionListRef { onKeyDown: (props: { event: KeyboardEvent }) => boolean }
 interface SuggestionListProps<T extends SuggestionItem> { items: T[]; command: (item: T) => void }
 
@@ -401,13 +404,16 @@ interface DocEditorCtx {
   onOpenDoc: (docId: string) => void
   /** Soft-detach: parent_doc_id → null. Never deletes the child (plan 24's rule). */
   onDetachChild: (docId: string) => void
+  /** False in the read-only view: node views still open their target, but the
+   *  controls that would change the document are not offered. */
+  editing: boolean
 }
 const DocEditorContext = createContext<DocEditorCtx>({
-  docIndex: new Map(), docIndexReady: false, onOpenDoc: () => {}, onDetachChild: () => {},
+  docIndex: new Map(), docIndexReady: false, onOpenDoc: () => {}, onDetachChild: () => {}, editing: false,
 })
 
 function ChildPageView({ node, deleteNode }: NodeViewProps) {
-  const { docIndex, docIndexReady, onOpenDoc, onDetachChild } = useContext(DocEditorContext)
+  const { docIndex, docIndexReady, onOpenDoc, onDetachChild, editing } = useContext(DocEditorContext)
   const docId = node.attrs.docId as string
   const live = docIndex.get(docId)
   // The server can't cheaply rewrite this doc's JSON when the child is deleted
@@ -420,23 +426,27 @@ function ChildPageView({ node, deleteNode }: NodeViewProps) {
     <NodeViewWrapper className={`dp-childpage${tombstoned ? ' dp-childpage-gone' : ''}`} contentEditable={false}>
       {tombstoned ? (
         <span className="dp-childpage-open dp-childpage-tombstone">
-          <span className="dp-childpage-icon" aria-hidden="true">🗎</span>
+          <Icon name="file-text" className="dp-childpage-icon ic-14" />
           <span className="dp-childpage-title">This page was deleted</span>
         </span>
       ) : (
         // Before the index lands, the node's own denormalized title carries the
         // row — the link stays live rather than flickering through a tombstone.
         <button type="button" className="dp-childpage-open" onClick={() => onOpenDoc(docId)}>
-          <span className="dp-childpage-icon" aria-hidden="true">📄</span>
+          <Icon name="file-text" className="dp-childpage-icon ic-14" />
           <span className="dp-childpage-title">{live?.title || fallbackTitle}</span>
         </button>
       )}
-      <button type="button" className="dp-childpage-detach" title="Remove from this page (keeps the page itself)"
-        aria-label="Remove sub-page link"
-        // Detach whenever the child might still exist. Skipping it on an
-        // unloaded index would orphan a live child: node gone from the body,
-        // parent_doc_id still pointing here.
-        onClick={() => { if (!tombstoned) onDetachChild(docId); deleteNode() }}>✕</button>
+      {editing && (
+        <button type="button" className="dp-childpage-detach" title="Remove from this page (keeps the page itself)"
+          aria-label="Remove sub-page link"
+          // Detach whenever the child might still exist. Skipping it on an
+          // unloaded index would orphan a live child: node gone from the body,
+          // parent_doc_id still pointing here.
+          onClick={() => { if (!tombstoned) onDetachChild(docId); deleteNode() }}>
+          <Icon name="x" className="ic-14" />
+        </button>
+      )}
     </NodeViewWrapper>
   )
 }
@@ -465,7 +475,14 @@ export const ChildPage = Node.create({
 
 // --- callout (plan 24) ---------------------------------------------------------
 
+// The emoji stays the stored + serialized value: it is what `data-icon` holds in
+// every doc already written, what the allowlist below is built around, and the
+// only thing a markdown export can carry. The UI renders the lucide equivalent,
+// so the editor shows a drawn icon without a migration over existing docs.
 const CALLOUT_ICONS = ['💡', '⚠️', '📌', '✅', '❗']
+const CALLOUT_ICON_NAME: Record<string, string> = {
+  '💡': 'lightbulb', '⚠️': 'alert-triangle', '📌': 'pin', '✅': 'circle-check', '❗': 'circle-alert',
+}
 
 function CalloutView({ node, updateAttributes }: NodeViewProps) {
   const icon = (node.attrs.icon as string) || CALLOUT_ICONS[0]
@@ -476,7 +493,7 @@ function CalloutView({ node, updateAttributes }: NodeViewProps) {
   return (
     <NodeViewWrapper className="dp-callout">
       <button type="button" className="dp-callout-icon" contentEditable={false} title="Change icon" onClick={cycleIcon}>
-        {icon}
+        <Icon name={CALLOUT_ICON_NAME[icon] ?? CALLOUT_ICON_NAME[CALLOUT_ICONS[0]]} className="ic-18" />
       </button>
       <NodeViewContent className="dp-callout-body" />
     </NodeViewWrapper>
@@ -524,22 +541,22 @@ interface SlashItem extends SuggestionItem {
  * the three Phase-A additions (toggle/callout/table). "Page" and "Convert to
  * page" need a doc-create API call, so DocEditor appends those two itself. */
 const SLASH_ITEMS: SlashItem[] = [
-  { key: 'text', label: 'Text', icon: '¶', run: (e, r) => { e.chain().focus().deleteRange(r).setParagraph().run() } },
-  { key: 'h1', label: 'Heading 1', icon: 'H1', run: (e, r) => { e.chain().focus().deleteRange(r).setNode('heading', { level: 1 }).run() } },
-  { key: 'h2', label: 'Heading 2', icon: 'H2', run: (e, r) => { e.chain().focus().deleteRange(r).setNode('heading', { level: 2 }).run() } },
-  { key: 'h3', label: 'Heading 3', icon: 'H3', run: (e, r) => { e.chain().focus().deleteRange(r).setNode('heading', { level: 3 }).run() } },
-  { key: 'h4', label: 'Heading 4', icon: 'H4', run: (e, r) => { e.chain().focus().deleteRange(r).setNode('heading', { level: 4 }).run() } },
-  { key: 'quote', label: 'Quote', icon: '❝', run: (e, r) => { e.chain().focus().deleteRange(r).setBlockquote().run() } },
-  { key: 'divider', label: 'Divider', icon: '—', run: (e, r) => { e.chain().focus().deleteRange(r).setHorizontalRule().run() } },
-  { key: 'bullet', label: 'Bullet list', icon: '•', run: (e, r) => { e.chain().focus().deleteRange(r).toggleBulletList().run() } },
-  { key: 'ordered', label: 'Numbered list', icon: '1.', run: (e, r) => { e.chain().focus().deleteRange(r).toggleOrderedList().run() } },
-  { key: 'checklist', label: 'Task list', icon: '☑', run: (e, r) => { e.chain().focus().deleteRange(r).toggleTaskList().run() } },
-  { key: 'toggle', label: 'Toggle', icon: '▸', run: (e, r) => { e.chain().focus().deleteRange(r).setDetails().run() } },
+  { key: 'text', label: 'Text', icon: <Icon name="pilcrow" />, run: (e, r) => { e.chain().focus().deleteRange(r).setParagraph().run() } },
+  { key: 'h1', label: 'Heading 1', icon: <Icon name="heading-1" />, run: (e, r) => { e.chain().focus().deleteRange(r).setNode('heading', { level: 1 }).run() } },
+  { key: 'h2', label: 'Heading 2', icon: <Icon name="heading-2" />, run: (e, r) => { e.chain().focus().deleteRange(r).setNode('heading', { level: 2 }).run() } },
+  { key: 'h3', label: 'Heading 3', icon: <Icon name="heading-3" />, run: (e, r) => { e.chain().focus().deleteRange(r).setNode('heading', { level: 3 }).run() } },
+  { key: 'h4', label: 'Heading 4', icon: <Icon name="heading-4" />, run: (e, r) => { e.chain().focus().deleteRange(r).setNode('heading', { level: 4 }).run() } },
+  { key: 'quote', label: 'Quote', icon: <Icon name="quote" />, run: (e, r) => { e.chain().focus().deleteRange(r).setBlockquote().run() } },
+  { key: 'divider', label: 'Divider', icon: <Icon name="minus" />, run: (e, r) => { e.chain().focus().deleteRange(r).setHorizontalRule().run() } },
+  { key: 'bullet', label: 'Bullet list', icon: <Icon name="list" />, run: (e, r) => { e.chain().focus().deleteRange(r).toggleBulletList().run() } },
+  { key: 'ordered', label: 'Numbered list', icon: <Icon name="list-ordered" />, run: (e, r) => { e.chain().focus().deleteRange(r).toggleOrderedList().run() } },
+  { key: 'checklist', label: 'Task list', icon: <Icon name="list-todo" />, run: (e, r) => { e.chain().focus().deleteRange(r).toggleTaskList().run() } },
+  { key: 'toggle', label: 'Toggle', icon: <Icon name="chevron-right" />, run: (e, r) => { e.chain().focus().deleteRange(r).setDetails().run() } },
   {
-    key: 'callout', label: 'Callout', icon: '💡',
+    key: 'callout', label: 'Callout', icon: <Icon name="lightbulb" />,
     run: (e, r) => { e.chain().focus().deleteRange(r).insertContent({ type: 'callout', content: [{ type: 'paragraph' }] }).run() },
   },
-  { key: 'table', label: 'Table', icon: '▦', run: (e, r) => { e.chain().focus().deleteRange(r).insertTable({ rows: 2, cols: 2, withHeaderRow: true }).run() } },
+  { key: 'table', label: 'Table', icon: <Icon name="table" />, run: (e, r) => { e.chain().focus().deleteRange(r).insertTable({ rows: 2, cols: 2, withHeaderRow: true }).run() } },
 ]
 
 const SlashCommand = Extension.create({
@@ -681,7 +698,7 @@ function DocTreeRow({
         {hasChildren ? (
           <button type="button" className="dp-tree-caret" aria-label={isCollapsed ? `Expand ${node.title}` : `Collapse ${node.title}`}
             onClick={e => { e.stopPropagation(); toggleCollapsed(node.id) }}>
-            {isCollapsed ? '▸' : '▾'}
+            <Icon name={isCollapsed ? 'chevron-right' : 'chevron-down'} className="ic-14" />
           </button>
         ) : <span className="dp-tree-caret-spacer" aria-hidden="true" />}
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -766,7 +783,10 @@ function DocList({ projectId, onSelect, onNew, onClose, docType, onRemoved }: Do
         </div>
         {searchBox}
         {!docType && <button className="btn btn-solid btn-sm" onClick={onNew}>+ New {Noun}</button>}
-        {onClose && <button type="button" className="btn btn-ghost btn-sm" title={`Close ${noun}s`} onClick={onClose}>✕</button>}
+        {onClose && (
+          <button type="button" className="btn btn-ghost btn-sm" title={`Close ${noun}s`} aria-label={`Close ${noun}s`}
+            onClick={onClose}><Icon name="x" className="ic-14" /></button>
+        )}
       </div>
       {composer}
       {loading ? <p className="dp-state">Loading {noun}s…</p>
@@ -775,7 +795,7 @@ function DocList({ projectId, onSelect, onNew, onClose, docType, onRemoved }: Do
       ) : docs.length === 0 ? (
         <div className="ab-empty">
           <div className="ab-empty-art">
-            <svg className="ic-32" aria-hidden="true"><use href="#icon-file" /></svg>
+            <Icon name="file" className="ic-32" />
           </div>
           <h3>No {noun}s yet</h3>
           <p>{docType === 'note'
@@ -814,7 +834,7 @@ function DocList({ projectId, onSelect, onNew, onClose, docType, onRemoved }: Do
                       .then(() => { setDocs(prev => prev.filter(x => x.id !== d.id)); onRemoved?.(d.id) })
                       .catch(reload)
                   }}>
-                  <svg className="ic-14" aria-hidden="true"><use href="#icon-trash" /></svg>
+                  <Icon name="trash" className="ic-14" />
                 </button>
               </div>
             </div>
@@ -960,57 +980,57 @@ function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
     // its native picker still opens.
     <div className="ab-toolbar" role="toolbar" aria-label="Editor toolbar"
       onMouseDown={(e) => { if ((e.target as HTMLElement).closest('button')) e.preventDefault() }}>
-      <button type="button" title="Bold"
+      <button type="button" title="Bold" aria-label="Bold"
         className={`ab-tbtn${editor.isActive('bold') ? ' active' : ''}`}
-        onClick={() => editor.chain().focus().toggleBold().run()}>B</button>
-      <button type="button" title="Italic"
+        onClick={() => editor.chain().focus().toggleBold().run()}><Icon name="bold" /></button>
+      <button type="button" title="Italic" aria-label="Italic"
         className={`ab-tbtn${editor.isActive('italic') ? ' active' : ''}`}
-        onClick={() => editor.chain().focus().toggleItalic().run()}><span className="ab-tbtn-it" aria-hidden="true">I</span></button>
-      <button type="button" title="Underline"
+        onClick={() => editor.chain().focus().toggleItalic().run()}><Icon name="italic" /></button>
+      <button type="button" title="Underline" aria-label="Underline"
         className={`ab-tbtn${editor.isActive('underline') ? ' active' : ''}`}
-        onClick={() => editor.chain().focus().toggleUnderline().run()}><u aria-hidden="true">U</u></button>
-      <button type="button" title="Strikethrough"
+        onClick={() => editor.chain().focus().toggleUnderline().run()}><Icon name="underline" /></button>
+      <button type="button" title="Strikethrough" aria-label="Strikethrough"
         className={`ab-tbtn${editor.isActive('strike') ? ' active' : ''}`}
-        onClick={() => editor.chain().focus().toggleStrike().run()}><s aria-hidden="true">S</s></button>
-      <button type="button" title="Highlight"
+        onClick={() => editor.chain().focus().toggleStrike().run()}><Icon name="strikethrough" /></button>
+      <button type="button" title="Highlight" aria-label="Highlight"
         className={`ab-tbtn${editor.isActive('highlight') ? ' active' : ''}`}
-        onClick={() => editor.chain().focus().toggleHighlight().run()}><mark aria-hidden="true">H</mark></button>
-      <button type="button" title="Subscript"
+        onClick={() => editor.chain().focus().toggleHighlight().run()}><Icon name="highlight" /></button>
+      <button type="button" title="Subscript" aria-label="Subscript"
         className={`ab-tbtn${editor.isActive('subscript') ? ' active' : ''}`}
-        onClick={() => editor.chain().focus().toggleSubscript().run()}>X<sub aria-hidden="true">2</sub></button>
-      <button type="button" title="Superscript"
+        onClick={() => editor.chain().focus().toggleSubscript().run()}><Icon name="subscript" /></button>
+      <button type="button" title="Superscript" aria-label="Superscript"
         className={`ab-tbtn${editor.isActive('superscript') ? ' active' : ''}`}
-        onClick={() => editor.chain().focus().toggleSuperscript().run()}>X<sup aria-hidden="true">2</sup></button>
+        onClick={() => editor.chain().focus().toggleSuperscript().run()}><Icon name="superscript" /></button>
       <span className="ab-tdiv" />
-      <button type="button" title="Heading 1"
+      <button type="button" title="Heading 1" aria-label="Heading 1"
         className={`ab-tbtn${editor.isActive('heading', { level: 1 }) ? ' active' : ''}`}
-        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>H1</button>
-      <button type="button" title="Heading 2"
+        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}><Icon name="heading-1" /></button>
+      <button type="button" title="Heading 2" aria-label="Heading 2"
         className={`ab-tbtn${editor.isActive('heading', { level: 2 }) ? ' active' : ''}`}
-        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>H2</button>
+        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}><Icon name="heading-2" /></button>
       <span className="ab-tdiv" />
-      <button type="button" title="Bullet list"
+      <button type="button" title="Bullet list" aria-label="Bullet list"
         className={`ab-tbtn${editor.isActive('bulletList') ? ' active' : ''}`}
-        onClick={() => editor.chain().focus().toggleBulletList().run()}>•</button>
-      <button type="button" title="Ordered list"
+        onClick={() => editor.chain().focus().toggleBulletList().run()}><Icon name="list" /></button>
+      <button type="button" title="Ordered list" aria-label="Ordered list"
         className={`ab-tbtn${editor.isActive('orderedList') ? ' active' : ''}`}
-        onClick={() => editor.chain().focus().toggleOrderedList().run()}>1.</button>
-      <button type="button" title="Task list"
+        onClick={() => editor.chain().focus().toggleOrderedList().run()}><Icon name="list-ordered" /></button>
+      <button type="button" title="Task list" aria-label="Task list"
         className={`ab-tbtn${editor.isActive('taskList') ? ' active' : ''}`}
-        onClick={() => editor.chain().focus().toggleTaskList().run()}>☑</button>
-      <button type="button" title="Blockquote"
+        onClick={() => editor.chain().focus().toggleTaskList().run()}><Icon name="list-todo" /></button>
+      <button type="button" title="Blockquote" aria-label="Blockquote"
         className={`ab-tbtn${editor.isActive('blockquote') ? ' active' : ''}`}
-        onClick={() => editor.chain().focus().toggleBlockquote().run()}>❝</button>
-      <button type="button" title="Code block"
+        onClick={() => editor.chain().focus().toggleBlockquote().run()}><Icon name="quote" /></button>
+      <button type="button" title="Code block" aria-label="Code block"
         className={`ab-tbtn${editor.isActive('codeBlock') ? ' active' : ''}`}
-        onClick={() => editor.chain().focus().toggleCodeBlock().run()}>{'{}'}</button>
+        onClick={() => editor.chain().focus().toggleCodeBlock().run()}><Icon name="code" /></button>
       <span className="ab-tdiv" />
-      <button type="button" title="Link"
+      <button type="button" title="Link" aria-label="Link"
         className={`ab-tbtn${editor.isActive('link') ? ' active' : ''}`}
-        onClick={setLink}>🔗</button>
-      <button type="button" title="Image"
+        onClick={setLink}><Icon name="link" /></button>
+      <button type="button" title="Image" aria-label="Image"
         className="ab-tbtn"
-        onClick={addImage}>🖼</button>
+        onClick={addImage}><Icon name="image" /></button>
       <input type="color" className="ab-tcolor" title="Font color" aria-label="Font color"
         value={(editor.getAttributes('textStyle').color as string) || '#000000'}
         onChange={(e) => editor.chain().focus().setColor(e.target.value).run()} />
@@ -1086,16 +1106,29 @@ interface DocEditorProps {
   /** Opens another doc in this same editor view — a childPage click, a
    * "Referenced by" backlink, or a breadcrumb ancestor. */
   onOpenDoc?: (docId: string) => void
+  /** Open armed for editing instead of read-only — set for a doc created a
+   * click ago, which has nothing to read yet. */
+  startEditing?: boolean
 }
 type SaveState = 'saved' | 'unsaved' | 'saving' | 'conflict' | 'error'
 
-function DocEditor({ docId, onBack, onRemoved, onOpenDoc }: DocEditorProps) {
+function DocEditor({ docId, onBack, onRemoved, onOpenDoc, startEditing }: DocEditorProps) {
   const [doc, setDoc] = useState<Doc | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<SaveState>('saved')
   const [saveError, setSaveError] = useState<string | null>(null)
   const [showPreview, setShowPreview] = useState(false)
+  // A doc opens read-only: links, mention chips and sub-pages are meant to be
+  // followed far more often than the prose is rewritten, and a caret sitting in
+  // someone's text is one stray keystroke away from an edit nobody asked for.
+  // "Edit" arms the editor; the load effect below re-arms the lock on every
+  // in-place doc switch, since DocEditor is not remounted for those.
+  const [editing, setEditing] = useState(!!startEditing)
+  // Read by that per-doc effect, which must not re-run when the prop settles
+  // back to false after the created doc has been opened.
+  const startEditingRef = useRef(!!startEditing)
+  startEditingRef.current = !!startEditing
   const [exportMsg, setExportMsg] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   // Every doc in this project, keyed by id (plan 24: live childPage titles +
@@ -1280,9 +1313,9 @@ function DocEditor({ docId, onBack, onRemoved, onOpenDoc }: DocEditorProps) {
         suggestion: {
           items: ({ query }) => {
             const pageItems: SlashItem[] = [
-              { key: 'page', label: 'Page', icon: '📄', sub: 'Create a sub-page', run: (e, r) => createChildPage(e, r) },
+              { key: 'page', label: 'Page', icon: <Icon name="file-text" />, sub: 'Create a sub-page', run: (e, r) => createChildPage(e, r) },
               {
-                key: 'convert-to-page', label: 'Convert to page', icon: '📄', sub: 'Turn this line into a sub-page',
+                key: 'convert-to-page', label: 'Convert to page', icon: <Icon name="file-text" />, sub: 'Turn this line into a sub-page',
                 run: (e, r) => {
                   const paraStart = e.state.doc.resolve(r.from).start()
                   const titleText = e.state.doc.textBetween(paraStart, r.from)
@@ -1397,8 +1430,18 @@ function DocEditor({ docId, onBack, onRemoved, onOpenDoc }: DocEditorProps) {
   }
 
   useEffect(() => {
-    editor?.setEditable(!lockedByOther)
-  }, [editor, lockedByOther])
+    const armed = editing && !lockedByOther
+    editor?.setEditable(armed)
+    // Pressing Edit should put the caret in the prose — otherwise it takes a
+    // second click to start typing, and the toolbar appears to do nothing.
+    if (armed) editor?.commands.focus()
+  }, [editor, editing, lockedByOther])
+
+  // Following a link is an in-place doc switch, not a remount, so the read-only
+  // default has to be re-applied per doc rather than only on mount. Keyed on
+  // docId alone: `editor` can be recreated by Tiptap, and that must not throw
+  // away an edit session the reader is in the middle of.
+  useEffect(() => { setEditing(startEditingRef.current) }, [docId])
 
   useEffect(() => {
     // #138 made in-place doc switching common (childPage / breadcrumb /
@@ -1575,8 +1618,9 @@ function DocEditor({ docId, onBack, onRemoved, onOpenDoc }: DocEditorProps) {
       docIndexReady,
       onOpenDoc: (id: string) => onOpenDocRef.current?.(id),
       onDetachChild: detachChild,
+      editing,
     }),
-    [docIndex, docIndexReady, detachChild],
+    [docIndex, docIndexReady, detachChild, editing],
   )
 
   // Breadcrumb: walk parent_doc_id via the already-loaded index, plus the live
@@ -1596,7 +1640,8 @@ function DocEditor({ docId, onBack, onRemoved, onOpenDoc }: DocEditorProps) {
     saveState === 'saving'  ? 'Saving…' :
     saveState === 'saved'   ? 'Saved' :
     saveState === 'unsaved' ? 'Unsaved changes' :
-    saveState === 'conflict' ? '⚠ Updated elsewhere — refresh to reload' :
+    // No glyph: `.dp-save-label.conflict` already carries the danger colour.
+    saveState === 'conflict' ? 'Updated elsewhere — refresh to reload' :
     `Error: ${saveError ?? 'unknown'}`
 
   return (
@@ -1614,10 +1659,12 @@ function DocEditor({ docId, onBack, onRemoved, onOpenDoc }: DocEditorProps) {
         </nav>
       )}
       <div className="dp-editor-nav" style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--border-subtle)' }}>
-        <button className="btn btn-ghost btn-sm" onClick={onBack} title="Back to list">← Back</button>
+        <button className="btn btn-ghost btn-sm" onClick={onBack} title="Back to list">
+          <Icon name="arrow-left" className="ic-14" /> Back
+        </button>
         {/* The title is the note's section heading — edit in place, autosaved. */}
-        <input className="dp-title-input" type="text" value={title} disabled={lockedByOther}
-          aria-label="Title" placeholder="Untitled"
+        <input className="dp-title-input" type="text" value={title} disabled={lockedByOther || !editing}
+          aria-label="Title" placeholder="Untitled — name this page"
           onChange={e => rename(e.target.value)}
           onBlur={() => { if (!title.trim()) rename(doc.title) }} />
         <StatusBadge kind="docstatus" value={doc.status} />
@@ -1630,12 +1677,12 @@ function DocEditor({ docId, onBack, onRemoved, onOpenDoc }: DocEditorProps) {
             className="badge badge-warning badge-sm"
             title="Someone else holds the edit lock; this doc is read-only until they leave"
           >
-            🔒 {editorName} is editing — read-only
+            <Icon name="lock" className="ic-14" /> {editorName} is editing — read-only
           </span>
         )}
       </div>
 
-      <EditorToolbar editor={editor} />
+      {editing && <EditorToolbar editor={editor} />}
 
       <div className="dp-tiptap-wrap">
         {showPreview
@@ -1644,11 +1691,25 @@ function DocEditor({ docId, onBack, onRemoved, onOpenDoc }: DocEditorProps) {
             <DocEditorContext.Provider
               value={docEditorCtx}
             >
-              <div className="ab-prose">
-                {editor && (
+              {/* Mention chips are plain spans, opened by ProseMirror's
+                  handleClickOn — and prosemirror-view only routes clicks to that
+                  handler while the view is editable. Read mode therefore needs
+                  its own listener, or every "@doc" chip goes dead exactly where
+                  following it matters most. One delegated handler on the
+                  wrapper, rather than a node view per chip. */}
+              <div className="ab-prose"
+                onClick={editing ? undefined : (e) => {
+                  const chip = (e.target as HTMLElement).closest('[data-type="mention"]')
+                  if (!chip || chip.getAttribute('data-target-type') !== 'doc') return
+                  const target = chip.getAttribute('data-target-id')
+                  if (target) onOpenDocRef.current?.(target)
+                }}>
+                {editor && editing && (
                   <DragHandle editor={editor} onNodeChange={onDragNodeChange}>
                     <span className="dp-drag-handle" role="button" tabIndex={0} aria-label="Block menu"
-                      onClick={() => setDragMenuPos(dragNodeRef.current?.pos ?? null)}>⠿</span>
+                      onClick={() => setDragMenuPos(dragNodeRef.current?.pos ?? null)}>
+                      <Icon name="grip" className="ic-14" />
+                    </span>
                   </DragHandle>
                 )}
                 {dragMenuPos !== null && editor && (
@@ -1678,14 +1739,27 @@ function DocEditor({ docId, onBack, onRemoved, onOpenDoc }: DocEditorProps) {
       </div>
 
       <div className="dp-statusbar">
-        <span className={`dp-save-label ${saveState}`}>{saveLabel}</span>
+        <span className={`dp-save-label ${editing ? saveState : 'saved'}`}>
+          {editing ? saveLabel : 'Read-only — links are clickable'}
+        </span>
         {doc.updated_by_display && (
           <span className="dp-edited-by" style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)' }}>
             Last edited by {doc.updated_by_display}
           </span>
         )}
-        <button type="button" className="btn btn-outline btn-xs"
-          onClick={save} disabled={saveState === 'saving' || saveState === 'saved'}>Save</button>
+        <button type="button" className="btn btn-outline btn-xs" disabled={lockedByOther}
+          onClick={() => {
+            // Leaving edit mode is the natural "I'm done" moment; the idle
+            // autosave would get there eventually, but not before a navigation.
+            if (editing && saveStateRef.current === 'unsaved') save()
+            setEditing(e => !e)
+          }}>
+          {editing ? 'Done' : 'Edit'}
+        </button>
+        {editing && (
+          <button type="button" className="btn btn-outline btn-xs"
+            onClick={save} disabled={saveState === 'saving' || saveState === 'saved'}>Save</button>
+        )}
         <button type="button" className="btn btn-ghost btn-xs"
           onClick={() => setShowPreview(p => !p)}>
           {showPreview ? 'Editor' : 'Preview'}
@@ -1795,6 +1869,8 @@ interface DocsPanelProps {
 export default function DocsPanel({ projectId, onClose, docType, captureTitle, initialDocId, onDocSelected }: DocsPanelProps) {
   const [view, setView] = useState<'list' | 'new' | 'editor'>(captureTitle ? 'new' : 'list')
   const [selected, setSelected] = useState<{ id: string; format: string } | null>(null)
+  // The one doc this panel just created — the only one that opens in edit mode.
+  const [createdId, setCreatedId] = useState<string | null>(null)
 
   // Fetched only once a document is actually open — browsing the list costs
   // nothing extra.
@@ -1823,6 +1899,9 @@ export default function DocsPanel({ projectId, onClose, docType, captureTitle, i
     // immediately selectable as a connection endpoint from any other open
     // document, rather than staying invisible until the panel remounts.
     if (conn.ready) conn.setTargets(prev => [...prev, docToTarget(doc)])
+    // Docs open read-only, but a document created one click ago has nothing to
+    // read — land in the editor, armed.
+    setCreatedId(doc.id)
     setSelected({ id: doc.id, format: doc.editor_format }); setView('editor')
     onDocSelected?.(doc.id)
   }
@@ -1861,7 +1940,8 @@ export default function DocsPanel({ projectId, onClose, docType, captureTitle, i
             ? <Suspense fallback={<p className="dp-state">Loading canvas…</p>}>
                 <CanvasEditor docId={selected.id} onBack={goBack} />
               </Suspense>
-            : <DocEditor docId={selected.id} onBack={goBack} onRemoved={handleRemoved} onOpenDoc={openDocById} />
+            : <DocEditor docId={selected.id} onBack={goBack} onRemoved={handleRemoved} onOpenDoc={openDocById}
+                startEditing={selected.id === createdId} />
         )}
       </ConnectionProvider>
     </div>

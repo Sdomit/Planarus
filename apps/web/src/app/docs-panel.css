@@ -83,8 +83,6 @@
 }
 .dp-state.dp-error { color: var(--status-danger-fg); }
 
-.ab-tbtn-it { font-style: italic; font-weight: 700; font-family: Georgia, "Times New Roman", serif; font-size: 14px; line-height: 1; }
-
 .ab-prose img { max-width: 100%; height: auto; }
 
 /* Font-color swatch in the toolbar (native input, styled to match ab-tbtn) */
@@ -120,7 +118,8 @@
 .dp-childpage-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dp-childpage-tombstone { color: var(--text-tertiary); font-style: italic; cursor: default; }
 .dp-childpage-detach {
-  flex-shrink: 0; margin-right: var(--space-2); padding: var(--space-1);
+  flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  margin-right: var(--space-2); padding: var(--space-1);
   border: 0; background: none; color: var(--text-tertiary); cursor: pointer; border-radius: var(--radius-sm);
 }
 .dp-childpage-detach:hover { color: var(--status-danger-fg); background: var(--bg-subtle); }
@@ -132,7 +131,8 @@
   border-left: 3px solid var(--border-default);
 }
 .dp-callout-icon {
-  flex-shrink: 0; border: 0; background: none; cursor: pointer; font-size: var(--text-base); line-height: 1;
+  flex-shrink: 0; display: inline-flex; align-items: center; padding: 0;
+  border: 0; background: none; cursor: pointer; color: var(--text-secondary); line-height: 1;
 }
 .dp-callout-body { flex: 1; min-width: 0; }
 .dp-callout-body > p:first-child { margin-top: 0; }
@@ -163,7 +163,10 @@
   text-align: left; font-size: var(--text-sm); color: var(--text-primary); cursor: pointer;
 }
 .dp-suggest-item.active, .dp-suggest-item:hover { background: var(--bg-subtle); }
-.dp-suggest-icon { flex-shrink: 0; width: 1.5em; text-align: center; }
+.dp-suggest-icon {
+  flex-shrink: 0; width: 1.5em; text-align: center;
+  display: inline-flex; align-items: center; justify-content: center; color: var(--text-secondary);
+}
 .dp-suggest-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dp-suggest-sub { flex-shrink: 0; font-size: var(--text-xs); color: var(--text-tertiary); }
 
@@ -182,7 +185,8 @@
 .dp-tree-row.dp-tree-drop-target { outline: 2px solid var(--status-info-fg); outline-offset: -2px; }
 .dp-tree-caret {
   flex-shrink: 0; width: 1.25em; border: 0; background: none; color: var(--text-tertiary);
-  cursor: pointer; font-size: var(--text-xs);
+  cursor: pointer; font-size: var(--text-xs); padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 .dp-tree-caret-spacer { display: inline-block; width: 1.25em; flex-shrink: 0; }
 

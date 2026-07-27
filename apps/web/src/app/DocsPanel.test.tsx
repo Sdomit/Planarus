@@ -366,6 +366,28 @@ describe('DocsPanel', () => {
     await waitFor(() => expect(mockApi.docs.get).toHaveBeenCalledWith('doc_1'))
   })
 
+  it('a doc opens read-only, and Edit arms the title, the toolbar and Save', async () => {
+    mockApi.docs.list.mockResolvedValue([DOC_SUMMARY])
+    mockApi.docs.get.mockResolvedValue(DOC_FULL)
+
+    render(<DocsPanel projectId="proj_1" onClose={vi.fn()} />)
+    await waitFor(() => screen.getByText('Test Note'))
+    fireEvent.click(screen.getByText('Test Note'))
+    await waitFor(() => screen.getByLabelText('Title'))
+
+    expect((screen.getByLabelText('Title') as HTMLInputElement).disabled).toBe(true)
+    expect(screen.queryByRole('toolbar', { name: 'Editor toolbar' })).toBeNull()
+    expect(screen.queryByText('Save')).toBeNull()
+    expect(screen.getByText(/Read-only/)).toBeTruthy()
+
+    fireEvent.click(screen.getByText('Edit'))
+
+    expect((screen.getByLabelText('Title') as HTMLInputElement).disabled).toBe(false)
+    expect(screen.getByRole('toolbar', { name: 'Editor toolbar' })).toBeTruthy()
+    expect(screen.getByText('Save')).toBeTruthy()
+    expect(screen.getByText('Done')).toBeTruthy()
+  })
+
   it('shows error if list fails', async () => {
     mockApi.docs.list.mockRejectedValue(new Error('network error'))
     render(<DocsPanel projectId="proj_1" onClose={vi.fn()} />)
@@ -460,7 +482,7 @@ describe('DocsPanel', () => {
       <DocsPanel projectId="proj_1" onClose={vi.fn()} initialDocId="doc_1" onDocSelected={onDocSelected} />,
     )
     await screen.findByLabelText('Title')
-    fireEvent.click(screen.getByText('← Back'))
+    fireEvent.click(screen.getByTitle('Back to list'))
 
     expect(onDocSelected).toHaveBeenCalledWith(null)
     await waitFor(() => expect(screen.getByText('Test Note')).toBeTruthy()) // back on the list

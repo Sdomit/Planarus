@@ -72,17 +72,37 @@ $PortsFile = Join-Path $env:LOCALAPPDATA 'Planarus\local.ports'
 # File read plus a socket connect, both in-process, cannot do that.
 function Test-Port {
     param([int]$Port)
-    $client = [System.Net.Sockets.TcpClient]::new()
-    try {
-        # Short timeout: this runs while the user is waiting for a menu to open,
-        # and both ports are probed, so the budget is half of what feels instant.
-        # Loopback either answers immediately or is not there.
-        return $client.ConnectAsync('127.0.0.1', $Port).Wait(250)
-    } catch {
-        return $false
-    } finally {
-        $client.Dispose()
+    # Both families, because the two services disagree about which one to use:
+    #
+    #   TCP    127.0.0.1:8000    LISTENING    <- uvicorn, IPv4 only
+    #   TCP    [::1]:5173        LISTENING    <- vite, IPv6 only
+    #
+    # and TcpClient's parameterless constructor makes an IPv4 socket, so it
+    # resolves "localhost" and then only ever tries 127.0.0.1. That probe cannot
+    # see vite at all: it returned false while the page was serving 200, which
+    # left the tray showing "stopped" with Open greyed out on a running app.
+    foreach ($family in [System.Net.Sockets.AddressFamily]::InterNetwork,
+                        [System.Net.Sockets.AddressFamily]::InterNetworkV6) {
+        if ($family -eq [System.Net.Sockets.AddressFamily]::InterNetwork) {
+            $address = '127.0.0.1'
+        } else {
+            $address = '::1'
+        }
+        $client = [System.Net.Sockets.TcpClient]::new($family)
+        try {
+            # 150ms per family, because this now runs up to four times while the
+            # user waits for the menu to open (two ports, two families). A live
+            # loopback answers in single-digit milliseconds; a closed one on ::1
+            # does not always refuse promptly, so this is a timeout in practice
+            # and the budget is what bounds the wait.
+            if ($client.ConnectAsync($address, $Port).Wait(150)) { return $true }
+        } catch {
+            # Wrong family or nothing listening; try the other one.
+        } finally {
+            $client.Dispose()
+        }
     }
+    return $false
 }
 
 function Get-Status {
