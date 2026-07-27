@@ -26,9 +26,10 @@ from app.fsmemory.project_root import resolve_project_root_or_none
 from app.models.comment import Comment
 from app.models.doc import Doc
 from app.models.link import Link
+from app.models.mention import Mention
 from app.models.project import Project
 from app.schemas.doc import DocCreate, DocExportResponse, DocUpdate
-from app.services import entity_connection_service
+from app.services import entity_connection_service, mention_service
 from app.services.audit_service import create_audit_event
 
 # Maps doc_type → export subfolder within docs/
@@ -126,6 +127,9 @@ def create_doc(session: Session, project_id: str, payload: DocCreate) -> Doc:
     )
     session.add(doc)
     session.flush()
+    # Always empty at creation (content_json starts as one of the two constants
+    # above) — wired for symmetry with update_doc, per plan 23.
+    mention_service.sync_mentions(session, project_id, doc.id, doc.content_json)
     create_audit_event(
         session,
         event_type="create",
@@ -265,6 +269,12 @@ def update_doc(session: Session, doc_id: str, payload: DocUpdate) -> Doc:
                 "was changed by another writer"
             )
         session.refresh(doc)
+        # Mentions are a projection of content_json (plan 23) — re-derive only
+        # when that column actually moved; a title/status/etc-only save leaves
+        # the existing backlinks untouched, and re-parsing them would be wasted
+        # work at best (they can't have changed).
+        if payload.content_json is not None:
+            mention_service.sync_mentions(session, doc.project_id, doc.id, doc.content_json)
 
     create_audit_event(
         session,
@@ -338,8 +348,17 @@ def repair_parent_integrity(session: Session, *, dry_run: bool = False) -> list[
 
 def delete_doc(session: Session, doc_id: str) -> bool:
     """Hard-delete a doc, its comments/links (attached via entity_type='doc'),
-    and promote any child docs to top-level (parent_doc_id cleared, so the FK
-    doesn't block the delete). Mirrors delete_task's owned-children cleanup."""
+    its own outbound mentions (source_doc_id — a real FK, so it must go before
+    the doc does), and promote any child docs to top-level (parent_doc_id
+    cleared, so the FK doesn't block the delete). Mirrors delete_task's
+    owned-children cleanup.
+
+    Mentions *targeting* this doc (target_type='doc', target_id=doc_id) are left
+    alone, same as a Link/Comment pointing at a deleted entity: target_id is a
+    polymorphic string, not an FK, so nothing blocks the delete, and plan 23
+    already treats a dangling backlink as expected — annotated "(deleted)" on
+    read rather than cleaned up eagerly.
+    """
     doc = session.get(Doc, doc_id)
     if doc is None:
         return False
@@ -354,6 +373,10 @@ def delete_doc(session: Session, doc_id: str) -> bool:
         select(Link).where(Link.entity_type == "doc", Link.entity_id == doc_id)
     ).all():
         session.delete(link)
+    for mention in session.exec(
+        select(Mention).where(Mention.source_doc_id == doc_id)
+    ).all():
+        session.delete(mention)
     # Project-scoped as defence in depth (#116). The normal path only ever
     # touches this project's documents.
     for child in session.exec(

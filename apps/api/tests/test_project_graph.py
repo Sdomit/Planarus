@@ -9,11 +9,14 @@ a copy that later 500 an import.
 The first test is the one that keeps this closed: a new project-scoped table must
 be declared as travelling or as deliberately excluded, or it fails here.
 """
+import json
+
 import app.models  # noqa: F401 — registers every table in SQLModel.metadata
 import pytest
 from app.core.utils import new_id, now_utc
 from app.models.calendar_connection import CalendarConnection
 from app.models.calendar_event import CalendarEvent
+from app.models.mention import Mention
 from app.models.status_option import StatusOption
 from app.models.task import Task
 from app.models.todo import Todo
@@ -62,6 +65,8 @@ def test_parents_precede_children():
     seen: set[str] = {"project"}
     for entity in project_graph.ENTITIES:
         for target in entity.fk_remap.values():
+            assert target in seen, f"{entity.key} points at {target}, which comes later"
+        for target in entity.required_fk_remap.values():
             assert target in seen, f"{entity.key} points at {target}, which comes later"
         if entity.via_parent is not None:
             assert entity.via_parent[1] in seen
@@ -167,6 +172,62 @@ def test_duplicate_carries_the_same_three(client, session):
     assert len(todos) == 2
     nested = next(t for t in todos if t.label == "Nested")
     assert nested.parent_id == next(t for t in todos if t.label == "Root").id
+
+
+# --- #138/plan 23: mentions travel and remap both their FK and their target ---
+def _mention_content(target_id: str) -> str:
+    return json.dumps({
+        "type": "doc",
+        "content": [{"type": "paragraph", "content": [
+            {"type": "mention", "attrs": {"targetType": "task", "targetId": target_id, "label": "ref"}},
+        ]}],
+    })
+
+
+def test_export_import_remaps_mention_source_and_target(client):
+    ws, proj = seed(client, "gph-men-exp")
+    task = _create(client, f"/api/v1/projects/{proj}/tasks", {"title": "Target"})
+    doc = _create(client, f"/api/v1/projects/{proj}/docs", {"title": "Referencer", "doc_type": "note"})
+    r = client.patch(
+        f"/api/v1/docs/{doc['id']}",
+        json={"version": doc["version"], "content_json": _mention_content(task["id"]), "markdown_cache": ""},
+    )
+    assert r.status_code == 200, r.text
+
+    data = client.get(f"/api/v1/projects/{proj}/export").json()
+    assert len(data["mentions"]) == 1
+    new = client.post("/api/v1/projects/import", json={"workspace_id": ws, "data": data})
+    assert new.status_code in (200, 201), new.text
+    copy_id = new.json()["id"]
+
+    copy_tasks = {t["title"]: t["id"] for t in client.get(f"/api/v1/projects/{copy_id}/tasks").json()}
+    copy_docs = {d["title"]: d["id"] for d in client.get(f"/api/v1/projects/{copy_id}/docs").json()}
+    mentions = client.get(f"/api/v1/projects/{copy_id}/mentions").json()
+    assert len(mentions) == 1
+    assert mentions[0]["source_doc_id"] == copy_docs["Referencer"]
+    assert mentions[0]["target_type"] == "task"
+    assert mentions[0]["target_id"] == copy_tasks["Target"]
+    # Never the source project's ids.
+    assert mentions[0]["source_doc_id"] != doc["id"]
+    assert mentions[0]["target_id"] != task["id"]
+
+
+def test_duplicate_remaps_mention_source_and_target(client, session):
+    ws, proj = seed(client, "gph-men-dup")
+    task = _create(client, f"/api/v1/projects/{proj}/tasks", {"title": "Target"})
+    doc = _create(client, f"/api/v1/projects/{proj}/docs", {"title": "Referencer", "doc_type": "note"})
+    r = client.patch(
+        f"/api/v1/docs/{doc['id']}",
+        json={"version": doc["version"], "content_json": _mention_content(task["id"]), "markdown_cache": ""},
+    )
+    assert r.status_code == 200, r.text
+
+    copy = project_service.duplicate_project(session, proj)
+    copy_task = session.exec(select(Task).where(Task.project_id == copy.id)).one()
+    mentions = session.exec(select(Mention).where(Mention.project_id == copy.id)).all()
+    assert len(mentions) == 1
+    assert mentions[0].target_id == copy_task.id
+    assert mentions[0].target_id != task["id"]
 
 
 def test_calendar_connection_never_travels(client, session):

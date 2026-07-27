@@ -34,6 +34,9 @@ vi.mock('../api/client', () => ({
     checklistItems: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
     statusOptions: { list: vi.fn(async () => []), create: vi.fn(), update: vi.fn(), reorder: vi.fn(), remove: vi.fn() },
     members: { list: vi.fn(async () => []) },
+    // #138: ReferencedBy's backlink lookup, mounted alongside every Attachments
+    // call — defaulted empty so it renders nothing unless a test says otherwise.
+    mentions: { list: vi.fn(async () => []) },
   },
 }))
 
@@ -55,6 +58,7 @@ const mockApi = api as unknown as {
   docs: { list: Fn }
   checklistItems: { list: Fn; create: Fn; update: Fn; remove: Fn }
   statusOptions: { list: Fn; create: Fn; update: Fn; reorder: Fn; remove: Fn }
+  mentions: { list: Fn }
 }
 
 const PROJECT = {

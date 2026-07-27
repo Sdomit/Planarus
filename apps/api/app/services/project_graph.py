@@ -40,6 +40,7 @@ from app.models.decision import Decision
 from app.models.doc import Doc
 from app.models.entity_connection import EntityConnection
 from app.models.link import Link
+from app.models.mention import Mention
 from app.models.milestone import Milestone
 from app.models.phase import Phase
 from app.models.risk import Risk
@@ -63,8 +64,14 @@ class GraphEntity:
     #: the entity's key in an export payload. Plural, and frozen by the v1 format
     #: — renaming one would break every file already written.
     json_key: str = ""
-    #: column → the ``key`` of the entity it points at, remapped on copy.
+    #: column → the ``key`` of the entity it points at, remapped on copy. The
+    #: column must be nullable: an unresolvable id becomes NULL rather than
+    #: dropping the row (see ``copy_graph``).
     fk_remap: dict[str, str] = field(default_factory=dict)
+    #: same idea as ``fk_remap``, for a column that is NOT NULL — an unresolvable
+    #: id drops the whole row instead (the polymorphic columns' rule), since
+    #: writing NULL there would just fail the column constraint instead.
+    required_fk_remap: dict[str, str] = field(default_factory=dict)
     #: column pointing at this same entity kind — needs a second pass, because a
     #: child can be copied before its parent exists in the id map.
     self_ref: Optional[str] = None
@@ -158,6 +165,20 @@ ENTITIES: tuple[GraphEntity, ...] = (
         drop_on_import=("author_id",),
     ),
     GraphEntity("link", Link, polymorphic=(("entity_type", "entity_id"),), uri_fields=("url",)),
+    # #138/plan 23. The row is a derived backlink, but it still has to travel: a
+    # copied doc's content_json keeps its mention nodes verbatim (content_json is
+    # an opaque blob to this walk, same as any other rich-document reference), so
+    # leaving the table out would silently drop backlinks the copy's own doc
+    # still visually carries. `source_doc_id` is NOT NULL (unlike a plain
+    # `fk_remap` target), so an unresolvable one drops the row via
+    # `required_fk_remap` instead of writing a NULL the column would reject; the
+    # target is polymorphic like `link.entity_id`, dropped the same way.
+    GraphEntity(
+        "mention",
+        Mention,
+        required_fk_remap={"source_doc_id": "doc"},
+        polymorphic=(("target_type", "target_id"),),
+    ),
     # Phase 25. Both endpoints are polymorphic, so a connection is only copied
     # when both of the entities it joins are in the same copy — a half-remapped
     # connection would silently point the new project at a source record.
@@ -270,6 +291,13 @@ def copy_graph(
                     unresolved = True
                     break
                 data[id_column] = resolved
+            if not unresolved:
+                for column, target_key in entity.required_fk_remap.items():
+                    resolved = idmap.get(target_key, {}).get(data.get(column))
+                    if resolved is None:
+                        unresolved = True
+                        break
+                    data[column] = resolved
             if unresolved:
                 continue
             for column, target_key in entity.fk_remap.items():

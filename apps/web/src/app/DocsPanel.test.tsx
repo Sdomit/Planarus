@@ -9,7 +9,9 @@ import { TaskList, TaskItem } from '@tiptap/extension-list'
 import Image from '@tiptap/extension-image'
 import { TextStyle } from '@tiptap/extension-text-style'
 import Color from '@tiptap/extension-color'
-import DocsPanel, { serializeToMarkdown } from './DocsPanel'
+import { Details, DetailsSummary, DetailsContent } from '@tiptap/extension-details'
+import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table'
+import DocsPanel, { serializeToMarkdown, PlanarusMention, ChildPage, Callout } from './DocsPanel'
 
 // CanvasEditor pulls in Excalidraw, which can't evaluate under jsdom (no canvas).
 // These tests don't exercise the canvas, so stub it out.
@@ -28,6 +30,10 @@ vi.mock('../api/client', () => ({
       presenceBeat: vi.fn().mockRejectedValue(new Error('404: not found')),
       presenceLeave: vi.fn().mockResolvedValue(undefined),
     },
+    // #138: ReferencedBy's backlink lookup — empty by default so it renders nothing.
+    mentions: {
+      list: vi.fn().mockResolvedValue([]),
+    },
   },
 }))
 
@@ -43,6 +49,9 @@ const mockApi = api as unknown as {
     exportMarkdown: ReturnType<typeof vi.fn>
     presenceBeat: ReturnType<typeof vi.fn>
     presenceLeave: ReturnType<typeof vi.fn>
+  }
+  mentions: {
+    list: ReturnType<typeof vi.fn>
   }
 }
 
@@ -483,6 +492,9 @@ describe('serializeToMarkdown', () => {
       extensions: [
         StarterKit.configure({ link: { openOnClick: false } }),
         TextStyle, Color, Highlight, Subscript, Superscript, TaskList, TaskItem, Image,
+        PlanarusMention, ChildPage, Callout,
+        Details, DetailsSummary, DetailsContent,
+        Table, TableRow, TableHeader, TableCell,
       ],
     })
   })
@@ -644,5 +656,183 @@ describe('serializeToMarkdown', () => {
     expect(md).toContain('**bold**')
     expect(md).toMatch(/\*italic\*|_italic_/)
     expect(md).toContain('* item')
+  })
+
+  // #138 plan 23/24: mention and childPage both serialize to the same
+  // planarus:// scheme, so markdown_cache/search/AI reads see references and
+  // nesting uniformly.
+  it('serializes a mention to [label](planarus://type/id)', () => {
+    act(() => {
+      editor.commands.setContent({
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [{ type: 'mention', attrs: { targetType: 'task', targetId: 'task_abc', label: 'Fix bug' } }],
+        }],
+      })
+    })
+    expect(serializeToMarkdown(editor.state.doc)).toContain('[Fix bug](planarus://task/task_abc)')
+  })
+
+  it('serializes a childPage to [title](planarus://doc/id)', () => {
+    act(() => {
+      editor.commands.setContent({
+        type: 'doc',
+        content: [{ type: 'childPage', attrs: { docId: 'doc_child1', title: 'Sub page' } }],
+      })
+    })
+    expect(serializeToMarkdown(editor.state.doc)).toContain('[Sub page](planarus://doc/doc_child1)')
+  })
+
+  it('round-trips a callout without crashing the save, prefixed by its icon', () => {
+    act(() => {
+      editor.commands.setContent({
+        type: 'doc',
+        content: [{
+          type: 'callout', attrs: { icon: '💡' },
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Heads up' }] }],
+        }],
+      })
+    })
+    expect(serializeToMarkdown(editor.state.doc)).toContain('> 💡 Heads up')
+  })
+
+  it('round-trips a toggle (details/summary/content) without crashing the save', () => {
+    act(() => {
+      editor.commands.setContent({
+        type: 'doc',
+        content: [{
+          type: 'details',
+          content: [
+            { type: 'detailsSummary', content: [{ type: 'text', text: 'More' }] },
+            { type: 'detailsContent', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hidden text' }] }] },
+          ],
+        }],
+      })
+    })
+    const md = serializeToMarkdown(editor.state.doc)
+    expect(md).toContain('**More**')
+    expect(md).toContain('Hidden text')
+  })
+
+  // #138: the #118 precedent ("cannot have its link syntax broken by a crafted
+  // href") extended to the five new handlers. These node attrs are set by
+  // parseHTML from data-* on pasted HTML and by any content_json write incl. the
+  // MCP doc.update propose path, so none of them passed through isAllowedLink.
+  // markdown_cache feeds disk exports, the context pack and MCP reads, so a
+  // forged construct here is both markdown forgery and a prompt-injection channel.
+  const FORGERY = 'x\n\n# Injected\n\n[Click me](https://evil.test)\n\n'
+
+  it('a crafted callout icon cannot escape the blockquote', () => {
+    act(() => {
+      editor.commands.setContent({
+        type: 'doc',
+        content: [{
+          type: 'callout', attrs: { icon: FORGERY },
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'body' }] }],
+        }],
+      })
+    })
+    const md = serializeToMarkdown(editor.state.doc)
+    expect(md).not.toContain('# Injected')
+    expect(md).not.toContain('[Click me](https://evil.test)')
+    // Falls back to the allowlisted default rather than emitting the forgery.
+    expect(md).toContain('> 💡 body')
+  })
+
+  it('a crafted mention label cannot forge a second link or leave its line', () => {
+    act(() => {
+      editor.commands.setContent({
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [{ type: 'mention', attrs: { targetType: 'task', targetId: 'tsk_1', label: FORGERY } }],
+        }],
+      })
+    })
+    const md = serializeToMarkdown(editor.state.doc)
+    // The forged link must not parse — brackets are escaped, so it stays text.
+    expect(md).not.toContain('[Click me](https://evil.test)')
+    expect(md).toContain('\\[Click me\\]')
+    // Collapsed onto one line, so "#" can never sit at start-of-line and become
+    // a heading, and the label cannot escape its own [...] construct.
+    expect(md.trimEnd().split('\n').every(l => !l.startsWith('#'))).toBe(true)
+    expect(md.split('\n').filter(l => l.includes('planarus://'))).toHaveLength(1)
+  })
+
+  it('a crafted mention targetId cannot break the link destination', () => {
+    act(() => {
+      editor.commands.setContent({
+        type: 'doc',
+        content: [{
+          type: 'paragraph',
+          content: [{ type: 'mention', attrs: { targetType: 'task', targetId: 'a\n\n[evil](https://evil.test)', label: 'ref' } }],
+        }],
+      })
+    })
+    const md = serializeToMarkdown(editor.state.doc)
+    expect(md).not.toContain('[evil](https://evil.test)')
+    // The out-of-shape id is dropped rather than escaped into the destination.
+    expect(md).toContain('[ref](planarus://task/)')
+  })
+
+  it('a crafted childPage title cannot forge markdown', () => {
+    act(() => {
+      editor.commands.setContent({
+        type: 'doc',
+        content: [{ type: 'childPage', attrs: { docId: 'doc_1', title: FORGERY } }],
+      })
+    })
+    const md = serializeToMarkdown(editor.state.doc)
+    expect(md).not.toContain('[Click me](https://evil.test)')
+    expect(md).toContain('\\[Click me\\]')
+    expect(md.trimEnd().split('\n').every(l => !l.startsWith('#'))).toBe(true)
+    expect(md.split('\n').filter(l => l.includes('planarus://'))).toHaveLength(1)
+  })
+
+  it('table cell text cannot forge a link or break out of the row', () => {
+    const cell = (text: string) => ({ type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] })
+    act(() => {
+      editor.commands.setContent({
+        type: 'doc',
+        content: [{
+          type: 'table',
+          content: [
+            { type: 'tableRow', content: [cell('[x](https://evil.test)'), cell('b\rc')] },
+          ],
+        }],
+      })
+    })
+    const md = serializeToMarkdown(editor.state.doc)
+    // Literal characters typed into a cell must not become a real link.
+    expect(md).not.toContain('[x](https://evil.test)')
+    // A lone \r is a CommonMark line ending — it must not end the row.
+    const rows = md.split('\n').filter(l => l.trim().startsWith('|'))
+    expect(rows.every(l => l.trim().endsWith('|'))).toBe(true)
+  })
+
+  it('round-trips a table to a GFM table without crashing the save', () => {
+    act(() => {
+      editor.commands.setContent({
+        type: 'doc',
+        content: [{
+          type: 'table',
+          content: [
+            { type: 'tableRow', content: [
+              { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'A' }] }] },
+              { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'B' }] }] },
+            ] },
+            { type: 'tableRow', content: [
+              { type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: '1' }] }] },
+              { type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: '2' }] }] },
+            ] },
+          ],
+        }],
+      })
+    })
+    const md = serializeToMarkdown(editor.state.doc)
+    expect(md).toContain('| A | B |')
+    expect(md).toContain('| --- | --- |')
+    expect(md).toContain('| 1 | 2 |')
   })
 })

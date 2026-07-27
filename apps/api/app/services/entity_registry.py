@@ -62,13 +62,23 @@ for _entity_type, (_model, _attr) in ENTITY_MODELS.items():
 
 
 def titles_for(
-    session: Session, wanted: Mapping[str, Iterable[str]]
+    session: Session,
+    wanted: Mapping[str, Iterable[str]],
+    *,
+    project_id: str | None = None,
 ) -> dict[tuple[str, str], str]:
     """Batch-resolve display labels: ``{entity_type: ids} -> {(type, id): title}``.
 
     One query per entity type present, not one per row. Unknown types and missing
     ids are simply absent from the result, so a caller renders its own fallback
     rather than raising on a deleted target.
+
+    ``project_id`` scopes the lookup. It is optional because the original callers
+    pass ids they already resolved inside one project, which made the scoping
+    implicit — correct, but only by construction, and a raw ``id IN (...)`` is a
+    poor place to leave that kind of invariant unstated. Pass it wherever the ids
+    came from user-supplied or document-derived data, so a title cannot be read
+    across the tenant boundary even if the caller's own filtering regresses.
 
     ponytail: ``timeline_service`` runs the same loop over its own resolver map
     (ENTITY_MODELS plus four audit-only types). Give this a resolvers argument and
@@ -82,7 +92,11 @@ def titles_for(
         if not ids:
             continue
         model, attr = ENTITY_MODELS[entity_type]
-        for row in session.exec(select(model).where(model.id.in_(ids))).all():  # type: ignore[attr-defined]
+        stmt = select(model).where(model.id.in_(ids))  # type: ignore[attr-defined]
+        # "project" is the tenant root and carries no project_id column of its own.
+        if project_id is not None and entity_type != "project":
+            stmt = stmt.where(model.project_id == project_id)  # type: ignore[attr-defined]
+        for row in session.exec(stmt).all():
             titles[(entity_type, row.id)] = str(getattr(row, attr))
     return titles
 

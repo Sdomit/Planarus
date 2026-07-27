@@ -106,6 +106,7 @@ tenant               GET     /api/v1/projects/{project_id}/git/prs
 tenant               GET     /api/v1/projects/{project_id}/git/snapshot
 tenant               GET     /api/v1/projects/{project_id}/links
 tenant               POST    /api/v1/projects/{project_id}/links
+tenant               GET     /api/v1/projects/{project_id}/mentions
 tenant               GET     /api/v1/projects/{project_id}/milestones
 tenant               POST    /api/v1/projects/{project_id}/milestones
 tenant               POST    /api/v1/projects/{project_id}/milestones/reorder

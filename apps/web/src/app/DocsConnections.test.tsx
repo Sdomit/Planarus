@@ -32,6 +32,8 @@ vi.mock('../api/client', () => ({
     milestones: { list: vi.fn() },
     decisions: { list: vi.fn() },
     risks: { list: vi.fn() },
+    // #138: ReferencedBy's backlink lookup, mounted alongside EntityConnections.
+    mentions: { list: vi.fn().mockResolvedValue([]) },
   },
 }))
 

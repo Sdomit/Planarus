@@ -17,6 +17,7 @@ import { useAuthInfo } from './auth'
 import { ConnectionCount, ConnectionProvider, EntityConnections, type ConnectionTarget } from './EntityConnections'
 import { buildConnectionTargets } from './connectionTargets'
 import { usePlanningFinder } from './PlanningFinder'
+import { ReferencedBy } from './ReferencedBy'
 import './planning-panel.css'
 
 // P16.3 (D33): team members (for the assignee picker) + the signed-in user id
@@ -973,6 +974,7 @@ function PhaseListRow({ phase, rollup, update, remove, dragProps, move, statusKe
           )}
           <EntityConnections entityType="phase" entityId={phase.id} projectId={phase.project_id} label={phase.title} />
           <Attachments entityType="phase" entityId={phase.id} projectId={phase.project_id} label={phase.title} />
+          <ReferencedBy projectId={phase.project_id} entityType="phase" entityId={phase.id} />
         </div>
       )}
     </li>
@@ -1476,6 +1478,7 @@ function TaskDetailBody({ task, phases, stages, projectId, onTaskUpdated, status
       </div>
       <EntityConnections entityType="task" entityId={task.id} projectId={projectId} label={task.title} />
       <Attachments entityType="task" entityId={task.id} projectId={projectId} label={task.title} />
+      <ReferencedBy projectId={projectId} entityType="task" entityId={task.id} />
     </div>
   )
 }
@@ -1668,6 +1671,7 @@ function MilestoneListRow({ milestone, update, remove, dragProps, move, statusKe
           </div>
           <EntityConnections entityType="milestone" entityId={milestone.id} projectId={milestone.project_id} label={milestone.title} />
           <Attachments entityType="milestone" entityId={milestone.id} projectId={milestone.project_id} label={milestone.title} />
+          <ReferencedBy projectId={milestone.project_id} entityType="milestone" entityId={milestone.id} />
         </div>
       )}
     </li>
@@ -1775,6 +1779,7 @@ function DecisionListRow({ decision, phases = [], update, remove, dragProps, mov
             onChange={phase_id => update(decision.id, { phase_id })} />
           <EntityConnections entityType="decision" entityId={decision.id} projectId={decision.project_id} label={decision.title} />
           <Attachments entityType="decision" entityId={decision.id} projectId={decision.project_id} label={decision.title} />
+          <ReferencedBy projectId={decision.project_id} entityType="decision" entityId={decision.id} />
         </div>
       )}
     </li>
@@ -1898,6 +1903,7 @@ function RiskListRow({ risk, phases = [], update, remove, dragProps, move, statu
             onChange={phase_id => update(risk.id, { phase_id })} />
           <EntityConnections entityType="risk" entityId={risk.id} projectId={risk.project_id} label={risk.title} />
           <Attachments entityType="risk" entityId={risk.id} projectId={risk.project_id} label={risk.title} />
+          <ReferencedBy projectId={risk.project_id} entityType="risk" entityId={risk.id} />
         </div>
       )}
     </li>

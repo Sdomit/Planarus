@@ -1,11 +1,16 @@
-import { useEffect, useMemo, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import Dashboard from './Dashboard'
 import CockpitPanel from './CockpitPanel'
 import PlanningPanel, { type TabKey as PlanningTabKey } from './PlanningPanel'
 import RoadmapPanel from './RoadmapPanel'
 import TimelinePanel from './TimelinePanel'
 import CalendarPanel from './CalendarPanel'
-import DocsPanel from './DocsPanel'
+// Lazy: DocsPanel pulls the whole Tiptap tree — including the drag handle's
+// required @tiptap/extension-collaboration + y-tiptap peers, which drag in yjs
+// (~34 kB gzip of machinery this app never uses; realtime collaboration is
+// explicitly out of scope). Statically imported it sat in the entry chunk, so
+// every user paid ~240 kB raw on first paint whether or not they opened a doc.
+const DocsPanel = lazy(() => import('./DocsPanel'))
 import CanvasPanel from './CanvasPanel'
 import ContextPackBuilder from './ContextPackBuilder'
 import ContextFilesPanel from './ContextFilesPanel'
@@ -776,14 +781,20 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
               {mainView === 'timeline' && (project ? <TimelinePanel projectId={project.id} /> : placeholder)}
               {mainView === 'calendar' && (project ? <CalendarPanel projectId={project.id} onOpenPlanning={() => navigate('planning', { planningTab: 'tasks' })} /> : placeholder)}
               {mainView === 'docs' && (project ? (
-                <DocsPanel
-                  projectId={project.id} onClose={() => setMainView('dashboard')}
-                  captureTitle={capture?.type === 'doc' ? captureTitle(capture) : undefined}
-                  initialDocId={routed?.detailId}
-                  onDocSelected={routed?.onSelectDetail}
-                />
+                <Suspense fallback={<p className="dp-state">Loading docs…</p>}>
+                  <DocsPanel
+                    projectId={project.id} onClose={() => setMainView('dashboard')}
+                    captureTitle={capture?.type === 'doc' ? captureTitle(capture) : undefined}
+                    initialDocId={routed?.detailId}
+                    onDocSelected={routed?.onSelectDetail}
+                  />
+                </Suspense>
               ) : placeholder)}
-              {mainView === 'notes' && (project ? <DocsPanel key="notes" projectId={project.id} docType="note" onClose={() => setMainView('dashboard')} /> : placeholder)}
+              {mainView === 'notes' && (project ? (
+                <Suspense fallback={<p className="dp-state">Loading notes…</p>}>
+                  <DocsPanel key="notes" projectId={project.id} docType="note" onClose={() => setMainView('dashboard')} />
+                </Suspense>
+              ) : placeholder)}
               {mainView === 'canvas' && (project ? <CanvasPanel projectId={project.id} onBack={() => setMainView('cockpit')} /> : placeholder)}
               {mainView === 'context-pack' && (project ? <ContextPackBuilder projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
               {mainView === 'context-files' && (project ? <ContextFilesPanel projectId={project.id} /> : placeholder)}

@@ -260,6 +260,18 @@ export interface Link {
   created_at: string
 }
 
+/** Derived @mention backlink row (#138/plan 23) — read-only, never authored directly. */
+export interface Mention {
+  id: string
+  project_id: string
+  source_doc_id: string
+  target_type: string
+  target_id: string
+  created_at: string
+  /** Resolved server-side; null if the doc was since deleted. */
+  source_doc_title: string | null
+}
+
 /** A constrained, same-project planning relationship (Phase 25). */
 export type ConnectionEntityType = 'phase' | 'task' | 'decision' | 'risk' | 'milestone' | 'doc'
 export type ConnectionRelationType =
@@ -1374,6 +1386,17 @@ export const api = {
     create: (projectId: string, data: { entity_type: string; entity_id: string; url: string; title?: string }) =>
       request<Link>(`/projects/${projectId}/links`, { method: 'POST', body: JSON.stringify(data) }),
   },
+  mentions: {
+    /** No create/update — derived from a doc's content_json on save (plan 23). */
+    list: (projectId: string, params?: { target_type?: string; target_id?: string; source_doc_id?: string }) => {
+      const q = new URLSearchParams()
+      if (params?.target_type) q.set('target_type', params.target_type)
+      if (params?.target_id) q.set('target_id', params.target_id)
+      if (params?.source_doc_id) q.set('source_doc_id', params.source_doc_id)
+      const qs = q.toString()
+      return request<Mention[]>(`/projects/${projectId}/mentions${qs ? `?${qs}` : ''}`)
+    },
+  },
   connections: {
     list: (projectId: string, params?: { entity_type?: ConnectionEntityType; entity_id?: string }) => {
       const q = new URLSearchParams()
@@ -1396,19 +1419,24 @@ export const api = {
       const qs = q.toString()
       return request<DocSummary[]>(`/projects/${projectId}/docs${qs ? `?${qs}` : ''}`)
     },
-    get: (id: string) => request<Doc>(`/docs/${id}`),
+    // #138 pointed document *content* at this id: a mention chip's `targetId` and
+    // a childPage's `docId` come from content_json, which pasted HTML and the MCP
+    // propose path can both set. An un-encoded id like "../../admin/users" would
+    // make the browser issue an authenticated same-origin GET the app never
+    // intended, so the id is escaped rather than trusted to be a plain slug.
+    get: (id: string) => request<Doc>(`/docs/${encodeURIComponent(id)}`),
     create: (projectId: string, data: DocCreate) =>
       request<Doc>(`/projects/${projectId}/docs`, { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, data: DocUpdate) =>
-      request<Doc>(`/docs/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-    remove: (id: string) => request<void>(`/docs/${id}`, { method: 'DELETE' }),
+      request<Doc>(`/docs/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    remove: (id: string) => request<void>(`/docs/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     exportMarkdown: (id: string) =>
-      request<DocExportResponse>(`/docs/${id}/export-markdown`, { method: 'POST' }),
+      request<DocExportResponse>(`/docs/${encodeURIComponent(id)}/export-markdown`, { method: 'POST' }),
     presenceBeat: (id: string, mode: 'viewing' | 'editing') =>
-      request<PresenceView>(`/docs/${id}/presence`, { method: 'PUT', body: JSON.stringify({ mode }) }),
-    presenceGet: (id: string) => request<PresenceView>(`/docs/${id}/presence`),
+      request<PresenceView>(`/docs/${encodeURIComponent(id)}/presence`, { method: 'PUT', body: JSON.stringify({ mode }) }),
+    presenceGet: (id: string) => request<PresenceView>(`/docs/${encodeURIComponent(id)}/presence`),
     presenceLeave: (id: string) =>
-      request<void>(`/docs/${id}/presence`, { method: 'DELETE' }),
+      request<void>(`/docs/${encodeURIComponent(id)}/presence`, { method: 'DELETE' }),
   },
   contextFiles: {
     list: (projectId: string) =>

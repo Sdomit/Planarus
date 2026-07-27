@@ -15,7 +15,7 @@ from app.core.utils import new_id, now_utc
 from app.models.decision import Decision
 from app.models.doc import Doc
 from app.models.task import Task
-from app.services import entity_connection_service, status_option_service
+from app.services import entity_connection_service, mention_service, status_option_service
 
 
 def _check_status(session: Session, project_id: str, status: str, entity_type: str) -> None:
@@ -113,6 +113,14 @@ def _apply_doc_update(session: Session, target_id: str, patch: dict) -> tuple[st
     doc.updated_at = now_utc()
     session.add(doc)
     session.flush()
+    # `mention` rows are a derived projection of content_json (#138/plan 23), and
+    # this path writes that column directly rather than through
+    # `doc_service.update_doc`. Without this the approved edit would leave the
+    # backlink table describing the *previous* content: mentions it removed would
+    # persist and mentions it added would never appear, until a human happened to
+    # save the doc through PATCH /docs/{id}.
+    if "content_json" in patch:
+        mention_service.sync_mentions(session, doc.project_id, doc.id, doc.content_json)
     return "doc", doc.id
 
 

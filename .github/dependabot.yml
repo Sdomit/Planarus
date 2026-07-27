@@ -15,8 +15,18 @@ updates:
     schedule:
       interval: monthly
     groups:
+      # Every @tiptap/* package must move as one set. Each extension declares an
+      # *exact* `@tiptap/core` peer, so a lone upgrade demands a core version the
+      # others cannot satisfy and pnpm resolves it by nesting a second copy —
+      # two @tiptap/core instances, which breaks the editor's singleton
+      # assumptions in ways that only show up at runtime (#138). They are pinned
+      # exactly in package.json for the same reason; this keeps Dependabot's
+      # monthly PR from splitting them apart again.
+      tiptap:
+        patterns: ["@tiptap/*"]
       javascript:
         patterns: ["*"]
+        exclude-patterns: ["@tiptap/*"]
     # Held back on purpose (2026-07): Vite 8 is only supported by Vitest 4, and
     # Vitest 4 cannot start on Node 24 (our local dev version) — it dies loading
     # its own '#module-evaluator'. Vitest 3 caps at Vite 7, so the three move as
