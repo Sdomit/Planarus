@@ -51,6 +51,12 @@ Bring an agent in and the same store hands it a narrow, ordered view of that
 context instead of a re-pasted transcript. Everything it proposes lands in a
 queue you review.
 
+<p align="center">
+  <img src="assets/readme/screenshots/cockpit.png" alt="The Planarus cockpit: phase, task, risk, milestone, decision and approval counts across the top, an attention list of proposals and blockers, phase progress bars, upcoming milestones and recent activity" width="100%" />
+  <br />
+  <sub>The cockpit of a real project — this one is the demo tour of how Planarus itself was built.</sub>
+</p>
+
 Its central rule is one sentence long:
 
 > [!IMPORTANT]
@@ -252,6 +258,57 @@ them intact:
 | Context | Rich documents, Markdown preview, context-pack generation, context files, offline canvas |
 | Agents | Review approval proposals, inspect agent runs, read notifications and reminders, use the read-only Git cockpit |
 | Control | Team access, integrations, MCP/API configuration, webhooks, export/import, local backups |
+
+</details>
+
+### Plan
+
+<table>
+  <tr>
+    <td width="50%"><img src="assets/readme/screenshots/dashboard.png" alt="Dashboard listing every project with active project, open task, pending approval and open risk counts" width="100%" /><br /><sub><b>Dashboard</b> — every project, with what is open across all of them.</sub></td>
+    <td width="50%"><img src="assets/readme/screenshots/planning-phases.png" alt="Planning view: phases with per-phase task and decision counts and Done, Active, Blocked and Frozen statuses" width="100%" /><br /><sub><b>Planning</b> — phases, tasks, milestones, decisions and risks in one place.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/readme/screenshots/roadmap.png" alt="Roadmap showing overall progress and per-phase completion bars with nested stages" width="100%" /><br /><sub><b>Roadmap</b> — progress rolled up from the same records, not maintained twice.</sub></td>
+    <td width="50%"><img src="assets/readme/screenshots/calendar.png" alt="Month calendar with events, milestones and task due dates, and an .ics export button" width="100%" /><br /><sub><b>Calendar</b> — events, milestones and due dates, exportable as .ics.</sub></td>
+  </tr>
+</table>
+
+### Context
+
+<table>
+  <tr>
+    <td width="50%"><img src="assets/readme/screenshots/markdown-preview.png" alt="Markdown preview of the generated decisions file, showing the decision log as a table with statuses" width="100%" /><br /><sub><b>Markdown preview</b> — the context an agent reads, rendered as you would read it.</sub></td>
+    <td width="50%"><img src="assets/readme/screenshots/canvas.png" alt="Offline canvas with task, decision and risk cards connected by arrows, plus a milestone card" width="100%" /><br /><sub><b>Canvas</b> — an offline whiteboard whose cards are real records.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/readme/screenshots/context-pack.png" alt="Context pack builder with profile, target tool, token budget and selectable project sources with per-source token costs" width="100%" /><br /><sub><b>Context packs</b> — pick sources against a token budget; nothing leaves until you copy it.</sub></td>
+    <td width="50%"><img src="assets/readme/screenshots/context-files.png" alt="Generated context files list including AGENTS.md, ARCHITECTURE.md, DECISIONS.md and NEXT_STEP.md with pin and accept-on-disk controls" width="100%" /><br /><sub><b>Context files</b> — the Markdown an agent picks up from the repository.</sub></td>
+  </tr>
+</table>
+
+### Agents and control
+
+<table>
+  <tr>
+    <td width="50%"><img src="assets/readme/screenshots/approvals.png" alt="Approval queue with pending MCP and API proposals and a history of applied and rejected ones" width="100%" /><br /><sub><b>Approval queue</b> — where every agent-originated write waits. This is the boundary.</sub></td>
+    <td width="50%"><img src="assets/readme/screenshots/agent-runs.png" alt="Agent runs view with total runs, success rate, average duration and a log of runs per agent and mode" width="100%" /><br /><sub><b>Agent runs</b> — what each agent did, how long it took, and whether it worked.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/readme/screenshots/timeline.png" alt="Timeline of audited events showing created, updated and other entries with actor and entity type" width="100%" /><br /><sub><b>Timeline</b> — an audit trail of every change, human or agent.</sub></td>
+    <td width="50%"><img src="assets/readme/screenshots/team-access-dark.png" alt="Settings Team and Access tab in dark theme, showing LAN team mode environment status and the switches it gates" width="100%" /><br /><sub><b>Team &amp; access</b> — LAN team mode, and the dark theme, which every view has.</sub></td>
+  </tr>
+</table>
+
+<details>
+<summary>Integrations tab</summary>
+
+<p align="center">
+  <img src="assets/readme/screenshots/settings-integrations.png" alt="Settings Integrations tab with external API status, REST base URLs, copyable curl, Python and TypeScript snippets, and local MCP agent configuration" width="100%" />
+</p>
+
+Both surfaces are off until you turn them on, and both are read-and-propose
+only — the panel states which, rather than leaving you to find out.
 
 </details>
 
