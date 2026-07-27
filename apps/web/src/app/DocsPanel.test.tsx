@@ -416,6 +416,56 @@ describe('DocsPanel', () => {
     expect(confirmSpy).not.toHaveBeenCalled()
     confirmSpy.mockRestore()
   })
+
+  // #183 step 3c: /docs/:docSlug — ProjectRoute resolves the slug to an id
+  // and passes it down as initialDocId; DocsPanel reports every open/close
+  // back through onDocSelected so the URL can follow.
+  it('#183 step 3c: selecting a doc from the list calls onDocSelected, for the URL to follow', async () => {
+    mockApi.docs.list.mockResolvedValue([DOC_SUMMARY])
+    mockApi.docs.get.mockResolvedValue(DOC_FULL)
+    const onDocSelected = vi.fn()
+
+    render(<DocsPanel projectId="proj_1" onClose={vi.fn()} onDocSelected={onDocSelected} />)
+    await waitFor(() => screen.getByText('Test Note'))
+    fireEvent.click(screen.getByText('Test Note'))
+
+    expect(onDocSelected).toHaveBeenCalledWith('doc_1')
+  })
+
+  it('#183 step 3c: initialDocId opens that doc directly', async () => {
+    mockApi.docs.list.mockResolvedValue([DOC_SUMMARY])
+    mockApi.docs.get.mockResolvedValue(DOC_FULL)
+
+    render(<DocsPanel projectId="proj_1" onClose={vi.fn()} initialDocId="doc_1" />)
+
+    expect(await screen.findByLabelText('Title')).toBeTruthy()
+    expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Test Note')
+  })
+
+  it('#183 step 3c: going back to the list calls onDocSelected(null)', async () => {
+    mockApi.docs.list.mockResolvedValue([DOC_SUMMARY])
+    mockApi.docs.get.mockResolvedValue(DOC_FULL)
+    const onDocSelected = vi.fn()
+
+    render(
+      <DocsPanel projectId="proj_1" onClose={vi.fn()} initialDocId="doc_1" onDocSelected={onDocSelected} />,
+    )
+    await screen.findByLabelText('Title')
+    fireEvent.click(screen.getByText('← Back'))
+
+    expect(onDocSelected).toHaveBeenCalledWith(null)
+    await waitFor(() => expect(screen.getByText('Test Note')).toBeTruthy()) // back on the list
+  })
+
+  it('#183 step 3c: an unresolvable initialDocId fails silently, staying on the list', async () => {
+    mockApi.docs.list.mockResolvedValue([DOC_SUMMARY])
+    mockApi.docs.get.mockRejectedValue(new Error('404: not found'))
+
+    render(<DocsPanel projectId="proj_1" onClose={vi.fn()} initialDocId="doc_gone" />)
+
+    await waitFor(() => expect(screen.getByText('Test Note')).toBeTruthy())
+    expect(screen.queryByLabelText('Title')).toBeNull()
+  })
 })
 
 // ---------------------------------------------------------------------------

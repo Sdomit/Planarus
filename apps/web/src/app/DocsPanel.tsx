@@ -662,7 +662,12 @@ function DocEditor({ docId, onBack, onRemoved }: DocEditorProps) {
       .then(d => {
         setDoc(d); docRef.current = d; versionRef.current = d.version
         setTitle(d.title); titleRef.current = d.title
-        if (editor) {
+        // `editor` is a closed-over snapshot; Tiptap can recreate its own Editor
+        // instance between this effect firing and the fetch resolving (#183
+        // step 3c surfaced this via the faster initialDocId mount path, with no
+        // click delay to mask it) — an already-destroyed one throws from its own
+        // `commands` getter rather than being a safe no-op.
+        if (editor && !editor.isDestroyed) {
           let parsed: object | null = null
           try { parsed = JSON.parse(d.content_json) } catch { /* ignore */ }
           if (parsed) editor.commands.setContent(parsed as never)
@@ -891,9 +896,15 @@ interface DocsPanelProps {
   docType?: string
   /** #106: a `doc` clip opens straight into the create form, titled. */
   captureTitle?: string
+  /** #183 step 3: the nested /docs/:docSlug route. ProjectRoute resolves the
+   *  slug to an id (docs have no by-slug read endpoint); this panel still
+   *  needs `editor_format` to pick Tiptap vs. Excalidraw, so it looks the doc
+   *  up once more here rather than pushing that lookup onto the router. */
+  initialDocId?: string
+  onDocSelected?: (id: string | null) => void
 }
 
-export default function DocsPanel({ projectId, onClose, docType, captureTitle }: DocsPanelProps) {
+export default function DocsPanel({ projectId, onClose, docType, captureTitle, initialDocId, onDocSelected }: DocsPanelProps) {
   const [view, setView] = useState<'list' | 'new' | 'editor'>(captureTitle ? 'new' : 'list')
   const [selected, setSelected] = useState<{ id: string; format: string } | null>(null)
 
@@ -901,14 +912,33 @@ export default function DocsPanel({ projectId, onClose, docType, captureTitle }:
   // nothing extra.
   const conn = useDocConnections(projectId, view === 'editor')
 
-  const handleSelect = (doc: DocSummary) => { setSelected({ id: doc.id, format: doc.editor_format }); setView('editor') }
+  useEffect(() => {
+    if (!initialDocId) return
+    let cancelled = false
+    api.docs.get(initialDocId).then(d => {
+      if (cancelled) return
+      setSelected({ id: d.id, format: d.editor_format })
+      setView('editor')
+    // A deleted/unresolvable doc id fails silently (stays on whatever view is
+    // already showing) rather than surfacing a broken editor — matching how
+    // TasksList's initialTaskId simply finds nothing to open.
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [initialDocId])
+
+  const handleSelect = (doc: DocSummary) => {
+    setSelected({ id: doc.id, format: doc.editor_format }); setView('editor')
+    onDocSelected?.(doc.id)
+  }
   const handleCreated = (doc: Doc) => {
     // Merges the new doc into the already-loaded target list so it is
     // immediately selectable as a connection endpoint from any other open
     // document, rather than staying invisible until the panel remounts.
     if (conn.ready) conn.setTargets(prev => [...prev, docToTarget(doc)])
     setSelected({ id: doc.id, format: doc.editor_format }); setView('editor')
+    onDocSelected?.(doc.id)
   }
+  const goBack = () => { setView('list'); setSelected(null); onDocSelected?.(null) }
   // Dropping the target lets ConnectionProvider's own prune effect (keyed on
   // `targets`) clean up any connection that pointed at it — no separate
   // connections-side update needed.
@@ -932,9 +962,9 @@ export default function DocsPanel({ projectId, onClose, docType, captureTitle }:
         {view === 'editor' && selected && (
           selected.format === 'excalidraw'
             ? <Suspense fallback={<p className="dp-state">Loading canvas…</p>}>
-                <CanvasEditor docId={selected.id} onBack={() => setView('list')} />
+                <CanvasEditor docId={selected.id} onBack={goBack} />
               </Suspense>
-            : <DocEditor docId={selected.id} onBack={() => setView('list')} onRemoved={handleRemoved} />
+            : <DocEditor docId={selected.id} onBack={goBack} onRemoved={handleRemoved} />
         )}
       </ConnectionProvider>
     </div>

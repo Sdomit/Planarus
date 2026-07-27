@@ -757,6 +757,8 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
                 <DocsPanel
                   projectId={project.id} onClose={() => setMainView('dashboard')}
                   captureTitle={capture?.type === 'doc' ? captureTitle(capture) : undefined}
+                  initialDocId={routed?.detailId}
+                  onDocSelected={routed?.onSelectDetail}
                 />
               ) : placeholder)}
               {mainView === 'notes' && (project ? <DocsPanel key="notes" projectId={project.id} docType="note" onClose={() => setMainView('dashboard')} /> : placeholder)}

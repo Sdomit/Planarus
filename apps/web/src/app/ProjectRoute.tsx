@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router'
-import { api } from '../api/client'
+import { api, type DocSummary } from '../api/client'
 import { EmptyState } from './EmptyState'
 import Layout, { isProjectScopedView, type MainView, type SelectedProject } from './Layout'
 
@@ -38,12 +38,40 @@ function projectPath(project: SelectedProject): string {
  * intake follows for an unresolvable clip). An unrecognised :view segment
  * (typo, or one of the three routes that deliberately live outside this
  * family — dashboard/settings/team) redirects to the project's own home
- * rather than guessing.
+ * rather than guessing — an unresolvable doc slug gets the same treatment,
+ * once the project's doc list has actually loaded (#183 step 3c).
  */
 export default function ProjectRoute() {
-  const { workspaceSlug, projectSlug, view: viewParam, approvalId, taskId } = useParams()
+  const { workspaceSlug, projectSlug, view: viewParam, approvalId, taskId, docSlug } = useParams()
   const navigate = useNavigate()
   const [state, setState] = useState<ResolveState>({ status: 'loading' })
+
+  // #183 step 3c: /docs/:docSlug needs the project's doc list to map a slug to
+  // an id (and back, when a selection changes the URL) — docs have no by-slug
+  // read endpoint, so this resolves the same way the workspace/project slugs
+  // above do. Fetched only while the docs view is actually active.
+  const [docs, setDocs] = useState<DocSummary[] | null>(null)
+  const project = state.status === 'ready' ? state.project : null
+  const view: MainView = approvalId
+    ? 'approvals'
+    : taskId
+      ? 'planning'
+      : docSlug
+        ? 'docs'
+        : viewParam === undefined
+          ? 'cockpit'
+          : (viewParam as MainView)
+
+  useEffect(() => {
+    if (!project || view !== 'docs') { setDocs(null); return }
+    let cancelled = false
+    api.docs.list(project.id).then(ds => {
+      if (!cancelled) setDocs(ds)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [project, view])
 
   useEffect(() => {
     let cancelled = false
@@ -88,22 +116,19 @@ export default function ProjectRoute() {
     )
   }
 
-  const { project } = state
-  // The /approvals/:approvalId and /planning/task/:taskId routes carry no
-  // :view segment of their own — their presence implies the view.
-  const view: MainView = approvalId
-    ? 'approvals'
-    : taskId
-      ? 'planning'
-      : viewParam === undefined
-        ? 'cockpit'
-        : (viewParam as MainView)
   if (viewParam !== undefined && !isProjectScopedView(viewParam)) {
     // Unknown segment, or one of dashboard/settings/team typed onto a project
     // URL by hand — neither belongs here. Redirect rather than guess.
-    return <Navigate to={projectPath(project)} replace />
+    return <Navigate to={projectPath(state.project)} replace />
   }
-  const detailId = approvalId ?? taskId
+  // A doc slug that matches nothing once the list has actually loaded — typo,
+  // deleted doc — gets the same "redirect to the view's own home" treatment
+  // as an unrecognised :view segment above, rather than sitting on a dead URL.
+  if (docSlug && docs !== null && !docs.some(d => d.slug === docSlug)) {
+    return <Navigate to={`${projectPath(state.project)}/docs`} replace />
+  }
+
+  const detailId = approvalId ?? taskId ?? (docSlug ? docs?.find(d => d.slug === docSlug)?.id : undefined)
 
   const onNavigate = (nextView: MainView, nextProject: SelectedProject) => {
     if (nextView === 'dashboard') return navigate('/')
@@ -116,10 +141,15 @@ export default function ProjectRoute() {
   // Which nested detail shape applies depends on the *current* view — each
   // of the three (approvals -> tasks -> docs) gets its own URL segment.
   const onSelectDetail = (id: string | null) => {
-    const base = projectPath(project)
+    const base = projectPath(state.project)
     if (view === 'approvals') return navigate(id ? `${base}/approvals/${id}` : `${base}/approvals`)
     if (view === 'planning') return navigate(id ? `${base}/planning/task/${id}` : `${base}/planning`)
+    if (view === 'docs') {
+      if (!id) return navigate(`${base}/docs`)
+      const slug = docs?.find(d => d.id === id)?.slug
+      return navigate(slug ? `${base}/docs/${slug}` : `${base}/docs`)
+    }
   }
 
-  return <Layout routed={{ project, view, onNavigate, detailId, onSelectDetail }} />
+  return <Layout routed={{ project: state.project, view, onNavigate, detailId, onSelectDetail }} />
 }
