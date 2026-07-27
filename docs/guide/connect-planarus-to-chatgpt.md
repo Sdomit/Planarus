@@ -226,6 +226,6 @@ Never try to edit a live key; a revoked key can never be re-enabled.
 
 ---
 
-*This is the friendly companion to the developer runbook at
-[`docs/dev/phase-7c2b-go-live-runbook.md`](../dev/phase-7c2b-go-live-runbook.md),
-which lists the exact code-verified facts behind each step.*
+*The exact contract behind each step is the committed OpenAPI document in
+[`docs/api/`](../api/), which `apps/api/tests/test_openapi_contract.py` compares
+byte-for-byte against the builder — so it cannot drift from the running API.*

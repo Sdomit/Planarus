@@ -4,9 +4,7 @@ Share one running Planarus with a small team on the same local network: real
 per-person sign-in, one shared database, the same approval boundary. No cloud,
 no public exposure, no TLS requirement.
 
-Built by Phase 11 against ratified decisions **D25–D28**
-([../plan/13-lan-team-mode.md](../plan/13-lan-team-mode.md),
-[../../context/DECISIONS.md](../../context/DECISIONS.md)):
+Built by Phase 11 against ratified decisions **D25–D28**:
 
 - **D25** — identity is a local **email+password** account (OAuth needs a public
   redirect URL a LAN box doesn't have). The dev-login provider stays a

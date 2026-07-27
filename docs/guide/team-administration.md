@@ -5,9 +5,7 @@ has real per-person accounts. This guide covers the layer on top: **who can do
 what**, the in-app **Team** view for managing people, and the **scripted API**
 for provisioning users from IT tooling or another system.
 
-Built by Phase 16 against ratified decisions **D29–D35**
-([../plan/14-team-admin.md](../plan/14-team-admin.md),
-[../../context/DECISIONS.md](../../context/DECISIONS.md)). Everything here is
+Built by Phase 16 against ratified decisions **D29–D35**. Everything here is
 dormant in local single-user mode — a solo install never sees a Team tab, an
 account, or an admin.
 

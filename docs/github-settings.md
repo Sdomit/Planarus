@@ -18,9 +18,8 @@ $ gh api repos/Sdomit/Planarus/rulesets                   # 403
 worse than "unprotected".** `gh pr merge --auto` does not wait for CI when there
 is no required check to wait *for* — it merges on the spot. That is how #135
 merged while all four jobs were still queued. Until one of the paths below is
-taken, the discipline in
-[../context/AGENT_RULES.md](../context/AGENT_RULES.md) — poll `gh pr checks`,
-merge only on four greens — is the only gate that exists.
+taken, discipline is the only gate that exists: poll `gh pr checks` and merge
+only on four greens.
 
 The owner must choose one of these paths before enforcing the controls below:
 
@@ -82,10 +81,9 @@ or replace them with a skip job that reports the four context names and exits 0.
 
 Two paths under `docs/` are deliberately **not** skipped, and that is not
 cosmetic: `docs/api/**` holds the two committed GPT Actions contracts that
-`tests/test_openapi_contract.py` compares byte-for-byte against the builder, and
-`docs/plan/**` is what `tests/test_docs_truth.py` reads. Skipping either would let
-CI report green on a change it never ran. If you rewrite these filters, keep the
-re-includes last — in a `paths` list, later patterns win.
+`tests/test_openapi_contract.py` compares byte-for-byte against the builder.
+Skipping it would let CI report green on a change it never ran. If you rewrite
+these filters, keep the re-include last — in a `paths` list, later patterns win.
 
 Four decisions are baked into that payload, each deliberate:
 

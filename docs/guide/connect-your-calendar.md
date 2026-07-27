@@ -156,6 +156,6 @@ e.g. "pushed 2, pulled 5". Run it whenever you want the two sides reconciled.
 
 ---
 
-Under the hood the tokens are encrypted at rest and never returned by the API;
-the design and the exact endpoints live in
-[docs/dev/phase-15.12b-calendar-sync.md](../dev/phase-15.12b-calendar-sync.md).
+Under the hood the tokens are encrypted at rest and never returned by the API.
+The exact endpoints live in `apps/api/app/api/v1/endpoints/`, and the encryption
+and refresh behaviour is pinned by the calendar tests under `apps/api/tests/`.
