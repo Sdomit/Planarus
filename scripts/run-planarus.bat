@@ -235,6 +235,11 @@ call :start_hidden "%API_DIR%" "%API_CMD%" "%LOG_DIR%\api.log" API_PID
 if errorlevel 1 goto failed
 call :start_hidden "%ROOT%" "%WEB_CMD%" "%LOG_DIR%\web.log" WEB_PID
 if errorlevel 1 goto failed
+REM With no consoles, the icon is the only evidence Planarus is running and the
+REM only handle on it. Guaranteed here, at the moment the hidden services come
+REM into being, so no launch path can leave them serving with an empty
+REM notification area.
+call :ensure_tray
 
 :wait_for_ready
 
@@ -295,6 +300,7 @@ if "%LAN_MODE%"=="1" (
 )
 REM Silent mode has no windows to close, so offering that as the alternative
 REM would be advice the user cannot follow.
+if "%SILENT_MODE%"=="1" echo   Tray:     icon in the notification area (or its overflow)
 if "%SILENT_MODE%"=="1" echo   Stop:     scripts\stop-planarus.bat  (or the tray icon)
 if "%SILENT_MODE%"=="0" echo   Stop:     scripts\stop-planarus.bat  (or close the two Planarus windows)
 exit /b 0
@@ -421,6 +427,13 @@ if not defined _hidden_pid (
 >>"%LOG_DIR%\local.ports" echo %~4=%_hidden_pid%
 exit /b 0
 
+:ensure_tray
+REM Fired blindly rather than guarded: the tray refuses to run twice through
+REM its pid file, so the dedupe lives in one place and a second icon cannot
+REM appear no matter how many launchers call this.
+start "" powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0planarus-tray.ps1"
+exit /b 0
+
 REM --- winget bootstrap ---------------------------------------------------------
 REM %1 = human name, %2 = winget package id. Installing software is not something
 REM a launcher should do behind your back, so this always asks first and a plain
@@ -530,6 +543,11 @@ echo   UI:       http://localhost:%RUNNING_WEB%
 echo.
 echo Opening it rather than starting a second copy.
 start "" "http://localhost:%RUNNING_WEB%"
+REM The user who lost the icon comes back through this path: a tray crash
+REM leaves the app serving with nothing in the notification area, and the
+REM shortcut is the natural thing to reach for. This repairs the icon, and is
+REM a no-op when it is already there.
+call :ensure_tray
 exit /b 0
 
 :detect_running

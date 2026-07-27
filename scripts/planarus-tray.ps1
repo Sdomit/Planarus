@@ -49,6 +49,28 @@ function Write-TrayLog {
     }
 }
 
+# --- single instance ----------------------------------------------------------
+# One tray, one icon. The launchers start this script blindly whenever they
+# bring the app up silently, so the dedupe lives here, once, instead of in
+# every .bat having to interrogate the process list before daring to. The pid
+# file is a hint in the local.ports tradition: it survives a crash, so it is
+# believed only while the process it names is still running this script.
+$PidFile = Join-Path $LogDir 'tray.pid'
+if (Test-Path -LiteralPath $PidFile) {
+    try {
+        $recorded = [int](Get-Content -LiteralPath $PidFile -ErrorAction Stop | Select-Object -First 1)
+        $alive = Get-CimInstance Win32_Process -Filter "ProcessId=$recorded" -ErrorAction SilentlyContinue
+        if ($alive -and $alive.CommandLine -like '*planarus-tray.ps1*') {
+            Write-TrayLog "tray : already running as pid $recorded, second instance exiting"
+            exit 0
+        }
+    } catch {
+        # An unreadable or non-numeric file is stale, the same as a dead pid.
+    }
+}
+if (-not (Test-Path -LiteralPath $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
+$PID | Set-Content -LiteralPath $PidFile
+
 # Wraps a menu action so a failure is reported rather than silently discarded.
 function Invoke-Action {
     param([string]$Name, [scriptblock]$Body)
@@ -312,4 +334,8 @@ try {
 } finally {
     $notify.Visible = $false
     $notify.Dispose()
+    # A menu exit and a clean loop end both release the record. A hard kill
+    # cannot run this, which is exactly why the check above validates the pid
+    # instead of trusting the file's existence.
+    Remove-Item -LiteralPath $PidFile -Force -ErrorAction SilentlyContinue
 }

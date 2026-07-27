@@ -250,6 +250,35 @@ jobs:
           }
           if ($bad) { throw "a PowerShell script does not parse" }
 
+      # Two launches, one icon: the tray single-instances through a pid file so
+      # every .bat can start it blindly. The first instance runs the real
+      # message loop; the second must exit 0 on its own, quickly, without
+      # touching the first one's pid record.
+      - name: A second tray instance exits instead of doubling the icon
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $pidFile = Join-Path $env:LOCALAPPDATA 'Planarus\tray.pid'
+          $trayLog = Join-Path $env:LOCALAPPDATA 'Planarus\tray.log'
+          Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
+          $first = Start-Process powershell -PassThru -WindowStyle Hidden -ArgumentList `
+            '-NoProfile','-ExecutionPolicy','Bypass','-File','scripts/planarus-tray.ps1'
+          $deadline = (Get-Date).AddSeconds(60)
+          while ((Get-Date) -lt $deadline -and -not (Test-Path $pidFile)) { Start-Sleep -Milliseconds 500 }
+          if (-not (Test-Path $pidFile)) {
+            Stop-Process -Id $first.Id -Force -ErrorAction SilentlyContinue
+            if (Test-Path $trayLog) { Get-Content $trayLog | Select-Object -Last 10 }
+            throw "the first tray instance never recorded its pid"
+          }
+          $second = Start-Process powershell -PassThru -Wait -WindowStyle Hidden -ArgumentList `
+            '-NoProfile','-ExecutionPolicy','Bypass','-File','scripts/planarus-tray.ps1'
+          $firstStillUp = -not $first.HasExited
+          Stop-Process -Id $first.Id -Force -ErrorAction SilentlyContinue
+          if (Test-Path $trayLog) { Get-Content $trayLog | Select-Object -Last 10 }
+          if (-not $firstStillUp) { throw "the first tray instance died while the second was probing" }
+          if ($second.ExitCode -ne 0) { throw "the second instance exited $($second.ExitCode) instead of deferring" }
+          if ((Get-Content $pidFile) -ne "$($first.Id)") { throw "the second instance overwrote the first's pid record" }
+
       # A tray is not drivable from CI - there is no message loop to click - so
       # the two promises that would break silently are asserted against the
       # source instead: that Exit still stops the services (otherwise silent mode
@@ -270,6 +299,17 @@ jobs:
             if ($bat -notmatch [regex]::Escape($log)) {
               throw "run-planarus.bat no longer writes $log"
             }
+          }
+          # Silent services with no icon are unreachable; both the silent start
+          # and the reopen path must summon the (self-deduping) tray.
+          if ($tray -notmatch 'tray\.pid') {
+            throw "the tray no longer single-instances through tray.pid"
+          }
+          if (([regex]::Matches($bat, 'call :ensure_tray')).Count -lt 2) {
+            throw "run-planarus.bat no longer ensures the tray on both the silent start and the reopen path"
+          }
+          if ($bat -notmatch 'planarus-tray\.ps1') {
+            throw "ensure_tray no longer points at the tray script"
           }
 
       # An unescaped ">" in an echo is a redirect, and this is what caught it:

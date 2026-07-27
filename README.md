@@ -151,7 +151,9 @@ what to install by hand.
 The tray is the no-console option: right-click its icon to start, stop or open
 Planarus, double-click to open the UI, and read the API, web and tray logs from
 the Logs submenu. "Exit tray" stops Planarus as well — with no service windows
-to close, the icon is the only interface those processes have. It reads the
+to close, the icon is the only interface those processes have. A silent start
+brings the icon up on its own, and the tray refuses to run twice, so relaunching
+anything repairs a missing icon rather than stacking a second one. It reads the
 ports out of the file the launcher records them in, so it stays correct when
 5173 is busy and the app moves to 5174.
 
