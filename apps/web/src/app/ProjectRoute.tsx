@@ -41,7 +41,7 @@ function projectPath(project: SelectedProject): string {
  * rather than guessing.
  */
 export default function ProjectRoute() {
-  const { workspaceSlug, projectSlug, view: viewParam, approvalId } = useParams()
+  const { workspaceSlug, projectSlug, view: viewParam, approvalId, taskId } = useParams()
   const navigate = useNavigate()
   const [state, setState] = useState<ResolveState>({ status: 'loading' })
 
@@ -89,14 +89,21 @@ export default function ProjectRoute() {
   }
 
   const { project } = state
-  // The /approvals/:approvalId route carries no :view segment of its own —
-  // its presence implies the view.
-  const view: MainView = approvalId ? 'approvals' : viewParam === undefined ? 'cockpit' : (viewParam as MainView)
+  // The /approvals/:approvalId and /planning/task/:taskId routes carry no
+  // :view segment of their own — their presence implies the view.
+  const view: MainView = approvalId
+    ? 'approvals'
+    : taskId
+      ? 'planning'
+      : viewParam === undefined
+        ? 'cockpit'
+        : (viewParam as MainView)
   if (viewParam !== undefined && !isProjectScopedView(viewParam)) {
     // Unknown segment, or one of dashboard/settings/team typed onto a project
     // URL by hand — neither belongs here. Redirect rather than guess.
     return <Navigate to={projectPath(project)} replace />
   }
+  const detailId = approvalId ?? taskId
 
   const onNavigate = (nextView: MainView, nextProject: SelectedProject) => {
     if (nextView === 'dashboard') return navigate('/')
@@ -106,7 +113,13 @@ export default function ProjectRoute() {
     navigate(nextView === 'cockpit' ? base : `${base}/${nextView}`)
   }
 
-  const onSelectDetail = (id: string) => navigate(`${projectPath(project)}/approvals/${id}`)
+  // Which nested detail shape applies depends on the *current* view — each
+  // of the three (approvals -> tasks -> docs) gets its own URL segment.
+  const onSelectDetail = (id: string | null) => {
+    const base = projectPath(project)
+    if (view === 'approvals') return navigate(id ? `${base}/approvals/${id}` : `${base}/approvals`)
+    if (view === 'planning') return navigate(id ? `${base}/planning/task/${id}` : `${base}/planning`)
+  }
 
-  return <Layout routed={{ project, view, onNavigate, detailId: approvalId, onSelectDetail }} />
+  return <Layout routed={{ project, view, onNavigate, detailId, onSelectDetail }} />
 }

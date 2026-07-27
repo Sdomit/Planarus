@@ -512,6 +512,58 @@ describe('PlanningPanel', () => {
     expect(screen.getByRole('button', { name: '+ Add column' })).toBeTruthy()
   })
 
+  it('#183 step 3: clicking a board card calls onTaskSelected, for the URL to follow', async () => {
+    setupEmpty()
+    mockApi.tasks.list.mockResolvedValue([{
+      id: 'tsk_1', project_id: 'proj_1', phase_id: null, stage_id: null, parent_task_id: null,
+      title: 'Ship the launch checklist', description: null, status: 'backlog', priority: null,
+      due_at: null, sort_order: 0, created_at: 'x', updated_at: 'x',
+    }])
+    const onTaskSelected = vi.fn()
+
+    render(<PlanningPanel projectId="proj_1" initialTab="tasks" onTaskSelected={onTaskSelected} />)
+    await screen.findByText('Ship the launch checklist')
+    fireEvent.click(screen.getByRole('button', { name: 'Board' }))
+    fireEvent.click(await screen.findByText('Ship the launch checklist', { selector: '.ab-task-title' }))
+
+    expect(onTaskSelected).toHaveBeenCalledWith('tsk_1')
+    // jsdom's <dialog> never sets `open` from showModal(), so its content is
+    // excluded from the a11y tree by default — `hidden: true` opts back in.
+    expect(screen.getByRole('button', { name: 'Close', hidden: true })).toBeTruthy()
+  })
+
+  it('#183 step 3: initialTaskId opens that task\'s dialog, regardless of List/Board view', async () => {
+    setupEmpty()
+    mockApi.tasks.list.mockResolvedValue([{
+      id: 'tsk_1', project_id: 'proj_1', phase_id: null, stage_id: null, parent_task_id: null,
+      title: 'Ship the launch checklist', description: null, status: 'backlog', priority: null,
+      due_at: null, sort_order: 0, created_at: 'x', updated_at: 'x',
+    }])
+
+    render(<PlanningPanel projectId="proj_1" initialTab="tasks" initialTaskId="tsk_1" />)
+    // The default sub-view is List, not Board — the dialog must still open.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Close', hidden: true })).toBeTruthy())
+    expect(screen.getByText('Ship the launch checklist', { selector: '.pp-dialog-title' })).toBeTruthy()
+  })
+
+  it('#183 step 3: closing the dialog calls onTaskSelected(null)', async () => {
+    setupEmpty()
+    mockApi.tasks.list.mockResolvedValue([{
+      id: 'tsk_1', project_id: 'proj_1', phase_id: null, stage_id: null, parent_task_id: null,
+      title: 'Ship the launch checklist', description: null, status: 'backlog', priority: null,
+      due_at: null, sort_order: 0, created_at: 'x', updated_at: 'x',
+    }])
+    const onTaskSelected = vi.fn()
+
+    render(
+      <PlanningPanel projectId="proj_1" initialTab="tasks" initialTaskId="tsk_1" onTaskSelected={onTaskSelected} />,
+    )
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Close', hidden: true })).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: 'Close', hidden: true }))
+
+    await waitFor(() => expect(onTaskSelected).toHaveBeenCalledWith(null))
+  })
+
   it('draws a custom-status task in an Other column on the Flow board (#97 part 1)', async () => {
     setupEmpty()
     const builtins = ['backlog', 'ready', 'in_progress', 'waiting', 'needs_review', 'blocked', 'done', 'canceled']
