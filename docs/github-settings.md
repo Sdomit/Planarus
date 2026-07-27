@@ -10,16 +10,24 @@ section used to describe — both the branch-protection and ruleset REST
 endpoints returning *"Upgrade to GitHub Pro or make this repository public to
 enable this feature"* — no longer applies.
 
-A ruleset named `main` is **active** on the default branch. Inspect it with:
+A ruleset named `main` is **active** on the default branch. Ask what is actually
+enforced rather than trusting a ruleset id written down here — deleting and
+recreating a ruleset issues a new id, which has already happened once:
 
 ```bash
-gh api repos/Sdomit/Planarus/rulesets
-gh api repos/Sdomit/Planarus/rulesets/19820906
+gh api repos/Sdomit/Planarus/rules/branches/main   # the rules in effect, by name
+gh api repos/Sdomit/Planarus/rulesets              # the rulesets, with their ids
 ```
 
 What is enforced is exactly two rules: `deletion` and `non_fast_forward`.
-`main` cannot be deleted and cannot be force-pushed, by anyone, owner included
-(`bypass_actors: []`).
+`main` cannot be deleted and cannot be force-pushed (`bypass_actors: []`).
+
+**A gap in coverage is a gap in protection, and it is measured in seconds.**
+Replacing this ruleset by deleting it and POSTing a new one leaves an unguarded
+window, and one force-push has already landed in exactly such a window — seven
+seconds wide, per `gh api repos/Sdomit/Planarus/activity`. Nothing was bypassed;
+there was briefly nothing to bypass. Prefer `PUT` on the existing ruleset, which
+swaps the rules atomically, over DELETE-then-POST.
 
 The `pull_request` rule from the payload below was dropped deliberately — this
 repository does not use pull requests, and that rule would require one for
@@ -59,9 +67,15 @@ Until then the real gate is running the suite locally before pushing.
 The contexts are the job names exactly as GitHub reports them; a typo creates a
 required check that never arrives, which blocks every pull request until the
 ruleset is edited. To adopt the pull-request gate later, DELETE the current
-ruleset first (`gh api --method DELETE repos/Sdomit/Planarus/rulesets/19820906`)
-and POST this, or PATCH the `rules` array onto it — two rulesets both targeting
-the default branch stack rather than replace.
+existing ruleset's id from `gh api repos/Sdomit/Planarus/rulesets` and `PUT`
+this payload onto it. Do not DELETE-then-POST: that opens the unguarded window
+described above, and two rulesets both targeting the default branch stack
+rather than replace.
+
+Send the body as a file or heredoc via `--input`, not as `-F 'rules[][type]=…'`
+flags. The flag form silently produces a different ruleset than intended — it
+was tried here and dropped `non_fast_forward` while keeping the rule it was
+meant to remove. Read the result back afterwards either way.
 
 ```bash
 gh api --method POST repos/Sdomit/Planarus/rulesets --input - <<'JSON'
