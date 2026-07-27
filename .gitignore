@@ -68,7 +68,6 @@ CLAUDE.md
 AGENTS.md
 deep-research-report.md
 context/
-docs/HANDOFF.md
 docs/release-readiness-audit.md
 docs/plan/
 # `docs/dev/*`, not `docs/dev/` — git does not descend into an ignored
