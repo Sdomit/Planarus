@@ -74,6 +74,16 @@ def test_list_projects_output_matches_schema(client: TestClient, session: Sessio
     _validate(res.metadata, output_schemas.LIST_PROJECTS)
 
 
+def test_list_status_options_output_matches_schema(client: TestClient, session: Session) -> None:
+    ws, pid = seed(client, "status-schema")
+    res = read.list_status_options(
+        session, read_cap(ws, pid),
+        read.ListStatusOptionsArgs(project_id=pid, entity_type="decision", limit=2),
+    )
+    assert res.metadata["next_offset"] == 2
+    _validate(res.metadata, output_schemas.LIST_STATUS_OPTIONS)
+
+
 def test_get_active_work_output_matches_schema(client: TestClient, session: Session) -> None:
     ws, pid = seed(client, "os3")
     phase = phase_service.create_phase(session, pid, PhaseCreate(title="Discovery"))

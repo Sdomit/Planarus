@@ -1,4 +1,5 @@
 const BASE = '/api/v1'
+export type ProjectMode = 'normal' | 'agentic'
 
 export interface Workspace {
   id: string
@@ -17,6 +18,9 @@ export interface Project {
   slug: string
   summary: string | null
   project_type: string | null
+  // Optional temporarily so older cached/test API payloads continue to mean the
+  // migration's safe compatibility value: existing projects are Agentic.
+  mode?: ProjectMode
   status: string
   priority: string | null
   folder_path: string | null
@@ -506,6 +510,7 @@ export interface ProjectCreate {
   summary?: string
   status?: string
   folder_path?: string
+  mode?: ProjectMode
 }
 
 // --- Context Pack Builder (Phase 6A) ---------------------------------------
@@ -637,6 +642,8 @@ export interface ApprovalSummary {
   /** #96: server-resolved title of the target row; null for a create proposal
    * (no target yet) or a target that has since been deleted. */
   target_title?: string | null
+  proposed_title?: string | null
+  proposed_excerpt?: string | null
   risk_level: string
   status: string
   policy_version: number
@@ -671,6 +678,11 @@ export interface ApprovalAuditEntry {
   actor_id: string | null
   actor_display: string | null
   created_at: string
+}
+
+export interface ApprovalAutoAcceptSetting {
+  project_id: string
+  enabled: boolean
 }
 
 // --- External API clients (Phase 7C1) --------------------------------------
@@ -719,6 +731,8 @@ export interface McpInfo {
   args: string[]
   /** Real apps/api path in local mode; null in team mode (no raw-path disclosure). */
   cwd: string | null
+  /** Absolute local SQLite URL when safe to share; null in team or network DB mode. */
+  database_url: string | null
   capability_env: string
   read_tools: McpToolInfo[]
   propose_tools: McpToolInfo[]
@@ -812,6 +826,14 @@ export interface AgentRunAnalytics {
   success_rate: number | null
   avg_duration_minutes: number | null
   last_run_at: string | null
+}
+
+export interface McpActivity {
+  actor_ref: string
+  project_id: string
+  project_title: string
+  tool_name: string
+  last_seen_at: string
 }
 
 export interface NotificationItem {
@@ -1212,6 +1234,10 @@ export const api = {
     get: (id: string) => request<Project>(`/projects/${id}`),
     update: (id: string, data: Partial<Pick<Project, 'title' | 'summary' | 'status' | 'priority' | 'folder_path'>>) =>
       request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    changeMode: (id: string, mode: ProjectMode, confirmationTitle: string) =>
+      request<Project>(`/projects/${id}/mode`, {
+        method: 'POST', body: JSON.stringify({ mode, confirmation_title: confirmationTitle }),
+      }),
     archive: (id: string) => request<Project>(`/projects/${id}/archive`, { method: 'POST' }),
     unarchive: (id: string) => request<Project>(`/projects/${id}/unarchive`, { method: 'POST' }),
     duplicate: (id: string) => request<Project>(`/projects/${id}/duplicate`, { method: 'POST' }),
@@ -1532,6 +1558,12 @@ export const api = {
   },
   approvals: {
     localSession: () => request<{ token: string }>('/local-session'),
+    autoAccept: (projectId: string) =>
+      request<ApprovalAutoAcceptSetting>(`/approvals/auto-accept?project_id=${encodeURIComponent(projectId)}`),
+    setAutoAccept: (projectId: string, enabled: boolean) =>
+      controlRequest<ApprovalAutoAcceptSetting>(`/approvals/auto-accept?project_id=${encodeURIComponent(projectId)}`, {
+        method: 'PUT', body: JSON.stringify({ enabled }),
+      }),
     list: (projectId?: string, status?: string) => {
       const q = new URLSearchParams()
       if (projectId) q.set('project_id', projectId)
@@ -1632,6 +1664,9 @@ export const api = {
     ) => request<AgentRun>(`/agent-runs/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     analytics: (projectId: string) =>
       request<AgentRunAnalytics>(`/projects/${projectId}/agent-runs/analytics`),
+  },
+  mcpActivity: {
+    list: () => request<McpActivity[]>('/mcp-activity'),
   },
   notifications: {
     feed: (projectId?: string | null) =>

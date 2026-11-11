@@ -13,7 +13,7 @@ from app.schemas.context_pack import (
     ContextPackSourcesResponse,
     ProfilesResponse,
 )
-from app.services import context_pack_service, project_service
+from app.services import context_pack_service, project_mode_service, project_service
 
 router = APIRouter()
 
@@ -37,6 +37,7 @@ def get_context_pack_sources(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
         )
+    project_mode_service.require_agentic(project)
     return context_pack_service.build_sources(session, project)
 
 
@@ -54,6 +55,7 @@ def preview_context_pack(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
         )
+    project_mode_service.require_agentic(project)
     try:
         return context_pack_service.generate_preview(session, project, request)
     except context_pack_service.DocumentNotFoundError as exc:

@@ -44,7 +44,7 @@ def _mk_project(client, cookies=None) -> str:
     ).json()["id"]
     return client.post(
         "/api/v1/projects",
-        json={"workspace_id": ws, "title": "P", "slug": "attr-proj"},
+        json={"workspace_id": ws, "title": "P", "slug": "attr-proj", "mode": "agentic"},
         **kw,
     ).json()["id"]
 

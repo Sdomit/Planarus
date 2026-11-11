@@ -1,6 +1,6 @@
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 
 
 class ApprovalSummary(BaseModel):
@@ -17,6 +17,8 @@ class ApprovalSummary(BaseModel):
     # server-side (one query per entity type on the page); None for a *.create
     # proposal, whose target does not exist yet, and for a target since deleted.
     target_title: Optional[str] = None
+    proposed_title: Optional[str] = None
+    proposed_excerpt: Optional[str] = None
     risk_level: str
     status: str
     policy_version: int
@@ -57,6 +59,15 @@ class RejectRequest(BaseModel):
 
 class LocalSessionResponse(BaseModel):
     token: str
+
+
+class AutoAcceptSetting(BaseModel):
+    project_id: str
+    enabled: bool
+
+
+class AutoAcceptUpdate(BaseModel):
+    enabled: StrictBool
 
 
 class ApprovalAuditEntry(BaseModel):

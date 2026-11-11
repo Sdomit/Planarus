@@ -1,6 +1,6 @@
 import os
 import re
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -10,6 +10,7 @@ _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$")
 
 _PROJECT_STATUSES = frozenset(PROJECT_STATUSES)
 _PROJECT_PRIORITIES = frozenset(PROJECT_PRIORITIES)
+ProjectMode = Literal["normal", "agentic"]
 
 
 class ProjectImport(BaseModel):
@@ -42,6 +43,8 @@ class ProjectCreate(BaseModel):
     summary: Optional[str] = None
     status: str = "idea"
     folder_path: Optional[str] = None
+    # New work is private-by-default: capabilities must be explicitly enabled.
+    mode: ProjectMode = "normal"
 
     @field_validator("slug")
     @classmethod
@@ -64,6 +67,12 @@ class ProjectCreate(BaseModel):
     @classmethod
     def validate_folder_path(cls, v: Optional[str]) -> Optional[str]:
         return _validate_folder_path(v)
+
+    @model_validator(mode="after")
+    def _normal_projects_have_no_folder(self) -> "ProjectCreate":
+        if self.mode == "normal" and self.folder_path:
+            raise ValueError("folder_path is available only for Agentic projects")
+        return self
 
 
 class ProjectUpdate(BaseModel):
@@ -96,6 +105,17 @@ class ProjectUpdate(BaseModel):
         return _validate_folder_path(v)
 
 
+class ProjectModeChange(BaseModel):
+    """Explicit, confirmation-backed capability-mode change.
+
+    A project title is used rather than a boolean acknowledgement so a client
+    cannot accidentally flip a mode through a stale dialog submission.
+    """
+
+    mode: ProjectMode
+    confirmation_title: str = Field(min_length=1, max_length=200)
+
+
 class ProjectRead(BaseModel):
     id: str
     workspace_id: str
@@ -103,6 +123,7 @@ class ProjectRead(BaseModel):
     slug: str
     summary: Optional[str]
     project_type: Optional[str]
+    mode: ProjectMode
     status: str
     priority: Optional[str]
     folder_path: Optional[str]
@@ -120,5 +141,10 @@ class ProjectRead(BaseModel):
         from app.core.config import settings
 
         if settings.auth_enabled:
+            self.folder_path = None
+        elif self.mode == "normal":
+            # Keep the persisted value when an Agentic project becomes Normal,
+            # but never expose the agent/repository location through a Normal
+            # project response.
             self.folder_path = None
         return self

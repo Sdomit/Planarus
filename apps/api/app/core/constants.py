@@ -209,6 +209,15 @@ APPROVAL_ACTION_TYPES: tuple[str, ...] = (
     "decision.create",
     "doc.update",  # Phase 13c: AI-proposed canvas/doc edits (content_json)
     "connection.create",  # Phase 25: approval-gated typed entity connection
+    "phase.create",
+    "phase.update",
+    "milestone.create",
+    "milestone.update",
+    "risk.create",
+    "risk.update",
+    "decision.update",
+    "comment.create",
+    "link.create",
 )
 
 # Entity kinds an approval may target. Widening requires a paired migration that
@@ -218,6 +227,11 @@ APPROVAL_TARGET_ENTITY_TYPES: tuple[str, ...] = (
     "decision",
     "doc",
     "entity_connection",
+    "phase",
+    "milestone",
+    "risk",
+    "comment",
+    "link",
 )
 
 

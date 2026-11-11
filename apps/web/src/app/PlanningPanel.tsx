@@ -961,7 +961,7 @@ function PhaseListRow({ phase, rollup, update, remove, dragProps, move, statusKe
       </div>
       {open && (
         <div className="pp-task-details">
-          {phase.description && <p className="pp-row-desc">{phase.description}</p>}
+          {phase.description && <div className="pp-row-desc"><Markdown markdown={phase.description} /></div>}
           {onAddInPhase && (
             <div className="pp-phase-add" role="group" aria-label={`Add to ${phase.title}`}>
               {(['tasks', 'milestones', 'decisions', 'risks'] as PhaseScopedTab[]).map(t => (
@@ -1458,6 +1458,7 @@ function TaskDetailBody({ task, phases, stages, projectId, onTaskUpdated, status
         </label>
       </div>
       {taskError && <p className="form-error" role="alert">{taskError}</p>}
+      {task.description && <div className="pp-row-desc"><Markdown markdown={task.description} /></div>}
       <div className="pp-checklist">
         {items.map(i => (
           <div key={i.id} className="pp-check-row">
@@ -1661,7 +1662,7 @@ function MilestoneListRow({ milestone, update, remove, dragProps, move, statusKe
       </div>
       {open && (
         <div className="pp-task-details">
-          {milestone.description && <p className="pp-row-desc">{milestone.description}</p>}
+          {milestone.description && <div className="pp-row-desc"><Markdown markdown={milestone.description} /></div>}
           <div className="pp-task-controls" role="group" aria-label={`Edit ${milestone.title}`}>
             <label>
               <span>Target date</span>
@@ -1773,8 +1774,8 @@ function DecisionListRow({ decision, phases = [], update, remove, dragProps, mov
       </div>
       {open && (
         <div className="pp-task-details">
-          <p className="pp-row-desc">{decision.decision}</p>
-          {decision.context && <p className="pp-row-desc">{decision.context}</p>}
+          <div className="pp-row-desc"><strong className="pp-row-desc-label">Decision</strong><Markdown markdown={decision.decision} /></div>
+          {decision.context && <div className="pp-row-desc"><strong className="pp-row-desc-label">Context</strong><Markdown markdown={decision.context} /></div>}
           <PhasePicker phaseId={decision.phase_id} phases={phases} label={`Phase for ${decision.title}`}
             onChange={phase_id => update(decision.id, { phase_id })} />
           <EntityConnections entityType="decision" entityId={decision.id} projectId={decision.project_id} label={decision.title} />
@@ -1897,8 +1898,8 @@ function RiskListRow({ risk, phases = [], update, remove, dragProps, move, statu
       </div>
       {open && (
         <div className="pp-task-details">
-          {risk.description && <p className="pp-row-desc">{risk.description}</p>}
-          {risk.mitigation && <p className="pp-row-desc"><strong>Mitigation:</strong> {risk.mitigation}</p>}
+          {risk.description && <div className="pp-row-desc"><Markdown markdown={risk.description} /></div>}
+          {risk.mitigation && <div className="pp-row-desc"><strong className="pp-row-desc-label">Mitigation</strong><Markdown markdown={risk.mitigation} /></div>}
           <PhasePicker phaseId={risk.phase_id} phases={phases} label={`Phase for ${risk.title}`}
             onChange={phase_id => update(risk.id, { phase_id })} />
           <EntityConnections entityType="risk" entityId={risk.id} projectId={risk.project_id} label={risk.title} />

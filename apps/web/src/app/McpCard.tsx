@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, type McpInfo, type Workspace } from '../api/client'
 import CopyButton from './CopyButton'
+import agentPrompt from '../../../../docs/guide/planarus-agent-prompt.md?raw'
 
 // P17.2: MCP config generator + live tool catalog for the Integrations tab.
 // The launch command, real cwd, and tool list come from GET /integrations/mcp
@@ -8,7 +9,7 @@ import CopyButton from './CopyButton'
 // a valid PLANARUS_MCP_CAPABILITY JSON grant, so the emitted config needs zero
 // hand-editing. The capability is a local scope declaration, not a secret.
 
-type Fmt = 'json' | 'cli'
+type Fmt = 'json' | 'cli' | 'codex'
 type Tier = 'read' | 'propose'
 
 const CWD_PLACEHOLDER = '<path to your apps/api directory>'
@@ -26,8 +27,15 @@ const codeBlock: React.CSSProperties = {
   margin: 0,
 }
 
-function capabilityJson(tier: Tier, workspaceId: string, projectIds: string[]): string {
-  return JSON.stringify({ tier, workspace_id: workspaceId, project_ids: projectIds, label: 'mcp' })
+function capabilityJson(tier: Tier, workspaceId: string, projectIds: string[], label: string): string {
+  return JSON.stringify({ tier, workspace_id: workspaceId, project_ids: projectIds, label })
+}
+
+function launchEnv(info: McpInfo, cap: string): Record<string, string> {
+  return {
+    [info.capability_env]: cap,
+    ...(info.database_url ? { PLANARUS_DATABASE_URL: info.database_url } : {}),
+  }
 }
 
 function jsonConfig(info: McpInfo, cap: string): string {
@@ -38,7 +46,7 @@ function jsonConfig(info: McpInfo, cap: string): string {
           command: info.command,
           args: info.args,
           cwd: info.cwd ?? CWD_PLACEHOLDER,
-          env: { [info.capability_env]: cap },
+          env: launchEnv(info, cap),
         },
       },
     },
@@ -48,11 +56,24 @@ function jsonConfig(info: McpInfo, cap: string): string {
 }
 
 function cliConfig(info: McpInfo, cap: string): string {
+  const envArgs = Object.entries(launchEnv(info, cap))
+    .map(([key, value]) => `--env ${key}='${value}'`).join(' ')
   return [
     `# run this from ${info.cwd ?? CWD_PLACEHOLDER}`,
-    `claude mcp add ${info.server_name} \\`,
-    `  --env ${info.capability_env}='${cap}' \\`,
-    `  -- ${info.command} ${info.args.join(' ')}`,
+    `claude mcp add ${info.server_name} ${envArgs} -- ${JSON.stringify(info.command)} ${info.args.join(' ')}`,
+  ].join('\n')
+}
+
+function codexConfig(info: McpInfo, cap: string): string {
+  return [
+    '# Add to ~/.codex/config.toml or a trusted project .codex/config.toml',
+    `[mcp_servers.${info.server_name}]`,
+    `command = ${JSON.stringify(info.command)}`,
+    `args = [${info.args.map(arg => JSON.stringify(arg)).join(', ')}]`,
+    `cwd = ${JSON.stringify(info.cwd ?? CWD_PLACEHOLDER)}`,
+    '',
+    `[mcp_servers.${info.server_name}.env]`,
+    ...Object.entries(launchEnv(info, cap)).map(([key, value]) => `${key} = ${JSON.stringify(value)}`),
   ].join('\n')
 }
 
@@ -82,8 +103,8 @@ export default function McpCard() {
   if (error) return <section><h3 style={{ marginTop: 0 }}>MCP</h3><p className="form-error" role="alert">{error}</p></section>
   if (!info) return <section><h3 style={{ marginTop: 0 }}>MCP</h3><p style={{ color: 'var(--text-tertiary)' }}>Loading…</p></section>
 
-  const cap = capabilityJson(tier, workspaceId, projectIds)
-  const config = fmt === 'json' ? jsonConfig(info, cap) : cliConfig(info, cap)
+  const cap = capabilityJson(tier, workspaceId, projectIds, fmt === 'codex' ? 'codex' : fmt === 'cli' ? 'claude' : 'mcp')
+  const config = fmt === 'json' ? jsonConfig(info, cap) : fmt === 'cli' ? cliConfig(info, cap) : codexConfig(info, cap)
   const catalog = tier === 'propose' ? [...info.read_tools, ...info.propose_tools] : info.read_tools
   const remoteUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/api/external/v1/mcp`
 
@@ -91,7 +112,7 @@ export default function McpCard() {
     <section>
       <h3 style={{ marginTop: 0 }}>MCP (local agents)</h3>
       <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', margin: '0 0 var(--space-3)' }}>
-        Connect a local agent (Claude Code, Claude Desktop, Cursor, Windsurf, VS Code) over STDIO.
+        Connect a local agent (Claude Code, Claude Desktop, Codex, Cursor, Windsurf, VS Code) over STDIO.
         Pick a scope; the config below is paste-ready — read &amp; pending-proposal only, never approve or apply.
       </p>
 
@@ -129,11 +150,23 @@ export default function McpCard() {
           <div className="tabs" role="tablist" aria-label="Config format" style={{ borderBottom: 'none', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
             <button type="button" role="tab" aria-selected={fmt === 'json'} className={`tab${fmt === 'json' ? ' active' : ''}`} onClick={() => setFmt('json')}>JSON config</button>
             <button type="button" role="tab" aria-selected={fmt === 'cli'} className={`tab${fmt === 'cli' ? ' active' : ''}`} onClick={() => setFmt('cli')}>Claude Code CLI</button>
+            <button type="button" role="tab" aria-selected={fmt === 'codex'} className={`tab${fmt === 'codex' ? ' active' : ''}`} onClick={() => setFmt('codex')}>Codex TOML</button>
           </div>
           <CopyButton text={config} label="Copy config" />
         </div>
         <code style={codeBlock}>{config}</code>
       </div>
+
+      <details style={{ marginTop: 'var(--space-4)' }}>
+        <summary style={{ cursor: 'pointer', fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)' }}>
+          Agent prompt for Codex and Claude
+        </summary>
+        <p style={{ color: 'var(--text-tertiary)', fontSize: 'var(--text-xs)' }}>
+          Copy this into an agent's project instructions. This repository also provides AGENTS.md and CLAUDE.md.
+        </p>
+        <CopyButton text={agentPrompt} label="Copy agent prompt" />
+        <code style={{ ...codeBlock, marginTop: 'var(--space-2)', whiteSpace: 'pre-wrap' }}>{agentPrompt}</code>
+      </details>
 
       <div className="form-field" style={{ marginTop: 'var(--space-4)' }}>
         <label className="form-label">Remote (HTTP) — claude.ai / hosted connectors</label>

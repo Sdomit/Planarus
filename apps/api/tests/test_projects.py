@@ -29,6 +29,7 @@ def test_create_project(client: TestClient) -> None:
     assert data["status"] == "planning"
     assert data["id"].startswith("proj_")
     assert data["workspace_id"] == ws_id
+    assert data["mode"] == "normal"
     assert "created_at" in data
     assert "updated_at" in data
 
@@ -47,6 +48,59 @@ def test_get_project(client: TestClient) -> None:
 def test_get_project_not_found(client: TestClient) -> None:
     response = client.get("/api/v1/projects/proj_doesnotexist")
     assert response.status_code == 404
+
+
+def test_change_mode_requires_exact_title_confirmation(client: TestClient) -> None:
+    ws_id = _create_workspace(client, "mode-ws")
+    project = client.post(
+        "/api/v1/projects",
+        json={"workspace_id": ws_id, "title": "Mode project", "slug": "mode-project"},
+    ).json()
+
+    rejected = client.post(
+        f"/api/v1/projects/{project['id']}/mode",
+        json={"mode": "agentic", "confirmation_title": "wrong"},
+    )
+    assert rejected.status_code == 422
+
+    changed = client.post(
+        f"/api/v1/projects/{project['id']}/mode",
+        json={"mode": "agentic", "confirmation_title": "Mode project"},
+    )
+    assert changed.status_code == 200
+    assert changed.json()["mode"] == "agentic"
+
+
+def test_normal_project_blocks_agent_feature_routes(client: TestClient) -> None:
+    ws_id = _create_workspace(client, "normal-boundary-ws")
+    project = client.post(
+        "/api/v1/projects",
+        json={"workspace_id": ws_id, "title": "Private plan", "slug": "private-plan"},
+    ).json()
+    project_id = project["id"]
+
+    for path in (
+        f"/api/v1/approvals?project_id={project_id}",
+        f"/api/v1/projects/{project_id}/agent-runs",
+        f"/api/v1/projects/{project_id}/context-pack/sources",
+        f"/api/v1/projects/{project_id}/git",
+    ):
+        response = client.get(path)
+        assert response.status_code == 403, f"{path}: {response.text}"
+
+
+def test_normal_project_rejects_folder_configuration(client: TestClient) -> None:
+    ws_id = _create_workspace(client, "normal-folder-ws")
+    response = client.post(
+        "/api/v1/projects",
+        json={
+            "workspace_id": ws_id,
+            "title": "Private plan",
+            "slug": "private-folder-plan",
+            "folder_path": "C:/private-project",
+        },
+    )
+    assert response.status_code == 422
 
 
 def test_update_project(client: TestClient) -> None:

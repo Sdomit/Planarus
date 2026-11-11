@@ -8,7 +8,13 @@ from app.core.tenant import tenant_user
 from app.db.session import get_session
 from app.models.user import User
 from app.models.workspace import Workspace
-from app.schemas.project import ProjectCreate, ProjectImport, ProjectRead, ProjectUpdate
+from app.schemas.project import (
+    ProjectCreate,
+    ProjectImport,
+    ProjectModeChange,
+    ProjectRead,
+    ProjectUpdate,
+)
 from app.services import export_service, project_service
 
 router = APIRouter()
@@ -79,6 +85,27 @@ def update_project(
     if updated is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return updated
+
+
+@router.post("/projects/{project_id}/mode", response_model=ProjectRead)
+def change_project_mode(
+    project_id: str,
+    data: ProjectModeChange,
+    session: Session = Depends(get_session),
+    user: Optional[User] = Depends(tenant_user),
+) -> ProjectRead:
+    project = project_service.get_project(session, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    # In local mode user is None and this is the machine operator. In team mode
+    # only an owner may enable or disable the agent capability boundary.
+    tenant.require_project_access(session, project, user, "owner")
+    if data.confirmation_title != project.title:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Type the exact project title to confirm the mode change",
+        )
+    return project_service.change_mode(session, project, data.mode)
 
 
 # The projects router is intentionally NOT under the router-level tenant_guard

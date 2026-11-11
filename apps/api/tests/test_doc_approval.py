@@ -22,7 +22,7 @@ def _seed(client: TestClient, suffix: str = "docapr") -> str:
     ws = client.post("/api/v1/workspaces", json={"name": "WS", "slug": f"ws-{suffix}"}).json()
     proj = client.post(
         "/api/v1/projects",
-        json={"workspace_id": ws["id"], "title": "P", "slug": f"p-{suffix}"},
+        json={"workspace_id": ws["id"], "title": "P", "slug": f"p-{suffix}", "mode": "agentic"},
     ).json()
     return proj["id"]
 

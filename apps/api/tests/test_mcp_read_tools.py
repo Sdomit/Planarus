@@ -4,8 +4,9 @@ import pytest
 from app.mcp import errors
 from app.mcp.tools import read
 from app.schemas.doc import DocCreate, DocUpdate
+from app.schemas.status_option import StatusOptionCreate
 from app.schemas.task import TaskCreate
-from app.services import approval_service, doc_service, task_service
+from app.services import approval_service, doc_service, status_option_service, task_service
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
@@ -21,6 +22,31 @@ def test_list_projects_scoped(client: TestClient, session: Session) -> None:
     res = read.list_projects(session, cap, read.ListProjectsArgs())
     assert res.metadata["project_ids"] == [pid]
     assert pid2 not in res.text
+
+
+def test_list_status_options_scoped_and_exact(client: TestClient, session: Session) -> None:
+    ws, pid = seed(client, "status1")
+    _, other = seed(client, "status2")
+    status_option_service.create_status_option(
+        session, pid, StatusOptionCreate(entity_type="task", label="Needs input")
+    )
+    cap = read_cap(ws, pid)
+    tasks = read.list_status_options(
+        session, cap, read.ListStatusOptionsArgs(project_id=pid, entity_type="task")
+    )
+    assert tasks.metadata["default_status"] == "backlog"
+    assert "needs_input" in tasks.metadata["status_keys"]
+    assert "todo" not in tasks.metadata["status_keys"]
+    decisions = read.list_status_options(
+        session, cap, read.ListStatusOptionsArgs(project_id=pid, entity_type="decision")
+    )
+    assert decisions.metadata["default_status"] == "proposed"
+    assert "open" not in decisions.metadata["status_keys"]
+    with pytest.raises(errors.MCPToolError) as exc:
+        read.list_status_options(
+            session, cap, read.ListStatusOptionsArgs(project_id=other, entity_type="task")
+        )
+    assert exc.value.code == errors.CODE_FORBIDDEN
 
 
 def test_out_of_scope_read_forbidden(client: TestClient, session: Session) -> None:

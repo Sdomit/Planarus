@@ -40,6 +40,7 @@ from app.api.v1.endpoints import (
     info,
     links,
     mcp,
+    mcp_activity,
     members,
     mentions,
     milestones,
@@ -124,6 +125,7 @@ ROUTER_PLANES: list[tuple[object, str, Plane, str]] = [
     (notifications, "notifications", Plane.TENANT, ""),
     (settings, "settings", Plane.LOCAL_CONTROL, "global runtime settings; control-token gated inside, no project scope"),
     (backups, "backups", Plane.LOCAL_CONTROL, "P18.0 local DB backups; control-token + server-admin gated inside"),
+    (mcp_activity, "mcp-activity", Plane.TENANT_SELF_ENFORCED, "recent MCP activity is workspace-filtered inside"),
     (mcp, "integrations", Plane.GLOBAL, "P17.2 read-only MCP connection metadata; discloses no capability value or raw path"),
     (gpt, "integrations", Plane.GLOBAL, "P17.5 static GPT Actions contract; a mirror of the external openapi builders"),
 ]

@@ -2,8 +2,9 @@
 
 The trust core. External callers may only ever create a *pending* proposal (via
 ``create_proposal``, an internal seam — there is no HTTP proposal-creation route
-in Phase 7A). Approve/apply are local-human actions, gated at the route layer by
-the local control token. Apply is atomic and idempotent: a compare-and-swap moves
+in Phase 7A). Manual approve/apply routes require local control. The owner can
+also opt in to the project-scoped background Auto accept service. Apply is atomic
+and idempotent: a compare-and-swap moves
 approved -> applying, the target is revalidated inside the same transaction, and
 any mismatch invalidates the proposal *without mutating canonical state*.
 
@@ -15,12 +16,13 @@ from __future__ import annotations
 import json
 from typing import Optional
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy import update as sa_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import defer
 from sqlmodel import Session, select
 
+from app.core.constants import REF_ENTITY_TYPES
 from app.core.exceptions import (
     ApprovalApplyError,
     ApprovalConflictError,
@@ -30,16 +32,20 @@ from app.core.exceptions import (
 from app.core.utils import new_id, now_utc, now_utc_plus_hours, sha256_hex
 from app.models.approval_request import ApprovalRequest
 from app.models.audit_event import AuditEvent
+from app.models.comment import Comment
 from app.models.decision import Decision
 from app.models.doc import Doc
 from app.models.entity_connection import EntityConnection
+from app.models.link import Link
+from app.models.milestone import Milestone
 from app.models.phase import Phase
 from app.models.project import Project
+from app.models.risk import Risk
 from app.models.stage import Stage
 from app.models.task import Task
 from app.policy import allowlist, binding, handlers
 from app.prompt import secrets as secret_scan
-from app.services import entity_connection_service
+from app.services import entity_connection_service, entity_ref, status_option_service
 from app.services.audit_service import create_audit_event
 
 # D61 (#103): ApprovalRequest and AuditEvent have NO retention, by design. Do not
@@ -58,6 +64,11 @@ _TARGET_MODELS = {
     "decision": Decision,
     "doc": Doc,
     "entity_connection": EntityConnection,
+    "phase": Phase,
+    "milestone": Milestone,
+    "risk": Risk,
+    "comment": Comment,
+    "link": Link,
 }
 _TERMINAL = ("applied", "rejected", "expired", "invalidated", "failed")
 # A proposal is "active" (still blocks an identical idempotent duplicate) while it
@@ -88,6 +99,20 @@ def _find_active_by_idempotency(
 def _is_expired(ar: ApprovalRequest) -> bool:
     # ISO-8601 UTC strings with identical offset compare chronologically as text.
     return now_utc() >= ar.expires_at
+
+
+def _validate_project_status(
+    session: Session, action_type: str, project_id: str, patch: dict
+) -> None:
+    """Reject statuses the apply handler cannot write before approval is offered."""
+    entity_type = action_type.split(".", 1)[0]
+    if entity_type not in {"task", "decision", "phase", "milestone", "risk"} or "status" not in patch:
+        return
+    status = patch["status"]
+    if status is None or status not in status_option_service.allowed_status_keys(
+        session, project_id, entity_type
+    ):
+        raise PolicyError(f"{entity_type} status is not defined for this project")
 
 
 def _base_payload(ar: ApprovalRequest) -> dict:
@@ -161,6 +186,17 @@ def _validate_dependencies(
             raise PolicyError(str(exc))
         return frozenset({"source_entity_id", "target_entity_id"})
 
+    if action_type in {"comment.create", "link.create"}:
+        if patch.get("entity_type") not in REF_ENTITY_TYPES:
+            raise PolicyError("unsupported attached record type")
+        try:
+            entity_ref.validate_entity_ref(
+                session, project_id, patch["entity_type"], patch["entity_id"]
+            )
+        except LookupError:
+            raise PolicyError("referenced attachment target is not valid in this project")
+        return frozenset({"entity_id"})
+
     reference_fields = policy.reference_fields
     if not reference_fields:
         return frozenset()
@@ -169,12 +205,14 @@ def _validate_dependencies(
     effective_phase = patch.get("phase_id")
     effective_stage = patch.get("stage_id")
     existing = None
-    if action_type == "task.update" and target_entity_id is not None:
-        existing = session.get(Task, target_entity_id)
+    if action_type.endswith(".update") and target_entity_id is not None:
+        model = _TARGET_MODELS.get(action_type.split(".", 1)[0])
+        if model is not None:
+            existing = session.get(model, target_entity_id)
     if "phase_id" not in patch and existing is not None:
         effective_phase = existing.phase_id
     if "stage_id" not in patch and existing is not None:
-        effective_stage = existing.stage_id
+        effective_stage = getattr(existing, "stage_id", None)
 
     if "phase_id" in reference_fields and effective_phase is not None:
         phase = session.get(Phase, effective_phase)
@@ -223,6 +261,10 @@ def _revalidate(
             normalized = entity_connection_service.normalize_connection_patch(normalized)
     except PolicyError:
         return "patch no longer satisfies policy"
+    try:
+        _validate_project_status(session, ar.action_type, ar.project_id, normalized)
+    except PolicyError as exc:
+        return exc.detail
     if binding.patch_checksum(normalized) != ar.patch_checksum:
         return "patch checksum mismatch"
 
@@ -291,6 +333,7 @@ def create_proposal(
 
     policy = allowlist.get_policy(action_type)
     normalized = allowlist.normalize_patch(action_type, patch)
+    _validate_project_status(session, action_type, project_id, normalized)
     if action_type == "connection.create":
         normalized = entity_connection_service.normalize_connection_patch(normalized)
 
@@ -358,6 +401,16 @@ def create_proposal(
             return existing
 
     now = now_utc()
+    # Small immutable previews keep queue pages readable without selecting the
+    # full patch (canvas scenes can be several megabytes).
+    proposed_title = normalized.get("title")
+    if not isinstance(proposed_title, str):
+        proposed_title = None
+    proposed_excerpt = next(
+        (normalized[key] for key in ("description", "decision", "body", "context", "mitigation")
+         if isinstance(normalized.get(key), str) and normalized[key].strip()),
+        None,
+    )
     ar = ApprovalRequest(
         id=new_id("apr"),
         workspace_id=project.workspace_id,
@@ -368,6 +421,8 @@ def create_proposal(
         target_entity_type=target_entity_type,
         target_entity_id=target_entity_id,
         proposed_patch_json=serialized,
+        proposed_title=" ".join(proposed_title.split())[:160] if proposed_title else None,
+        proposed_excerpt=" ".join(proposed_excerpt.split())[:180] if proposed_excerpt else None,
         patch_checksum=checksum,
         base_target_fingerprint=base_fingerprint,
         base_versions_json=binding.canonical_json(base_versions) if base_versions else None,
@@ -397,7 +452,9 @@ def create_proposal(
     return ar
 
 
-def _approval_filters(stmt, project_id: Optional[str], status: Optional[str]):
+def _approval_filters(
+    stmt, project_id: Optional[str], status: Optional[str], agentic_only: bool = False
+):
     """``status`` accepts one value or a comma-separated set.
 
     The set form exists because the queue's *actionable* rows are not one status
@@ -413,6 +470,10 @@ def _approval_filters(stmt, project_id: Optional[str], status: Optional[str]):
             stmt = stmt.where(ApprovalRequest.status == wanted[0])
         elif wanted:
             stmt = stmt.where(ApprovalRequest.status.in_(wanted))
+    if agentic_only:
+        stmt = stmt.join(Project, ApprovalRequest.project_id == Project.id).where(
+            or_(Project.mode.is_(None), Project.mode == "agentic")
+        )
     return stmt
 
 
@@ -420,10 +481,11 @@ def count_approvals(
     session: Session,
     project_id: Optional[str] = None,
     status: Optional[str] = None,
+    agentic_only: bool = False,
 ) -> int:
     """Total matching rows, so a bounded list can report what it left out (#103)."""
     stmt = _approval_filters(
-        select(func.count()).select_from(ApprovalRequest), project_id, status
+        select(func.count()).select_from(ApprovalRequest), project_id, status, agentic_only
     )
     return int(session.exec(stmt).one())
 
@@ -434,6 +496,7 @@ def list_approvals(
     status: Optional[str] = None,
     limit: Optional[int] = None,
     offset: int = 0,
+    agentic_only: bool = False,
 ) -> list[ApprovalRequest]:
     """#103: bounded, and without dragging every historical patch body through
     Python. ``proposed_patch_json`` is deferred because no list caller reads it —
@@ -442,7 +505,7 @@ def list_approvals(
     and are unaffected; touching the attribute on a deferred row still works, it
     just costs a second query, which is the right trade for a list of 200.
     """
-    stmt = _approval_filters(select(ApprovalRequest), project_id, status)
+    stmt = _approval_filters(select(ApprovalRequest), project_id, status, agentic_only)
     stmt = stmt.options(defer(ApprovalRequest.proposed_patch_json))
     stmt = stmt.order_by(ApprovalRequest.created_at.desc(), ApprovalRequest.id)
     if offset:
@@ -545,15 +608,16 @@ def build_diff(session: Session, ar: ApprovalRequest) -> list[dict]:
 
 def staleness(session: Session, ar: ApprovalRequest) -> tuple[bool, Optional[str]]:
     """Compute (is_expired, stale_reason) for the detail view. Read-only."""
-    is_expired = ar.status in ("pending", "approved") and _is_expired(ar)
+    is_expired = ar.status in ("pending", "approved", "failed") and _is_expired(ar)
     stale_reason = None
-    if ar.status in ("pending", "approved") and not is_expired:
+    if ar.status in ("pending", "approved", "failed") and not is_expired:
         stale_reason = _revalidate(session, ar)
     return is_expired, stale_reason
 
 
 def approve(
-    session: Session, approval_id: str, decided_by: str = "local"
+    session: Session, approval_id: str, decided_by: str = "local",
+    actor_type: str = "human",
 ) -> ApprovalRequest:
     ar = session.get(ApprovalRequest, approval_id)
     if ar is None:
@@ -565,7 +629,7 @@ def approve(
     if _is_expired(ar):
         ar.status = "expired"
         ar.decided_at = now_utc()
-        _audit(session, ar, "proposal_expired")
+        _audit(session, ar, "proposal_expired", actor_type=actor_type)
         session.commit()
         raise ApprovalConflictError("approval has expired")
     reason = _revalidate(session, ar)
@@ -573,13 +637,13 @@ def approve(
         ar.status = "invalidated"
         ar.decided_at = now_utc()
         ar.failure_reason = reason
-        _audit(session, ar, "proposal_invalidated", payload={**_base_payload(ar), "reason": reason})
+        _audit(session, ar, "proposal_invalidated", actor_type=actor_type, payload={**_base_payload(ar), "reason": reason})
         session.commit()
         raise ApprovalConflictError(f"approval is stale: {reason}")
     ar.status = "approved"
     ar.decided_at = now_utc()
     ar.decided_by = decided_by
-    _audit(session, ar, "proposal_approved")
+    _audit(session, ar, "proposal_approved", actor_type=actor_type)
     session.commit()
     session.refresh(ar)
     return ar
@@ -633,7 +697,8 @@ def invalidate(
 
 
 def apply(
-    session: Session, approval_id: str, applied_by: str = "local"
+    session: Session, approval_id: str, applied_by: str = "local",
+    actor_type: str = "human",
 ) -> ApprovalRequest:
     """Atomically apply an approved (or retryable failed) proposal exactly once."""
     ar = session.get(ApprovalRequest, approval_id)
@@ -645,7 +710,7 @@ def apply(
     if ar.status in ("approved", "failed") and _is_expired(ar):
         ar.status = "expired"
         ar.decided_at = now_utc()
-        _audit(session, ar, "proposal_expired")
+        _audit(session, ar, "proposal_expired", actor_type=actor_type)
         session.commit()
         raise ApprovalConflictError("approval has expired")
     if ar.status not in ("approved", "failed"):
@@ -685,7 +750,7 @@ def apply(
         ar.status = "invalidated"
         ar.decided_at = now_utc()
         ar.failure_reason = reason
-        _audit(session, ar, "proposal_invalidated", payload={**_base_payload(ar), "reason": reason})
+        _audit(session, ar, "proposal_invalidated", actor_type=actor_type, payload={**_base_payload(ar), "reason": reason})
         session.commit()
         raise ApprovalConflictError(f"approval is stale: {reason}")
 
@@ -709,6 +774,7 @@ def apply(
             session,
             ar,
             "proposal_apply_failed",
+            actor_type=actor_type,
             payload={**_base_payload(ar), "error": type(exc).__name__},
         )
         session.commit()
@@ -721,6 +787,7 @@ def apply(
         session,
         ar,
         "proposal_applied",
+        actor_type=actor_type,
         payload={
             **_base_payload(ar),
             "applied_entity_type": entity_type,

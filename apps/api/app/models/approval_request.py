@@ -78,6 +78,8 @@ class ApprovalRequest(SQLModel, table=True):
     target_entity_type: Optional[str] = None
     target_entity_id: Optional[str] = None
     proposed_patch_json: str
+    proposed_title: Optional[str] = None
+    proposed_excerpt: Optional[str] = None
     patch_checksum: str
     base_target_fingerprint: Optional[str] = None
     base_versions_json: Optional[str] = None

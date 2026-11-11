@@ -16,7 +16,7 @@ from app.schemas.git import (
     GitRepoLink,
     GitSnapshot,
 )
-from app.services import gh_service, git_service, project_service
+from app.services import gh_service, git_service, project_mode_service, project_service
 from app.services.audit_service import create_audit_event
 
 router = APIRouter()
@@ -31,6 +31,7 @@ def get_project_git(
     project = project_service.get_project(session, project_id)
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    project_mode_service.require_agentic(project)
     return git_service.collect(project.id, resolve_project_root_or_none(project))
 
 
@@ -46,6 +47,7 @@ def get_project_git_snapshot(
     project = project_service.get_project(session, project_id)
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    project_mode_service.require_agentic(project)
     return git_service.snapshot(project.id, resolve_project_root_or_none(project))
 
 
@@ -62,6 +64,7 @@ def get_project_git_prs(
     project = project_service.get_project(session, project_id)
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    project_mode_service.require_agentic(project)
     return gh_service.pr_summary(project.id, resolve_project_root_or_none(project))
 
 
@@ -83,6 +86,7 @@ def fetch_project_git(
     project = project_service.get_project(session, project_id)
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    project_mode_service.require_agentic(project)
 
     result = git_service.fetch(project.id, resolve_project_root_or_none(project))
 
@@ -120,6 +124,7 @@ def commit_project_git(
     project = project_service.get_project(session, project_id)
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    project_mode_service.require_agentic(project)
 
     result = git_service.commit(
         project.id, resolve_project_root_or_none(project), body.message
@@ -155,6 +160,7 @@ def merge_project_git(
     project = project_service.get_project(session, project_id)
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    project_mode_service.require_agentic(project)
 
     result = git_service.merge(
         project.id, resolve_project_root_or_none(project), body.branch

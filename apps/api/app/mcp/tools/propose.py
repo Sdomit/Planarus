@@ -3,14 +3,16 @@
 Each maps 1:1 to a Phase 7A action type and calls ONLY
 ``approval_service.create_proposal()`` — never approve/apply/reject/invalidate and
 never ``policy.handlers``. A successful call creates a single *pending*
-ApprovalRequest; nothing canonical is mutated until a local human approves and
-applies it. Project ownership is bound server-side; idempotency keys are derived
+ApprovalRequest; nothing canonical is mutated by the tool call. A local human
+or the owner-enabled Auto accept service may later apply it. Project ownership
+is bound server-side; idempotency keys are derived
 server-side (never accepted from the client).
 """
 from __future__ import annotations
 
 from typing import Optional
 
+from pydantic import Field
 from sqlmodel import Session
 
 from app.core.exceptions import PolicyError, SecretDetectedError
@@ -24,7 +26,12 @@ from app.mcp.errors import (
 )
 from app.mcp.serializers import ToolResult
 from app.mcp.tools import StrictArgs
+from app.models.decision import Decision
 from app.models.doc import Doc
+from app.models.milestone import Milestone
+from app.models.phase import Phase
+from app.models.project import Project
+from app.models.risk import Risk
 from app.models.task import Task
 from app.prompt import boundary
 from app.services import approval_service
@@ -36,21 +43,27 @@ from app.services import approval_service
 # loop. Both sentences ship to GPT Actions, whose descriptions cap at 300 chars —
 # this string plus its 58-char schema prefix sits at 286.
 REVIEW_HINT = (
-    "Pending human review in Planarus Approval Queue. Nothing has changed "
-    "until a local human approves and applies this exact proposal. "
-    "Poll get_approval_status with this approval_id to learn the outcome "
-    "and the affected entity's id."
+    "Queued in Planarus Approval Queue. No record changed yet. If the project "
+    "owner enabled Auto accept, Planarus may apply it; otherwise human review "
+    "is required. Poll get_approval_status with this approval_id for the "
+    "outcome and entity id."
 )
 
 
 # --- input schemas -----------------------------------------------------------
 
+TITLE_GUIDE = "Short, specific outcome or issue; this is the Approval Queue heading."
+DESCRIPTION_GUIDE = (
+    "Start with a plain summary sentence. Use short Markdown paragraphs or bullets "
+    "for details and completion criteria; the Approval Queue renders this text."
+)
+
 
 class CreateTaskProposalArgs(StrictArgs):
     project_id: str
-    title: str
-    description: Optional[str] = None
-    status: Optional[str] = None
+    title: str = Field(description=TITLE_GUIDE)
+    description: Optional[str] = Field(default=None, description=DESCRIPTION_GUIDE)
+    status: Optional[str] = Field(default=None, description="Omit for backlog. If explicit, call list_status_options for this project's task keys first; todo is not a built-in task status.")
     priority: Optional[str] = None
     phase_id: Optional[str] = None
     stage_id: Optional[str] = None
@@ -60,9 +73,9 @@ class CreateTaskProposalArgs(StrictArgs):
 class UpdateTaskProposalArgs(StrictArgs):
     # NOTE: no project_id — ownership is derived from task_id server-side.
     task_id: str
-    title: Optional[str] = None
-    description: Optional[str] = None
-    status: Optional[str] = None
+    title: Optional[str] = Field(default=None, description=TITLE_GUIDE)
+    description: Optional[str] = Field(default=None, description=DESCRIPTION_GUIDE)
+    status: Optional[str] = Field(default=None, description="Before changing status, call list_status_options for the task's project and use an exact returned task key.")
     priority: Optional[str] = None
     phase_id: Optional[str] = None
     stage_id: Optional[str] = None
@@ -71,10 +84,10 @@ class UpdateTaskProposalArgs(StrictArgs):
 
 class CreateDecisionProposalArgs(StrictArgs):
     project_id: str
-    title: str
-    decision: str
-    context: Optional[str] = None
-    status: Optional[str] = None
+    title: str = Field(description=TITLE_GUIDE)
+    decision: str = Field(description="State the choice clearly in one or two sentences.")
+    context: Optional[str] = Field(default=None, description="Concise rationale and relevant alternatives in Markdown.")
+    status: Optional[str] = Field(default=None, description="Omit for proposed. If explicit, call list_status_options for this project's decision keys first; open is a risk status, not a decision status.")
 
 
 class UpdateCanvasProposalArgs(StrictArgs):
@@ -91,6 +104,82 @@ class CreateConnectionProposalArgs(StrictArgs):
     source_entity_id: str
     target_entity_type: str
     target_entity_id: str
+
+
+class CreatePhaseProposalArgs(StrictArgs):
+    project_id: str
+    title: str = Field(description=TITLE_GUIDE)
+    description: Optional[str] = Field(default=None, description=DESCRIPTION_GUIDE)
+    status: Optional[str] = None
+
+
+class UpdatePhaseProposalArgs(StrictArgs):
+    phase_id: str
+    title: Optional[str] = Field(default=None, description=TITLE_GUIDE)
+    description: Optional[str] = Field(default=None, description=DESCRIPTION_GUIDE)
+    status: Optional[str] = None
+
+
+class CreateMilestoneProposalArgs(StrictArgs):
+    project_id: str
+    title: str = Field(description=TITLE_GUIDE)
+    description: Optional[str] = Field(default=None, description=DESCRIPTION_GUIDE)
+    status: Optional[str] = None
+    target_date: Optional[str] = None
+    phase_id: Optional[str] = None
+
+
+class UpdateMilestoneProposalArgs(StrictArgs):
+    milestone_id: str
+    title: Optional[str] = Field(default=None, description=TITLE_GUIDE)
+    description: Optional[str] = Field(default=None, description=DESCRIPTION_GUIDE)
+    status: Optional[str] = None
+    target_date: Optional[str] = None
+    phase_id: Optional[str] = None
+
+
+class CreateRiskProposalArgs(StrictArgs):
+    project_id: str
+    title: str = Field(description=TITLE_GUIDE)
+    severity: str
+    description: Optional[str] = Field(default=None, description="Concise threat and impact; start with a plain summary sentence.")
+    status: Optional[str] = None
+    mitigation: Optional[str] = Field(default=None, description="Concrete response or reduction plan in short Markdown paragraphs or bullets.")
+    phase_id: Optional[str] = None
+
+
+class UpdateRiskProposalArgs(StrictArgs):
+    risk_id: str
+    title: Optional[str] = Field(default=None, description=TITLE_GUIDE)
+    description: Optional[str] = Field(default=None, description="Concise threat and impact; start with a plain summary sentence.")
+    severity: Optional[str] = None
+    status: Optional[str] = None
+    mitigation: Optional[str] = Field(default=None, description="Concrete response or reduction plan in short Markdown paragraphs or bullets.")
+    phase_id: Optional[str] = None
+
+
+class UpdateDecisionProposalArgs(StrictArgs):
+    decision_id: str
+    title: Optional[str] = Field(default=None, description=TITLE_GUIDE)
+    decision: Optional[str] = Field(default=None, description="State the choice clearly in one or two sentences.")
+    context: Optional[str] = Field(default=None, description="Concise rationale and relevant alternatives in Markdown.")
+    status: Optional[str] = None
+    phase_id: Optional[str] = None
+
+
+class CreateCommentProposalArgs(StrictArgs):
+    project_id: str
+    entity_type: str
+    entity_id: str
+    body: str = Field(min_length=1, max_length=10000, description="Brief progress update with result, evidence, or next step; short Markdown is supported.")
+
+
+class CreateLinkProposalArgs(StrictArgs):
+    project_id: str
+    entity_type: str
+    entity_id: str
+    url: str = Field(min_length=1, max_length=2000)
+    title: Optional[str] = Field(default=None, max_length=300, description="Short descriptive label for the destination.")
 
 
 # --- helpers -----------------------------------------------------------------
@@ -165,6 +254,31 @@ _CONNECTION_FIELDS = (
     "target_entity_type",
     "target_entity_id",
 )
+_PHASE_FIELDS = ("title", "description", "status")
+_MILESTONE_FIELDS = ("title", "description", "status", "target_date", "phase_id")
+_RISK_FIELDS = ("title", "description", "severity", "status", "mitigation", "phase_id")
+_DECISION_UPDATE_FIELDS = ("title", "decision", "context", "status", "phase_id")
+_COMMENT_FIELDS = ("entity_type", "entity_id", "body")
+_LINK_FIELDS = ("entity_type", "entity_id", "url", "title")
+
+
+def _create_scoped(session: Session, cap: Capability, args: StrictArgs, action: str, fields: tuple[str, ...]) -> ToolResult:
+    _require_propose(cap)
+    if not cap.allows_project(args.project_id):
+        raise MCPToolError(CODE_FORBIDDEN, "project not in scope")
+    return _create(session, cap, action, args.project_id, None, _patch_from(args, fields))
+
+
+def _update_scoped(session: Session, cap: Capability, args: StrictArgs, kind: str, model, fields: tuple[str, ...]) -> ToolResult:
+    _require_propose(cap)
+    target_id = getattr(args, f"{kind}_id")
+    obj = session.get(model, target_id)
+    if obj is None or not cap.allows_project(obj.project_id):
+        raise MCPToolError(CODE_NOT_FOUND, f"{kind} not found")
+    project = session.get(Project, obj.project_id)
+    if project is None or project.mode == "normal":
+        raise MCPToolError(CODE_NOT_FOUND, f"{kind} not found")
+    return _create(session, cap, f"{kind}.update", obj.project_id, target_id, _patch_from(args, fields))
 
 
 def create_task_proposal(
@@ -229,3 +343,39 @@ def create_connection_proposal(
         None,
         _patch_from(args, _CONNECTION_FIELDS),
     )
+
+
+def create_phase_proposal(session: Session, cap: Capability, args: CreatePhaseProposalArgs) -> ToolResult:
+    return _create_scoped(session, cap, args, "phase.create", _PHASE_FIELDS)
+
+
+def update_phase_proposal(session: Session, cap: Capability, args: UpdatePhaseProposalArgs) -> ToolResult:
+    return _update_scoped(session, cap, args, "phase", Phase, _PHASE_FIELDS)
+
+
+def create_milestone_proposal(session: Session, cap: Capability, args: CreateMilestoneProposalArgs) -> ToolResult:
+    return _create_scoped(session, cap, args, "milestone.create", _MILESTONE_FIELDS)
+
+
+def update_milestone_proposal(session: Session, cap: Capability, args: UpdateMilestoneProposalArgs) -> ToolResult:
+    return _update_scoped(session, cap, args, "milestone", Milestone, _MILESTONE_FIELDS)
+
+
+def create_risk_proposal(session: Session, cap: Capability, args: CreateRiskProposalArgs) -> ToolResult:
+    return _create_scoped(session, cap, args, "risk.create", _RISK_FIELDS)
+
+
+def update_risk_proposal(session: Session, cap: Capability, args: UpdateRiskProposalArgs) -> ToolResult:
+    return _update_scoped(session, cap, args, "risk", Risk, _RISK_FIELDS)
+
+
+def update_decision_proposal(session: Session, cap: Capability, args: UpdateDecisionProposalArgs) -> ToolResult:
+    return _update_scoped(session, cap, args, "decision", Decision, _DECISION_UPDATE_FIELDS)
+
+
+def create_comment_proposal(session: Session, cap: Capability, args: CreateCommentProposalArgs) -> ToolResult:
+    return _create_scoped(session, cap, args, "comment.create", _COMMENT_FIELDS)
+
+
+def create_link_proposal(session: Session, cap: Capability, args: CreateLinkProposalArgs) -> ToolResult:
+    return _create_scoped(session, cap, args, "link.create", _LINK_FIELDS)

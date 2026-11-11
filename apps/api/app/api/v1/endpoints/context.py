@@ -11,9 +11,17 @@ from app.schemas.context_file import (
     FileOutcomeRead,
     RegenReportRead,
 )
-from app.services import context_service, project_service
+from app.services import context_service, project_mode_service, project_service
 
 router = APIRouter()
+
+
+def _agentic_context_file(session: Session, context_file_id: str):
+    cf = context_service.get_context_file(session, context_file_id)
+    if cf is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Context file not found")
+    project_mode_service.get_agentic_project(session, cf.project_id)
+    return cf
 
 
 def _report_to_read(report: RegenReport) -> RegenReportRead:
@@ -48,6 +56,7 @@ def regenerate_context(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
         )
+    project_mode_service.require_agentic(project)
     if not project.folder_path:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -64,6 +73,7 @@ def list_context_files(
     project_id: str,
     session: Session = Depends(get_session),
 ) -> list[ContextFileRead]:
+    project_mode_service.get_agentic_project(session, project_id)
     return context_service.list_context_files(session, project_id)
 
 
@@ -75,11 +85,7 @@ def get_context_file_content(
     context_file_id: str,
     session: Session = Depends(get_session),
 ) -> ContextFileContent:
-    cf = context_service.get_context_file(session, context_file_id)
-    if cf is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Context file not found"
-        )
+    cf = _agentic_context_file(session, context_file_id)
     content, drifted = context_service.read_content(session, cf)
     return ContextFileContent(
         relative_path=cf.relative_path, content=content, drifted=drifted
@@ -94,11 +100,7 @@ def get_context_file_diff(
     context_file_id: str,
     session: Session = Depends(get_session),
 ) -> ContextFileDiff:
-    cf = context_service.get_context_file(session, context_file_id)
-    if cf is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Context file not found"
-        )
+    cf = _agentic_context_file(session, context_file_id)
     diff = context_service.compute_diff(session, cf)
     return ContextFileDiff(relative_path=cf.relative_path, diff=diff)
 
@@ -117,6 +119,7 @@ def adopt_context_file(
     it records the checksum of bytes the human already wrote — so there is no AI
     write surface here and nothing for the approval queue to gate.
     """
+    _agentic_context_file(session, context_file_id)
     cf, outcome = context_service.adopt_on_disk(session, context_file_id)
     if outcome == "not-found" or cf is None:
         raise HTTPException(
@@ -144,6 +147,7 @@ def update_context_file(
     data: ContextFileUpdate,
     session: Session = Depends(get_session),
 ) -> ContextFileRead:
+    _agentic_context_file(session, context_file_id)
     cf = context_service.set_pinned(session, context_file_id, data.pinned)
     if cf is None:
         raise HTTPException(

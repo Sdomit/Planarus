@@ -26,10 +26,11 @@ interface CockpitPanelProps {
   onOpenTasks?: () => void
   // #95: the KPI tiles counted things you then had to go find yourself.
   onOpenPlanning?: (tab: PlanningTabKey) => void
+  agentic?: boolean
 }
 
 export default function CockpitPanel({
-  projectId, onOpenCanvas, onOpenItem, onOpenApprovals, onOpenTasks, onOpenPlanning,
+  projectId, onOpenCanvas, onOpenItem, onOpenApprovals, onOpenTasks, onOpenPlanning, agentic = true,
 }: CockpitPanelProps) {
   const [project, setProject] = useState<Project | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
@@ -56,13 +57,12 @@ export default function CockpitPanel({
         api.risks.list(projectId),
         api.milestones.list(projectId).catch(() => []),
         api.decisions.list(projectId).catch(() => []),
-        api.approvals.listPaged(projectId, 'pending').catch(() => ({ items: [], total: 0, hasMore: false })),
+        agentic ? api.approvals.listPaged(projectId, 'pending').catch(() => ({ items: [], total: 0, hasMore: false })) : Promise.resolve({ items: [], total: 0, hasMore: false }),
         api.roadmap.get(projectId).catch(() => null),
         api.timeline.get(projectId, 6).catch(() => null),
         api.blockers.list(projectId).catch(() => []),
-        // Deliberately unscoped: this is the only place in the app that shows a
-        // human what is happening in the projects they are not looking at (#95).
-        api.notifications.feed(null).catch(() => null),
+        // Normal projects do not surface agent-specific notification activity.
+        agentic ? api.notifications.feed(null).catch(() => null) : Promise.resolve(null),
       ])
       setProject(proj)
       setPhaseCount(phases.length)
@@ -81,7 +81,7 @@ export default function CockpitPanel({
     } finally {
       setLoading(false)
     }
-  }, [projectId])
+  }, [projectId, agentic])
 
   useEffect(() => { void load() }, [load])
 
@@ -111,7 +111,7 @@ export default function CockpitPanel({
     { label: 'Open risks', value: openRisks, foot: openRisks ? 'need attention' : 'clear', go: planning('risks') },
     { label: 'Milestones', value: openMilestones, foot: `of ${milestones.length} total`, go: planning('milestones') },
     { label: 'Decisions', value: decisions.length, foot: 'recorded', go: planning('decisions') },
-    { label: 'Pending approvals', value: pending, foot: pending ? 'awaiting review' : 'queue clear', go: onOpenApprovals },
+    ...(agentic ? [{ label: 'Pending approvals', value: pending, foot: pending ? 'awaiting review' : 'queue clear', go: onOpenApprovals }] : []),
   ]
 
   const upcoming = milestones
@@ -173,7 +173,7 @@ export default function CockpitPanel({
         <RecentActivity events={events} />
       </div>
 
-      <GitSnapshotPanel projectId={projectId} />
+      {agentic && <GitSnapshotPanel projectId={projectId} />}
     </section>
   )
 }
@@ -252,4 +252,3 @@ function RecentActivity({ events }: { events: TimelineEvent[] }) {
     </WidgetCard>
   )
 }
-

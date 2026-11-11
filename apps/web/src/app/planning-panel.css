@@ -190,9 +190,13 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .pp-row-desc {
-  font-size: var(--text-sm); color: var(--text-secondary); white-space: pre-wrap;
-  word-break: break-word; padding-left: var(--space-5); margin: 0;
+  font-size: var(--text-sm); color: var(--text-secondary);
+  overflow-wrap: anywhere; padding-left: var(--space-5); margin: 0 0 var(--space-3);
 }
+.pp-row-desc .ab-prose { padding: 0; max-width: none; }
+.pp-row-desc .ab-prose p, .pp-row-desc .ab-prose li { font-size: var(--text-sm); }
+.pp-row-desc .ab-prose > :last-child { margin-bottom: 0; }
+.pp-row-desc-label { display: block; margin-bottom: var(--space-1); color: var(--text-primary); }
 
 @media (max-width: 640px) {
   .pp-finder { flex-basis: 100%; justify-content: flex-start; }

@@ -10,7 +10,7 @@ def _workspace(client: TestClient, slug: str = "ws") -> str:
 def test_create_without_folder_provisions_nothing(client):
     ws = _workspace(client)
     proj = client.post(
-        "/api/v1/projects", json={"workspace_id": ws, "title": "P", "slug": "proj"}
+        "/api/v1/projects", json={"workspace_id": ws, "title": "P", "slug": "proj", "mode": "agentic"}
     ).json()
     files = client.get(f"/api/v1/context-files?project_id={proj['id']}").json()
     assert files == []
@@ -25,6 +25,7 @@ def test_relative_folder_path_rejected_422(client):
             "title": "P",
             "slug": "proj",
             "folder_path": "relative/dir",
+            "mode": "agentic",
         },
     )
     assert res.status_code == 422
@@ -33,7 +34,7 @@ def test_relative_folder_path_rejected_422(client):
 def test_update_setting_folder_provisions(client, tmp_path):
     ws = _workspace(client)
     proj = client.post(
-        "/api/v1/projects", json={"workspace_id": ws, "title": "P", "slug": "proj"}
+        "/api/v1/projects", json={"workspace_id": ws, "title": "P", "slug": "proj", "mode": "agentic"}
     ).json()
     assert client.get(f"/api/v1/context-files?project_id={proj['id']}").json() == []
 
@@ -56,6 +57,7 @@ def test_create_does_not_break_when_folder_set(client, tmp_path, session):
             "title": "P",
             "slug": "proj",
             "folder_path": str(tmp_path),
+            "mode": "agentic",
         },
     )
     assert res.status_code == 201

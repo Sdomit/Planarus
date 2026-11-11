@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 from pydantic import Field
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
 from app.core.constants import BUILTIN_STATUS_KEYS
@@ -27,8 +27,12 @@ from app.mcp.serializers import (
 from app.mcp.tools import StrictArgs
 from app.models.approval_request import ApprovalRequest
 from app.models.blocker import Blocker
+from app.models.comment import Comment
 from app.models.decision import Decision
 from app.models.doc import Doc
+from app.models.entity_connection import EntityConnection
+from app.models.link import Link
+from app.models.milestone import Milestone
 from app.models.phase import Phase
 from app.models.project import Project
 from app.models.risk import Risk
@@ -48,6 +52,13 @@ _ACTIVE_BUILTIN_TASK_STATUSES = ("in_progress", "ready", "needs_review", "waitin
 
 class ListProjectsArgs(StrictArgs):
     pass
+
+
+class ListStatusOptionsArgs(StrictArgs):
+    project_id: str
+    entity_type: Literal["task", "decision", "phase", "milestone", "risk"]
+    limit: int = Field(default=MAX_LIST_ROWS, ge=1, le=MAX_LIST_ROWS)
+    offset: int = Field(default=0, ge=0)
 
 
 class ProjectArgs(StrictArgs):
@@ -85,6 +96,11 @@ class ListPhaseScopedArgs(ListScopedArgs):
     phase_id: Optional[str] = None
 
 
+class ListCommentsArgs(ListScopedArgs):
+    entity_type: Optional[str] = None
+    entity_id: Optional[str] = None
+
+
 class DocExcerptArgs(StrictArgs):
     doc_id: str
     max_chars: int = Field(default=MAX_DOC_EXCERPT_CHARS, ge=1, le=MAX_DOC_EXCERPT_CHARS)
@@ -106,7 +122,7 @@ class GetItemArgs(StrictArgs):
     route to its untruncated fields.
     """
 
-    kind: Literal["task", "decision", "risk", "doc"]
+    kind: Literal["task", "decision", "risk", "doc", "phase", "milestone", "comment", "link"]
     item_id: str
 
 
@@ -150,7 +166,10 @@ def list_projects(session: Session, cap: Capability, args: ListProjectsArgs) -> 
     projects = list(
         session.exec(
             select(Project)
-            .where(Project.id.in_(list(cap.project_ids)))
+            .where(
+                Project.id.in_(list(cap.project_ids)),
+                or_(Project.mode.is_(None), Project.mode == "agentic"),
+            )
             .order_by(Project.id)
         ).all()
     )
@@ -169,6 +188,29 @@ def list_projects(session: Session, cap: Capability, args: ListProjectsArgs) -> 
         for p in projects
     ]
     return build_result(metadata, blocks)
+
+
+def list_status_options(
+    session: Session, cap: Capability, args: ListStatusOptionsArgs
+) -> ToolResult:
+    """List exact allowed keys before an agent proposes an explicit status."""
+    _require_project_scope(cap, args.project_id)
+    if session.get(Project, args.project_id) is None:
+        raise MCPToolError(CODE_NOT_FOUND, "project not found")
+    keys = sorted(status_option_service.allowed_status_keys(session, args.project_id, args.entity_type))
+    page = keys[args.offset:args.offset + args.limit]
+    metadata = {
+        "project_id": args.project_id,
+        "entity_type": args.entity_type,
+        "default_status": {
+            "task": "backlog", "decision": "proposed", "phase": "planned",
+            "milestone": "planned", "risk": "open",
+        }[args.entity_type],
+        "count": len(page),
+        "status_keys": page,
+        **_page_metadata(args.limit, args.offset, len(page), args.offset + len(page) < len(keys)),
+    }
+    return status_only_result(metadata, "Use only these exact status keys in proposals. Omit status to use the default on create.")
 
 
 def get_project_summary(session: Session, cap: Capability, args: ProjectArgs) -> ToolResult:
@@ -499,6 +541,106 @@ def list_risks(
     return build_result(metadata, blocks)
 
 
+def list_phases(session: Session, cap: Capability, args: ListScopedArgs) -> ToolResult:
+    _require_project_scope(cap, args.project_id)
+    stmt = select(Phase).where(Phase.project_id == args.project_id).order_by(Phase.sort_order, Phase.id)
+    rows, truncated = _fetch_capped(session, stmt, args.limit, args.offset)
+    metadata = {
+        "project_id": args.project_id, "count": len(rows),
+        "phase_ids": [p.id for p in rows], "statuses": [p.status for p in rows],
+        **_page_metadata(args.limit, args.offset, len(rows), truncated),
+    }
+    blocks = [wrap_block(
+        f"phase:{p.id}", "phase", [f"id: {p.id}", f"status: {p.status}"],
+        [("title", p.title, MAX_FIELD_CHARS), ("description", p.description, MAX_FIELD_CHARS)],
+    ) for p in rows]
+    return build_result(metadata, blocks)
+
+
+def list_milestones(session: Session, cap: Capability, args: ListPhaseScopedArgs) -> ToolResult:
+    _require_project_scope(cap, args.project_id)
+    stmt = select(Milestone).where(Milestone.project_id == args.project_id)
+    if args.phase_id is not None:
+        stmt = stmt.where(Milestone.phase_id == args.phase_id)
+    stmt = stmt.order_by(Milestone.sort_order, Milestone.id)
+    rows, truncated = _fetch_capped(session, stmt, args.limit, args.offset)
+    metadata = {
+        "project_id": args.project_id, "phase_id": args.phase_id, "count": len(rows),
+        "milestone_ids": [m.id for m in rows], "statuses": [m.status for m in rows],
+        **_page_metadata(args.limit, args.offset, len(rows), truncated),
+    }
+    blocks = [wrap_block(
+        f"milestone:{m.id}", "milestone",
+        [f"id: {m.id}", f"status: {m.status}", f"phase_id: {m.phase_id or '(none)'}", f"target_date: {m.target_date or '(none)'}"],
+        [("title", m.title, MAX_FIELD_CHARS), ("description", m.description, MAX_FIELD_CHARS)],
+    ) for m in rows]
+    return build_result(metadata, blocks)
+
+
+def list_comments(session: Session, cap: Capability, args: ListCommentsArgs) -> ToolResult:
+    _require_project_scope(cap, args.project_id)
+    stmt = select(Comment).where(Comment.project_id == args.project_id)
+    if args.entity_type is not None:
+        stmt = stmt.where(Comment.entity_type == args.entity_type)
+    if args.entity_id is not None:
+        stmt = stmt.where(Comment.entity_id == args.entity_id)
+    stmt = stmt.order_by(Comment.created_at.desc(), Comment.id)
+    rows, truncated = _fetch_capped(session, stmt, args.limit, args.offset)
+    metadata = {
+        "project_id": args.project_id, "count": len(rows),
+        "comment_ids": [c.id for c in rows],
+        **_page_metadata(args.limit, args.offset, len(rows), truncated),
+    }
+    blocks = [wrap_block(
+        f"comment:{c.id}", "comment",
+        [f"id: {c.id}", f"entity_type: {c.entity_type}", f"entity_id: {c.entity_id}", f"status: {c.status}"],
+        [("body", c.body, MAX_FIELD_CHARS)],
+    ) for c in rows]
+    return build_result(metadata, blocks)
+
+
+def list_links(session: Session, cap: Capability, args: ListCommentsArgs) -> ToolResult:
+    _require_project_scope(cap, args.project_id)
+    stmt = select(Link).where(Link.project_id == args.project_id)
+    if args.entity_type is not None:
+        stmt = stmt.where(Link.entity_type == args.entity_type)
+    if args.entity_id is not None:
+        stmt = stmt.where(Link.entity_id == args.entity_id)
+    stmt = stmt.order_by(Link.created_at.desc(), Link.id)
+    rows, truncated = _fetch_capped(session, stmt, args.limit, args.offset)
+    metadata = {
+        "project_id": args.project_id, "count": len(rows),
+        "link_ids": [link.id for link in rows],
+        **_page_metadata(args.limit, args.offset, len(rows), truncated),
+    }
+    blocks = [wrap_block(
+        f"link:{link.id}", "link",
+        [f"id: {link.id}", f"entity_type: {link.entity_type}", f"entity_id: {link.entity_id}"],
+        [("title", link.title, MAX_FIELD_CHARS), ("url", link.url, MAX_FIELD_CHARS)],
+    ) for link in rows]
+    return build_result(metadata, blocks)
+
+
+def list_connections(session: Session, cap: Capability, args: ListScopedArgs) -> ToolResult:
+    _require_project_scope(cap, args.project_id)
+    stmt = select(EntityConnection).where(EntityConnection.project_id == args.project_id).order_by(EntityConnection.created_at.desc(), EntityConnection.id)
+    rows, truncated = _fetch_capped(session, stmt, args.limit, args.offset)
+    metadata = {
+        "project_id": args.project_id, "count": len(rows),
+        "connection_ids": [c.id for c in rows],
+        "source_entity_ids": [c.source_entity_id for c in rows],
+        "target_entity_ids": [c.target_entity_id for c in rows],
+        **_page_metadata(args.limit, args.offset, len(rows), truncated),
+    }
+    blocks = [wrap_block(
+        f"entity_connection:{c.id}", "entity_connection",
+        [f"id: {c.id}", f"relation_type: {c.relation_type}",
+         f"source_entity_type: {c.source_entity_type}", f"source_entity_id: {c.source_entity_id}",
+         f"target_entity_type: {c.target_entity_type}", f"target_entity_id: {c.target_entity_id}"], [],
+    ) for c in rows]
+    return build_result(metadata, blocks)
+
+
 def list_docs(session: Session, cap: Capability, args: ListScopedArgs) -> ToolResult:
     _require_project_scope(cap, args.project_id)
     stmt = (
@@ -539,6 +681,9 @@ def doc_excerpt_result(
     doc = session.get(Doc, doc_id)
     # Generic not_found for missing OR out-of-scope — never reveal existence.
     if doc is None or not cap.allows_project(doc.project_id):
+        raise MCPToolError(CODE_NOT_FOUND, "document not found")
+    project = session.get(Project, doc.project_id)
+    if project is None or project.mode == "normal":
         raise MCPToolError(CODE_NOT_FOUND, "document not found")
     # Page over the REDACTED representation, not the raw one. wrap_block redacts
     # before it clips (deliberately — a secret straddling the cap must not survive
@@ -589,6 +734,26 @@ def get_doc_excerpt(session: Session, cap: Capability, args: DocExcerptArgs) -> 
 # Scalars stay separate from wrapped text: raw titles/descriptions never leak into
 # metadata (the module contract at the top of this file).
 _DETAIL_SPECS: dict[str, tuple] = {
+    "phase": (
+        Phase,
+        lambda o: [f"id: {o.id}", f"status: {o.status}"],
+        lambda o: [("title", o.title), ("description", o.description)],
+    ),
+    "milestone": (
+        Milestone,
+        lambda o: [f"id: {o.id}", f"status: {o.status}", f"phase_id: {o.phase_id or '(none)'}", f"target_date: {o.target_date or '(none)'}"],
+        lambda o: [("title", o.title), ("description", o.description)],
+    ),
+    "comment": (
+        Comment,
+        lambda o: [f"id: {o.id}", f"entity_type: {o.entity_type}", f"entity_id: {o.entity_id}", f"status: {o.status}"],
+        lambda o: [("body", o.body)],
+    ),
+    "link": (
+        Link,
+        lambda o: [f"id: {o.id}", f"entity_type: {o.entity_type}", f"entity_id: {o.entity_id}"],
+        lambda o: [("title", o.title), ("url", o.url)],
+    ),
     "task": (
         Task,
         lambda o: [
@@ -669,6 +834,9 @@ def get_approval_status(
 ) -> ToolResult:
     ar = session.get(ApprovalRequest, args.approval_id)
     if ar is None or not cap.allows_project(ar.project_id):
+        raise MCPToolError(CODE_NOT_FOUND, "approval not found")
+    project = session.get(Project, ar.project_id)
+    if project is None or project.mode == "normal":
         raise MCPToolError(CODE_NOT_FOUND, "approval not found")
     # The three id keys close the propose -> approve -> apply loop (#91): without
     # them an agent's only way back to what it created was list_tasks plus a fuzzy

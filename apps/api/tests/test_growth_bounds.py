@@ -42,7 +42,7 @@ def _seed_project(client: TestClient, suffix: str) -> tuple[str, str]:
     ).json()
     proj = client.post(
         "/api/v1/projects",
-        json={"workspace_id": ws["id"], "title": "P", "slug": f"p-{suffix}"},
+        json={"workspace_id": ws["id"], "title": "P", "slug": f"p-{suffix}", "mode": "agentic"},
     ).json()
     return ws["id"], proj["id"]
 
@@ -104,6 +104,18 @@ def test_approvals_list_does_not_load_patch_bodies(
     assert res.status_code == 200
     assert len(res.json()) == 3
     assert len(counter) == 0, f"patch body was selected: {counter.statements}"
+    assert res.json()[0]["proposed_title"].startswith("proposed task")
+
+
+def test_approval_list_exposes_bounded_text_preview(client: TestClient, session: Session) -> None:
+    _, pid = _seed_project(client, "gr-preview")
+    approval_service.create_proposal(
+        session, project_id=pid, action_type="task.create",
+        patch={"title": "Review the roadmap", "description": "Short summary.\n\n- Verify all phases"},
+    )
+    row = client.get(f"/api/v1/approvals?project_id={pid}").json()[0]
+    assert row["proposed_title"] == "Review the roadmap"
+    assert row["proposed_excerpt"] == "Short summary. - Verify all phases"
 
 
 def test_approval_detail_still_returns_the_patch(

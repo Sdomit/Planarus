@@ -19,11 +19,17 @@ from fastapi.testclient import TestClient
 EXPECTED_READ_TOOLS: frozenset[str] = frozenset(
     {
         "list_projects",
+        "list_status_options",
         "get_project_summary",
         "get_active_work",
         "list_tasks",
         "list_decisions",
         "list_risks",
+        "list_phases",
+        "list_milestones",
+        "list_comments",
+        "list_links",
+        "list_connections",
         "list_docs",
         "get_doc_excerpt",
         "get_item",
@@ -38,6 +44,15 @@ EXPECTED_PROPOSE_TOOLS: frozenset[str] = frozenset(
         "create_decision_proposal",
         "update_canvas_proposal",
         "create_connection_proposal",
+        "create_phase_proposal",
+        "update_phase_proposal",
+        "create_milestone_proposal",
+        "update_milestone_proposal",
+        "create_risk_proposal",
+        "update_risk_proposal",
+        "update_decision_proposal",
+        "create_comment_proposal",
+        "create_link_proposal",
     }
 )
 
@@ -49,7 +64,8 @@ def seed(client: TestClient, suffix: str) -> tuple[str, str]:
     ws = client.post("/api/v1/workspaces", json={"name": "WS", "slug": f"ws-{suffix}"}).json()
     proj = client.post(
         "/api/v1/projects",
-        json={"workspace_id": ws["id"], "title": "P", "slug": f"p-{suffix}"},
+        # MCP-focused tests intentionally exercise the capability-enabled path.
+        json={"workspace_id": ws["id"], "title": "P", "slug": f"p-{suffix}", "mode": "agentic"},
     ).json()
     return ws["id"], proj["id"]
 

@@ -21,11 +21,12 @@ import RemindersPanel from './RemindersPanel'
 import SettingsPanel from './SettingsPanel'
 import TeamPanel from './TeamPanel'
 import AboutModal from './AboutModal'
+import AgentPromptsModal from './AgentPromptsModal'
 import NotificationsBell from './NotificationsBell'
 import { SidebarTodos } from './SidebarTodos'
 import { useAuthInfo } from './auth'
 import { Icon } from './Icon'
-import { api, type NotificationItem, type Project, type Workspace } from '../api/client'
+import { api, type McpActivity, type NotificationItem, type Project, type Workspace } from '../api/client'
 import { OPEN_APPROVALS_FRAGMENT, captureTitle, parseCapture, type Capture, type CaptureType } from './capture'
 import './layout.css'
 
@@ -54,6 +55,7 @@ export interface SelectedProject {
   // routed. Unused (and never populated from a stale pre-migration NAV_KEY
   // value) outside routed mode — uncontrolled Layout never constructs a URL.
   workspaceSlug: string
+  mode?: Project['mode']
 }
 
 /** The 14 views that live under a project's route (D63's URL shape). The
@@ -124,9 +126,13 @@ const NAV: { group: string; items: { view: MainView; label: string; icon: string
 // System lives in the account menu, not the sidebar nav — still reachable via Ctrl+K.
 const ACCOUNT_MENU = NAV.find(g => g.group === 'System')!.items
 
-function navGroups(teamMode: boolean) {
-  if (teamMode) return NAV
-  return NAV.map(g => ({ ...g, items: g.items.filter(it => it.view !== 'team') }))
+const AGENTIC_VIEWS = new Set<MainView>(['context-pack', 'context-files', 'preview', 'approvals', 'agent-runs'])
+
+function navGroups(teamMode: boolean, agentic: boolean) {
+  return NAV.map(g => ({
+    ...g,
+    items: g.items.filter(it => (teamMode || it.view !== 'team') && (agentic || !AGENTIC_VIEWS.has(it.view))),
+  })).filter(g => g.items.length > 0)
 }
 
 function isMobileViewport(): boolean {
@@ -223,6 +229,41 @@ function HealthDot({ healthy }: { healthy: boolean | null }) {
   return <span className={`ab-health ab-health--${state}`} role="img" aria-label={label} title={label} />
 }
 
+function useMcpActivity(): McpActivity[] {
+  const [activity, setActivity] = useState<McpActivity[]>([])
+  useEffect(() => {
+    // Older embedded clients and lightweight test doubles can predate the
+    // optional activity endpoint. The indicator is informational, so absence
+    // must degrade to idle rather than stop the whole shell from rendering.
+    const listActivity = api.mcpActivity?.list
+    if (!listActivity) return
+    let live = true
+    const refresh = () => listActivity().then(
+      rows => { if (live) setActivity(rows) },
+      () => { if (live) setActivity([]) },
+    )
+    void refresh()
+    const timer = setInterval(() => void refresh(), 10_000)
+    return () => { live = false; clearInterval(timer) }
+  }, [])
+  return activity
+}
+
+function McpActivityIndicator({ activity }: { activity: McpActivity[] }) {
+  const current = activity[0]
+  const agent = current?.actor_ref.replace(/^mcp:/, '') || 'agent'
+  const active = Boolean(current)
+  const title = active
+    ? `${agent} used ${current.tool_name} through MCP for ${current.project_title} in the last minute`
+    : 'No project-scoped AI or MCP activity in the last minute'
+  return (
+    <span className={`ab-mcp-activity ab-mcp-activity--${active ? 'active' : 'idle'}`} title={title} aria-label={title}>
+      <span className="ab-mcp-activity-dot" aria-hidden="true" />
+      <span>{active ? `AI / MCP · ${current.project_title}` : 'AI / MCP · idle'}</span>
+    </span>
+  )
+}
+
 // This line said "local" whether or not it was, so the one place a signed-in
 // teammate could confirm which server they were on was the account menu. Mode
 // comes from the session (an account exists only when the gate is on) and the
@@ -315,6 +356,7 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
   // One poller for the whole shell: the sidebar and the account menu are making
   // the same claim, and two intervals would let them disagree.
   const apiHealthy = useApiHealth()
+  const mcpActivity = useMcpActivity()
   const [internalMainView, setInternalMainView] = useState<MainView>(
     () => routed?.view ?? initialView ?? loadNav().view ?? 'dashboard',
   )
@@ -351,6 +393,8 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
     () => document.documentElement.getAttribute('data-theme') || 'light-cosmo',
   )
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [agentPromptsOpen, setAgentPromptsOpen] = useState(false)
+  const [agentPromptsFor, setAgentPromptsFor] = useState<Project | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [mobileNavMode, setMobileNavMode] = useState(isMobileViewport)
   const [searchQuery, setSearchQuery] = useState('')
@@ -480,6 +524,8 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
     options?: { planningTab?: PlanningTabKey; focusEntityId?: string },
     projectOverride?: SelectedProject,
   ) => {
+    const targetProject = projectOverride ?? project
+    if (targetProject?.mode === 'normal' && AGENTIC_VIEWS.has(view)) view = 'cockpit'
     if (view === 'planning') {
       setPlanningTab(options?.planningTab ?? 'phases')
       setPlanningFocus(options?.focusEntityId)
@@ -499,7 +545,8 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
   // `open` = came from a Dashboard card, where the click means "take me into it".
   // Switching via the sidebar selector keeps you on whatever view you were reading.
   const selectProject = (p: SelectedProject, opts?: { open?: boolean }) => {
-    const nextView = opts?.open ? 'cockpit' : mainView
+    const requestedView = opts?.open ? 'cockpit' : mainView
+    const nextView = p.mode === 'normal' && AGENTIC_VIEWS.has(requestedView) ? 'cockpit' : requestedView
     if (routed) {
       routed.onNavigate(nextView, p)
     } else {
@@ -510,11 +557,17 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
     closeMenu()
   }
 
+  useEffect(() => {
+    if (project?.mode === 'normal' && AGENTIC_VIEWS.has(mainView)) navigate('cockpit')
+    // navigate is intentionally excluded: it is recreated each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id, project?.mode, mainView])
+
   const openNotification = async (item: NotificationItem) => {
     let target = project ?? undefined
     if (project?.id !== item.project_id) {
       const t = await api.projects.get(item.project_id)
-      target = { id: t.id, title: t.title, slug: t.slug, workspaceSlug: workspaceSlugFor(t.workspace_id) ?? '' }
+      target = { id: t.id, title: t.title, slug: t.slug, workspaceSlug: workspaceSlugFor(t.workspace_id) ?? '', mode: t.mode }
     }
     const { view, ...options } = notificationTarget(item)
     navigate(view, options, target)
@@ -532,7 +585,8 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
   )
 
   const { title, sub } = TITLES[mainView]
-  const groups = useMemo(() => navGroups(Boolean(me)), [me])
+  const agentic = project?.mode !== 'normal'
+  const groups = useMemo(() => navGroups(Boolean(me), agentic), [me, agentic])
   const searchableItems = useMemo(
     () => groups.flatMap(g => g.items.map(item => ({ ...item, group: g.group }))),
     [groups],
@@ -573,8 +627,11 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
         <div className="ab-brand">
           <img className="ab-brand-mark" src="/planarus-icon.png" alt="" aria-hidden="true" />
           <div>
-            <div className="ab-brand-name">Planarus</div>
+            <div className="ab-brand-titleline">
+              <div className="ab-brand-name">Planarus</div>
+            </div>
             <BrandEnv team={!!me} healthy={apiHealthy} />
+            {agentic && <McpActivityIndicator activity={mcpActivity} />}
           </div>
         </div>
 
@@ -620,7 +677,7 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
                     role="option"
                     aria-selected={project?.id === p.id}
                     onClick={() => {
-                      selectProject({ id: p.id, title: p.title, slug: p.slug, workspaceSlug: workspaceSlugFor(p.workspace_id) ?? '' })
+                      selectProject({ id: p.id, title: p.title, slug: p.slug, workspaceSlug: workspaceSlugFor(p.workspace_id) ?? '', mode: p.mode })
                       setProjMenuOpen(false)
                     }}
                   >
@@ -652,6 +709,16 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
                   </button>
                 )
               })}
+              {grp.group === 'Context' && (
+                <button
+                  type="button"
+                  className="sidebar-nav-item"
+                  onClick={() => { setAgentPromptsFor(null); setAgentPromptsOpen(true); closeMenu() }}
+                >
+                  <Icon name="message" className="nav-icon ic" />
+                  <span>Agent prompts</span>
+                </button>
+              )}
             </nav>
           ))}
 
@@ -794,10 +861,11 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
         <main className="ab-content">
           <div className="ab-content-inner">
             <div style={{ minWidth: 0 }}>
-              {mainView === 'dashboard' && <Dashboard onSelectProject={p => selectProject(p, { open: true })} />}
+              {mainView === 'dashboard' && <Dashboard onSelectProject={p => selectProject(p, { open: true })} onOpenAgentPrompts={p => { setAgentPromptsFor(p); setAgentPromptsOpen(true) }} />}
               {mainView === 'cockpit' && (project ? (
                 <CockpitPanel
                   projectId={project.id}
+                  agentic={agentic}
                   onClose={() => setMainView('dashboard')}
                   onOpenCanvas={() => setMainView('canvas')}
                   // Same handler the bell uses, so a row about another project
@@ -843,10 +911,10 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
                 </Suspense>
               ) : placeholder)}
               {mainView === 'canvas' && (project ? <CanvasPanel projectId={project.id} onBack={() => setMainView('cockpit')} /> : placeholder)}
-              {mainView === 'context-pack' && (project ? <ContextPackBuilder projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
-              {mainView === 'context-files' && (project ? <ContextFilesPanel projectId={project.id} /> : placeholder)}
-              {mainView === 'preview' && (project ? <MarkdownPreviewPanel projectId={project.id} /> : placeholder)}
-              {mainView === 'approvals' && (project ? (
+              {agentic && mainView === 'context-pack' && (project ? <ContextPackBuilder projectId={project.id} onClose={() => setMainView('dashboard')} /> : placeholder)}
+              {agentic && mainView === 'context-files' && (project ? <ContextFilesPanel projectId={project.id} /> : placeholder)}
+              {agentic && mainView === 'preview' && (project ? <MarkdownPreviewPanel projectId={project.id} /> : placeholder)}
+              {agentic && mainView === 'approvals' && (project ? (
                 <ApprovalQueuePanel
                   projectId={project.id}
                   onClose={() => setMainView('dashboard')}
@@ -854,7 +922,7 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
                   onSelect={routed?.onSelectDetail}
                 />
               ) : placeholder)}
-              {mainView === 'agent-runs' && (project ? <AgentRunsPanel projectId={project.id} /> : placeholder)}
+              {agentic && mainView === 'agent-runs' && (project ? <AgentRunsPanel projectId={project.id} /> : placeholder)}
               {mainView === 'reminders' && (project ? <RemindersPanel projectId={project.id} /> : placeholder)}
               {mainView === 'team' && <TeamPanel />}
               {mainView === 'settings' && <SettingsPanel />}
@@ -864,6 +932,13 @@ export default function Layout({ initialView, routed }: LayoutProps = {}) {
       </div>
 
       {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
+      {agentPromptsOpen && (
+        <AgentPromptsModal
+          onClose={() => setAgentPromptsOpen(false)}
+          onOpenSettings={() => { setAgentPromptsOpen(false); navigate('settings') }}
+          currentProject={agentPromptsFor ?? project}
+        />
+      )}
     </div>
   )
 }

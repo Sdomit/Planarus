@@ -29,6 +29,7 @@ Add-Type -AssemblyName System.Drawing
 $Root = Split-Path -Parent $PSScriptRoot
 $StartScript = Join-Path $PSScriptRoot 'run-planarus.bat'
 $StopScript = Join-Path $PSScriptRoot 'stop-planarus.bat'
+$AppLabel = 'Planarus DEVELOPMENT'
 
 # A tray has nowhere to print. WinForms also swallows exceptions thrown inside a
 # click handler, so without this a failed menu item is indistinguishable from a
@@ -173,6 +174,13 @@ function Get-TrayIcon {
                 # a 256px bitmap itself produces a noticeably muddier result.
                 $small = [System.Drawing.Bitmap]::new($bitmap, 16, 16)
                 try {
+                    $graphics = [System.Drawing.Graphics]::FromImage($small)
+                    try {
+                        $brush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(220, 220, 38, 38))
+                        try { $graphics.FillEllipse($brush, 8, 8, 8, 8) } finally { $brush.Dispose() }
+                        $pen = [System.Drawing.Pen]::new([System.Drawing.Color]::White, 1.25)
+                        try { $graphics.DrawEllipse($pen, 8, 8, 7, 7) } finally { $pen.Dispose() }
+                    } finally { $graphics.Dispose() }
                     return [System.Drawing.Icon]::FromHandle($small.GetHicon())
                 } finally { $small.Dispose() }
             } finally { $bitmap.Dispose() }
@@ -240,9 +248,9 @@ function Open-LogFile {
 # --- tray --------------------------------------------------------------------
 
 $menu = [System.Windows.Forms.ContextMenuStrip]::new()
-$itemOpen = $menu.Items.Add('Open Planarus')
-$itemStart = $menu.Items.Add('Start Planarus')
-$itemStop = $menu.Items.Add('Stop Planarus')
+$itemOpen = $menu.Items.Add('Open Planarus DEVELOPMENT')
+$itemStart = $menu.Items.Add('Start Planarus DEVELOPMENT')
+$itemStop = $menu.Items.Add('Stop Planarus DEVELOPMENT')
 $menu.Items.Add('-') | Out-Null
 
 # Three logs, because "it did not start" is answered by a different file than
@@ -258,12 +266,12 @@ $menuLogs.DropDownItems.Add('-') | Out-Null
 $logFolder = $menuLogs.DropDownItems.Add('Open the logs folder')
 
 $menu.Items.Add('-') | Out-Null
-$itemExit = $menu.Items.Add('Exit tray (stops Planarus)')
+$itemExit = $menu.Items.Add('Exit development tray (stops Planarus)')
 
 $notify = [System.Windows.Forms.NotifyIcon]::new()
 $notify.Icon = Get-TrayIcon
 $notify.ContextMenuStrip = $menu
-$notify.Text = 'Planarus'
+$notify.Text = $AppLabel
 
 function Update-Menu {
     $status = Get-Status
@@ -273,9 +281,9 @@ function Update-Menu {
 
     # NotifyIcon.Text throws above 63 characters, so this stays short.
     $notify.Text = if ($status.Running) {
-        if ($null -ne $status.WebPort) { "Planarus - running on :$($status.WebPort)" }
-        else { 'Planarus - starting...' }
-    } else { 'Planarus - stopped' }
+        if ($null -ne $status.WebPort) { "$AppLabel - running on :$($status.WebPort)" }
+        else { "$AppLabel - starting..." }
+    } else { "$AppLabel - stopped" }
 }
 
 $itemOpen.Add_Click({ Invoke-Action 'open' { Open-Planarus } })

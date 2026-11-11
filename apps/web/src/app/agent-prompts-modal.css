@@ -1,0 +1,29 @@
+.agent-prompts-dialog {
+  max-height: min(90vh, 800px);
+  display: flex;
+  flex-direction: column;
+}
+
+.agent-prompts-dialog .modal-header { flex-shrink: 0; }
+.agent-prompts-dialog .modal-title { margin: 0; }
+.agent-prompts-lede { margin: var(--space-1) 0 0; color: var(--text-secondary); font-size: var(--text-sm); }
+.agent-prompts-body { min-height: 0; overflow-y: auto; }
+.agent-prompts-body > .input.select { width: 100%; margin-bottom: var(--space-4); }
+.agent-prompts-all { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); padding: var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-subtle); }
+.agent-prompts-all p { margin: var(--space-1) 0 0; color: var(--text-secondary); font-size: var(--text-xs); }
+.agent-prompts-all button { flex-shrink: 0; }
+.agent-prompts-steps { margin: 0 0 var(--space-4); padding-left: var(--space-5); }
+.agent-prompts-steps li + li { margin-top: var(--space-2); }
+.agent-prompts-copy-row { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2); color: var(--text-primary); font-weight: var(--weight-semibold); }
+.agent-prompts-text { display: block; box-sizing: border-box; width: 100%; min-height: 260px; resize: vertical; padding: var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-subtle); color: var(--text-primary); font-family: var(--font-mono); font-size: var(--text-xs); line-height: 1.5; }
+.agent-prompts-text:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.agent-prompts-note { margin: var(--space-3) 0 0; color: var(--text-tertiary); font-size: var(--text-xs); }
+.agent-prompts-dialog .modal-footer { flex-shrink: 0; padding-top: var(--space-3); }
+.agent-prompts-hook { margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--border-subtle); }
+.agent-prompts-hook h3 { margin: 0 0 var(--space-2); color: var(--text-primary); font-size: var(--text-base); }
+.agent-prompts-hook p { margin: 0 0 var(--space-3); }
+.agent-prompts-hook .agent-prompts-copy-row { margin-top: var(--space-3); }
+.agent-prompts-code { display: block; white-space: pre-wrap; overflow-wrap: anywhere; padding: var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-subtle); color: var(--text-primary); font-family: var(--font-mono); font-size: var(--text-xs); }
+.agent-prompts-hook .agent-prompts-note { margin-top: var(--space-3); }
+.agent-prompts-warning { padding: var(--space-3); border-radius: var(--radius-md); background: var(--status-warning-bg, var(--bg-subtle)); color: var(--status-warning-fg, var(--text-primary)); }
+.agent-prompts-hook .agent-prompts-code + .agent-prompts-copy-row { margin-top: var(--space-4); }

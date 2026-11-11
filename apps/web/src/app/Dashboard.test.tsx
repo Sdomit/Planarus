@@ -53,6 +53,30 @@ beforeEach(() => {
 
 afterEach(cleanup)
 
+describe('project agent prompts', () => {
+  it('opens the new project prompt with the returned project details', async () => {
+    const created = { ...baseProject, id: 'proj_new', title: 'New Team Project', slug: 'new-team-project', summary: 'Shared work', mode: 'agentic' as const }
+    vi.mocked(api.projects.create).mockResolvedValue(created)
+    const onOpenAgentPrompts = vi.fn()
+    render(<Dashboard onOpenAgentPrompts={onOpenAgentPrompts} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'New project' }))
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: created.title } })
+    fireEvent.change(screen.getByLabelText('Summary'), { target: { value: created.summary } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create project' }))
+
+    await waitFor(() => expect(onOpenAgentPrompts).toHaveBeenCalledWith(created))
+  })
+
+  it('reopens prompts from the project three-dot menu', async () => {
+    const onOpenAgentPrompts = vi.fn()
+    render(<Dashboard onOpenAgentPrompts={onOpenAgentPrompts} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Project actions' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Agent prompts…' }))
+    expect(onOpenAgentPrompts).toHaveBeenCalledWith(baseProject)
+  })
+})
+
 /** Open the card's ⋯ menu and pick "Edit details…". */
 async function openEditModal() {
   fireEvent.click(await screen.findByRole('button', { name: 'Project actions' }))
@@ -125,6 +149,24 @@ describe('Dashboard project edit (#158)', () => {
     expect(save.disabled).toBe(true)
     fireEvent.click(save)
     expect(api.projects.update).not.toHaveBeenCalled()
+  })
+})
+
+describe('Dashboard project modes', () => {
+  it('creates Normal projects by default without exposing a folder field', async () => {
+    vi.mocked(api.projects.create).mockResolvedValue({ ...baseProject, id: 'proj_new', mode: 'normal' })
+    render(<Dashboard />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'New project' }))
+    expect((screen.getByRole('radio', { name: /Normal/ }) as HTMLInputElement).checked).toBe(true)
+    expect(screen.queryByLabelText('Folder / repository')).toBeNull()
+
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Private plan' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create project' }))
+
+    await waitFor(() => expect(api.projects.create).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Private plan', slug: 'private-plan', mode: 'normal', folder_path: undefined,
+    })))
   })
 })
 

@@ -8,6 +8,7 @@ import {
 import { EmptyState } from './EmptyState'
 import { fmtTimestamp } from './format'
 import { Icon } from './Icon'
+import { Markdown } from './markdown'
 import { StatusBadge } from './StatusBadge'
 import './approval-queue-panel.css'
 
@@ -42,6 +43,27 @@ function targetLabel(a: ApprovalSummary): string {
   return `new ${a.target_entity_type ?? 'entity'}`
 }
 
+function proposalLabel(a: ApprovalSummary): string {
+  return a.proposed_title || targetLabel(a)
+}
+
+function detailTitle(a: ApprovalDetail): string {
+  const title = a.diff.find(entry => entry.field === 'title')?.after
+  return typeof title === 'string' && title.trim() ? title : proposalLabel(a)
+}
+
+const PROSE_FIELDS = new Set(['description', 'decision', 'context', 'mitigation', 'body', 'content', 'notes'])
+
+function displayValue(field: string, value: unknown) {
+  return PROSE_FIELDS.has(field) && typeof value === 'string' && value.trim()
+    ? <Markdown markdown={value} />
+    : renderValue(value)
+}
+
+function fieldLabel(field: string): string {
+  return field.replace(/_/g, ' ').replace(/^./, (letter: string) => letter.toUpperCase())
+}
+
 function renderValue(v: unknown): string {
   if (v === null || v === undefined) return '∅'
   if (typeof v === 'string') return v === '' ? '(empty)' : v
@@ -68,6 +90,9 @@ export default function ApprovalQueuePanel({
 
   const [checked, setChecked] = useState<string[]>([])
   const [bulkErrors, setBulkErrors] = useState<string[]>([])
+  const [autoAccept, setAutoAccept] = useState<boolean | null>(null)
+  const [autoSaving, setAutoSaving] = useState(false)
+  const [autoError, setAutoError] = useState<string | null>(null)
   // A poll that lands mid-decision would repaint the list from a snapshot the
   // server took before the write. Skip that tick instead of racing it.
   const actingRef = useRef(false)
@@ -100,9 +125,14 @@ export default function ApprovalQueuePanel({
   useEffect(() => { loadList() }, [loadList])
 
   useEffect(() => {
-    const timer = setInterval(() => { if (!actingRef.current) loadList(true) }, POLL_MS)
-    return () => clearInterval(timer)
-  }, [loadList])
+    let current = true
+    setAutoAccept(null)
+    setAutoError(null)
+    api.approvals.autoAccept(projectId)
+      .then(setting => { if (current) setAutoAccept(setting.enabled) })
+      .catch((e: Error) => { if (current) setAutoError(e.message) })
+    return () => { current = false }
+  }, [projectId])
 
   const openDetail = useCallback((id: string) => {
     setDetailError(null); setActionError(null); setRejectReason('')
@@ -110,6 +140,15 @@ export default function ApprovalQueuePanel({
       .then(([d, a]) => { setSelected(d); setAudit(a) })
       .catch((e: Error) => setDetailError(e.message))
   }, [])
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (actingRef.current) return
+      loadList(true)
+      if (autoAccept && selected?.id) openDetail(selected.id)
+    }, autoAccept ? 5_000 : POLL_MS)
+    return () => clearInterval(timer)
+  }, [loadList, autoAccept, openDetail, selected?.id])
 
   useEffect(() => {
     if (initialApprovalId) openDetail(initialApprovalId)
@@ -142,6 +181,20 @@ export default function ApprovalQueuePanel({
     [],
   )
 
+  const toggleAutoAccept = async (value: boolean) => {
+    setAutoSaving(true)
+    setAutoError(null)
+    try {
+      const setting = await api.approvals.setAutoAccept(projectId, value)
+      setAutoAccept(setting.enabled)
+      await loadList(true)
+    } catch (e) {
+      setAutoError((e as Error).message)
+    } finally {
+      setAutoSaving(false)
+    }
+  }
+
   const pending = openItems
   const history = historyItems
   const selectable = pending.filter(a => a.status === 'pending')
@@ -161,8 +214,26 @@ export default function ApprovalQueuePanel({
     if (ids.length === 0) return
     setBusy(true); setBulkErrors([]); setActionError(null); actingRef.current = true
     const failures: string[] = []
+    const selectedRows = openItems.filter(item => ids.includes(item.id))
+    const targetCounts = new Map<string, number>()
+    for (const item of selectedRows) {
+      if (!item.target_entity_id) continue
+      const key = `${item.target_entity_type}:${item.target_entity_id}`
+      targetCounts.set(key, (targetCounts.get(key) ?? 0) + 1)
+    }
     for (const id of ids) {
+      const row = selectedRows.find(item => item.id === id)
+      const targetKey = row?.target_entity_id ? `${row.target_entity_type}:${row.target_entity_id}` : null
+      if (targetKey && (targetCounts.get(targetKey) ?? 0) > 1) {
+        failures.push(`${targetLabel(row!)}: multiple selected proposals change this record. Review them individually.`)
+        continue
+      }
       try {
+        const detail = await api.approvals.get(id)
+        if (detail.is_expired || detail.stale_reason || detail.status !== 'pending') {
+          failures.push(`${targetLabel(detail)}: ${detail.stale_reason ?? (detail.is_expired ? 'proposal expired' : `proposal is ${detail.status}`)}. Ask the agent for a fresh proposal if the change is still needed.`)
+          continue
+        }
         await approveAndApply(id)
       } catch (e) {
         failures.push(`${id.slice(0, 14)}: ${(e as Error).message}`)
@@ -173,7 +244,7 @@ export default function ApprovalQueuePanel({
     await loadList(true)
     if (selected && ids.includes(selected.id)) await openDetail(selected.id)
     setBusy(false)
-  }, [checked, approveAndApply, loadList, openDetail, selected])
+  }, [checked, openItems, approveAndApply, loadList, openDetail, selected])
 
   const renderRow = (a: ApprovalSummary, withCheckbox = false) => {
     const row = (
@@ -182,11 +253,16 @@ export default function ApprovalQueuePanel({
         className={`aqp-row${selected?.id === a.id ? ' aqp-row-selected' : ''}`}
         onClick={() => { openDetail(a.id); onSelect?.(a.id) }}
       >
-        <span className={`aqp-origin${a.origin === 'api' ? ' api' : ''}`}>{a.origin}</span>
-        <span className="aqp-row-action">{a.action_type}</span>
-        <span className="aqp-row-target" title={a.target_entity_id ?? undefined}>{targetLabel(a)}</span>
-        <StatusBadge kind="severity" value={a.risk_level} />
-        <StatusBadge kind="approval" value={a.status} />
+        <span className="aqp-row-copy">
+          <span className="aqp-row-target" title={a.target_entity_id ?? undefined}>{proposalLabel(a)}</span>
+          {a.proposed_excerpt && <span className="aqp-row-excerpt">{a.proposed_excerpt}</span>}
+          <span className="aqp-row-action">{a.action_type}</span>
+        </span>
+        <span className="aqp-row-badges">
+          <span className={`aqp-origin${a.origin === 'api' ? ' api' : ''}`}>{a.origin}</span>
+          <StatusBadge kind="severity" value={a.risk_level} />
+          <StatusBadge kind="approval" value={a.status} />
+        </span>
       </button>
     )
     if (!withCheckbox || a.status !== 'pending') return row
@@ -206,8 +282,22 @@ export default function ApprovalQueuePanel({
   return (
     <div className="aqp-panel">
       <p className="aqp-notice" role="note">
-        Proposals are reference-only until you approve and apply them. Planarus never applies a change on its own.
+        {autoAccept
+          ? 'Auto accept is on for this project. The local server approves and applies valid proposals until you turn it off.'
+          : 'Proposals are reference-only until you approve and apply them.'}
       </p>
+
+      <div className="aqp-auto-setting">
+        <label className="aqp-auto-label">
+          <input type="checkbox" checked={autoAccept === true}
+            disabled={autoAccept === null || autoSaving}
+            onChange={event => void toggleAutoAccept(event.target.checked)}
+            aria-label="Auto accept all proposals for this project" />
+          <span><strong>Auto accept all proposals</strong><small>Applies current and future requests for this project, even when the queue is closed. Stays on after restart until you turn it off.</small></span>
+        </label>
+        {autoSaving && <span className="aqp-auto-state">Saving…</span>}
+        {autoError && <p className="aqp-state aqp-error" role="alert">{autoError}</p>}
+      </div>
 
       <div className="aqp-body">
         {/* Left: queue list */}
@@ -243,13 +333,15 @@ export default function ApprovalQueuePanel({
                     <EmptyState
                       icon={<Icon name="inbox" className="ic-32" />}
                       title="No proposals waiting"
-                      hint="Proposals appear here when a connected agent suggests a change. Nothing is applied until you approve it. Connect an agent in Settings → Integrations."
+                      hint={autoAccept
+                        ? 'New agent proposals are being approved and applied automatically for this project.'
+                        : 'Proposals appear here when a connected agent suggests a change. Nothing is applied until you approve it. Connect an agent in Settings → Integrations.'}
                     />
                   )
                   : pending.map(a => renderRow(a, true))}
                 {bulkErrors.length > 0 && (
                   <ul className="aqp-state aqp-error aqp-bulk-errors">
-                    {bulkErrors.map(msg => <li key={msg}>{msg}</li>)}
+                    {bulkErrors.map((msg, index) => <li key={`${index}:${msg}`}>{msg}</li>)}
                   </ul>
                 )}
               </section>
@@ -281,6 +373,8 @@ export default function ApprovalQueuePanel({
                 <StatusBadge kind="approval" value={selected.status} />
               </div>
 
+              <h3 className="aqp-proposal-title">{detailTitle(selected)}</h3>
+
               <dl className="aqp-meta">
                 <div><dt>Origin</dt><dd>{selected.origin}</dd></div>
                 <div><dt>Project</dt><dd title={selected.project_id}>{selected.project_id.slice(0, 18)}…</dd></div>
@@ -300,7 +394,9 @@ export default function ApprovalQueuePanel({
               )}
               {selected.stale_reason && (
                 <div className="alert alert-warning" role="alert">
-                  <span className="alert-body">⚠ Stale: {selected.stale_reason}. Applying will be blocked; a new proposal is required.</span>
+                  <span className="alert-body">⚠ {selected.stale_reason}. {selected.status === 'failed'
+                    ? 'This failed proposal cannot be applied as written. Ask the agent for a new proposal using a status listed in this project.'
+                    : 'Applying will be blocked; a new proposal is required.'}</span>
                 </div>
               )}
 
@@ -308,17 +404,18 @@ export default function ApprovalQueuePanel({
                 🔒 Secrets are blocked at proposal time (best-effort); patch content is never logged or audited.
               </p>
 
-              <h4 className="aqp-diff-title">Proposed change (before → after)</h4>
+              <h4 className="aqp-diff-title">Proposed changes</h4>
               {selected.diff.length === 0
                 ? <p className="aqp-empty">No fields.</p>
                 : (
                   <ul className="aqp-diff">
                     {selected.diff.map(d => (
                       <li key={d.field}>
-                        <span className="aqp-diff-field">{d.field}</span>
-                        <span className="aqp-diff-before">{renderValue(d.before)}</span>
-                        <span className="aqp-diff-arrow">→</span>
-                        <span className="aqp-diff-after">{renderValue(d.after)}</span>
+                        <span className="aqp-diff-field">{fieldLabel(d.field)}</span>
+                        {d.before !== null && d.before !== undefined && (
+                          <div className="aqp-diff-before"><small>Current</small>{displayValue(d.field, d.before)}</div>
+                        )}
+                        <div className="aqp-diff-after"><small>Proposed</small>{displayValue(d.field, d.after)}</div>
                       </li>
                     ))}
                   </ul>
@@ -337,19 +434,19 @@ export default function ApprovalQueuePanel({
 
               <div className="aqp-actions">
                 {selected.status === 'pending' && (
-                  <button className="btn btn-solid btn-sm" disabled={busy}
+                  <button className="btn btn-solid btn-sm" disabled={busy || selected.is_expired || !!selected.stale_reason}
                     onClick={() => runAction(selected.id, () => approveAndApply(selected.id))}>
                     Approve &amp; apply
                   </button>
                 )}
                 {selected.status === 'pending' && (
-                  <button className="btn btn-outline btn-sm" disabled={busy}
+                  <button className="btn btn-outline btn-sm" disabled={busy || selected.is_expired || !!selected.stale_reason}
                     onClick={() => runAction(selected.id, () => api.approvals.approve(selected.id))}>
                     Approve
                   </button>
                 )}
                 {selected.status === 'approved' && (
-                  <button className="btn btn-solid btn-sm" disabled={busy}
+                  <button className="btn btn-solid btn-sm" disabled={busy || selected.is_expired || !!selected.stale_reason}
                     onClick={() => runAction(selected.id, () => api.approvals.apply(selected.id))}>
                     Apply
                   </button>

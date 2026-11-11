@@ -180,7 +180,7 @@ def test_approver_gate_requires_owner(client, session, auth_on):
     ws = _mk_owned_workspace(client, alice, "alice-ws")
     pid = client.post(
         "/api/v1/projects",
-        json={"workspace_id": ws, "title": "P", "slug": "pproj"},
+        json={"workspace_id": ws, "title": "P", "slug": "pproj", "mode": "agentic"},
         cookies=_auth(alice),
     ).json()["id"]
     ar = approval_service.create_proposal(
@@ -213,7 +213,7 @@ def test_approver_gate_noop_when_auth_off(client, session):
 
     ws = client.post("/api/v1/workspaces", json={"name": "W", "slug": "wapr"}).json()["id"]
     pid = client.post(
-        "/api/v1/projects", json={"workspace_id": ws, "title": "P", "slug": "papr"}
+        "/api/v1/projects", json={"workspace_id": ws, "title": "P", "slug": "papr", "mode": "agentic"}
     ).json()["id"]
     ar = approval_service.create_proposal(
         session, project_id=pid, action_type="task.create", patch={"title": "T"}

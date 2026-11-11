@@ -19,6 +19,9 @@ class Project(SQLModel, table=True):
     slug: str = Field(max_length=60)
     summary: Optional[str] = None
     project_type: Optional[str] = None
+    # Capability mode is deliberately separate from project_type: a project can
+    # be an "app" (type) while still being a normal, non-agentic project.
+    mode: str = Field(default="agentic", max_length=16, index=True)
     status: str = Field(default="idea", index=True)
     priority: Optional[str] = None
     folder_path: Optional[str] = None

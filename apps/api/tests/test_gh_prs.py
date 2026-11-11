@@ -177,7 +177,7 @@ def test_prs_endpoint_shape_and_degrade(client, monkeypatch) -> None:
     ws = client.post("/api/v1/workspaces", json={"name": "gh-ws", "slug": "gh-ws"}).json()
     res = client.post(
         "/api/v1/projects",
-        json={"workspace_id": ws["id"], "title": "GH Proj", "slug": "gh-proj"},
+        json={"workspace_id": ws["id"], "title": "GH Proj", "slug": "gh-proj", "mode": "agentic"},
     )
     assert res.status_code == 201, res.text
     proj = res.json()

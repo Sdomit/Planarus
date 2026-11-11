@@ -398,6 +398,8 @@ default postures.
 | REST / external API | Disabled and loopback-only until explicitly configured | [ChatGPT connection guide](docs/guide/connect-planarus-to-chatgpt.md) |
 | Remote HTTP MCP | Opt-in advanced integration | Settings → Integrations |
 
+For Codex and Claude, see the [local MCP setup and agent prompt guide](docs/guide/use-planarus-with-codex-and-claude.md).
+
 Machine-readable contracts for the ChatGPT Actions surfaces ship in the repo:
 [`docs/api/planarus-gpt-actions-readonly.openapi.json`](docs/api/planarus-gpt-actions-readonly.openapi.json)
 and

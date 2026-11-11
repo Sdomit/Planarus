@@ -16,6 +16,7 @@ def _project_with_folder(client: TestClient, tmp_path, slug: str = "proj") -> di
             "title": "P",
             "slug": slug,
             "folder_path": str(tmp_path),
+            "mode": "agentic",
         },
     )
     assert res.status_code == 201, res.text
@@ -44,7 +45,7 @@ def test_regenerate_endpoint_idempotent(client, tmp_path):
 def test_regenerate_without_folder_400(client):
     ws = _workspace(client)
     proj = client.post(
-        "/api/v1/projects", json={"workspace_id": ws, "title": "P", "slug": "nofolder"}
+        "/api/v1/projects", json={"workspace_id": ws, "title": "P", "slug": "nofolder", "mode": "agentic"}
     ).json()
     res = client.post(f"/api/v1/projects/{proj['id']}/context/regenerate")
     assert res.status_code == 400

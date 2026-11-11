@@ -10,6 +10,7 @@ vi.mock('../api/client', () => ({
         command: 'python',
         args: ['-m', 'app.mcp.server'],
         cwd: '/home/me/apps/api',
+        database_url: 'sqlite:////home/me/data/planarus.db',
         capability_env: 'PLANARUS_MCP_CAPABILITY',
         read_tools: [{ name: 'list_projects', description: 'List projects.' }],
         propose_tools: [{ name: 'create_task_proposal', description: 'Propose a task.' }],
@@ -31,6 +32,7 @@ describe('McpCard', () => {
     expect(cfg).toContain('app.mcp.server')       // launch module
     expect(cfg).toContain('/home/me/apps/api')     // real cwd from the endpoint
     expect(cfg).toContain('PLANARUS_MCP_CAPABILITY')
+    expect(cfg).toContain('PLANARUS_DATABASE_URL')
     expect(cfg).toContain('proj_1')                // both projects → zero hand-editing
   })
 
@@ -39,6 +41,22 @@ describe('McpCard', () => {
     await waitFor(() => screen.getByText(/mcpServers/))
     fireEvent.click(screen.getByRole('tab', { name: 'Claude Code CLI' }))
     expect(screen.getByText(/claude mcp add planarus/)).toBeTruthy()
+    expect(screen.getByText(/claude mcp add planarus/).textContent).toContain('PLANARUS_DATABASE_URL')
+    expect(screen.getByText(/claude mcp add planarus/).textContent).toContain('"label":"claude"')
+  })
+
+  it('generates Codex TOML with the selected scope and exposes the agent prompt', async () => {
+    render(<McpCard />)
+    await waitFor(() => expect(screen.getByText(/mcpServers/).textContent).toContain('proj_2'))
+    fireEvent.click(screen.getByRole('tab', { name: 'Codex TOML' }))
+    const cfg = screen.getByText(/\[mcp_servers\.planarus\]/).textContent ?? ''
+    expect(cfg).toContain('cwd = "/home/me/apps/api"')
+    expect(cfg).toContain('PLANARUS_MCP_CAPABILITY')
+    expect(cfg).toContain('PLANARUS_DATABASE_URL')
+    expect(cfg).toContain('proj_2')
+    expect(cfg).toContain('\\"label\\":\\"codex\\"')
+    expect(screen.getByText('Agent prompt for Codex and Claude')).toBeTruthy()
+    expect(screen.getByText('Copy agent prompt')).toBeTruthy()
   })
 
   it('adds propose tools to the catalog when access is read+propose', async () => {

@@ -10,6 +10,7 @@ render paste-ready client config plus a tool list that can never drift from code
 Does NOT import ``app.mcp.server`` (the only MCP-SDK importer) — the server name
 is a stable constant and the registry/capabilities modules are SDK-free.
 """
+import sys
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -27,6 +28,20 @@ SERVER_NAME = "planarus"  # mirrors app.mcp.server.SERVER_NAME (kept SDK-free)
 _APP_ROOT = str(Path(__file__).resolve().parents[4])
 
 
+def _local_sqlite_url() -> str | None:
+    """Give local MCP clients this instance's SQLite file, even when launched
+    from a different cwd. Never return a network DB URL or a team-mode path."""
+    if env.auth_enabled or not env.database_url.startswith("sqlite:///"):
+        return None
+    raw_path = env.database_url.removeprefix("sqlite:///")
+    if not raw_path or raw_path == ":memory:" or "?" in raw_path:
+        return None
+    db_path = Path(raw_path)
+    if not db_path.is_absolute():
+        db_path = Path(_APP_ROOT) / db_path
+    return f"sqlite:///{db_path.resolve().as_posix()}"
+
+
 def _catalog(specs: dict) -> list[dict]:
     return [{"name": s.name, "description": s.description} for s in specs.values()]
 
@@ -35,11 +50,14 @@ def _catalog(specs: dict) -> list[dict]:
 def get_mcp_info() -> dict:
     return {
         "server_name": SERVER_NAME,
-        "command": "python",
+        # Use the interpreter already running the local API, which has the MCP
+        # package installed. Team mode must not disclose a host path.
+        "command": "python" if env.auth_enabled else sys.executable,
         "args": ["-m", "app.mcp.server"],
         # Real path only in local single-user mode; team mode follows the
         # settings surface's no-raw-path rule.
         "cwd": None if env.auth_enabled else _APP_ROOT,
+        "database_url": _local_sqlite_url(),
         "capability_env": ENV_VAR,
         "read_tools": _catalog(READ_TOOLS),
         "propose_tools": _catalog(PROPOSE_TOOLS),

@@ -5,6 +5,8 @@ import ApprovalQueuePanel from './ApprovalQueuePanel'
 vi.mock('../api/client', () => ({
   api: {
     approvals: {
+      autoAccept: vi.fn(),
+      setAutoAccept: vi.fn(),
       list: vi.fn(),
       listPaged: vi.fn(),
       get: vi.fn(),
@@ -21,6 +23,8 @@ import { api } from '../api/client'
 
 const mockApi = api as unknown as {
   approvals: {
+    autoAccept: ReturnType<typeof vi.fn>
+    setAutoAccept: ReturnType<typeof vi.fn>
     list: ReturnType<typeof vi.fn>
     listPaged: ReturnType<typeof vi.fn>
     get: ReturnType<typeof vi.fn>
@@ -66,6 +70,7 @@ const DETAIL = {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubGlobal('fetch', vi.fn())
+  mockApi.approvals.autoAccept.mockResolvedValue({ project_id: 'proj_1', enabled: false })
 })
 
 afterEach(() => {
@@ -74,6 +79,30 @@ afterEach(() => {
 })
 
 describe('ApprovalQueuePanel', () => {
+  it('keeps auto accept off by default and saves an explicit switch-on', async () => {
+    mockApi.approvals.listPaged.mockResolvedValue({ items: [], total: 0, hasMore: false })
+    mockApi.approvals.setAutoAccept.mockResolvedValue({ project_id: 'proj_1', enabled: true })
+    render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
+    const toggle = await screen.findByRole('checkbox', { name: 'Auto accept all proposals for this project' }) as HTMLInputElement
+    await waitFor(() => expect(toggle.disabled).toBe(false))
+    expect(toggle.checked).toBe(false)
+    fireEvent.click(toggle)
+    await waitFor(() => expect(mockApi.approvals.setAutoAccept).toHaveBeenCalledWith('proj_1', true))
+    await waitFor(() => expect(toggle.checked).toBe(true))
+    expect(screen.getByText(/Stays on after restart until you turn it off/)).toBeTruthy()
+  })
+
+  it('shows a failed setting write and leaves auto accept off', async () => {
+    mockApi.approvals.listPaged.mockResolvedValue({ items: [], total: 0, hasMore: false })
+    mockApi.approvals.setAutoAccept.mockRejectedValue(new Error('local control unavailable'))
+    render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
+    const toggle = await screen.findByRole('checkbox', { name: 'Auto accept all proposals for this project' }) as HTMLInputElement
+    await waitFor(() => expect(toggle.disabled).toBe(false))
+    fireEvent.click(toggle)
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'local control unavailable')
+    expect(toggle.checked).toBe(false)
+  })
+
   it('renders a pending proposal in the queue', async () => {
     mockApi.approvals.listPaged.mockResolvedValue({ items: [PENDING], total: ([PENDING]).length, hasMore: false })
     render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
@@ -161,10 +190,36 @@ describe('ApprovalQueuePanel', () => {
         ),
       ).toBeTruthy(),
     )
-    expect(screen.getByText('title')).toBeTruthy()
-    expect(screen.getByText('New task')).toBeTruthy()
+    expect(screen.getByText('Title')).toBeTruthy()
+    expect(screen.getAllByText('New task').length).toBeGreaterThan(0)
     // No raw HTML rendering.
     expect(document.querySelector('[dangerouslysetinnerhtml]')).toBeNull()
+  })
+
+  it('shows proposal titles in rows and formats the full description in the detail pane', async () => {
+    const description = 'Add the project flow.\n\n- Create the phase\n- Verify it appears'
+    const proposal = {
+      ...PENDING,
+      proposed_title: 'Set up project phases',
+      proposed_excerpt: 'Add the project flow. - Create the phase - Verify it appears',
+    }
+    mockApi.approvals.listPaged.mockResolvedValue({ items: [proposal], total: 1, hasMore: false })
+    mockApi.approvals.get.mockResolvedValue({
+      ...DETAIL, ...proposal,
+      diff: [
+        { field: 'title', before: null, after: proposal.proposed_title },
+        { field: 'description', before: null, after: description },
+      ],
+    })
+    mockApi.approvals.audit.mockResolvedValue([])
+    render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
+    const row = await screen.findByRole('button', { name: /Set up project phases/i })
+    expect(row.textContent).toContain('Add the project flow.')
+    fireEvent.click(row)
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Set up project phases' })).toBeTruthy())
+    expect(screen.getByText('Description')).toBeTruthy()
+    expect(screen.getByText('Create the phase').closest('li')).toBeTruthy()
+    expect(screen.getByText('Verify it appears').closest('li')).toBeTruthy()
   })
 
   it('approve is required before apply; both call the API', async () => {
@@ -203,6 +258,8 @@ describe('ApprovalQueuePanel', () => {
     fireEvent.click(screen.getByText('task.create'))
     await waitFor(() => expect(screen.getByText(/has expired/i)).toBeTruthy())
     expect(screen.getByText(/target changed since proposal/i)).toBeTruthy()
+    expect((screen.getByText('Approve & apply') as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByText('Approve') as HTMLButtonElement).disabled).toBe(true)
     // The secret-policy note is always shown.
     expect(screen.getByText(/Secrets are blocked at proposal time/i)).toBeTruthy()
   })
@@ -221,6 +278,27 @@ describe('ApprovalQueuePanel', () => {
     await waitFor(() => screen.getByText('task.update'))
     expect(screen.getByText('Ship the thing')).toBeTruthy()
     expect(screen.queryByText(/tsk_1a2b3c4d5e6f/)).toBeNull()
+  })
+
+  it('keeps the current target identifiable when a proposal changes its title', async () => {
+    const update = {
+      ...PENDING,
+      action_type: 'task.update',
+      target_entity_id: 'tsk_1a2b3c4d5e6f7890',
+      target_title: 'Old task name',
+      proposed_title: 'New task name',
+    }
+    mockApi.approvals.listPaged.mockResolvedValue({ items: [update], total: 1, hasMore: false })
+    mockApi.approvals.get.mockResolvedValue({
+      ...DETAIL, ...update,
+      diff: [{ field: 'title', before: 'Old task name', after: 'New task name' }],
+    })
+    mockApi.approvals.audit.mockResolvedValue([])
+    render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
+    const row = await screen.findByRole('button', { name: /New task name/i })
+    fireEvent.click(row)
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'New task name' })).toBeTruthy())
+    expect(screen.getAllByText('Old task name').length).toBeGreaterThan(0)
   })
 
   it('falls back to the id when the target has no resolved title', async () => {
@@ -261,6 +339,7 @@ describe('ApprovalQueuePanel', () => {
     })
     mockApi.approvals.approve.mockResolvedValue({ ...PENDING, status: 'approved' })
     mockApi.approvals.apply.mockResolvedValue({ ...PENDING, status: 'applied' })
+    mockApi.approvals.get.mockImplementation((id: string) => Promise.resolve({ ...DETAIL, id }))
 
     render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
     await waitFor(() => screen.getByText('task.create'))
@@ -279,6 +358,7 @@ describe('ApprovalQueuePanel', () => {
       items: [PENDING, second], total: 2, hasMore: false,
     })
     mockApi.approvals.approve.mockResolvedValue({ ...PENDING, status: 'approved' })
+    mockApi.approvals.get.mockImplementation((id: string) => Promise.resolve({ ...DETAIL, id }))
     mockApi.approvals.apply.mockImplementation((id: string) =>
       id === 'apr_1' ? Promise.reject(new Error('target changed')) : Promise.resolve({ ...second, status: 'applied' }),
     )
@@ -291,6 +371,29 @@ describe('ApprovalQueuePanel', () => {
     await waitFor(() => expect(screen.getByText(/target changed/)).toBeTruthy())
     // The second row still ran.
     expect(mockApi.approvals.apply).toHaveBeenCalledWith('apr_2')
+  })
+
+  it('skips stale rows before bulk approval', async () => {
+    mockApi.approvals.listPaged.mockResolvedValue({ items: [PENDING], total: 1, hasMore: false })
+    mockApi.approvals.get.mockResolvedValue({ ...DETAIL, stale_reason: 'target changed since proposal' })
+    render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
+    await waitFor(() => screen.getByText('task.create'))
+    fireEvent.click(screen.getByLabelText('Select all pending proposals'))
+    fireEvent.click(screen.getByText(/Approve & apply \(1\)/))
+    await waitFor(() => expect(screen.getByText(/target changed since proposal/)).toBeTruthy())
+    expect(mockApi.approvals.approve).not.toHaveBeenCalled()
+  })
+
+  it('does not bulk apply competing updates to one task', async () => {
+    const first = { ...PENDING, id: 'apr_1', action_type: 'task.update', target_entity_id: 'tsk_1' }
+    const second = { ...first, id: 'apr_2' }
+    mockApi.approvals.listPaged.mockResolvedValue({ items: [first, second], total: 2, hasMore: false })
+    render(<ApprovalQueuePanel projectId="proj_1" onClose={vi.fn()} />)
+    await waitFor(() => screen.getAllByText('task.update'))
+    fireEvent.click(screen.getByLabelText('Select all pending proposals'))
+    fireEvent.click(screen.getByText(/Approve & apply \(2\)/))
+    await waitFor(() => expect(screen.getAllByText(/multiple selected proposals change this record/).length).toBe(2))
+    expect(mockApi.approvals.approve).not.toHaveBeenCalled()
   })
 
   it('offers no checkbox on decided history rows', async () => {

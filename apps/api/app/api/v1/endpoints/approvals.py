@@ -26,10 +26,18 @@ from app.schemas.approval import (
     ApprovalAuditEntry,
     ApprovalDetail,
     ApprovalSummary,
+    AutoAcceptSetting,
+    AutoAcceptUpdate,
     LocalSessionResponse,
     RejectRequest,
 )
-from app.services import approval_service, audit_service, entity_registry
+from app.services import (
+    approval_auto_accept_service,
+    approval_service,
+    audit_service,
+    entity_registry,
+    project_mode_service,
+)
 
 router = APIRouter()
 
@@ -78,11 +86,12 @@ def _require_approver(
     token. No-op when auth is disabled. Preserves the 7C1 invariant: this only
     gates the human apply path; external clients still never reach it.
     """
-    if not tenant.settings.auth_enabled:
-        return
     ar = approval_service.get_approval(session, approval_id)
     if ar is None:
         raise HTTPException(status_code=404, detail="approval not found")
+    _require_agentic_approval(session, ar)
+    if not tenant.settings.auth_enabled:
+        return
     tenant.require_workspace_access(
         session, ar.workspace_id, user, *tenant.APPROVER_ROLES
     )
@@ -106,7 +115,16 @@ def _require_approval_read(session: Session, approval_id: str, user: Optional[Us
     ar = approval_service.get_approval(session, approval_id)
     if ar is None:
         raise HTTPException(status_code=404, detail="approval not found")
+    _require_agentic_approval(session, ar)
     tenant.require_workspace_access(session, ar.workspace_id, user, *tenant.READ_ROLES)
+    return ar
+
+
+def _require_agentic_approval(session: Session, ar):
+    project = session.get(Project, ar.project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="approval not found")
+    project_mode_service.require_agentic(project)
     return ar
 
 
@@ -122,26 +140,70 @@ def list_approvals(
 ) -> list[ApprovalSummary]:
     # Hosted mode scopes the queue to one project the caller can read (a
     # workspace-wide or global queue would leak tenants).
+    if project_id is not None:
+        project = session.get(Project, project_id)
+        if project is None:
+            raise HTTPException(status_code=404, detail="project not found")
+        project_mode_service.require_agentic(project)
     if settings.auth_enabled:
         if project_id is None:
             raise HTTPException(status_code=400, detail="project_id is required")
         project = session.get(Project, project_id)
-        if project is None:
-            raise HTTPException(status_code=404, detail="project not found")
+        assert project is not None
         tenant.require_project_access(session, project, user, *tenant.READ_ROLES)
     rows = approval_service.list_approvals(
-        session, project_id=project_id, status=status, limit=limit, offset=offset
+        session, project_id=project_id, status=status, limit=limit, offset=offset, agentic_only=True
     )
     # The response body is a bare list (changing its shape would break every
     # existing client), so the paging facts ride in headers. Without these a cap
     # is a silent truncation — the caller cannot tell a complete page from a
     # clipped one.
     total = approval_service.count_approvals(
-        session, project_id=project_id, status=status
+        session, project_id=project_id, status=status, agentic_only=True
     )
     response.headers["X-Total-Count"] = str(total)
     response.headers["X-Has-More"] = "true" if offset + len(rows) < total else "false"
     return _summarize(session, rows)
+
+
+def _auto_accept_project(session: Session, project_id: str, user: Optional[User], *, write: bool) -> Project:
+    project = session.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    project_mode_service.require_agentic(project)
+    roles = tenant.APPROVER_ROLES if write else tenant.READ_ROLES
+    tenant.require_project_access(session, project, user, *roles)
+    return project
+
+
+@router.get("/approvals/auto-accept", response_model=AutoAcceptSetting)
+def get_auto_accept(
+    project_id: str,
+    session: Session = Depends(get_session),
+    user: Optional[User] = Depends(tenant_user),
+) -> AutoAcceptSetting:
+    _auto_accept_project(session, project_id, user, write=False)
+    return AutoAcceptSetting(
+        project_id=project_id,
+        enabled=approval_auto_accept_service.enabled(session, project_id),
+    )
+
+
+@router.put(
+    "/approvals/auto-accept",
+    response_model=AutoAcceptSetting,
+    dependencies=[Depends(require_local_control)],
+)
+def update_auto_accept(
+    project_id: str,
+    body: AutoAcceptUpdate,
+    session: Session = Depends(get_session),
+    user: Optional[User] = Depends(tenant_user),
+) -> AutoAcceptSetting:
+    project = _auto_accept_project(session, project_id, user, write=True)
+    if approval_auto_accept_service.enabled(session, project_id) != body.enabled:
+        approval_auto_accept_service.set_enabled(session, project, body.enabled)
+    return AutoAcceptSetting(project_id=project_id, enabled=body.enabled)
 
 
 @router.get("/approvals/{approval_id}", response_model=ApprovalDetail)

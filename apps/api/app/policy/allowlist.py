@@ -92,6 +92,51 @@ ACTION_POLICIES: dict[str, ActionPolicy] = {
         required_fields=frozenset({"title", "decision"}),
         reference_fields=frozenset(),
     ),
+    "decision.update": ActionPolicy(
+        "decision.update", "decision", False,
+        frozenset({"title", "decision", "context", "status", "phase_id"}),
+        frozenset(), frozenset({"phase_id"}),
+    ),
+    "phase.create": ActionPolicy(
+        "phase.create", "phase", True,
+        frozenset({"title", "description", "status"}), frozenset({"title"}),
+    ),
+    "phase.update": ActionPolicy(
+        "phase.update", "phase", False,
+        frozenset({"title", "description", "status"}), frozenset(),
+    ),
+    "milestone.create": ActionPolicy(
+        "milestone.create", "milestone", True,
+        frozenset({"title", "description", "status", "target_date", "phase_id"}),
+        frozenset({"title"}), frozenset({"phase_id"}),
+    ),
+    "milestone.update": ActionPolicy(
+        "milestone.update", "milestone", False,
+        frozenset({"title", "description", "status", "target_date", "phase_id"}),
+        frozenset(), frozenset({"phase_id"}),
+    ),
+    "risk.create": ActionPolicy(
+        "risk.create", "risk", True,
+        frozenset({"title", "description", "severity", "status", "mitigation", "phase_id"}),
+        frozenset({"title", "severity"}), frozenset({"phase_id"}),
+    ),
+    "risk.update": ActionPolicy(
+        "risk.update", "risk", False,
+        frozenset({"title", "description", "severity", "status", "mitigation", "phase_id"}),
+        frozenset(), frozenset({"phase_id"}),
+    ),
+    "comment.create": ActionPolicy(
+        "comment.create", "comment", True,
+        frozenset({"entity_type", "entity_id", "body"}),
+        frozenset({"entity_type", "entity_id", "body"}),
+        frozenset({"entity_id"}),
+    ),
+    "link.create": ActionPolicy(
+        "link.create", "link", True,
+        frozenset({"entity_type", "entity_id", "url", "title"}),
+        frozenset({"entity_type", "entity_id", "url"}),
+        frozenset({"entity_id"}),
+    ),
     # Phase 13c: AI-proposed canvas/doc content edits. content_json is the new
     # scene (secret-scanned like any free text); markdown_cache is optional derived
     # text. No reference fields; the base-target fingerprint over content_json is
@@ -168,6 +213,9 @@ def _validate_enums(action_type: str, patch: dict) -> None:
     priority = patch.get("priority")
     if priority is not None and priority not in _TASK_PRIORITIES:
         raise PolicyError("invalid priority value")
+    severity = patch.get("severity")
+    if severity is not None and severity not in {"low", "medium", "high", "critical"}:
+        raise PolicyError("invalid risk severity")
 
 
 def normalize_patch(action_type: str, patch: dict) -> dict:
@@ -207,6 +255,17 @@ def normalize_patch(action_type: str, patch: dict) -> dict:
         value = normalized.get(required)
         if not isinstance(value, str) or not value.strip():
             raise PolicyError(f"field {required!r} must not be blank")
+
+    if action_type == "comment.create" and len(normalized["body"]) > 10000:
+        raise PolicyError("comment body exceeds size limit")
+
+    if action_type == "link.create":
+        from app.core.uri_policy import normalize_link
+
+        try:
+            normalized["url"] = normalize_link(normalized["url"], allow_relative=False)
+        except ValueError:
+            raise PolicyError("link URL is not permitted")
 
     if action_type == "doc.update":
         # content_json is the canonical scene; a malformed body would apply an

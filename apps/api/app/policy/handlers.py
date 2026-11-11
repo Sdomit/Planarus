@@ -12,8 +12,13 @@ from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.core.utils import new_id, now_utc
+from app.models.comment import Comment
 from app.models.decision import Decision
 from app.models.doc import Doc
+from app.models.link import Link
+from app.models.milestone import Milestone
+from app.models.phase import Phase
+from app.models.risk import Risk
 from app.models.task import Task
 from app.services import entity_connection_service, mention_service, status_option_service
 
@@ -133,6 +138,93 @@ def _apply_connection_create(
     return "entity_connection", connection.id
 
 
+_PLANNING_MODELS = {
+    "phase": (Phase, "ph", ("title", "description", "status"), "planned"),
+    "milestone": (
+        Milestone, "mil", ("title", "description", "status", "target_date", "phase_id"), "planned"
+    ),
+    "risk": (
+        Risk, "rsk", ("title", "description", "severity", "status", "mitigation", "phase_id"), "open"
+    ),
+}
+
+
+def _apply_planning_create(
+    session: Session, kind: str, project_id: str, patch: dict
+) -> tuple[str, str]:
+    model, prefix, fields, default_status = _PLANNING_MODELS[kind]
+    status = patch.get("status", default_status)
+    _check_status(session, project_id, status, kind)
+    now = now_utc()
+    values = {field: patch[field] for field in fields if field in patch}
+    if kind == "phase":
+        max_order = session.exec(
+            select(func.max(Phase.sort_order)).where(Phase.project_id == project_id)
+        ).first()
+        values["sort_order"] = (max_order or 0) + 1
+    obj = model(id=new_id(prefix), project_id=project_id, created_at=now, updated_at=now, **values)
+    session.add(obj)
+    session.flush()
+    return kind, obj.id
+
+
+def _apply_planning_update(
+    session: Session, kind: str, target_id: str, patch: dict
+) -> tuple[str, str]:
+    model, _, fields, _ = _PLANNING_MODELS[kind]
+    obj = session.get(model, target_id)
+    if obj is None:
+        raise LookupError(f"{kind} not found")
+    if "status" in patch:
+        _check_status(session, obj.project_id, patch["status"], kind)
+    for field in fields:
+        if field in patch:
+            setattr(obj, field, patch[field])
+    obj.updated_at = now_utc()
+    session.add(obj)
+    session.flush()
+    return kind, obj.id
+
+
+def _apply_decision_update(session: Session, target_id: str, patch: dict) -> tuple[str, str]:
+    obj = session.get(Decision, target_id)
+    if obj is None:
+        raise LookupError("decision not found")
+    if "status" in patch:
+        _check_status(session, obj.project_id, patch["status"], "decision")
+    for field in ("title", "decision", "context", "status", "phase_id"):
+        if field in patch:
+            setattr(obj, field, patch[field])
+    obj.updated_at = now_utc()
+    session.add(obj)
+    session.flush()
+    return "decision", obj.id
+
+
+def _apply_comment_create(
+    session: Session, project_id: str, patch: dict
+) -> tuple[str, str]:
+    comment = Comment(
+        id=new_id("cmt"), project_id=project_id,
+        entity_type=patch["entity_type"], entity_id=patch["entity_id"],
+        body=patch["body"], author_type="agent", created_at=now_utc(),
+    )
+    session.add(comment)
+    session.flush()
+    return "comment", comment.id
+
+
+def _apply_link_create(session: Session, project_id: str, patch: dict) -> tuple[str, str]:
+    link = Link(
+        id=new_id("lnk"), project_id=project_id,
+        entity_type=patch["entity_type"], entity_id=patch["entity_id"],
+        url=patch["url"], title=patch.get("title"), created_at=now_utc(),
+    )
+    session.add(link)
+    session.flush()
+    return "link", link.id
+
+
 def apply_action(
     session: Session,
     *,
@@ -150,6 +242,20 @@ def apply_action(
         return _apply_task_update(session, target_entity_id, patch)
     if action_type == "decision.create":
         return _apply_decision_create(session, project_id, patch)
+    if action_type == "decision.update":
+        if target_entity_id is None:
+            raise LookupError("decision.update requires a target")
+        return _apply_decision_update(session, target_entity_id, patch)
+    if action_type in {"phase.create", "milestone.create", "risk.create"}:
+        return _apply_planning_create(session, action_type.split(".")[0], project_id, patch)
+    if action_type in {"phase.update", "milestone.update", "risk.update"}:
+        if target_entity_id is None:
+            raise LookupError(f"{action_type} requires a target")
+        return _apply_planning_update(session, action_type.split(".")[0], target_entity_id, patch)
+    if action_type == "comment.create":
+        return _apply_comment_create(session, project_id, patch)
+    if action_type == "link.create":
+        return _apply_link_create(session, project_id, patch)
     if action_type == "doc.update":
         if target_entity_id is None:
             raise LookupError("doc.update requires a target entity id")

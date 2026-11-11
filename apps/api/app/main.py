@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import os
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, Request
 from fastapi.exception_handlers import (
@@ -40,8 +42,30 @@ from app.core.runtime import worker_count_violation
 from app.core.security import allowed_ui_origins
 from app.fsmemory.path_safety import PathSafetyError
 from app.mcp.http_transport import MOUNT_PATH, make_mcp_mount, mcp_lifespan
+from app.services import approval_auto_accept_service
 
 _log = logging.getLogger("planarus")
+
+
+async def _auto_accept_loop() -> None:
+    while True:
+        try:
+            await asyncio.to_thread(approval_auto_accept_service.sweep)
+        except Exception:  # noqa: BLE001 — keep the service alive after one bad tick
+            _log.exception("auto accept sweep failed")
+        await asyncio.sleep(3)
+
+
+@asynccontextmanager
+async def planarus_lifespan(app: FastAPI):
+    async with mcp_lifespan(app):
+        worker = asyncio.create_task(_auto_accept_loop())
+        try:
+            yield
+        finally:
+            worker.cancel()
+            with suppress(asyncio.CancelledError):
+                await worker
 
 
 def _is_external(request: Request) -> bool:
@@ -165,7 +189,7 @@ def create_app() -> FastAPI:
         title="Planarus API",
         version=settings.app_version,  # one source of truth, not a second literal
         description="Local-first AI project cockpit — API",
-        lifespan=mcp_lifespan,
+        lifespan=planarus_lifespan,
     )
 
     # CORS for the local UI ONLY, restricted to the known local origins (shared with

@@ -91,7 +91,7 @@ export default function ProjectRoute() {
         if (!cancelled) {
           setState({
             status: 'ready',
-            project: { id: p.id, title: p.title, slug: p.slug, workspaceSlug: ws.slug },
+            project: { id: p.id, title: p.title, slug: p.slug, workspaceSlug: ws.slug, mode: p.mode },
           })
         }
       })

@@ -156,6 +156,11 @@ def _import_priority(value: object) -> Optional[str]:
     return value if isinstance(value, str) and value in PROJECT_PRIORITIES else None
 
 
+def _import_mode(value: object) -> str:
+    """Preserve an explicit exported mode; old/invalid payloads stay Normal."""
+    return value if isinstance(value, str) and value in {"normal", "agentic"} else "normal"
+
+
 def import_project(session: Session, workspace_id: str, data: dict) -> Project:
     """Create a fresh project from an export dict, remapping every id. Raises
     ValueError on an unrecognized payload."""
@@ -169,6 +174,7 @@ def import_project(session: Session, workspace_id: str, data: dict) -> Project:
         slug=_unique_slug(session, workspace_id, str(src.get("slug") or "imported")),
         summary=src.get("summary"),
         project_type=src.get("project_type"),
+        mode=_import_mode(src.get("mode")),
         status="idea",
         # The column has no DB CHECK and ProjectImport does not cover this field,
         # so an untrusted payload would otherwise land an arbitrary string in a

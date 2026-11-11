@@ -10,6 +10,8 @@ tenant-self-enforced GET     /api/v1/api-clients
 tenant-self-enforced POST    /api/v1/api-clients
 tenant-self-enforced POST    /api/v1/api-clients/{client_id}/revoke
 tenant-self-enforced GET     /api/v1/approvals
+tenant-self-enforced GET     /api/v1/approvals/auto-accept
+tenant-self-enforced PUT     /api/v1/approvals/auto-accept
 tenant-self-enforced GET     /api/v1/approvals/{approval_id}
 tenant-self-enforced POST    /api/v1/approvals/{approval_id}/apply
 tenant-self-enforced POST    /api/v1/approvals/{approval_id}/approve
@@ -63,6 +65,7 @@ global               GET     /api/v1/info
 global               GET     /api/v1/integrations/gpt-openapi
 global               GET     /api/v1/integrations/mcp
 tenant-self-enforced GET     /api/v1/local-session
+tenant-self-enforced GET     /api/v1/mcp-activity
 tenant               DELETE  /api/v1/milestones/{milestone_id}
 tenant               PATCH   /api/v1/milestones/{milestone_id}
 tenant               PATCH   /api/v1/notification-rules/{rule_id}
@@ -113,6 +116,7 @@ tenant               GET     /api/v1/projects/{project_id}/mentions
 tenant               GET     /api/v1/projects/{project_id}/milestones
 tenant               POST    /api/v1/projects/{project_id}/milestones
 tenant               POST    /api/v1/projects/{project_id}/milestones/reorder
+tenant-self-enforced POST    /api/v1/projects/{project_id}/mode
 tenant               GET     /api/v1/projects/{project_id}/notification-rules
 tenant               POST    /api/v1/projects/{project_id}/notification-rules
 tenant               GET     /api/v1/projects/{project_id}/phases

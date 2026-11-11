@@ -30,8 +30,17 @@
         )
       })()
     </script>
+    <style>
+      #planarus-dev-marker {
+        position: fixed; z-index: 10000; top: 12px; right: 12px;
+        padding: 5px 9px; border: 1px solid #dc2626; border-radius: 999px;
+        background: #fef2f2; color: #b91c1c; font: 700 11px/1 system-ui, sans-serif;
+        letter-spacing: .08em; pointer-events: none;
+      }
+    </style>
   </head>
   <body>
+    <div id="planarus-dev-marker" aria-label="Development environment">DEVELOPMENT</div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

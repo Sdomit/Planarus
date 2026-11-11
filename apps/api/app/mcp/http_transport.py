@@ -195,7 +195,8 @@ def make_mcp_mount(app: FastAPI):
                 # Per-key rate + concurrency gate, matching the REST surface
                 # (require_external_read): each MCP POST is gated as a read and holds
                 # a concurrency slot for the request, released below. Propose tools
-                # still route through human approval regardless.
+                # still enqueue a proposal; only the owner's Auto accept setting
+                # can make the local background worker apply it automatically.
                 _rate_and_concurrency(client, propose=False)
             except ExternalProblem as problem:
                 await _send_problem(

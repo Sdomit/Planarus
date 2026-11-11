@@ -45,7 +45,7 @@ def test_auth_mode_derives_root_and_ignores_tenant_path(client, auth_on, session
     # A tenant tries to point the project at an arbitrary absolute path.
     r = client.post(
         "/api/v1/projects",
-        json={"workspace_id": ws, "title": "P", "slug": "proj", "folder_path": "/etc"},
+        json={"workspace_id": ws, "title": "P", "slug": "proj", "folder_path": "/etc", "mode": "agentic"},
         cookies=_auth(token),
     )
     assert r.status_code == 201, r.text
@@ -64,7 +64,7 @@ def test_local_mode_accepts_a_normal_absolute_folder(client, tmp_path):
     folder = str(tmp_path / "myproj")
     r = client.post(
         "/api/v1/projects",
-        json={"workspace_id": ws, "title": "P", "slug": "pp", "folder_path": folder},
+        json={"workspace_id": ws, "title": "P", "slug": "pp", "folder_path": folder, "mode": "agentic"},
     )
     assert r.status_code == 201, r.text
     assert r.json()["folder_path"] == os.path.realpath(folder)
@@ -79,6 +79,7 @@ def test_local_mode_rejects_dangerous_root(client):
             "title": "P",
             "slug": "pp",
             "folder_path": os.path.abspath(os.sep),  # filesystem/drive root
+            "mode": "agentic",
         },
     )
     assert r.status_code == 422, r.text
@@ -90,7 +91,7 @@ def test_local_mode_rejects_overlapping_root(client, tmp_path):
     os.makedirs(parent)
     first = client.post(
         "/api/v1/projects",
-        json={"workspace_id": ws, "title": "A", "slug": "aa", "folder_path": parent},
+        json={"workspace_id": ws, "title": "A", "slug": "aa", "folder_path": parent, "mode": "agentic"},
     )
     assert first.status_code == 201, first.text
     # A second project nested inside the first's root must be refused.
@@ -101,6 +102,7 @@ def test_local_mode_rejects_overlapping_root(client, tmp_path):
             "title": "B",
             "slug": "bb",
             "folder_path": os.path.join(parent, "child"),
+            "mode": "agentic",
         },
     )
     assert second.status_code == 409, second.text
@@ -114,11 +116,11 @@ def test_local_mode_update_cannot_repoint_onto_another_project(client, tmp_path)
     os.makedirs(b)
     pa = client.post(
         "/api/v1/projects",
-        json={"workspace_id": ws, "title": "A", "slug": "aa", "folder_path": a},
+        json={"workspace_id": ws, "title": "A", "slug": "aa", "folder_path": a, "mode": "agentic"},
     ).json()
     pb = client.post(
         "/api/v1/projects",
-        json={"workspace_id": ws, "title": "B", "slug": "bb", "folder_path": b},
+        json={"workspace_id": ws, "title": "B", "slug": "bb", "folder_path": b, "mode": "agentic"},
     ).json()
     # Repointing B onto A's root is an overlap → 409.
     r = client.patch(f"/api/v1/projects/{pb['id']}", json={"folder_path": a})

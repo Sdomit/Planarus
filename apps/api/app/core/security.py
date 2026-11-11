@@ -25,7 +25,9 @@ from app.core.config import settings
 # CORS middleware in app.main so the two never drift.
 LOCAL_UI_ORIGINS: tuple[str, ...] = (
     "http://localhost:5173",
+    "http://127.0.0.1:5173",
     "http://localhost:3000",
+    "http://127.0.0.1:3000",
 )
 
 

@@ -36,11 +36,13 @@ def test_project_export_import_round_trips(client):
     assert len(data["decisions"]) == 1
     assert len(data["comments"]) == 1
     assert len(data["connections"]) == 1
+    assert data["project"]["mode"] == "normal"
 
     res = client.post("/api/v1/projects/import", json={"workspace_id": ws, "data": data})
     assert res.status_code == 201, res.text
     new_proj = res.json()
     assert new_proj["id"] != proj
+    assert new_proj["mode"] == "normal"
 
     # The copy's graph mirrors the original, with every id remapped.
     copy = client.get(f"/api/v1/projects/{new_proj['id']}/export").json()

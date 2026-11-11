@@ -47,6 +47,7 @@ secrets/
 # Local agent/tooling config — machine paths + capability ids, never published
 .claude/
 .mcp.json
+.planarus-progress.json
 
 # Launch/marketing working material — drafts, distribution notes, internal
 # checklists. Kept locally, deliberately not part of the public repo.
@@ -55,17 +56,15 @@ docs/marketing/
 # ---------------------------------------------------------------------------
 # Working material kept on disk but out of the published repo.
 #
-# These are the agent operating pack and the internal build record. They are
-# how this repo is *developed*, not part of what it *ships*, and several of
-# them (NEXT_STEP, RISKS, the audit) are stale the moment they are pushed.
+# These are the local agent working material and the internal build record.
+# The small, reusable AGENTS.md and CLAUDE.md guides are published separately;
+# context/ and the notes below remain local because they can go stale.
 # A reference copy lives outside the repo; see docs/README.md.
 #
 # Note: untracking removes them from future commits only. Every commit made
 # before this one still carries them, so they remain readable in the history
 # of any public clone until that history is rewritten.
 # ---------------------------------------------------------------------------
-CLAUDE.md
-AGENTS.md
 deep-research-report.md
 context/
 docs/release-readiness-audit.md

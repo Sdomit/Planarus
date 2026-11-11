@@ -45,7 +45,7 @@ def _owned_project(client, session, token, slug):
     ).json()["id"]
     pid = client.post(
         "/api/v1/projects",
-        json={"workspace_id": ws, "title": "P", "slug": f"{slug}p"},
+        json={"workspace_id": ws, "title": "P", "slug": f"{slug}p", "mode": "agentic"},
         cookies=_auth(token),
     ).json()["id"]
     phase = phase_service.create_phase(session, pid, PhaseCreate(title="Ph"))
@@ -105,7 +105,7 @@ def test_sweep_routes_open_when_auth_off(client, session):
     # The same routes must work with no auth (guard is a complete no-op) — no login below.
     ws = client.post("/api/v1/workspaces", json={"name": "W", "slug": "woff"}).json()["id"]
     pid = client.post(
-        "/api/v1/projects", json={"workspace_id": ws, "title": "P", "slug": "poff"}
+        "/api/v1/projects", json={"workspace_id": ws, "title": "P", "slug": "poff", "mode": "agentic"}
     ).json()["id"]
     assert client.get(f"/api/v1/projects/{pid}/tasks").status_code == 200
     assert client.get(f"/api/v1/projects/{pid}/roadmap").status_code == 200

@@ -206,6 +206,7 @@ EXCLUDED: dict[str, str] = {
     "contextfile": "regenerated from the copy's own folder",
     "notificationrule": "addressed to the source instance's recipients",
     "agentrun": "run history of the source instance",
+    "mcp_activity": "short-lived connection presence from the source instance",
     "calendar_connection": "holds encrypted provider tokens — never copied",
     "oauthtransaction": (
         "a one-time, browser-bound handshake that expires in minutes (#113); it "

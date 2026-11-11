@@ -12,7 +12,7 @@ def _seed(client: TestClient) -> tuple[str, str]:
     ws = client.post("/api/v1/workspaces", json={"name": "MVP WS", "slug": "mvp-ws"}).json()
     proj = client.post(
         "/api/v1/projects",
-        json={"workspace_id": ws["id"], "title": "MVP Project", "slug": "mvp-project"},
+        json={"workspace_id": ws["id"], "title": "MVP Project", "slug": "mvp-project", "mode": "agentic"},
     ).json()
     pid = proj["id"]
     client.post(f"/api/v1/projects/{pid}/phases", json={"title": "Build", "status": "active"})

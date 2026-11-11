@@ -8,6 +8,7 @@ Start here if you're running it, not building it.
 |---|---|
 | [dev/setup.md](dev/setup.md) | Running locally with hot reload (Docker needs none of it — see the [README quickstart](../README.md#quickstart)) |
 | [guide/connect-planarus-to-chatgpt.md](guide/connect-planarus-to-chatgpt.md) | Exposing the read-only API to a private GPT — human-gated, read this fully first |
+| [guide/use-planarus-with-codex-and-claude.md](guide/use-planarus-with-codex-and-claude.md) | Connecting Codex and Claude to local MCP and using the agent prompt |
 | [guide/connect-your-calendar.md](guide/connect-your-calendar.md) | Optional Google / Microsoft calendar sync (off by default) |
 | [guide/lan-team-mode.md](guide/lan-team-mode.md) | Sharing one instance across a LAN (off by default; turn auth on first) |
 | [guide/team-administration.md](guide/team-administration.md) | Accounts, roles, and attribution |
@@ -39,8 +40,9 @@ actions integration.
 ## What is not in this repo
 
 Three kinds of working material are deliberately kept off the published tree:
-the agent operating pack (`CLAUDE.md`, `AGENTS.md`, `context/`), the design
-notes (`docs/plan/`), and the per-phase build record (`docs/dev/phase-*.md`).
+local generated context (`context/`), the design notes (`docs/plan/`), and the
+per-phase build record (`docs/dev/phase-*.md`). The short, reusable
+`AGENTS.md` and `CLAUDE.md` agent instructions are published.
 
 They describe how Planarus is developed, not what it ships, and several of them
 are point-in-time snapshots that would be stale on arrival. Excluding them keeps

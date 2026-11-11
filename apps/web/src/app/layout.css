@@ -187,6 +187,31 @@ body {
 }
 .ab-brand-name { color: var(--ab-sidebar-text-primary); letter-spacing: -0.03em; }
 .ab-brand-env { color: var(--ab-sidebar-text-muted); }
+.ab-brand-titleline { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ab-mcp-activity {
+  display: inline-flex; align-items: center; gap: 5px; max-width: 100%; margin-top: 4px;
+  font-size: 10px; font-weight: 650;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ab-mcp-activity--active { color: var(--status-success-fg, #16803c); }
+.ab-mcp-activity--idle { color: var(--ab-sidebar-text-muted); }
+.ab-mcp-activity-dot {
+  width: 6px; height: 6px; border-radius: 999px; flex: 0 0 6px;
+  background: var(--status-success-fg, #16803c);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-success-fg, #16803c) 18%, transparent);
+  animation: ab-mcp-pulse 1.6s ease-in-out infinite;
+}
+.ab-mcp-activity--idle .ab-mcp-activity-dot {
+  background: var(--ab-sidebar-text-muted);
+  box-shadow: none;
+  animation: none;
+}
+@keyframes ab-mcp-pulse {
+  50% { opacity: 0.45; transform: scale(0.8); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ab-mcp-activity-dot { animation: none; }
+}
 .ab-projsel {
   background: var(--ab-sidebar-panel);
   border-color: var(--ab-sidebar-border);

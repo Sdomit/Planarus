@@ -11,7 +11,7 @@ def _seed(client: TestClient) -> tuple[str, str]:
     ws = client.post("/api/v1/workspaces", json={"name": "WS", "slug": "ws-doc"}).json()
     proj = client.post(
         "/api/v1/projects",
-        json={"workspace_id": ws["id"], "title": "P", "slug": "p-doc"},
+        json={"workspace_id": ws["id"], "title": "P", "slug": "p-doc", "mode": "agentic"},
     ).json()
     return ws["id"], proj["id"]
 

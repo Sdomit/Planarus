@@ -195,7 +195,7 @@ def _create_project(client: TestClient) -> str:
     ws = client.post("/api/v1/workspaces", json={"name": "WS", "slug": "ws"}).json()
     res = client.post(
         "/api/v1/projects",
-        json={"workspace_id": ws["id"], "title": "P", "slug": "proj"},
+        json={"workspace_id": ws["id"], "title": "P", "slug": "proj", "mode": "agentic"},
     )
     assert res.status_code == 201, res.text
     return res.json()["id"]

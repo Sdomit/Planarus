@@ -115,6 +115,21 @@ describe('PlanningPanel', () => {
     expect(await screen.findByText('Test Project')).toBeTruthy()
   })
 
+  it('shows an agent task description as formatted Markdown in its details', async () => {
+    setupEmpty()
+    mockApi.tasks.list.mockResolvedValue([{
+      id: 'tsk_1', project_id: 'proj_1', phase_id: null, stage_id: null, parent_task_id: null,
+      title: 'Ship release', description: 'Finish the release:\n\n- Verify build\n- Publish notes',
+      status: 'in_progress', priority: null, due_at: null, sort_order: 0,
+      assignee_id: null, assignee_display: null, created_at: 'x', updated_at: 'x',
+    }])
+    const { container } = render(<PlanningPanel projectId="proj_1" initialTab="tasks" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ship release' }))
+    expect(screen.getByText('Finish the release:')).toBeTruthy()
+    expect(container.querySelectorAll('.pp-row-desc li')).toHaveLength(2)
+    expect(screen.getByText('Verify build')).toBeTruthy()
+  })
+
   it('shows all tabs', async () => {
     setupEmpty()
     render(<PlanningPanel projectId="proj_1" />)

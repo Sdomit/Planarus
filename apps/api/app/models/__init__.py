@@ -13,6 +13,7 @@ from app.models.doc import Doc  # noqa: F401
 from app.models.email_log import EmailLog  # noqa: F401
 from app.models.entity_connection import EntityConnection  # noqa: F401
 from app.models.link import Link  # noqa: F401
+from app.models.mcp_activity import McpActivity  # noqa: F401
 from app.models.mention import Mention  # noqa: F401
 from app.models.milestone import Milestone  # noqa: F401
 from app.models.notification_rule import NotificationRule  # noqa: F401
@@ -51,6 +52,7 @@ __all__ = [
     "NotificationRule",
     "EmailLog",
     "Milestone",
+    "McpActivity",
     "ChecklistItem",
     "Comment",
     "Link",

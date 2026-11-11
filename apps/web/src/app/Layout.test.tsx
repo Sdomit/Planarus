@@ -14,7 +14,7 @@ vi.mock('../api/client', () => {
         get: (id: string) => id === 'gone' ? Promise.reject(new Error('404')) : Promise.resolve({ id, title: 'Planarus', slug: 'planarus' }),
       },
       workspaces: { list: () => Promise.resolve([]) },
-      approvals: { list: never, listPaged: never },
+      approvals: { list: never, listPaged: never, autoAccept: () => Promise.resolve({ project_id: 'p1', enabled: false }) },
       tasks: { list: never },
       risks: { list: never },
       settings: { get: never },
@@ -97,6 +97,30 @@ describe('about', () => {
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByRole('dialog', { name: 'About Planarus' })).toBeNull()
   })
+})
+
+describe('agent prompts', () => {
+  // The shared prompt is also available from the Context menu, without opening Settings.
+  it('opens and copies the Codex and Claude prompt', async () => {
+    const writeText = vi.fn(() => Promise.resolve())
+    Object.assign(navigator, { clipboard: { writeText } })
+    render(<Layout />)
+
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Context' })).getByRole('button', { name: 'Agent prompts' }))
+    const dialog = screen.getByRole('dialog', { name: 'Agent prompts' })
+    const prompt = within(dialog).getByLabelText('Shared Planarus prompt') as HTMLTextAreaElement
+    expect(prompt.value).toContain('list_projects')
+    expect(prompt.value).toContain('Codex and Claude')
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Copy prompt' }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(prompt.value))
+    fireEvent.change(within(dialog).getByLabelText('Planarus project'), { target: { value: 'p1' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Copy project link' }))
+    await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(expect.stringContaining('"project_id": "p1"')))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'Agent prompts' })).toBeNull()
+  })
+
 })
 
 describe('LAN address', () => {

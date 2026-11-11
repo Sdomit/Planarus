@@ -128,6 +128,7 @@ def create_project(session: Session, data: ProjectCreate) -> Project:
         title=data.title,
         slug=data.slug,
         summary=data.summary,
+        mode=data.mode,
         status=data.status,
         folder_path=folder_path,
         created_at=now,
@@ -157,7 +158,8 @@ def create_project(session: Session, data: ProjectCreate) -> Project:
         project_id=project.id,
     )
     session.commit()
-    _provision_on_save(session, project)
+    if project.mode == "agentic":
+        _provision_on_save(session, project)
     session.refresh(project)
     return project
 
@@ -174,6 +176,8 @@ def update_project(
     # is server-managed in auth mode, and we never log absolute host paths (#115).
     folder_in_patch = "folder_path" in update_data
     requested_folder = update_data.pop("folder_path", None)
+    if folder_in_patch and project.mode == "normal":
+        raise PolicyError("folder_path is available only for Agentic projects")
     now = now_utc()
     for key, value in update_data.items():
         setattr(project, key, value)
@@ -197,7 +201,29 @@ def update_project(
         payload_json=json.dumps(update_data),
     )
     session.commit()
-    _provision_on_save(session, project)
+    if project.mode == "agentic":
+        _provision_on_save(session, project)
+    session.refresh(project)
+    return project
+
+
+def change_mode(session: Session, project: Project, mode: str) -> Project:
+    """Persist an explicit capability-mode transition without deleting data."""
+    previous = project.mode
+    project.mode = mode
+    project.updated_at = now_utc()
+    session.add(project)
+    create_audit_event(
+        session,
+        event_type="update",
+        actor_type="human",
+        entity_type="project",
+        entity_id=project.id,
+        workspace_id=project.workspace_id,
+        project_id=project.id,
+        payload_json=json.dumps({"mode": {"before": previous, "after": mode}}),
+    )
+    session.commit()
     session.refresh(project)
     return project
 
@@ -277,6 +303,7 @@ def duplicate_project(session: Session, project_id: str) -> Optional[Project]:
         slug=_unique_slug(session, src.workspace_id, src.slug),
         summary=src.summary,
         project_type=src.project_type,
+        mode=src.mode,
         status="idea",
         priority=src.priority,
         folder_path=None,  # ponytail: folderless copy → no re-provision / disk collision

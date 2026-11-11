@@ -393,6 +393,11 @@ def test_profiles_are_visibly_marked():
 @pytest.fixture
 def world(client, external_api, session):
     ws, proj = seed(client, "c2a")
+    changed = client.post(
+        f"/api/v1/projects/{proj}/mode",
+        json={"mode": "agentic", "confirmation_title": "P"},
+    )
+    assert changed.status_code == 200
     now = now_utc()
     task = Task(
         id=new_id("tsk"), project_id=proj, title="t", status="in_progress",

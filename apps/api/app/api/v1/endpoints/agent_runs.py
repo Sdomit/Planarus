@@ -2,13 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session
 
 from app.db.session import get_session
+from app.models.agent_run import AgentRun
 from app.schemas.agent_run import (
     AgentRunAnalytics,
     AgentRunCreate,
     AgentRunRead,
     AgentRunUpdate,
 )
-from app.services import agent_run_service
+from app.services import agent_run_service, project_mode_service
 
 router = APIRouter()
 
@@ -19,6 +20,7 @@ def list_agent_runs(
     limit: int = Query(default=100, ge=1, le=500),
     session: Session = Depends(get_session),
 ) -> list[AgentRunRead]:
+    project_mode_service.get_agentic_project(session, project_id)
     return agent_run_service.list_agent_runs(session, project_id, limit=limit)
 
 
@@ -32,6 +34,7 @@ def create_agent_run(
     data: AgentRunCreate,
     session: Session = Depends(get_session),
 ) -> AgentRunRead:
+    project_mode_service.get_agentic_project(session, project_id)
     try:
         return agent_run_service.create_agent_run(session, project_id, data)
     except ValueError:
@@ -45,6 +48,7 @@ def agent_run_analytics(
     project_id: str,
     session: Session = Depends(get_session),
 ) -> AgentRunAnalytics:
+    project_mode_service.get_agentic_project(session, project_id)
     try:
         return agent_run_service.build_analytics(session, project_id)
     except ValueError:
@@ -57,6 +61,10 @@ def update_agent_run(
     data: AgentRunUpdate,
     session: Session = Depends(get_session),
 ) -> AgentRunRead:
+    existing = session.get(AgentRun, run_id)
+    if existing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent run not found")
+    project_mode_service.get_agentic_project(session, existing.project_id)
     run = agent_run_service.update_agent_run(session, run_id, data)
     if run is None:
         raise HTTPException(

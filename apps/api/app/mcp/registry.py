@@ -1,8 +1,8 @@
 """Static, explicit MCP tool registry (Phase 7B).
 
 There is NO reflection / decorator auto-discovery: the two dicts below are the
-only source of tools. The read tier sees the ten read tools; the propose tier
-sees those ten plus exactly five proposal tools. No registered tool name (or
+only source of tools. The read tier sees the tools in READ_TOOLS; the propose tier
+also sees PROPOSE_TOOLS. No registered tool name (or
 implementation) involves approve/apply/reject/invalidate/delete/archive/export/
 filesystem/path/shell/command/git/network/http/chatgpt — asserted at import.
 """
@@ -54,6 +54,14 @@ READ_TOOLS: dict[str, ToolSpec] = {
         read_tools.ListProjectsArgs, read_tools.list_projects,
         output_schemas.LIST_PROJECTS,
     ),
+    "list_status_options": ToolSpec(
+        "list_status_options", "read",
+        "List exact task, decision, phase, milestone or risk status keys for one scoped project. Call before "
+        "proposing an explicit status; omit status on create to use the default "
+        "(task: backlog, decision: proposed).",
+        read_tools.ListStatusOptionsArgs, read_tools.list_status_options,
+        output_schemas.LIST_STATUS_OPTIONS,
+    ),
     "get_project_summary": ToolSpec(
         "get_project_summary", "read",
         "Return a bounded summary (status + counts + title) for one scoped project.",
@@ -89,6 +97,26 @@ READ_TOOLS: dict[str, ToolSpec] = {
         read_tools.ListPhaseScopedArgs, read_tools.list_risks,
         output_schemas.LIST_RISKS,
     ),
+    "list_phases": ToolSpec(
+        "list_phases", "read", "List phases for one scoped project (paged).",
+        read_tools.ListScopedArgs, read_tools.list_phases, output_schemas.LIST_PHASES,
+    ),
+    "list_milestones": ToolSpec(
+        "list_milestones", "read", "List milestones for one scoped project, optionally by phase.",
+        read_tools.ListPhaseScopedArgs, read_tools.list_milestones, output_schemas.LIST_MILESTONES,
+    ),
+    "list_comments": ToolSpec(
+        "list_comments", "read", "List comments for one scoped project, optionally by attached record.",
+        read_tools.ListCommentsArgs, read_tools.list_comments, output_schemas.LIST_COMMENTS,
+    ),
+    "list_links": ToolSpec(
+        "list_links", "read", "List URL links attached to records in one scoped project.",
+        read_tools.ListCommentsArgs, read_tools.list_links, output_schemas.LIST_LINKS,
+    ),
+    "list_connections": ToolSpec(
+        "list_connections", "read", "List typed links between records in one scoped project.",
+        read_tools.ListScopedArgs, read_tools.list_connections, output_schemas.LIST_CONNECTIONS,
+    ),
     "list_docs": ToolSpec(
         "list_docs", "read",
         "List document titles for one scoped project (no bodies).",
@@ -103,7 +131,7 @@ READ_TOOLS: dict[str, ToolSpec] = {
     ),
     "get_item": ToolSpec(
         "get_item", "read",
-        "Return one task, decision, risk or doc with its text fields at a larger "
+        "Return one task, decision, risk, phase, milestone, comment, link or doc with its text fields at a larger "
         "cap than list rows. Use this after a list result reports field_truncated, "
         "instead of proposing an edit from a clipped field.",
         read_tools.GetItemArgs, read_tools.get_item,
@@ -120,40 +148,87 @@ READ_TOOLS: dict[str, ToolSpec] = {
 PROPOSE_TOOLS: dict[str, ToolSpec] = {
     "create_task_proposal": ToolSpec(
         "create_task_proposal", "propose",
-        "Propose creating a task. Creates a PENDING approval only; a human must "
-        "approve and apply it before anything changes.",
+        "Propose creating a task. Queues a PENDING approval; Auto accept may "
+        "apply it if enabled. Omit status for backlog; "
+        "otherwise call list_status_options for task first.",
         propose_tools.CreateTaskProposalArgs, propose_tools.create_task_proposal,
         output_schemas.CREATE_TASK_PROPOSAL,
     ),
     "update_task_proposal": ToolSpec(
         "update_task_proposal", "propose",
-        "Propose updating a task (by task_id). Creates a PENDING approval only; "
-        "a human must approve and apply it before anything changes.",
+        "Propose updating a task (by task_id). Queues a PENDING approval; "
+        "Auto accept may apply it if enabled. Call "
+        "list_status_options for task before changing status.",
         propose_tools.UpdateTaskProposalArgs, propose_tools.update_task_proposal,
         output_schemas.UPDATE_TASK_PROPOSAL,
     ),
     "create_decision_proposal": ToolSpec(
         "create_decision_proposal", "propose",
-        "Propose recording a decision. Creates a PENDING approval only; a human "
-        "must approve and apply it before anything changes.",
+        "Propose recording a decision. Queues a PENDING approval; Auto accept "
+        "may apply it if enabled. Omit status for proposed; "
+        "otherwise call list_status_options for decision first.",
         propose_tools.CreateDecisionProposalArgs, propose_tools.create_decision_proposal,
         output_schemas.CREATE_DECISION_PROPOSAL,
     ),
     "update_canvas_proposal": ToolSpec(
         "update_canvas_proposal", "propose",
         "Propose replacing a canvas's contents (by doc_id) with a new Excalidraw "
-        "scene. Creates a PENDING approval only; a human must approve and apply it "
-        "before anything changes.",
+        "scene. Queues a PENDING approval; Auto accept may apply it if enabled.",
         propose_tools.UpdateCanvasProposalArgs, propose_tools.update_canvas_proposal,
         output_schemas.UPDATE_CANVAS_PROPOSAL,
     ),
     "create_connection_proposal": ToolSpec(
         "create_connection_proposal", "propose",
         "Propose a typed connection between two planning records. Creates a PENDING "
-        "approval only; a human must approve and apply it before anything changes.",
+        "approval; Auto accept may apply it if enabled.",
         propose_tools.CreateConnectionProposalArgs,
         propose_tools.create_connection_proposal,
         output_schemas.CREATE_CONNECTION_PROPOSAL,
+    ),
+    "create_phase_proposal": ToolSpec(
+        "create_phase_proposal", "propose", "Propose a new phase. Queues an approval; Auto accept may apply it. Omit status for planned.",
+        propose_tools.CreatePhaseProposalArgs, propose_tools.create_phase_proposal,
+        output_schemas.CREATE_PHASE_PROPOSAL,
+    ),
+    "update_phase_proposal": ToolSpec(
+        "update_phase_proposal", "propose", "Propose updating a phase. Queues an approval; Auto accept may apply it.",
+        propose_tools.UpdatePhaseProposalArgs, propose_tools.update_phase_proposal,
+        output_schemas.UPDATE_PHASE_PROPOSAL,
+    ),
+    "create_milestone_proposal": ToolSpec(
+        "create_milestone_proposal", "propose", "Propose a new milestone. Queues an approval; Auto accept may apply it. Omit status for planned.",
+        propose_tools.CreateMilestoneProposalArgs, propose_tools.create_milestone_proposal,
+        output_schemas.CREATE_MILESTONE_PROPOSAL,
+    ),
+    "update_milestone_proposal": ToolSpec(
+        "update_milestone_proposal", "propose", "Propose updating a milestone. Queues an approval; Auto accept may apply it.",
+        propose_tools.UpdateMilestoneProposalArgs, propose_tools.update_milestone_proposal,
+        output_schemas.UPDATE_MILESTONE_PROPOSAL,
+    ),
+    "create_risk_proposal": ToolSpec(
+        "create_risk_proposal", "propose", "Propose a new risk with severity. Queues an approval; Auto accept may apply it. Omit status for open.",
+        propose_tools.CreateRiskProposalArgs, propose_tools.create_risk_proposal,
+        output_schemas.CREATE_RISK_PROPOSAL,
+    ),
+    "update_risk_proposal": ToolSpec(
+        "update_risk_proposal", "propose", "Propose updating a risk. Queues an approval; Auto accept may apply it.",
+        propose_tools.UpdateRiskProposalArgs, propose_tools.update_risk_proposal,
+        output_schemas.UPDATE_RISK_PROPOSAL,
+    ),
+    "update_decision_proposal": ToolSpec(
+        "update_decision_proposal", "propose", "Propose updating a decision. Queues an approval; Auto accept may apply it.",
+        propose_tools.UpdateDecisionProposalArgs, propose_tools.update_decision_proposal,
+        output_schemas.UPDATE_DECISION_PROPOSAL,
+    ),
+    "create_comment_proposal": ToolSpec(
+        "create_comment_proposal", "propose", "Propose an agent comment attached to a project record. Queues an approval; Auto accept may apply it.",
+        propose_tools.CreateCommentProposalArgs, propose_tools.create_comment_proposal,
+        output_schemas.CREATE_COMMENT_PROPOSAL,
+    ),
+    "create_link_proposal": ToolSpec(
+        "create_link_proposal", "propose", "Propose an external URL link attached to a project record. Queues an approval; Auto accept may apply it.",
+        propose_tools.CreateLinkProposalArgs, propose_tools.create_link_proposal,
+        output_schemas.CREATE_LINK_PROPOSAL,
     ),
 }
 

@@ -31,7 +31,7 @@ def _project_with_folder(client: TestClient, tmp_path, slug: str = "gov") -> tup
     ws = client.post("/api/v1/workspaces", json={"name": "WS", "slug": f"ws-{slug}"}).json()
     proj = client.post(
         "/api/v1/projects",
-        json={"workspace_id": ws["id"], "title": "Gov", "slug": slug, "summary": "s"},
+        json={"workspace_id": ws["id"], "title": "Gov", "slug": slug, "summary": "s", "mode": "agentic"},
     ).json()
     folder = str(tmp_path / slug)
     os.makedirs(folder)

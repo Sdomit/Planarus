@@ -28,7 +28,7 @@ def test_create_task_proposal_pending_only(client: TestClient, session: Session)
     )
     assert res.metadata["status"] == "pending"
     assert set(res.metadata) == {"approval_id", "status", "action_type", "expires_at", "review_hint"}
-    assert res.metadata["review_hint"].startswith("Pending human review in Planarus Approval Queue")
+    assert res.metadata["review_hint"].startswith("Queued in Planarus Approval Queue")
     ars = _approvals(session, pid)
     assert len(ars) == 1
     assert ars[0].origin == "mcp" and ars[0].actor_ref == "mcp:test"
@@ -60,6 +60,27 @@ def test_create_decision_proposal_pending_only(client: TestClient, session: Sess
     assert res.metadata["action_type"] == "decision.create"
     assert len(_approvals(session, pid)) == 1
     assert session.exec(select(Decision).where(Decision.project_id == pid)).all() == []
+
+
+@pytest.mark.parametrize("kind,status", [("task", "todo"), ("decision", "open")])
+def test_invalid_project_status_rejected_before_queue(
+    client: TestClient, session: Session, kind: str, status: str
+) -> None:
+    ws, pid = seed(client, f"bad-{kind}-status")
+    cap = propose_cap(ws, pid)
+    with pytest.raises(errors.MCPToolError) as exc:
+        if kind == "task":
+            propose.create_task_proposal(
+                session, cap, propose.CreateTaskProposalArgs(project_id=pid, title="t", status=status)
+            )
+        else:
+            propose.create_decision_proposal(
+                session, cap,
+                propose.CreateDecisionProposalArgs(project_id=pid, title="d", decision="x", status=status),
+            )
+    assert exc.value.code == errors.CODE_INVALID
+    assert "status is not defined for this project" in exc.value.message
+    assert _approvals(session, pid) == []
 
 
 def test_update_task_derives_project_and_stays_pending(client: TestClient, session: Session) -> None:

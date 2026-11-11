@@ -12,8 +12,9 @@ from app.models.audit_event import AuditEvent
 from app.models.decision import Decision
 from app.models.project import Project
 from app.models.task import Task
+from app.schemas.status_option import StatusOptionCreate
 from app.schemas.task import TaskCreate, TaskUpdate
-from app.services import approval_service, task_service
+from app.services import approval_service, status_option_service, task_service
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
@@ -25,7 +26,8 @@ def _seed(client: TestClient, suffix: str = "apr") -> str:
     ws = client.post("/api/v1/workspaces", json={"name": "WS", "slug": f"ws-{suffix}"}).json()
     proj = client.post(
         "/api/v1/projects",
-        json={"workspace_id": ws["id"], "title": "P", "slug": f"p-{suffix}"},
+        # Approval state-machine coverage deliberately uses an Agentic project.
+        json={"workspace_id": ws["id"], "title": "P", "slug": f"p-{suffix}", "mode": "agentic"},
     ).json()
     return proj["id"]
 
@@ -143,6 +145,37 @@ def test_invalid_status_rejected(client: TestClient, session: Session) -> None:
     pid = _seed(client)
     with pytest.raises(PolicyError):
         _propose_task_create(session, pid, title="t", status="not-a-status")
+
+
+def test_unsupported_project_status_rejected_before_approval(client: TestClient, session: Session) -> None:
+    pid = _seed(client)
+    with pytest.raises(PolicyError, match="task status is not defined"):
+        _propose_task_create(session, pid, title="t", status="todo")
+    with pytest.raises(PolicyError, match="task status is not defined"):
+        _propose_task_create(session, pid, title="t", status=None)
+    assert session.exec(select(ApprovalRequest).where(ApprovalRequest.project_id == pid)).all() == []
+
+
+def test_removed_custom_status_invalidates_approved_proposal(client: TestClient, session: Session) -> None:
+    pid = _seed(client)
+    option = status_option_service.create_status_option(
+        session, pid, StatusOptionCreate(entity_type="task", label="Todo")
+    )
+    ar = _propose_task_create(session, pid, title="t", status="todo")
+    approval_service.approve(session, ar.id)
+    status_option_service.delete_status_option(session, option.id)
+    ar.status = "failed"  # Legacy apply failure before this validation existed.
+    ar.failure_reason = "ValueError"
+    session.add(ar)
+    session.commit()
+
+    detail = client.get(f"/api/v1/approvals/{ar.id}").json()
+    assert detail["stale_reason"] == "task status is not defined for this project"
+
+    res = client.post(f"/api/v1/approvals/{ar.id}/apply", headers=_hdr(client))
+    assert res.status_code == 409
+    assert session.get(ApprovalRequest, ar.id).status == "invalidated"
+    assert session.exec(select(Task).where(Task.project_id == pid)).all() == []
 
 
 def test_cross_project_target_rejected(client: TestClient, session: Session) -> None:
@@ -613,6 +646,27 @@ def test_detail_missing_404(client: TestClient) -> None:
 def test_approve_missing_404(client: TestClient) -> None:
     res = client.post("/api/v1/approvals/apr_missing/approve", headers=_hdr(client))
     assert res.status_code == 404
+
+
+def test_normal_project_blocks_approval_id_routes(client: TestClient, session: Session) -> None:
+    """An approval id must not bypass the project capability boundary."""
+    ws = client.post("/api/v1/workspaces", json={"name": "WS", "slug": "normal-approval-ws"}).json()
+    project = client.post(
+        "/api/v1/projects",
+        json={"workspace_id": ws["id"], "title": "Private", "slug": "private-approval"},
+    ).json()
+    approval = _propose_task_create(session, project["id"])
+    token = _hdr(client)
+
+    blocked = [
+        client.get(f"/api/v1/approvals/{approval.id}"),
+        client.get(f"/api/v1/approvals/{approval.id}/audit"),
+        client.post(f"/api/v1/approvals/{approval.id}/approve", headers=token),
+        client.post(f"/api/v1/approvals/{approval.id}/reject", headers=token, json={"reason": "no"}),
+        client.post(f"/api/v1/approvals/{approval.id}/apply", headers=token),
+        client.post(f"/api/v1/approvals/{approval.id}/invalidate", headers=token),
+    ]
+    assert all(response.status_code == 403 for response in blocked)
 
 
 # --- model constraint ---------------------------------------------------------

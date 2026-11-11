@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react'
-import { api, Project, Workspace, Task, Risk } from '../api/client'
+import { api, Project, Workspace, Task, Risk, type ProjectMode } from '../api/client'
 import FolderPicker from './FolderPicker'
 import { StatusBadge } from './StatusBadge'
 import { Icon } from './Icon'
@@ -34,10 +34,11 @@ const stop = (e: MouseEvent) => e.stopPropagation()
 
 interface ProjAgg { project: Project; tasks: Task[]; risks: Risk[]; done: number; total: number; pct: number }
 interface DashboardProps {
-  onSelectProject?: (p: { id: string; title: string; slug: string; workspaceSlug: string }) => void
+  onSelectProject?: (p: { id: string; title: string; slug: string; workspaceSlug: string; mode: Project['mode'] }) => void
+  onOpenAgentPrompts?: (project: Project) => void
 }
 
-export default function Dashboard({ onSelectProject }: DashboardProps) {
+export default function Dashboard({ onSelectProject, onOpenAgentPrompts }: DashboardProps) {
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [aggs, setAggs] = useState<ProjAgg[]>([])
   const [pending, setPending] = useState(0)
@@ -45,7 +46,7 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
   const [error, setError] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [form, setForm] = useState({ title: '', slug: '', status: 'idea', summary: '', folder: '' })
+  const [form, setForm] = useState({ title: '', slug: '', status: 'idea', summary: '', folder: '', mode: 'normal' as ProjectMode })
   const [pickingFolder, setPickingFolder] = useState(false)
 
   // Manage-project state
@@ -111,17 +112,19 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
     if (!workspace) return
     setCreating(true)
     try {
-      await api.projects.create({
+      const created = await api.projects.create({
         workspace_id: workspace.id,
         title: form.title,
         slug: form.slug,
         status: form.status,
         summary: form.summary || undefined,
-        folder_path: form.folder.trim() || undefined,
+        folder_path: form.mode === 'agentic' ? form.folder.trim() || undefined : undefined,
+        mode: form.mode,
       })
       setShowCreate(false)
-      setForm({ title: '', slug: '', status: 'idea', summary: '', folder: '' })
-      loadData()
+      setForm({ title: '', slug: '', status: 'idea', summary: '', folder: '', mode: 'normal' })
+      await loadData()
+      onOpenAgentPrompts?.(created)
     } catch (e) {
       setError(String(e))
     } finally {
@@ -167,6 +170,13 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
       summary: patch.summary.trim() || null,
       priority: patch.priority || null,
     })
+    setEditFor(null)
+    await loadData()
+  }
+
+  async function changeMode(mode: ProjectMode, confirmationTitle: string) {
+    if (!editFor) return
+    await api.projects.changeMode(editFor.id, mode, confirmationTitle)
     setEditFor(null)
     await loadData()
   }
@@ -274,7 +284,7 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
             const archived = !!p.archived_at
             // Every project here was loaded scoped to `workspace` (api.projects.list(ws.id, ...)
             // above), so its slug is always this workspace's — no separate lookup needed.
-            const open = () => onSelectProject?.({ id: p.id, title: p.title, slug: p.slug, workspaceSlug: workspace.slug })
+            const open = () => onSelectProject?.({ id: p.id, title: p.title, slug: p.slug, workspaceSlug: workspace.slug, mode: p.mode })
             return (
               <article
                 key={p.id}
@@ -313,6 +323,7 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
                           }}
                         >
                           <MenuItem onClick={() => { setMenuFor(null); setEditFor(p) }}>Edit details…</MenuItem>
+                          <MenuItem onClick={() => { setMenuFor(null); onOpenAgentPrompts?.(p) }}>Agent prompts…</MenuItem>
                           {!archived && <MenuItem onClick={() => act(() => api.projects.update(p.id, { status: 'active' }))}>Set active</MenuItem>}
                           {!archived && <MenuItem onClick={() => act(() => api.projects.update(p.id, { status: 'done' }))}>Set done</MenuItem>}
                           <MenuItem onClick={() => act(() => api.projects.duplicate(p.id))}>Duplicate</MenuItem>
@@ -343,6 +354,7 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
                     Updated {new Date(p.updated_at).toLocaleDateString()}
                   </span>
                   {p.priority && <StatusBadge kind="priority" value={p.priority} />}
+                  <span className={`status-badge ${(p.mode ?? 'agentic') === 'agentic' ? 'status-badge-info' : ''}`}>{(p.mode ?? 'agentic') === 'agentic' ? 'Agentic' : 'Normal'}</span>
                 </div>
               </article>
             )
@@ -367,6 +379,19 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
                     onChange={(e) => setForm((f) => ({ ...f, title: e.target.value, slug: slugify(e.target.value) }))}
                     placeholder="Project title" />
                 </div>
+                <fieldset className="form-field" style={{ border: 0, padding: 0, margin: 0 }}>
+                  <legend className="form-label">Project mode</legend>
+                  <label style={{ display: 'block', marginBottom: 8, cursor: 'pointer' }}>
+                    <input type="radio" name="np-mode" checked={form.mode === 'normal'}
+                      onChange={() => setForm(f => ({ ...f, mode: 'normal' }))} />{' '}
+                    <strong>Normal</strong> — private planning without AI, MCP, context, approvals, or GitHub tools.
+                  </label>
+                  <label style={{ display: 'block', cursor: 'pointer' }}>
+                    <input type="radio" name="np-mode" checked={form.mode === 'agentic'}
+                      onChange={() => setForm(f => ({ ...f, mode: 'agentic' }))} />{' '}
+                    <strong>Agentic</strong> — enables MCP, context packs, approvals, and Git/GitHub features.
+                  </label>
+                </fieldset>
                 <div className="form-field">
                   <label className="form-label" htmlFor="np-slug">Slug</label>
                   <input id="np-slug" className="input" required value={form.slug}
@@ -385,7 +410,7 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
                   <input id="np-sum" className="input" value={form.summary}
                     onChange={(e) => setForm((f) => ({ ...f, summary: e.target.value }))} placeholder="Optional" />
                 </div>
-                <div className="form-field">
+                {form.mode === 'agentic' && <div className="form-field">
                   <label className="form-label" htmlFor="np-folder">Folder / repository</label>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <input id="np-folder" className="input" style={{ fontFamily: 'var(--font-mono, monospace)' }}
@@ -396,7 +421,7 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
                       Browse…
                     </button>
                   </div>
-                </div>
+                </div>}
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowCreate(false)}>Cancel</button>
@@ -420,6 +445,7 @@ export default function Dashboard({ onSelectProject }: DashboardProps) {
           project={editFor}
           onClose={() => setEditFor(null)}
           onSave={saveEdit}
+          onModeChange={changeMode}
         />
       )}
 
@@ -489,17 +515,20 @@ function MenuItem({ children, onClick, danger }: { children: ReactNode; onClick:
 }
 
 function EditModal({
-  project, onClose, onSave,
+  project, onClose, onSave, onModeChange,
 }: {
   project: Project
   onClose: () => void
   onSave: (patch: { title: string; summary: string; priority: string }) => Promise<void>
+  onModeChange: (mode: ProjectMode, confirmationTitle: string) => Promise<void>
 }) {
   const [title, setTitle] = useState(project.title)
   const [summary, setSummary] = useState(project.summary ?? '')
   const [priority, setPriority] = useState(project.priority ?? '')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [nextMode, setNextMode] = useState<ProjectMode>(project.mode ?? 'agentic')
+  const [modeConfirm, setModeConfirm] = useState('')
   async function submit(e: FormEvent) {
     e.preventDefault()
     setSaving(true)
@@ -528,6 +557,21 @@ function EditModal({
               <label className="form-label" htmlFor="ep-title">Title</label>
               <input id="ep-title" className="input" required maxLength={200} autoFocus
                 value={title} onChange={(e) => setTitle(e.target.value)} />
+            </div>
+            <div className="form-field">
+              <label className="form-label" htmlFor="ep-mode">Project mode</label>
+              <select id="ep-mode" className="input select" value={nextMode} onChange={e => setNextMode(e.target.value as ProjectMode)}>
+                <option value="normal">Normal — agent features disabled</option>
+                <option value="agentic">Agentic — agent features enabled</option>
+              </select>
+              {nextMode !== (project.mode ?? 'agentic') && <>
+                <p style={{ fontSize: 'var(--text-xs)', margin: 'var(--space-2) 0' }}>Agent data is retained but inaccessible in Normal mode. Type the exact project title to confirm.</p>
+                <input className="input" aria-label="Confirm project title" value={modeConfirm} onChange={e => setModeConfirm(e.target.value)} placeholder={project.title} />
+                <button type="button" className="btn btn-outline btn-sm" style={{ marginTop: 8 }} disabled={modeConfirm !== project.title || saving}
+                  onClick={() => { setSaving(true); setSaveError(null); onModeChange(nextMode, modeConfirm).catch(err => setSaveError(String(err))).finally(() => setSaving(false)) }}>
+                  Change to {nextMode}
+                </button>
+              </>}
             </div>
             <div className="form-field">
               <label className="form-label" htmlFor="ep-sum">Summary</label>

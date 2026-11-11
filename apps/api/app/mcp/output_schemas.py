@@ -68,6 +68,20 @@ LIST_PROJECTS = _schema(
     ("count", "project_ids", "statuses"),
 )
 
+LIST_STATUS_OPTIONS = _schema(
+    {
+        "project_id": {"type": "string"},
+        "entity_type": {"type": "string", "enum": ["task", "decision", "phase", "milestone", "risk"]},
+        "default_status": {"type": "string"},
+        "count": {"type": "integer"},
+        "status_keys": {"type": "array", "items": {"type": "string"}},
+    },
+    ("project_id", "entity_type", "default_status", "count", "status_keys"),
+    envelope=False,
+    paged=True,
+)
+
+
 GET_PROJECT_SUMMARY = _schema(
     {
         "project_id": {"type": "string"},
@@ -140,6 +154,41 @@ LIST_RISKS = _schema(
     paged=True,
 )
 
+LIST_PHASES = _schema(
+    {"project_id": {"type": "string"}, "count": {"type": "integer"},
+     "phase_ids": {"type": "array", "items": {"type": "string"}},
+     "statuses": {"type": "array", "items": {"type": "string"}}},
+    ("project_id", "count", "phase_ids", "statuses"), paged=True,
+)
+
+LIST_MILESTONES = _schema(
+    {"project_id": {"type": "string"}, "phase_id": {"type": ["string", "null"]},
+     "count": {"type": "integer"},
+     "milestone_ids": {"type": "array", "items": {"type": "string"}},
+     "statuses": {"type": "array", "items": {"type": "string"}}},
+    ("project_id", "phase_id", "count", "milestone_ids", "statuses"), paged=True,
+)
+
+LIST_COMMENTS = _schema(
+    {"project_id": {"type": "string"}, "count": {"type": "integer"},
+     "comment_ids": {"type": "array", "items": {"type": "string"}}},
+    ("project_id", "count", "comment_ids"), paged=True,
+)
+
+LIST_LINKS = _schema(
+    {"project_id": {"type": "string"}, "count": {"type": "integer"},
+     "link_ids": {"type": "array", "items": {"type": "string"}}},
+    ("project_id", "count", "link_ids"), paged=True,
+)
+
+LIST_CONNECTIONS = _schema(
+    {"project_id": {"type": "string"}, "count": {"type": "integer"},
+     "connection_ids": {"type": "array", "items": {"type": "string"}},
+     "source_entity_ids": {"type": "array", "items": {"type": "string"}},
+     "target_entity_ids": {"type": "array", "items": {"type": "string"}}},
+    ("project_id", "count", "connection_ids", "source_entity_ids", "target_entity_ids"), paged=True,
+)
+
 LIST_DOCS = _schema(
     {
         "project_id": {"type": "string"},
@@ -172,7 +221,7 @@ GET_DOC_EXCERPT = _schema(
 
 GET_ITEM = _schema(
     {
-        "kind": {"type": "string", "enum": ["task", "decision", "risk", "doc"]},
+        "kind": {"type": "string", "enum": ["task", "decision", "risk", "doc", "phase", "milestone", "comment", "link"]},
         "item_id": {"type": "string"},
         "project_id": {"type": "string"},
         "max_chars": {"type": "integer"},
@@ -202,8 +251,8 @@ GET_APPROVAL_STATUS = _schema(
 )
 
 # --- propose tools --------------------------------------------------------------
-# All five proposal tools return the identical shape (_proposal_result in
-# tools/propose.py) — one shared schema, not five copies.
+# Proposal tools return the identical shape (_proposal_result in
+# tools/propose.py) — one shared schema rather than a copy per action.
 
 _PROPOSAL_RESULT = _schema(
     {
@@ -222,3 +271,12 @@ UPDATE_TASK_PROPOSAL = _PROPOSAL_RESULT
 CREATE_DECISION_PROPOSAL = _PROPOSAL_RESULT
 UPDATE_CANVAS_PROPOSAL = _PROPOSAL_RESULT
 CREATE_CONNECTION_PROPOSAL = _PROPOSAL_RESULT
+CREATE_PHASE_PROPOSAL = _PROPOSAL_RESULT
+UPDATE_PHASE_PROPOSAL = _PROPOSAL_RESULT
+CREATE_MILESTONE_PROPOSAL = _PROPOSAL_RESULT
+UPDATE_MILESTONE_PROPOSAL = _PROPOSAL_RESULT
+CREATE_RISK_PROPOSAL = _PROPOSAL_RESULT
+UPDATE_RISK_PROPOSAL = _PROPOSAL_RESULT
+UPDATE_DECISION_PROPOSAL = _PROPOSAL_RESULT
+CREATE_COMMENT_PROPOSAL = _PROPOSAL_RESULT
+CREATE_LINK_PROPOSAL = _PROPOSAL_RESULT
