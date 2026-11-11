@@ -14,4 +14,18 @@
   color: var(--status-danger-fg);
 }
 
-.ab-proj-desc { color: var(--text-secondary); }
+.ab-proj-grid { align-items: start; }
+.ab-proj { min-width: 0; }
+.ab-proj-name, .ab-proj-sub { overflow-wrap: anywhere; }
+.ab-proj-desc {
+  color: var(--text-secondary);
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+}
+.ab-proj-foot { flex-wrap: wrap; }
+.ab-proj-foot > span:first-child { min-width: 0; overflow-wrap: anywhere; }

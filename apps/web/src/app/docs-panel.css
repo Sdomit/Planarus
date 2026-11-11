@@ -1,6 +1,9 @@
 /* Docs Panel — thin structural layer over Forma / planarus.css primitives */
 
 .dp-panel { display: flex; flex-direction: column; gap: 0; }
+.ab-note-composer { position: relative; }
+.ab-note-composer .input { min-width: 0; }
+.ab-note-composer-status { color: var(--text-tertiary); font-size: var(--text-xs); white-space: nowrap; }
 
 /* List view header */
 .dp-list-header {

@@ -307,10 +307,12 @@ describe('DocsPanel', () => {
   })
 
   // Notes = this same panel locked to doc_type 'note' (Layout renders it as the Notes view).
-  it('docType="note" filters the list and creates from the Keep-style composer', async () => {
+  it('opens an editable note on focus, carries typed title through creation, and autosaves it', async () => {
     mockApi.docs.list.mockResolvedValue([])
-    mockApi.docs.create.mockResolvedValue(DOC_FULL)
+    let finishCreate: (doc: typeof DOC_FULL) => void = () => {}
+    mockApi.docs.create.mockImplementation(() => new Promise(resolve => { finishCreate = resolve }))
     mockApi.docs.get.mockResolvedValue(DOC_FULL)
+    mockApi.docs.update.mockResolvedValue({ ...DOC_FULL, title: 'Groceries', version: 2 })
     render(<DocsPanel projectId="proj_1" docType="note" onClose={vi.fn()} />)
 
     await waitFor(() => expect(screen.getByText(/No notes yet/i)).toBeTruthy())
@@ -319,14 +321,17 @@ describe('DocsPanel', () => {
     // No "+ New Note" button and no type dropdown — the composer replaces both.
     expect(screen.queryByText('+ New Note')).toBeNull()
     expect(screen.queryByText('Type')).toBeNull()
-    fireEvent.change(screen.getByPlaceholderText('Take a note…'), { target: { value: 'Groceries' } })
-    fireEvent.keyDown(screen.getByPlaceholderText('Take a note…'), { key: 'Enter' })
-
+    const composer = screen.getByPlaceholderText('Take a note…')
+    fireEvent.focus(composer)
+    expect(mockApi.docs.create).toHaveBeenCalledWith('proj_1', { title: 'Untitled', doc_type: 'note' })
+    fireEvent.change(composer, { target: { value: 'Groceries' } })
+    await act(async () => { finishCreate(DOC_FULL) })
+    const titleBox = await screen.findByLabelText('Title') as HTMLInputElement
+    expect(titleBox.value).toBe('Groceries')
+    expect(document.activeElement).toBe(titleBox)
     await waitFor(() =>
-      expect(mockApi.docs.create).toHaveBeenCalledWith('proj_1', {
-        title: 'Groceries',
-        doc_type: 'note',
-      })
+      expect(mockApi.docs.update).toHaveBeenCalledWith('doc_1', expect.objectContaining({ title: 'Groceries' })),
+      { timeout: 2000 },
     )
   })
 

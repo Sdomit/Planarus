@@ -341,7 +341,7 @@ export default function Dashboard({ onSelectProject, onOpenAgentPrompts }: Dashb
                     )}
                   </div>
                 </div>
-                {p.summary && <div className="ab-proj-desc">{p.summary}</div>}
+                {p.summary && <div className="ab-proj-desc" title={p.summary}>{p.summary}</div>}
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 6 }}>
                     <span>{done}/{total} tasks</span><span>{pct}%</span>

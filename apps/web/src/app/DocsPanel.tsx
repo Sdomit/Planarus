@@ -620,36 +620,34 @@ function NoteColors(
   )
 }
 
-/**
- * Keep's "Take a note…" bar: type a title, press Enter, land in the editor.
- * ponytail: a plain input, not an expanding inline rich-text composer — the
- * editor is one keystroke away and already does everything.
- */
+/** Open a new note on focus, retaining text typed while the local create runs. */
 function NoteComposer(
-  { projectId, docType, onCreated }: { projectId: string; docType: string; onCreated: (d: Doc) => void },
+  { projectId, docType, onCreated }: { projectId: string; docType: string; onCreated: (d: Doc, draftTitle: string) => void },
 ) {
   const [title, setTitle] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const draftTitle = useRef('')
+  const creating = useRef(false)
 
   const create = () => {
-    const t = title.trim()
-    if (!t || busy) return
+    if (creating.current) return
+    creating.current = true
     setBusy(true); setError(null)
-    api.docs.create(projectId, { title: t, doc_type: docType })
-      .then(d => { setTitle(''); onCreated(d) })
+    api.docs.create(projectId, { title: 'Untitled', doc_type: docType })
+      .then(d => onCreated(d, draftTitle.current.trim()))
       .catch((e: Error) => setError(e.message))
-      .finally(() => setBusy(false))
+      .finally(() => { creating.current = false; setBusy(false) })
   }
 
   return (
-    <div className="ab-note-composer">
-      <input className="input" type="text" value={title} disabled={busy}
+    <div className="ab-note-composer" onClick={create}>
+      <input className="input" type="text" value={title}
         placeholder={`Take a ${nouns(docType).noun}…`} aria-label={`New ${nouns(docType).noun} title`}
-        onChange={e => setTitle(e.target.value)}
+        onFocus={create}
+        onChange={e => { draftTitle.current = e.target.value; setTitle(e.target.value) }}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); create() } }} />
-      <button type="button" className="btn btn-solid btn-sm" disabled={!title.trim() || busy}
-        onClick={create}>{busy ? 'Adding…' : 'Add'}</button>
+      {busy && <span className="ab-note-composer-status">Opening…</span>}
       {error && <p className="form-error">{error}</p>}
     </div>
   )
@@ -658,6 +656,7 @@ function NoteComposer(
 interface DocListProps {
   projectId: string
   onSelect: (doc: DocSummary) => void
+  onCreated: (doc: Doc, draftTitle: string) => void
   onNew: () => void
   onClose?: () => void
   docType?: string
@@ -724,7 +723,7 @@ function DocTreeRow({
   )
 }
 
-function DocList({ projectId, onSelect, onNew, onClose, docType, onRemoved }: DocListProps) {
+function DocList({ projectId, onSelect, onCreated, onNew, onClose, docType, onRemoved }: DocListProps) {
   const [docs, setDocs] = useState<DocSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -770,7 +769,7 @@ function DocList({ projectId, onSelect, onNew, onClose, docType, onRemoved }: Do
 
   // Keep-ish: an always-present composer instead of a button that swaps the view.
   const composer = docType ? (
-    <NoteComposer projectId={projectId} docType={docType} onCreated={onSelect} />
+    <NoteComposer projectId={projectId} docType={docType} onCreated={onCreated} />
   ) : null
 
   const searchBox = (
@@ -1265,10 +1264,12 @@ interface DocEditorProps {
   /** Open armed for editing instead of read-only — set for a doc created a
    * click ago, which has nothing to read yet. */
   startEditing?: boolean
+  initialTitle?: string
+  focusTitle?: boolean
 }
 type SaveState = 'saved' | 'unsaved' | 'saving' | 'conflict' | 'error'
 
-function DocEditor({ docId, onBack, onRemoved, onOpenDoc, startEditing }: DocEditorProps) {
+function DocEditor({ docId, onBack, onRemoved, onOpenDoc, startEditing, initialTitle, focusTitle }: DocEditorProps) {
   const [doc, setDoc] = useState<Doc | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -1287,6 +1288,7 @@ function DocEditor({ docId, onBack, onRemoved, onOpenDoc, startEditing }: DocEdi
   startEditingRef.current = !!startEditing
   const [exportMsg, setExportMsg] = useState<string | null>(null)
   const [title, setTitle] = useState('')
+  const titleInputRef = useRef<HTMLInputElement>(null)
   // Every doc in this project, keyed by id (plan 24: live childPage titles +
   // tombstone detection; also feeds the breadcrumb). Loaded once per project,
   // alongside the doc itself — DocEditor persists across in-place doc switches
@@ -1594,8 +1596,8 @@ function DocEditor({ docId, onBack, onRemoved, onOpenDoc, startEditing }: DocEdi
     editor?.setEditable(armed)
     // Pressing Edit should put the caret in the prose — otherwise it takes a
     // second click to start typing, and the toolbar appears to do nothing.
-    if (armed) editor?.commands.focus()
-  }, [editor, editing, lockedByOther])
+    if (armed && !focusTitle) editor?.commands.focus()
+  }, [editor, editing, lockedByOther, focusTitle])
 
   // Following a link is an in-place doc switch, not a remount, so the read-only
   // default has to be re-applied per doc rather than only on mount. Keyed on
@@ -1614,7 +1616,8 @@ function DocEditor({ docId, onBack, onRemoved, onOpenDoc, startEditing }: DocEdi
       .then(d => {
         if (cancelled) return
         setDoc(d); docRef.current = d; versionRef.current = d.version
-        setTitle(d.title); titleRef.current = d.title
+        const openedTitle = initialTitle?.trim() || d.title
+        setTitle(openedTitle); titleRef.current = openedTitle
         // `editor` is a closed-over snapshot; Tiptap can recreate its own Editor
         // instance between this effect firing and the fetch resolving (#183
         // step 3c surfaced this via the faster initialDocId mount path, with no
@@ -1638,12 +1641,21 @@ function DocEditor({ docId, onBack, onRemoved, onOpenDoc, startEditing }: DocEdi
               .setContent(parsed as never, { emitUpdate: false }).run()
           }
         }
-        setSaveState('saved')
+        setSaveState(openedTitle === d.title ? 'saved' : 'unsaved')
       })
       .catch((e: Error) => { if (!cancelled) setLoadError(e.message) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [docId, editor])
+  }, [docId, editor, initialTitle])
+
+  useEffect(() => {
+    if (loading || !focusTitle || !editing || lockedByOther) return
+    const input = titleInputRef.current
+    if (!input) return
+    input.focus()
+    if (initialTitle) input.setSelectionRange(input.value.length, input.value.length)
+    else input.select()
+  }, [loading, focusTitle, editing, lockedByOther, initialTitle])
 
   // The project's full doc list, for childPage titles/tombstones and the
   // breadcrumb — loaded once per project (DocEditor persists across in-place
@@ -1831,7 +1843,7 @@ function DocEditor({ docId, onBack, onRemoved, onOpenDoc, startEditing }: DocEdi
           <Icon name="arrow-left" className="ic-14" /> Back
         </button>
         {/* The title is the note's section heading — edit in place, autosaved. */}
-        <input className="dp-title-input" type="text" value={title} disabled={lockedByOther || !editing}
+        <input ref={titleInputRef} className="dp-title-input" type="text" value={title} disabled={lockedByOther || !editing}
           aria-label="Title" placeholder="Untitled — name this page"
           onChange={e => rename(e.target.value)}
           onBlur={() => { if (!title.trim()) rename(doc.title) }} />
@@ -2040,6 +2052,7 @@ export default function DocsPanel({ projectId, onClose, docType, captureTitle, i
   const [selected, setSelected] = useState<{ id: string; format: string } | null>(null)
   // The one doc this panel just created — the only one that opens in edit mode.
   const [createdId, setCreatedId] = useState<string | null>(null)
+  const [createdTitle, setCreatedTitle] = useState('')
 
   // Fetched only once a document is actually open — browsing the list costs
   // nothing extra.
@@ -2060,10 +2073,11 @@ export default function DocsPanel({ projectId, onClose, docType, captureTitle, i
   }, [initialDocId])
 
   const handleSelect = (doc: DocSummary) => {
+    setCreatedId(null)
     setSelected({ id: doc.id, format: doc.editor_format }); setView('editor')
     onDocSelected?.(doc.id)
   }
-  const handleCreated = (doc: Doc) => {
+  const handleCreated = (doc: Doc, draftTitle = '') => {
     // Merges the new doc into the already-loaded target list so it is
     // immediately selectable as a connection endpoint from any other open
     // document, rather than staying invisible until the panel remounts.
@@ -2071,10 +2085,11 @@ export default function DocsPanel({ projectId, onClose, docType, captureTitle, i
     // Docs open read-only, but a document created one click ago has nothing to
     // read — land in the editor, armed.
     setCreatedId(doc.id)
+    setCreatedTitle(draftTitle)
     setSelected({ id: doc.id, format: doc.editor_format }); setView('editor')
     onDocSelected?.(doc.id)
   }
-  const goBack = () => { setView('list'); setSelected(null); onDocSelected?.(null) }
+  const goBack = () => { setView('list'); setSelected(null); setCreatedId(null); onDocSelected?.(null) }
   // Dropping the target lets ConnectionProvider's own prune effect (keyed on
   // `targets`) clean up any connection that pointed at it — no separate
   // connections-side update needed.
@@ -2086,6 +2101,7 @@ export default function DocsPanel({ projectId, onClose, docType, captureTitle, i
   // persists across the docId change (same pattern initialDocId already uses).
   const openDocById = useCallback((id: string) => {
     api.docs.get(id).then(d => {
+      setCreatedId(null)
       setSelected({ id: d.id, format: d.editor_format }); setView('editor')
       onDocSelected?.(d.id)
     }).catch(() => {})
@@ -2093,7 +2109,7 @@ export default function DocsPanel({ projectId, onClose, docType, captureTitle, i
 
   return (
     <div className="dp-panel">
-      {view === 'list' && <DocList projectId={projectId} onSelect={handleSelect} onNew={() => setView('new')} onClose={onClose} docType={docType} onRemoved={handleRemoved} />}
+      {view === 'list' && <DocList projectId={projectId} onSelect={handleSelect} onCreated={handleCreated} onNew={() => setView('new')} onClose={onClose} docType={docType} onRemoved={handleRemoved} />}
       {view === 'new' && <CreateDocForm projectId={projectId} onCreated={handleCreated} onCancel={() => setView('list')} lockedType={docType} initialTitle={captureTitle} />}
       {/* Mounted unconditionally, and `ready` carries the loading state instead.
           Wrapping the editor only once loaded would change the element type at
@@ -2110,7 +2126,9 @@ export default function DocsPanel({ projectId, onClose, docType, captureTitle, i
                 <CanvasEditor docId={selected.id} onBack={goBack} />
               </Suspense>
             : <DocEditor docId={selected.id} onBack={goBack} onRemoved={handleRemoved} onOpenDoc={openDocById}
-                startEditing={selected.id === createdId} />
+                startEditing={docType === 'note' || selected.id === createdId}
+                initialTitle={selected.id === createdId ? createdTitle : undefined}
+                focusTitle={selected.id === createdId && docType === 'note'} />
         )}
       </ConnectionProvider>
     </div>
